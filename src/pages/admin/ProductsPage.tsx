@@ -24,7 +24,6 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // AliExpress import state
   const [showAliModal, setShowAliModal] = useState(false);
   const [aliUrl, setAliUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
@@ -84,14 +83,16 @@ export default function ProductsPage() {
     setIsImporting(true);
     setAliError('');
     try {
-      const data = await importFromAliExpress(aliUrl.trim(), apiKeys.scraperApiKey || undefined);
-
+      const data = await importFromAliExpress(
+        aliUrl.trim(),
+        apiKeys.scrapedoKey || undefined,
+        apiKeys.scraperApiKey || undefined
+      );
       const importedImages: ProductImage[] = data.images.map((url, i) => ({
         id: `img-${Date.now()}-${i}`,
         url,
         isPrimary: i === 0,
       }));
-
       setShowAliModal(false);
       setAliUrl('');
       setEditingProduct(null);
@@ -107,7 +108,7 @@ export default function ProductsPage() {
         images: importedImages,
       });
       setShowModal(true);
-      addNotification({ type: 'success', message: 'Product imported! Review details and publish.' });
+      addNotification({ type: 'success', message: 'Product imported! Review and publish.' });
     } catch (err) {
       setAliError(err instanceof Error ? err.message : 'Import failed. Please try again.');
     } finally {
@@ -140,15 +141,12 @@ export default function ProductsPage() {
 
   const handleRemoveImage = (imageId: string) => {
     const newImages = formData.images.filter((img) => img.id !== imageId);
-    if (newImages.length > 0 && !newImages.some((img) => img.isPrimary)) {
-      newImages[0].isPrimary = true;
-    }
+    if (newImages.length > 0 && !newImages.some((img) => img.isPrimary)) newImages[0].isPrimary = true;
     setFormData({ ...formData, images: newImages });
   };
 
   const handleSetPrimary = (imageId: string) => {
-    const newImages = formData.images.map((img) => ({ ...img, isPrimary: img.id === imageId }));
-    setFormData({ ...formData, images: newImages });
+    setFormData({ ...formData, images: formData.images.map((img) => ({ ...img, isPrimary: img.id === imageId })) });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -162,10 +160,7 @@ export default function ProductsPage() {
       stock: parseInt(formData.stock),
       sku: formData.sku,
       isActive: formData.isActive,
-      images:
-        formData.images.length > 0
-          ? formData.images
-          : [{ id: 'img-default', url: defaultImages[0], isPrimary: true }],
+      images: formData.images.length > 0 ? formData.images : [{ id: 'img-default', url: defaultImages[0], isPrimary: true }],
     };
     if (editingProduct) {
       updateProduct(editingProduct.id, productData);
@@ -185,7 +180,6 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
@@ -214,23 +208,11 @@ export default function ProductsPage() {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-            />
+            <input type="text" placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
           </div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-          >
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary">
             <option value="All">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.name}>{cat.name}</option>
-            ))}
+            {categories.map((cat) => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
           </select>
         </div>
       </div>
@@ -254,11 +236,7 @@ export default function ProductsPage() {
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={product.images[0]?.url}
-                        alt={product.name}
-                        className="w-12 h-12 object-cover rounded-lg"
-                      />
+                      <img src={product.images[0]?.url} alt={product.name} className="w-12 h-12 object-cover rounded-lg" />
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{product.name}</p>
                         <p className="text-xs text-gray-500">SKU: {product.sku}</p>
@@ -272,9 +250,7 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-6 py-4">
                     {product.stock <= 10 ? (
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-                        product.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${ product.stock === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700' }`}>
                         <AlertTriangle size={12} />
                         {product.stock === 0 ? 'Out of stock' : `${product.stock} left`}
                       </span>
@@ -283,26 +259,14 @@ export default function ProductsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      product.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${ product.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }`}>
                       {product.isActive ? 'Active' : 'Draft'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleOpenModal(product)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        <Edit2 size={16} className="text-gray-500" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(product.id)}
-                        className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={16} className="text-red-500" />
-                      </button>
+                      <button onClick={() => handleOpenModal(product)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors"><Edit2 size={16} className="text-gray-500" /></button>
+                      <button onClick={() => setDeleteConfirm(product.id)} className="p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} className="text-red-500" /></button>
                     </div>
                   </td>
                 </tr>
@@ -318,13 +282,8 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* ── AliExpress Import Modal ── */}
-      <Modal
-        isOpen={showAliModal}
-        onClose={() => setShowAliModal(false)}
-        title="Import from AliExpress"
-        size="md"
-      >
+      {/* AliExpress Import Modal */}
+      <Modal isOpen={showAliModal} onClose={() => setShowAliModal(false)} title="Import from AliExpress" size="md">
         <div className="p-6 space-y-4">
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -332,23 +291,19 @@ export default function ProductsPage() {
               <p className="text-sm font-semibold text-orange-900">AI Product Import Agent</p>
             </div>
             <p className="text-xs text-orange-700 leading-relaxed">
-              Paste any AliExpress product URL. The AI agent will automatically extract the title, price,
-              images, and description. You can review and edit before publishing.
+              Paste any AliExpress product URL. The agent will auto-extract title, price, images and description.
             </p>
-            {!apiKeys.scraperApiKey && (
-              <p className="text-xs text-orange-600 mt-2 font-medium">
-                Tip: Add a ScraperAPI key in Settings → API Keys for 100% reliable imports.
+            {apiKeys.scrapedoKey ? (
+              <p className="text-xs text-green-700 mt-2 font-medium">✓ scrape.do active — high reliability mode</p>
+            ) : (
+              <p className="text-xs text-orange-600 mt-2">
+                For reliable imports: Settings → API Keys → add free scrape.do key (1000/month free).
               </p>
-            )}
-            {apiKeys.scraperApiKey && (
-              <p className="text-xs text-green-700 mt-2 font-medium">✓ ScraperAPI key active — high reliability mode</p>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-              AliExpress Product URL
-            </label>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">AliExpress Product URL</label>
             <div className="relative">
               <Link size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -374,220 +329,99 @@ export default function ProductsPage() {
               disabled={isImporting || !aliUrl.trim()}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isImporting ? (
-                <><Loader2 size={16} className="animate-spin" /> Importing...</>
-              ) : (
-                <><Bot size={16} /> Import Product</>
-              )}
+              {isImporting ? <><Loader2 size={16} className="animate-spin" /> Importing...</> : <><Bot size={16} /> Import Product</>}
             </button>
-            <button
-              onClick={() => setShowAliModal(false)}
-              className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            <button onClick={() => setShowAliModal(false)} className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50">
               Cancel
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* ── Add / Edit Product Modal ── */}
-      <Modal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        title={editingProduct ? 'Edit Product' : 'Add New Product'}
-        size="lg"
-      >
+      {/* Add / Edit Modal */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingProduct ? 'Edit Product' : 'Add New Product'} size="lg">
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Product Name</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
+              <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Description</label>
-              <textarea
-                required
-                rows={4}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary resize-none"
-              />
+              <textarea required rows={4} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary resize-none" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Price ($)</label>
-              <input
-                type="number" step="0.01" required
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
+              <input type="number" step="0.01" required value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Original / Compare Price ($)</label>
-              <input
-                type="number" step="0.01" required
-                value={formData.originalPrice}
-                onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Compare Price ($)</label>
+              <input type="number" step="0.01" required value={formData.originalPrice} onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Category</label>
-              <select
-                required
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>{cat.name}</option>
-                ))}
+              <select required value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary">
+                {categories.map((cat) => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Stock</label>
-              <input
-                type="number" required
-                value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
+              <input type="number" required value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">SKU</label>
-              <input
-                type="text" required
-                value={formData.sku}
-                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
+              <input type="text" required value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary" />
             </div>
             <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 rounded text-admin-primary"
-              />
-              <label htmlFor="isActive" className="text-sm text-gray-700">
-                Active (visible in store)
-              </label>
+              <input type="checkbox" id="isActive" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="w-4 h-4 rounded text-admin-primary" />
+              <label htmlFor="isActive" className="text-sm text-gray-700">Active (visible in store)</label>
             </div>
           </div>
 
           {/* Images */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-              Product Images ({formData.images.length}/10)
-            </label>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Product Images ({formData.images.length}/10)</label>
             <div className="flex flex-wrap gap-3 mb-3">
               {formData.images.map((img) => (
                 <div key={img.id} className="relative group">
-                  <img
-                    src={img.url}
-                    alt=""
-                    className={`w-20 h-20 object-cover rounded-lg border-2 cursor-pointer ${
-                      img.isPrimary ? 'border-orange-400' : 'border-gray-200'
-                    }`}
-                    onClick={() => handleSetPrimary(img.id)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(img.id)}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X size={12} />
-                  </button>
-                  {img.isPrimary && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] bg-orange-400 text-white px-1 rounded">
-                      Main
-                    </span>
-                  )}
+                  <img src={img.url} alt="" className={`w-20 h-20 object-cover rounded-lg border-2 cursor-pointer ${ img.isPrimary ? 'border-orange-400' : 'border-gray-200' }`} onClick={() => handleSetPrimary(img.id)} />
+                  <button type="button" onClick={() => handleRemoveImage(img.id)} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
+                  {img.isPrimary && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] bg-orange-400 text-white px-1 rounded">Main</span>}
                 </div>
               ))}
               {formData.images.length < 10 && (
-                <button
-                  type="button"
-                  onClick={handleAddImage}
-                  className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-admin-primary hover:text-admin-primary transition-colors"
-                >
-                  <Upload size={16} />
-                  <span className="text-[10px] mt-1">Add</span>
+                <button type="button" onClick={handleAddImage} className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-admin-primary hover:text-admin-primary transition-colors">
+                  <Upload size={16} /><span className="text-[10px] mt-1">Sample</span>
                 </button>
               )}
             </div>
-            {/* Manual image URL input */}
             <div className="flex gap-2">
-              <input
-                type="url"
-                id="imageUrlInput"
-                placeholder="Paste image URL and press Add..."
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-admin-primary"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const input = e.currentTarget;
-                    handleAddImageUrl(input.value);
-                    input.value = '';
-                  }
-                }}
+              <input type="url" id="imageUrlInput" placeholder="Paste image URL and press Add..." className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-admin-primary"
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const input = e.currentTarget; handleAddImageUrl(input.value); input.value = ''; } }}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  const input = document.getElementById('imageUrlInput') as HTMLInputElement;
-                  if (input) { handleAddImageUrl(input.value); input.value = ''; }
-                }}
-                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg transition-colors"
-              >
-                Add URL
-              </button>
+              <button type="button" onClick={() => { const input = document.getElementById('imageUrlInput') as HTMLInputElement; if (input) { handleAddImageUrl(input.value); input.value = ''; } }} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg">Add URL</button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Click image to set as main. Paste URL or press Add for sample image.</p>
+            <p className="text-xs text-gray-400 mt-1">Click image to set as main. Paste URL or use Sample button.</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">
-            <button
-              type="submit"
-              className="flex-1 py-2.5 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors"
-            >
+            <button type="submit" className="flex-1 py-2.5 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors">
               {editingProduct ? 'Save Changes' : 'Add Product'}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="px-6 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            <button type="button" onClick={() => setShowModal(false)} className="px-6 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50">
               Cancel
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirm */}
       <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Delete Product" size="sm">
         <div className="p-6">
           <p className="text-gray-600 mb-6">Are you sure? This cannot be undone.</p>
           <div className="flex gap-3">
-            <button
-              onClick={() => handleDelete(deleteConfirm!)}
-              className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg"
-            >
-              Delete
-            </button>
-            <button
-              onClick={() => setDeleteConfirm(null)}
-              className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
+            <button onClick={() => handleDelete(deleteConfirm!)} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg">Delete</button>
+            <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50">Cancel</button>
           </div>
         </div>
       </Modal>

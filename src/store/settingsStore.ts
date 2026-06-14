@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export interface ApiKeys {
-  scraperApiKey: string;
+  scrapedoKey: string;       // scrape.do — 1000 free/month, permanent, no credit card
+  scraperApiKey: string;     // ScraperAPI — fallback
   openAiKey: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -30,6 +31,7 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       apiKeys: {
+        scrapedoKey: '',
         scraperApiKey: '',
         openAiKey: '',
         supabaseUrl: '',
