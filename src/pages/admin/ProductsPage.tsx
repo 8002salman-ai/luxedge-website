@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, X, Upload, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, X, Upload, AlertTriangle, Bot, Loader2, Link } from 'lucide-react';
 import { useProductStore } from '../../store/productStore';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { importFromAliExpress } from '../../utils/aliexpressImporter';
 import Modal from '../../components/common/Modal';
 import type { Product, ProductImage } from '../../types';
 
@@ -14,12 +16,19 @@ const defaultImages = [
 export default function ProductsPage() {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const { apiKeys } = useSettingsStore();
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // AliExpress import state
+  const [showAliModal, setShowAliModal] = useState(false);
+  const [aliUrl, setAliUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [aliError, setAliError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -70,6 +79,42 @@ export default function ProductsPage() {
     setShowModal(true);
   };
 
+  const handleAliImport = async () => {
+    if (!aliUrl.trim()) return;
+    setIsImporting(true);
+    setAliError('');
+    try {
+      const data = await importFromAliExpress(aliUrl.trim(), apiKeys.scraperApiKey || undefined);
+
+      const importedImages: ProductImage[] = data.images.map((url, i) => ({
+        id: `img-${Date.now()}-${i}`,
+        url,
+        isPrimary: i === 0,
+      }));
+
+      setShowAliModal(false);
+      setAliUrl('');
+      setEditingProduct(null);
+      setFormData({
+        name: data.title,
+        description: data.description,
+        price: data.price.toFixed(2),
+        originalPrice: data.originalPrice.toFixed(2),
+        category: data.category || categories[0]?.name || '',
+        stock: '100',
+        sku: data.sku,
+        isActive: false,
+        images: importedImages,
+      });
+      setShowModal(true);
+      addNotification({ type: 'success', message: 'Product imported! Review details and publish.' });
+    } catch (err) {
+      setAliError(err instanceof Error ? err.message : 'Import failed. Please try again.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleAddImage = () => {
     if (formData.images.length >= 10) {
       addNotification({ type: 'warning', message: 'Maximum 10 images allowed' });
@@ -78,6 +123,16 @@ export default function ProductsPage() {
     const newImage: ProductImage = {
       id: `img-${Date.now()}`,
       url: defaultImages[formData.images.length % defaultImages.length],
+      isPrimary: formData.images.length === 0,
+    };
+    setFormData({ ...formData, images: [...formData.images, newImage] });
+  };
+
+  const handleAddImageUrl = (url: string) => {
+    if (!url.trim() || formData.images.length >= 10) return;
+    const newImage: ProductImage = {
+      id: `img-${Date.now()}`,
+      url: url.trim(),
       isPrimary: formData.images.length === 0,
     };
     setFormData({ ...formData, images: [...formData.images, newImage] });
@@ -92,16 +147,12 @@ export default function ProductsPage() {
   };
 
   const handleSetPrimary = (imageId: string) => {
-    const newImages = formData.images.map((img) => ({
-      ...img,
-      isPrimary: img.id === imageId,
-    }));
+    const newImages = formData.images.map((img) => ({ ...img, isPrimary: img.id === imageId }));
     setFormData({ ...formData, images: newImages });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     const productData = {
       name: formData.name,
       description: formData.description,
@@ -111,40 +162,51 @@ export default function ProductsPage() {
       stock: parseInt(formData.stock),
       sku: formData.sku,
       isActive: formData.isActive,
-      images: formData.images.length > 0 ? formData.images : [{ id: 'img-default', url: defaultImages[0], isPrimary: true }],
+      images:
+        formData.images.length > 0
+          ? formData.images
+          : [{ id: 'img-default', url: defaultImages[0], isPrimary: true }],
     };
-
     if (editingProduct) {
       updateProduct(editingProduct.id, productData);
-      addNotification({ type: 'success', message: 'Product updated successfully!' });
+      addNotification({ type: 'success', message: 'Product updated!' });
     } else {
       addProduct(productData);
-      addNotification({ type: 'success', message: 'Product added successfully!' });
+      addNotification({ type: 'success', message: 'Product added!' });
     }
-
     setShowModal(false);
   };
 
   const handleDelete = (id: string) => {
     deleteProduct(id);
-    addNotification({ type: 'success', message: 'Product deleted successfully!' });
+    addNotification({ type: 'success', message: 'Product deleted!' });
     setDeleteConfirm(null);
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-500 text-sm">Manage your product inventory</p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors"
-        >
-          <Plus size={18} />
-          Add Product
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { setShowAliModal(true); setAliError(''); setAliUrl(''); }}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors"
+          >
+            <Bot size={18} />
+            Import from AliExpress
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors"
+          >
+            <Plus size={18} />
+            Add Product
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -224,7 +286,7 @@ export default function ProductsPage() {
                     <span className={`text-xs font-medium px-2 py-1 rounded-full ${
                       product.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                     }`}>
-                      {product.isActive ? 'Active' : 'Inactive'}
+                      {product.isActive ? 'Active' : 'Draft'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -248,7 +310,6 @@ export default function ProductsPage() {
             </tbody>
           </table>
         </div>
-
         {filteredProducts.length === 0 && (
           <div className="text-center py-12">
             <Package size={48} className="mx-auto text-gray-200 mb-4" />
@@ -257,7 +318,79 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* ── AliExpress Import Modal ── */}
+      <Modal
+        isOpen={showAliModal}
+        onClose={() => setShowAliModal(false)}
+        title="Import from AliExpress"
+        size="md"
+      >
+        <div className="p-6 space-y-4">
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Bot size={16} className="text-orange-600" />
+              <p className="text-sm font-semibold text-orange-900">AI Product Import Agent</p>
+            </div>
+            <p className="text-xs text-orange-700 leading-relaxed">
+              Paste any AliExpress product URL. The AI agent will automatically extract the title, price,
+              images, and description. You can review and edit before publishing.
+            </p>
+            {!apiKeys.scraperApiKey && (
+              <p className="text-xs text-orange-600 mt-2 font-medium">
+                Tip: Add a ScraperAPI key in Settings → API Keys for 100% reliable imports.
+              </p>
+            )}
+            {apiKeys.scraperApiKey && (
+              <p className="text-xs text-green-700 mt-2 font-medium">✓ ScraperAPI key active — high reliability mode</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+              AliExpress Product URL
+            </label>
+            <div className="relative">
+              <Link size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="url"
+                placeholder="https://www.aliexpress.com/item/..."
+                value={aliUrl}
+                onChange={(e) => { setAliUrl(e.target.value); setAliError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleAliImport()}
+                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-orange-400"
+              />
+            </div>
+          </div>
+
+          {aliError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-xs text-red-700 leading-relaxed">{aliError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleAliImport}
+              disabled={isImporting || !aliUrl.trim()}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isImporting ? (
+                <><Loader2 size={16} className="animate-spin" /> Importing...</>
+              ) : (
+                <><Bot size={16} /> Import Product</>
+              )}
+            </button>
+            <button
+              onClick={() => setShowAliModal(false)}
+              className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Add / Edit Product Modal ── */}
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
@@ -267,9 +400,7 @@ export default function ProductsPage() {
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Product Name
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Product Name</label>
               <input
                 type="text"
                 required
@@ -279,47 +410,35 @@ export default function ProductsPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Description
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Description</label>
               <textarea
                 required
-                rows={3}
+                rows={4}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary resize-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Price ($)
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Price ($)</label>
               <input
-                type="number"
-                step="0.01"
-                required
+                type="number" step="0.01" required
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Original Price ($)
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Original / Compare Price ($)</label>
               <input
-                type="number"
-                step="0.01"
-                required
+                type="number" step="0.01" required
                 value={formData.originalPrice}
                 onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Category
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Category</label>
               <select
                 required
                 value={formData.category}
@@ -332,24 +451,18 @@ export default function ProductsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Stock
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Stock</label>
               <input
-                type="number"
-                required
+                type="number" required
                 value={formData.stock}
                 onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                SKU
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">SKU</label>
               <input
-                type="text"
-                required
+                type="text" required
                 value={formData.sku}
                 onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
@@ -363,14 +476,16 @@ export default function ProductsPage() {
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="w-4 h-4 rounded text-admin-primary"
               />
-              <label htmlFor="isActive" className="text-sm text-gray-700">Active (visible in store)</label>
+              <label htmlFor="isActive" className="text-sm text-gray-700">
+                Active (visible in store)
+              </label>
             </div>
           </div>
 
           {/* Images */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-              Product Images (max 10)
+              Product Images ({formData.images.length}/10)
             </label>
             <div className="flex flex-wrap gap-3 mb-3">
               {formData.images.map((img) => (
@@ -378,7 +493,9 @@ export default function ProductsPage() {
                   <img
                     src={img.url}
                     alt=""
-                    className={`w-20 h-20 object-cover rounded-lg border-2 ${img.isPrimary ? 'border-admin-primary' : 'border-gray-200'}`}
+                    className={`w-20 h-20 object-cover rounded-lg border-2 cursor-pointer ${
+                      img.isPrimary ? 'border-orange-400' : 'border-gray-200'
+                    }`}
                     onClick={() => handleSetPrimary(img.id)}
                   />
                   <button
@@ -389,8 +506,8 @@ export default function ProductsPage() {
                     <X size={12} />
                   </button>
                   {img.isPrimary && (
-                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] bg-admin-primary text-white px-1 rounded">
-                      Primary
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] bg-orange-400 text-white px-1 rounded">
+                      Main
                     </span>
                   )}
                 </div>
@@ -406,7 +523,34 @@ export default function ProductsPage() {
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500">Click an image to set as primary. Click + to add sample images.</p>
+            {/* Manual image URL input */}
+            <div className="flex gap-2">
+              <input
+                type="url"
+                id="imageUrlInput"
+                placeholder="Paste image URL and press Add..."
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-admin-primary"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const input = e.currentTarget;
+                    handleAddImageUrl(input.value);
+                    input.value = '';
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.getElementById('imageUrlInput') as HTMLInputElement;
+                  if (input) { handleAddImageUrl(input.value); input.value = ''; }
+                }}
+                className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-lg transition-colors"
+              >
+                Add URL
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Click image to set as main. Paste URL or press Add for sample image.</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">
@@ -430,17 +574,17 @@ export default function ProductsPage() {
       {/* Delete Confirmation */}
       <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Delete Product" size="sm">
         <div className="p-6">
-          <p className="text-gray-600 mb-6">Are you sure you want to delete this product? This action cannot be undone.</p>
+          <p className="text-gray-600 mb-6">Are you sure? This cannot be undone.</p>
           <div className="flex gap-3">
             <button
               onClick={() => handleDelete(deleteConfirm!)}
-              className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+              className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg"
             >
               Delete
             </button>
             <button
               onClick={() => setDeleteConfirm(null)}
-              className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex-1 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50"
             >
               Cancel
             </button>

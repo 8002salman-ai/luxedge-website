@@ -1,13 +1,27 @@
 import { useState } from 'react';
-import { Save, Lock, User, Store, Loader2 } from 'lucide-react';
+import { Save, Lock, User, Store, Key, Eye, EyeOff, Loader2, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useSettingsStore } from '../../store/settingsStore';
+
+type Tab = 'profile' | 'security' | 'store' | 'apikeys';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'security', label: 'Security' },
+  { id: 'store', label: 'Store' },
+  { id: 'apikeys', label: 'API Keys' },
+];
 
 export default function SettingsPage() {
   const { user, updateProfile, changePassword } = useAuthStore();
-  const addNotification = useNotificationStore((state) => state.addNotification);
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const { apiKeys, storeConfig, updateApiKeys, updateStoreConfig } = useSettingsStore();
 
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [loading, setLoading] = useState(false);
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -19,55 +33,85 @@ export default function SettingsPage() {
     confirmPassword: '',
   });
 
+  const [storeData, setStoreData] = useState({ ...storeConfig });
+  const [keysData, setKeysData] = useState({ ...apiKeys });
+
+  const toggleKey = (k: string) => setShowKey((p) => ({ ...p, [k]: !p[k] }));
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((r) => setTimeout(r, 400));
     updateProfile(profileData);
-    addNotification({ type: 'success', message: 'Profile updated successfully!' });
+    addNotification({ type: 'success', message: 'Profile updated!' });
     setLoading(false);
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
-
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       addNotification({ type: 'error', message: 'New passwords do not match' });
       return;
     }
-
     const result = changePassword(passwordData.currentPassword, passwordData.newPassword);
-
     if (result.success) {
-      addNotification({ type: 'success', message: 'Password changed successfully!' });
+      addNotification({ type: 'success', message: 'Password changed!' });
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } else {
       addNotification({ type: 'error', message: result.message });
     }
   };
 
+  const handleStoreSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateStoreConfig(storeData);
+    addNotification({ type: 'success', message: 'Store settings saved!' });
+  };
+
+  const handleApiKeysSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateApiKeys(keysData);
+    addNotification({ type: 'success', message: 'API keys saved!' });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 text-sm">Manage your admin account settings</p>
+        <p className="text-gray-500 text-sm">Manage store settings, API keys and integrations</p>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Profile Settings */}
-        <div className="bg-white rounded-xl border border-gray-100 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-admin-primary/10 rounded-lg">
-              <User size={18} className="text-admin-primary" />
-            </div>
-            <h2 className="font-semibold text-gray-900">Admin Profile</h2>
-          </div>
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.id === 'profile' && <User size={14} />}
+            {tab.id === 'security' && <Lock size={14} />}
+            {tab.id === 'store' && <Store size={14} />}
+            {tab.id === 'apikeys' && <Key size={14} />}
+            {tab.label}
+            {tab.id === 'apikeys' && (
+              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-orange-500 text-white rounded-full">NEW</span>
+            )}
+          </button>
+        ))}
+      </div>
 
+      {/* ── Profile ── */}
+      {activeTab === 'profile' && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg">
+          <h2 className="font-semibold text-gray-900 mb-6">Admin Profile</h2>
           <form onSubmit={handleProfileUpdate} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Name
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Name</label>
               <input
                 type="text"
                 value={profileData.name}
@@ -76,9 +120,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Email
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Email</label>
               <input
                 type="email"
                 value={profileData.email}
@@ -96,55 +138,30 @@ export default function SettingsPage() {
             </button>
           </form>
         </div>
+      )}
 
-        {/* Password Settings */}
-        <div className="bg-white rounded-xl border border-gray-100 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-admin-primary/10 rounded-lg">
-              <Lock size={18} className="text-admin-primary" />
-            </div>
-            <h2 className="font-semibold text-gray-900">Change Password</h2>
-          </div>
-
+      {/* ── Security ── */}
+      {activeTab === 'security' && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-lg">
+          <h2 className="font-semibold text-gray-900 mb-6">Change Password</h2>
           <form onSubmit={handlePasswordChange} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Current Password
-              </label>
-              <input
-                type="password"
-                required
-                value={passwordData.currentPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                New Password
-              </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={passwordData.newPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={passwordData.confirmPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
+            {([
+              { key: 'currentPassword', label: 'Current Password' },
+              { key: 'newPassword', label: 'New Password' },
+              { key: 'confirmPassword', label: 'Confirm New Password' },
+            ] as { key: keyof typeof passwordData; label: string }[]).map(({ key, label }) => (
+              <div key={key}>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">{label}</label>
+                <input
+                  type="password"
+                  required
+                  minLength={key !== 'currentPassword' ? 6 : undefined}
+                  value={passwordData[key]}
+                  onChange={(e) => setPasswordData({ ...passwordData, [key]: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
+                />
+              </div>
+            ))}
             <button
               type="submit"
               className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-lg transition-colors"
@@ -154,86 +171,229 @@ export default function SettingsPage() {
             </button>
           </form>
         </div>
+      )}
 
-        {/* Store Settings */}
-        <div className="bg-white rounded-xl border border-gray-100 p-6 lg:col-span-2">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-admin-primary/10 rounded-lg">
-              <Store size={18} className="text-admin-primary" />
+      {/* ── Store ── */}
+      {activeTab === 'store' && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 max-w-2xl">
+          <h2 className="font-semibold text-gray-900 mb-6">Store Information</h2>
+          <form onSubmit={handleStoreSave} className="grid sm:grid-cols-2 gap-4">
+            {([
+              { field: 'storeName' as const, label: 'Store Name', type: 'text' },
+              { field: 'contactEmail' as const, label: 'Contact Email', type: 'email' },
+              { field: 'phone' as const, label: 'Phone', type: 'tel' },
+              { field: 'address' as const, label: 'Address', type: 'text' },
+              { field: 'freeShippingThreshold' as const, label: 'Free Shipping Threshold ($)', type: 'number' },
+              { field: 'shippingFee' as const, label: 'Shipping Fee ($)', type: 'number' },
+            ]).map(({ field, label, type }) => (
+              <div key={field}>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">{label}</label>
+                <input
+                  type={type}
+                  step={type === 'number' ? '0.01' : undefined}
+                  value={storeData[field]}
+                  onChange={(e) =>
+                    setStoreData({
+                      ...storeData,
+                      [field]: type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
+                />
+              </div>
+            ))}
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-6 py-2.5 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors"
+              >
+                <Save size={16} />
+                Save Store Settings
+              </button>
             </div>
-            <h2 className="font-semibold text-gray-900">Store Information</h2>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Store Name
-              </label>
-              <input
-                type="text"
-                defaultValue="Luxedge"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Contact Email
-              </label>
-              <input
-                type="email"
-                defaultValue="hello@luxedge.us"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Phone
-              </label>
-              <input
-                type="tel"
-                defaultValue="(440) 941-8002"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Address
-              </label>
-              <input
-                type="text"
-                defaultValue="Irving, TX, USA"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Free Shipping Threshold ($)
-              </label>
-              <input
-                type="number"
-                defaultValue="50"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-                Shipping Fee ($)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                defaultValue="4.99"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-admin-primary"
-              />
-            </div>
-          </div>
-
-          <button className="mt-6 flex items-center gap-2 px-6 py-2.5 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors">
-            <Save size={16} />
-            Save Store Settings
-          </button>
+          </form>
         </div>
-      </div>
+      )}
+
+      {/* ── API Keys ── */}
+      {activeTab === 'apikeys' && (
+        <div className="space-y-5 max-w-2xl">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-1">Secure Local Storage</p>
+            <p className="text-xs text-amber-700">
+              Keys are stored only in your browser (localStorage). They are sent directly to each service provider — never to any third-party server.
+            </p>
+          </div>
+
+          <form onSubmit={handleApiKeysSave} className="space-y-4">
+
+            {/* ScraperAPI */}
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">ScraperAPI</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Required for AliExpress product import. Free tier: 5,000 req/month.</p>
+                </div>
+                <a
+                  href="https://www.scraperapi.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0 ml-4"
+                >
+                  Get Free Key <ExternalLink size={10} />
+                </a>
+              </div>
+              <div className="relative mt-3">
+                <input
+                  type={showKey.scraperApiKey ? 'text' : 'password'}
+                  placeholder="Your ScraperAPI key..."
+                  value={keysData.scraperApiKey}
+                  onChange={(e) => setKeysData({ ...keysData, scraperApiKey: e.target.value })}
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-orange-400"
+                />
+                <button type="button" onClick={() => toggleKey('scraperApiKey')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showKey.scraperApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {keysData.scraperApiKey && (
+                <p className="mt-2 text-xs text-green-600 font-medium">✓ ScraperAPI key set — AliExpress import enabled</p>
+              )}
+            </div>
+
+            {/* OpenAI */}
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">OpenAI API Key</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">For AI-enhanced product descriptions. Optional.</p>
+                </div>
+                <a
+                  href="https://platform.openai.com/api-keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0 ml-4"
+                >
+                  Get Key <ExternalLink size={10} />
+                </a>
+              </div>
+              <div className="relative mt-3">
+                <input
+                  type={showKey.openAiKey ? 'text' : 'password'}
+                  placeholder="sk-..."
+                  value={keysData.openAiKey}
+                  onChange={(e) => setKeysData({ ...keysData, openAiKey: e.target.value })}
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-admin-primary"
+                />
+                <button type="button" onClick={() => toggleKey('openAiKey')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showKey.openAiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Supabase */}
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Supabase (Database + Auth)</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">For persistent database and Google Login. Free tier available.</p>
+                </div>
+                <a
+                  href="https://supabase.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0 ml-4"
+                >
+                  Free Setup <ExternalLink size={10} />
+                </a>
+              </div>
+              <div className="space-y-3 mt-3">
+                <input
+                  type="text"
+                  placeholder="https://xxxxxxxxxxxx.supabase.co"
+                  value={keysData.supabaseUrl}
+                  onChange={(e) => setKeysData({ ...keysData, supabaseUrl: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-admin-primary"
+                />
+                <div className="relative">
+                  <input
+                    type={showKey.supabaseAnonKey ? 'text' : 'password'}
+                    placeholder="Supabase Anon (public) Key..."
+                    value={keysData.supabaseAnonKey}
+                    onChange={(e) => setKeysData({ ...keysData, supabaseAnonKey: e.target.value })}
+                    className="w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-admin-primary"
+                  />
+                  <button type="button" onClick={() => toggleKey('supabaseAnonKey')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showKey.supabaseAnonKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Stripe */}
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Stripe (Payments)</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">For real online payments. Use publishable key (starts with pk_).</p>
+                </div>
+                <a
+                  href="https://dashboard.stripe.com/apikeys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0 ml-4"
+                >
+                  Stripe Dashboard <ExternalLink size={10} />
+                </a>
+              </div>
+              <div className="relative mt-3">
+                <input
+                  type={showKey.stripePublishableKey ? 'text' : 'password'}
+                  placeholder="pk_live_..."
+                  value={keysData.stripePublishableKey}
+                  onChange={(e) => setKeysData({ ...keysData, stripePublishableKey: e.target.value })}
+                  className="w-full px-4 py-2.5 pr-10 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-admin-primary"
+                />
+                <button type="button" onClick={() => toggleKey('stripePublishableKey')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showKey.stripePublishableKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Google OAuth */}
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Google OAuth (Google Login)</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Create OAuth 2.0 Client ID in Google Cloud Console. Free.</p>
+                </div>
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline shrink-0 ml-4"
+                >
+                  Google Console <ExternalLink size={10} />
+                </a>
+              </div>
+              <input
+                type="text"
+                placeholder="xxxxxxxxxxxx.apps.googleusercontent.com"
+                value={keysData.googleClientId}
+                onChange={(e) => setKeysData({ ...keysData, googleClientId: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-mono mt-3 focus:outline-none focus:border-admin-primary"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="flex items-center gap-2 px-6 py-2.5 bg-admin-primary hover:bg-admin-primary-dark text-white font-medium rounded-lg transition-colors"
+            >
+              <Save size={16} />
+              Save All API Keys
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
