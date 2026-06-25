@@ -3070,8 +3070,8 @@ export default function App() {
           <Route path="/blog/write" element={<SLayout><BlogWritePage /></SLayout>} />
           <Route path="/blog/:slug" element={<SLayout><BlogDetailPage /></SLayout>} />
           {/* Auth */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/login" element={<SLayout><LoginPage /></SLayout>} />
+          <Route path="/signup" element={<SLayout><SignupPage /></SLayout>} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
           {/* Admin - EACH SECTION IS ITS OWN ROUTE */}
           <Route path="/admin" element={<AdminLayout><ADashboard /></AdminLayout>} />
