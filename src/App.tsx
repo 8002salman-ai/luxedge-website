@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, Save, ArrowLeft, DollarSign, Upload, ImageIcon,
   Globe, Clock, Send, Headphones, ChevronLeft, Sparkles, TrendingUp,
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
-  Bot, Clipboard, Link2, RefreshCw, Wand2, ExternalLink, Copy, History,
+  Bot, Clipboard, Link2, RefreshCw, Wand2, History,
 } from 'lucide-react';
 
 // ============================================================================
