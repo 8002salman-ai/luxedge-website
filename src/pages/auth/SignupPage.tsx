@@ -49,7 +49,7 @@ export default function SignupPage() {
             <div className="w-10 h-10 bg-luxe-black rounded-lg flex items-center justify-center">
               <span className="text-white font-serif text-lg font-bold">L</span>
             </div>
-            <span className="font-serif text-2xl font-bold text-luxe-black">LUXEDGE</span>
+            <span className="font-serif text-2xl font-bold text-luxe-red">LUXEDGE</span>
           </Link>
         </div>
 
