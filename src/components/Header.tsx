@@ -56,10 +56,10 @@ export default function Header({ currentPage, onNavigate, cartCount, onCartOpen 
               onClick={() => onNavigate('home')}
               className="flex items-center gap-2 group"
             >
-              <div className="w-8 h-8 bg-luxe-black rounded-sm flex items-center justify-center group-hover:bg-luxe-gold transition-colors duration-300">
+              <div className="w-8 h-8 bg-luxe-red rounded-sm flex items-center justify-center group-hover:bg-luxe-gold transition-colors duration-300">
                 <span className="text-white font-serif text-sm font-bold">L</span>
               </div>
-              <span className="font-serif text-xl lg:text-2xl font-bold tracking-tight text-luxe-black">
+              <span className="font-serif text-xl lg:text-2xl font-bold tracking-tight text-luxe-red">
                 LUXEDGE
               </span>
             </button>
