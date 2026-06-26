@@ -10,6 +10,8 @@ import {
   Globe, Clock, Send, Headphones, ChevronLeft, Sparkles, TrendingUp,
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
   Bot, Clipboard, Link2, RefreshCw, Wand2, History, Layers, Shuffle, Table2, Sliders,
+  Monitor, Smartphone, Share2, Code,
+  Megaphone, Target,
 } from 'lucide-react';
 
 // ============================================================================
@@ -84,6 +86,31 @@ interface EnterpriseVariant {
 }
 interface VariantAttribute {
   id: string; name: string; values: string[]; autoDetected: boolean;
+}
+interface SEOData {
+  title: string; metaDescription: string; keywords: string[];
+  slug: string; canonicalUrl: string; focusKeyword: string;
+  secondaryKeywords: string[]; imageAlt: string; imageTitle: string; imageCaption: string;
+}
+interface SocialSEO {
+  ogTitle: string; ogDescription: string; ogImage: string;
+  twitterCard: string; twitterTitle: string; twitterDescription: string;
+  pinterestDescription: string; pinterestImage: string;
+}
+interface ContentData {
+  premiumTitle: string; luxuryDescription: string; shortDescription: string;
+  bulletFeatures: string[]; specifications: Record<string,string>;
+  benefits: string[]; useCases: string[]; careInstructions: string;
+  packageContents: string[]; warrantyText: string; shippingInfo: string;
+  faqs: { q: string; a: string }[];
+}
+interface SEOScore {
+  overall: number; readability: number; keywordDensity: number;
+  metaLength: number; titleLength: number; missingAlt: number;
+  issues: { type: 'error'|'warning'|'good'; msg: string }[];
+}
+interface StructuredSchemas {
+  product: string; breadcrumb: string; organization: string; website: string; faq: string;
 }
 
 const DEFAULT_AI_PROVIDERS: AIProvider[] = [
@@ -2582,6 +2609,8 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/categories', icon: FolderTree, label: 'Categories' },
     { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     { to: '/admin/blogs', icon: FileText, label: 'Blog Posts' },
+    { to: '/admin/seo-engine', icon: Search, label: 'SEO Engine ⭐' },
+    { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
     { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
@@ -3294,6 +3323,1740 @@ function ASettings() {
     </div>
   );
 }
+
+// ============================================================================
+// ENTERPRISE MARKETING GENERATOR
+// ============================================================================
+type MktTab = 'google'|'meta'|'social'|'email'|'video'|'vault';
+type MktTone = 'luxury'|'urgent'|'friendly'|'professional';
+const MKT_TONES: MktTone[] = ['luxury','urgent','friendly','professional'];
+
+interface GoogleAd {
+  headlines: string[];
+  descriptions: string[];
+  displayUrl: string;
+  finalUrl: string;
+  callouts: string[];
+  sitelinks: { title: string; desc: string; url: string }[];
+}
+interface MetaAd {
+  primaryText: string;
+  headline: string;
+  description: string;
+  cta: string;
+  audience: string;
+  interests: string[];
+}
+interface SocialPosts {
+  instagram: string;
+  hashtags: string[];
+  facebook: string;
+  twitter: string[];
+  linkedin: string;
+  pinterest: string;
+  tiktokScript: string;
+}
+interface EmailDraft {
+  subjectA: string;
+  subjectB: string;
+  preheader: string;
+  heroHeadline: string;
+  body: string;
+  ctaText: string;
+  urgency: string;
+}
+interface VideoScript {
+  youtubeTitle: string;
+  youtubeDesc: string;
+  youtubeTags: string[];
+  tiktokScript: string;
+  reelHook: string;
+}
+interface MktVaultItem {
+  id: string;
+  type: string;
+  productName: string;
+  content: string;
+  createdAt: string;
+}
+
+const EMPTY_GOOGLE: GoogleAd = { headlines: ['','','','','',''], descriptions: ['',''], displayUrl: '', finalUrl: '', callouts: [], sitelinks: [] };
+const EMPTY_META: MetaAd = { primaryText: '', headline: '', description: '', cta: 'Shop Now', audience: '', interests: [] };
+const EMPTY_SOCIAL: SocialPosts = { instagram: '', hashtags: [], facebook: '', twitter: [], linkedin: '', pinterest: '', tiktokScript: '' };
+const EMPTY_EMAIL: EmailDraft = { subjectA: '', subjectB: '', preheader: '', heroHeadline: '', body: '', ctaText: '', urgency: '' };
+const EMPTY_VIDEO: VideoScript = { youtubeTitle: '', youtubeDesc: '', youtubeTags: [], tiktokScript: '', reelHook: '' };
+
+const META_CTA_OPTIONS = ['Shop Now','Learn More','Get Offer','Order Now','Sign Up','Book Now','Contact Us','Download'];
+
+function AMarketingGen() {
+  const { products } = useAppContext();
+  const [tab, setTab] = useState<MktTab>('google');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [aiProvider, setAiProvider] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [tone, setTone] = useState<MktTone>('luxury');
+  const [generating, setGenerating] = useState(false);
+  const [genSection, setGenSection] = useState('');
+  const [googleAd, setGoogleAd] = useState<GoogleAd>(EMPTY_GOOGLE);
+  const [metaAd, setMetaAd] = useState<MetaAd>(EMPTY_META);
+  const [social, setSocial] = useState<SocialPosts>(EMPTY_SOCIAL);
+  const [email, setEmail] = useState<EmailDraft>(EMPTY_EMAIL);
+  const [video, setVideo] = useState<VideoScript>(EMPTY_VIDEO);
+  const [vault, setVault] = useState<MktVaultItem[]>([]);
+  const [copied, setCopied] = useState('');
+  const [newInterest, setNewInterest] = useState('');
+  const [newCallout, setNewCallout] = useState('');
+
+  const allProviders: AIProvider[] = (() => { try { const s = localStorage.getItem('luxedge_ai_providers'); return s ? JSON.parse(s) : DEFAULT_AI_PROVIDERS; } catch { return DEFAULT_AI_PROVIDERS; } })();
+  const activeProviders = allProviders.filter(p => p.enabled && p.apiKey);
+  const selectedProduct = products.find(p => p.id === selectedProductId);
+
+  useEffect(() => {
+    try { setVault(JSON.parse(localStorage.getItem('luxedge_mkt_vault') || '[]')); } catch { setVault([]); }
+  }, []);
+
+  useEffect(() => {
+    if (activeProviders.length && !aiProvider) {
+      const def = activeProviders.find(p => p.isDefault) || activeProviders[0];
+      setAiProvider(def.id);
+      setAiModel(def.defaultModel);
+    }
+  }, [activeProviders.length, aiProvider]);
+
+  function copyText(text: string, key: string) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(key);
+    setTimeout(() => setCopied(''), 2000);
+  }
+
+  function saveVault(type: MktTab, content: string) {
+    const item: MktVaultItem = { id: Date.now().toString(), type, productName: selectedProduct?.name || '', content, createdAt: new Date().toISOString() };
+    const updated = [item, ...vault].slice(0, 100);
+    setVault(updated);
+    localStorage.setItem('luxedge_mkt_vault', JSON.stringify(updated));
+  }
+
+  async function callAI(prompt: string): Promise<string> {
+    const prov = activeProviders.find(p => p.id === aiProvider) || activeProviders[0];
+    if (!prov) throw new Error('No AI provider with API key. Go to Settings → AI Providers.');
+    const model = aiModel || prov.defaultModel;
+    if (prov.id === 'openai') {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${prov.apiKey}`}, body: JSON.stringify({ model, messages:[{role:'system',content:'You are an expert luxury e-commerce marketing copywriter. Return only valid JSON.'},{role:'user',content:prompt}], temperature:0.85 }) });
+      const d = await r.json(); if (d.error) throw new Error(d.error.message); return d.choices[0].message.content;
+    } else if (prov.id === 'gemini') {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${prov.apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.85} }) });
+      const d = await r.json(); if (d.error) throw new Error(d.error.message); return d.candidates[0].content.parts[0].text;
+    } else {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${prov.apiKey}`,'HTTP-Referer':'https://luxedge.com'}, body: JSON.stringify({ model, messages:[{role:'user',content:prompt}] }) });
+      const d = await r.json(); if (d.error) throw new Error(d.error.message || JSON.stringify(d.error)); return d.choices[0].message.content;
+    }
+  }
+
+  function parseJ<T>(raw: string, fb: T): T {
+    try { const m = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/(\{[\s\S]*\})/); return JSON.parse(m ? m[1] : raw); }
+    catch { return fb; }
+  }
+
+  function buildPrompt(section: string): string {
+    const p = selectedProduct;
+    if (!p) return '';
+    const base = `Product: "${p.name}" | Price: $${p.price} | Category: ${p.category||'Luxury'} | Tone: ${tone.toUpperCase()}\nDescription: ${p.description?.slice(0,300)||'Premium luxury product'}`;
+    if (section === 'all') return `${base}\n\nGenerate comprehensive marketing copy. Return ONLY valid JSON:\n{\n  "google": {\n    "headlines": ["h1 ≤30ch","h2","h3","h4","h5","h6"],\n    "descriptions": ["desc1 ≤90ch","desc2"],\n    "displayUrl": "luxedge.com/shop",\n    "finalUrl": "https://luxedge.com/products/${p.name.toLowerCase().replace(/\s+/g,'-')}",\n    "callouts": ["Free US Shipping","Luxury Quality","Easy Returns","Secure Checkout"],\n    "sitelinks": [{"title":"Shop Now","desc":"View all luxury items","url":"/products"},{"title":"About Us","desc":"Our story","url":"/about"}]\n  },\n  "meta": {\n    "primaryText": "compelling 125-char primary ad text with emoji",\n    "headline": "40-char headline",\n    "description": "30-char description",\n    "cta": "Shop Now",\n    "audience": "US adults 25-55 interested in luxury goods, high income",\n    "interests": ["Luxury Brands","Premium Shopping","Interior Design","High-End Fashion"]\n  },\n  "social": {\n    "instagram": "engaging Instagram caption with emojis 2200 chars max",\n    "hashtags": ["luxuryliving","premiumquality","luxedge","shopnow","luxury"],\n    "facebook": "Facebook post 400-500 chars",\n    "twitter": ["tweet1 ≤280ch","tweet2 continuation","tweet3 CTA"],\n    "linkedin": "professional LinkedIn post 500-700 chars",\n    "pinterest": "Pinterest pin description 500 chars",\n    "tiktokScript": "30-second TikTok script with hook/body/CTA"\n  },\n  "email": {\n    "subjectA": "email subject A ≤50ch",\n    "subjectB": "A/B variant subject ≤50ch",\n    "preheader": "preheader text ≤90ch",\n    "heroHeadline": "bold hero headline",\n    "body": "email body with benefit paragraphs",\n    "ctaText": "Shop Now →",\n    "urgency": "limited time urgency line"\n  },\n  "video": {\n    "youtubeTitle": "YouTube title ≤60ch",\n    "youtubeDesc": "YouTube description with timestamps",\n    "youtubeTags": ["luxury","premium","review","unboxing"],\n    "tiktokScript": "60-sec TikTok script with hook/demo/CTA",\n    "reelHook": "First 3-second Reels hook line"\n  }\n}`;
+    if (section === 'google') return `${base}\n\nGenerate Google RSA ad copy. Return ONLY valid JSON:\n{"headlines":["h1 ≤30ch","h2","h3","h4","h5","h6"],"descriptions":["desc1 ≤90ch","desc2"],"displayUrl":"luxedge.com/shop","finalUrl":"https://luxedge.com/products/slug","callouts":["Free Shipping","Easy Returns"],"sitelinks":[{"title":"Shop Now","desc":"All products","url":"/products"}]}`;
+    if (section === 'meta') return `${base}\n\nGenerate Meta/Facebook ad copy. Return ONLY valid JSON:\n{"primaryText":"125ch primary text","headline":"40ch headline","description":"30ch description","cta":"Shop Now","audience":"target audience description","interests":["interest1","interest2"]}`;
+    if (section === 'social') return `${base}\n\nGenerate social media posts. Return ONLY valid JSON:\n{"instagram":"caption","hashtags":["tag1","tag2"],"facebook":"fb post","twitter":["tweet1","tweet2"],"linkedin":"linkedin post","pinterest":"pin desc","tiktokScript":"script"}`;
+    if (section === 'email') return `${base}\n\nGenerate email marketing copy. Return ONLY valid JSON:\n{"subjectA":"subject A","subjectB":"subject B","preheader":"preheader","heroHeadline":"hero","body":"body text","ctaText":"Shop Now →","urgency":"urgency line"}`;
+    if (section === 'video') return `${base}\n\nGenerate video marketing scripts. Return ONLY valid JSON:\n{"youtubeTitle":"title","youtubeDesc":"description","youtubeTags":["tag1"],"tiktokScript":"script","reelHook":"hook"}`;
+    return base;
+  }
+
+  async function generateAll() {
+    if (!selectedProduct) { alert('Please select a product first.'); return; }
+    if (!activeProviders.length) { alert('Add an AI provider API key in Settings first.'); return; }
+    setGenerating(true); setGenSection('all');
+    try {
+      const raw = await callAI(buildPrompt('all'));
+      const d = parseJ<Record<string,unknown>>(raw, {});
+      if (d.google) setGoogleAd(d.google as GoogleAd);
+      if (d.meta) setMetaAd(d.meta as MetaAd);
+      if (d.social) setSocial(d.social as SocialPosts);
+      if (d.email) setEmail(d.email as EmailDraft);
+      if (d.video) setVideo(d.video as VideoScript);
+    } catch(e) { alert(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
+    setGenerating(false); setGenSection('');
+  }
+
+  async function regenSection(section: MktTab) {
+    if (!selectedProduct) return;
+    setGenerating(true); setGenSection(section);
+    try {
+      const raw = await callAI(buildPrompt(section));
+      if (section === 'google') setGoogleAd(parseJ(raw, googleAd));
+      else if (section === 'meta') setMetaAd(parseJ(raw, metaAd));
+      else if (section === 'social') setSocial(parseJ(raw, social));
+      else if (section === 'email') setEmail(parseJ(raw, email));
+      else if (section === 'video') setVideo(parseJ(raw, video));
+    } catch(e) { alert(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
+    setGenerating(false); setGenSection('');
+  }
+
+  const MKT_TABS: { key: MktTab; label: string }[] = [
+    { key: 'google', label: '🔍 Google Ads' },
+    { key: 'meta', label: '📘 Meta Ads' },
+    { key: 'social', label: '📱 Social Posts' },
+    { key: 'email', label: '📧 Email' },
+    { key: 'video', label: '🎬 Video' },
+    { key: 'vault', label: '🗄️ Vault' },
+  ];
+
+  const CopyBtn = ({ text, k }: { text: string; k: string }) => (
+    <button onClick={() => copyText(text, k)} className="p-1.5 rounded hover:bg-gray-100 transition-colors" title="Copy">
+      {copied === k ? <CheckCircle size={14} className="text-green-500" /> : <Clipboard size={14} className="text-gray-400" />}
+    </button>
+  );
+
+  const RegenBtn = ({ section, loading }: { section: MktTab; loading: boolean }) => (
+    <button onClick={() => regenSection(section)} disabled={generating || !selectedProduct} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium disabled:opacity-50 transition-colors">
+      {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+      {loading ? 'Generating…' : 'Regenerate'}
+    </button>
+  );
+
+  const CharBadge = ({ text, max, warn }: { text: string; max: number; warn?: number }) => {
+    const n = text.length; const w = warn ?? Math.floor(max * 0.85);
+    return <span className={`text-xs font-mono ${n > max ? 'text-red-500 font-bold' : n > w ? 'text-amber-500' : 'text-gray-400'}`}>{n}/{max}</span>;
+  };
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Megaphone size={24} className="text-purple-600" /> Marketing Generator
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">AI-powered ads, social posts, email &amp; video scripts</p>
+        </div>
+        <button onClick={generateAll} disabled={generating || !selectedProductId} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:shadow-lg transition-all">
+          {generating && genSection === 'all' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+          {generating && genSection === 'all' ? 'Generating All…' : '✨ Generate All'}
+        </button>
+      </div>
+
+      {/* Controls */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div>
+          <label className="text-xs font-semibold text-gray-600 block mb-1">Product</label>
+          <select value={selectedProductId} onChange={e => setSelectedProductId(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
+            <option value="">— Select product —</option>
+            {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-600 block mb-1">AI Provider</label>
+          <select value={aiProvider} onChange={e => { setAiProvider(e.target.value); setAiModel(''); }} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
+            {activeProviders.length === 0 && <option value="">No providers configured</option>}
+            {activeProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-600 block mb-1">Model</label>
+          <select value={aiModel} onChange={e => setAiModel(e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
+            {(activeProviders.find(p => p.id === aiProvider)?.models || []).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-600 block mb-1">Tone</label>
+          <select value={tone} onChange={e => setTone(e.target.value as MktTone)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
+            {MKT_TONES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+        {MKT_TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── GOOGLE ADS TAB ── */}
+      {tab === 'google' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Search size={18} className="text-blue-600" /> Google Search Ads (RSA)</h2>
+            <div className="flex gap-2">
+              <button onClick={() => { saveVault('google', JSON.stringify(googleAd, null, 2)); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <RegenBtn section="google" loading={generating && genSection === 'google'} />
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Headlines <span className="text-gray-400 font-normal">(max 30 chars each, use at least 5)</span></h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {googleAd.headlines.map((h, i) => (
+                <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-xs text-gray-400 w-4">{i+1}</span>
+                  <input value={h} onChange={e => { const hs = [...googleAd.headlines]; hs[i] = e.target.value.slice(0,30); setGoogleAd({...googleAd, headlines: hs}); }} placeholder={`Headline ${i+1}`} className="flex-1 text-sm bg-transparent focus:outline-none" />
+                  <CharBadge text={h} max={30} />
+                  <CopyBtn text={h} k={`gh${i}`} />
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setGoogleAd({...googleAd, headlines: [...googleAd.headlines, '']})} className="mt-2 text-xs text-purple-600 hover:underline">+ Add headline</button>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Descriptions <span className="text-gray-400 font-normal">(max 90 chars each)</span></h3>
+            <div className="space-y-2">
+              {googleAd.descriptions.map((d, i) => (
+                <div key={i} className="flex items-start gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-xs text-gray-400 w-4 mt-1">{i+1}</span>
+                  <textarea value={d} onChange={e => { const ds = [...googleAd.descriptions]; ds[i] = e.target.value.slice(0,90); setGoogleAd({...googleAd, descriptions: ds}); }} placeholder={`Description ${i+1}`} rows={2} className="flex-1 text-sm bg-transparent focus:outline-none resize-none" />
+                  <div className="flex flex-col items-end gap-1">
+                    <CharBadge text={d} max={90} />
+                    <CopyBtn text={d} k={`gd${i}`} />
+                  </div>
+                </div>
+              ))}
+              {googleAd.descriptions.length < 4 && <button onClick={() => setGoogleAd({...googleAd, descriptions: [...googleAd.descriptions, '']})} className="text-xs text-purple-600 hover:underline">+ Add description</button>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Display URL</h3>
+              <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                <Globe size={14} className="text-gray-400 flex-shrink-0" />
+                <input value={googleAd.displayUrl} onChange={e => setGoogleAd({...googleAd, displayUrl: e.target.value})} placeholder="luxedge.com/shop/product-name" className="flex-1 text-sm bg-transparent focus:outline-none" />
+                <CopyBtn text={googleAd.displayUrl} k="gdurl" />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Shown in ad — must match final URL domain</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Final URL</h3>
+              <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                <Link2 size={14} className="text-gray-400 flex-shrink-0" />
+                <input value={googleAd.finalUrl} onChange={e => setGoogleAd({...googleAd, finalUrl: e.target.value})} placeholder="https://luxedge.com/products/..." className="flex-1 text-sm bg-transparent focus:outline-none" />
+                <CopyBtn text={googleAd.finalUrl} k="gfurl" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Callout Extensions</h3>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {googleAd.callouts.map((c, i) => (
+                  <span key={i} className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                    {c}
+                    <button onClick={() => setGoogleAd({...googleAd, callouts: googleAd.callouts.filter((_,j) => j !== i)})} className="hover:text-red-500">×</button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input value={newCallout} onChange={e => setNewCallout(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newCallout.trim()) { setGoogleAd({...googleAd, callouts: [...googleAd.callouts, newCallout.trim()]}); setNewCallout(''); } }} placeholder="Add callout…" className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <button onClick={() => { if (newCallout.trim()) { setGoogleAd({...googleAd, callouts: [...googleAd.callouts, newCallout.trim()]}); setNewCallout(''); } }} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium">+</button>
+              </div>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Sitelink Extensions</h3>
+              <div className="space-y-2">
+                {googleAd.sitelinks.map((sl, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs bg-gray-50 rounded-lg p-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-800 truncate">{sl.title}</p>
+                      <p className="text-gray-500 truncate">{sl.desc}</p>
+                    </div>
+                    <button onClick={() => setGoogleAd({...googleAd, sitelinks: googleAd.sitelinks.filter((_,j) => j !== i)})} className="text-gray-400 hover:text-red-500">×</button>
+                  </div>
+                ))}
+                <button onClick={() => setGoogleAd({...googleAd, sitelinks: [...googleAd.sitelinks, {title:'',desc:'',url:''}]})} className="text-xs text-blue-600 hover:underline">+ Add sitelink</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Google Ad Preview */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Monitor size={14} /> Ad Preview</h3>
+            <div className="border border-gray-100 rounded-lg p-4 bg-gray-50 max-w-lg">
+              <div className="flex items-center gap-1 mb-1"><span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium">Ad</span><span className="text-xs text-gray-500 truncate">{googleAd.displayUrl || 'luxedge.com'}</span></div>
+              <p className="text-blue-600 text-base font-medium leading-tight mb-0.5">{[googleAd.headlines[0], googleAd.headlines[1], googleAd.headlines[2]].filter(Boolean).join(' | ') || 'Your Ad Headlines Here'}</p>
+              <p className="text-sm text-gray-700 leading-snug">{googleAd.descriptions[0] || 'Your compelling description that drives clicks and conversions.'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── META ADS TAB ── */}
+      {tab === 'meta' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Target size={18} className="text-blue-700" /> Meta Ads (Facebook &amp; Instagram)</h2>
+            <div className="flex gap-2">
+              <button onClick={() => saveVault('meta', JSON.stringify(metaAd, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <RegenBtn section="meta" loading={generating && genSection === 'meta'} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Primary Text <span className="text-gray-400 font-normal">(≤125 chars recommended)</span></label>
+                  <div className="flex items-center gap-1"><CharBadge text={metaAd.primaryText} max={500} warn={125} /><CopyBtn text={metaAd.primaryText} k="mpt" /></div>
+                </div>
+                <textarea value={metaAd.primaryText} onChange={e => setMetaAd({...metaAd, primaryText: e.target.value})} placeholder="Engaging primary text that appears above your image…" rows={4} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-700">Headline <span className="text-gray-400 text-xs">(≤40)</span></label>
+                    <div className="flex items-center gap-1"><CharBadge text={metaAd.headline} max={40} /><CopyBtn text={metaAd.headline} k="mh" /></div>
+                  </div>
+                  <input value={metaAd.headline} onChange={e => setMetaAd({...metaAd, headline: e.target.value.slice(0,40)})} placeholder="Bold headline" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-700">Description <span className="text-gray-400 text-xs">(≤30)</span></label>
+                    <div className="flex items-center gap-1"><CharBadge text={metaAd.description} max={30} /><CopyBtn text={metaAd.description} k="md" /></div>
+                  </div>
+                  <input value={metaAd.description} onChange={e => setMetaAd({...metaAd, description: e.target.value.slice(0,30)})} placeholder="Short description" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <label className="text-sm font-semibold text-gray-700 block mb-2">Call to Action</label>
+                <select value={metaAd.cta} onChange={e => setMetaAd({...metaAd, cta: e.target.value})} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                  {META_CTA_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <label className="text-sm font-semibold text-gray-700 block mb-2">Target Audience</label>
+                <textarea value={metaAd.audience} onChange={e => setMetaAd({...metaAd, audience: e.target.value})} placeholder="e.g. US adults 25-55, high income, interested in luxury goods…" rows={2} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <label className="text-sm font-semibold text-gray-700 block mb-2">Interests to Target</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {metaAd.interests.map((interest, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                      {interest}
+                      <button onClick={() => setMetaAd({...metaAd, interests: metaAd.interests.filter((_,j) => j !== i)})} className="hover:text-red-500 ml-0.5">×</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={newInterest} onChange={e => setNewInterest(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newInterest.trim()) { setMetaAd({...metaAd, interests: [...metaAd.interests, newInterest.trim()]}); setNewInterest(''); } }} placeholder="Add interest…" className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <button onClick={() => { if (newInterest.trim()) { setMetaAd({...metaAd, interests: [...metaAd.interests, newInterest.trim()]}); setNewInterest(''); } }} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium">+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Meta Ad Preview */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm h-fit">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Share2 size={14} /> Facebook Ad Preview</h3>
+              <div className="border border-gray-200 rounded-xl overflow-hidden max-w-sm">
+                <div className="p-3 flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">L</div>
+                  <div><p className="text-xs font-semibold text-gray-900">Luxedge</p><p className="text-xs text-gray-400">Sponsored · <Globe size={10} className="inline" /></p></div>
+                </div>
+                <p className="px-3 pb-3 text-xs text-gray-800 leading-relaxed">{metaAd.primaryText || 'Your primary ad text will appear here.'}</p>
+                <div className="bg-gray-100 h-32 flex items-center justify-center text-gray-400 text-xs">
+                  <ImageIcon size={24} className="text-gray-300" />
+                </div>
+                <div className="p-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                  <div><p className="text-xs font-semibold text-gray-900">{metaAd.headline || 'Your Headline'}</p><p className="text-xs text-gray-500">{metaAd.description || 'Your description'}</p></div>
+                  <button className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold flex-shrink-0">{metaAd.cta}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SOCIAL POSTS TAB ── */}
+      {tab === 'social' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Share2 size={18} className="text-pink-600" /> Social Media Posts</h2>
+            <div className="flex gap-2">
+              <button onClick={() => saveVault('social', JSON.stringify(social, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <RegenBtn section="social" loading={generating && genSection === 'social'} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Instagram */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">📸 Instagram Caption</h3>
+                <div className="flex items-center gap-1"><CharBadge text={social.instagram} max={2200} warn={1000} /><CopyBtn text={social.instagram + '\n\n' + social.hashtags.map(h => '#'+h).join(' ')} k="ig" /></div>
+              </div>
+              <textarea value={social.instagram} onChange={e => setSocial({...social, instagram: e.target.value})} placeholder="Write an engaging Instagram caption with emojis…" rows={5} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" />
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-gray-600 mb-1"># Hashtags</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {social.hashtags.map((h, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-pink-50 text-pink-700 text-xs rounded-full">
+                      #{h}
+                      <button onClick={() => setSocial({...social, hashtags: social.hashtags.filter((_,j) => j !== i)})} className="hover:text-red-500">×</button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input placeholder="hashtag (no #)" onKeyDown={e => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim().replace(/^#/,''); if (v) { setSocial({...social, hashtags: [...social.hashtags, v]}); (e.target as HTMLInputElement).value = ''; } } }} className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-pink-300" />
+                </div>
+              </div>
+            </div>
+
+            {/* Facebook */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">📘 Facebook Post</h3>
+                <div className="flex items-center gap-1"><CharBadge text={social.facebook} max={5000} warn={400} /><CopyBtn text={social.facebook} k="fb" /></div>
+              </div>
+              <textarea value={social.facebook} onChange={e => setSocial({...social, facebook: e.target.value})} placeholder="Write an engaging Facebook post…" rows={5} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none" />
+              <p className="text-xs text-gray-400 mt-1">Optimal length: 40–80 words</p>
+            </div>
+
+            {/* Twitter/X Thread */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">𝕏 Twitter/X Thread</h3>
+                <div className="flex gap-2">
+                  <CopyBtn text={social.twitter.join('\n\n')} k="tw" />
+                  <button onClick={() => setSocial({...social, twitter: [...social.twitter, '']})} className="text-xs text-blue-500 hover:underline">+ Add tweet</button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {social.twitter.map((tw, i) => (
+                  <div key={i} className="relative">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-gray-400 mt-2 w-4 flex-shrink-0">{i+1}/</span>
+                      <textarea value={tw} onChange={e => { const t = [...social.twitter]; t[i] = e.target.value.slice(0,280); setSocial({...social, twitter: t}); }} placeholder={`Tweet ${i+1}`} rows={2} className="flex-1 text-sm border border-gray-200 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-sky-300 resize-none" />
+                      <div className="flex flex-col items-end gap-1">
+                        <CharBadge text={tw} max={280} warn={240} />
+                        <button onClick={() => setSocial({...social, twitter: social.twitter.filter((_,j) => j !== i)})} className="text-gray-300 hover:text-red-400 text-xs">×</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {social.twitter.length === 0 && <p className="text-sm text-gray-400 text-center py-4">No tweets yet. Click "Generate All" or add manually.</p>}
+              </div>
+            </div>
+
+            {/* LinkedIn */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">💼 LinkedIn Post</h3>
+                <div className="flex items-center gap-1"><CharBadge text={social.linkedin} max={3000} warn={700} /><CopyBtn text={social.linkedin} k="li" /></div>
+              </div>
+              <textarea value={social.linkedin} onChange={e => setSocial({...social, linkedin: e.target.value})} placeholder="Professional LinkedIn post…" rows={5} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+            </div>
+
+            {/* Pinterest */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">📌 Pinterest Pin</h3>
+                <div className="flex items-center gap-1"><CharBadge text={social.pinterest} max={500} /><CopyBtn text={social.pinterest} k="pin" /></div>
+              </div>
+              <textarea value={social.pinterest} onChange={e => setSocial({...social, pinterest: e.target.value.slice(0,500)})} placeholder="Pinterest pin description optimized for discovery…" rows={3} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+            </div>
+
+            {/* TikTok Script */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700">🎵 TikTok Script</h3>
+                <CopyBtn text={social.tiktokScript} k="tt" />
+              </div>
+              <textarea value={social.tiktokScript} onChange={e => setSocial({...social, tiktokScript: e.target.value})} placeholder="Write a 30-60 second TikTok script with hook/demo/CTA…" rows={6} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EMAIL TAB ── */}
+      {tab === 'email' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-green-600" /> Email Marketing</h2>
+            <div className="flex gap-2">
+              <button onClick={() => saveVault('email', JSON.stringify(email, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <RegenBtn section="email" loading={generating && genSection === 'email'} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">A/B Subject Lines</h3>
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-600 font-medium">Version A</label>
+                      <div className="flex items-center gap-1"><CharBadge text={email.subjectA} max={50} /><CopyBtn text={email.subjectA} k="esa" /></div>
+                    </div>
+                    <input value={email.subjectA} onChange={e => setEmail({...email, subjectA: e.target.value})} placeholder="Subject line A — curiosity/benefit driven" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-600 font-medium">Version B</label>
+                      <div className="flex items-center gap-1"><CharBadge text={email.subjectB} max={50} /><CopyBtn text={email.subjectB} k="esb" /></div>
+                    </div>
+                    <input value={email.subjectB} onChange={e => setEmail({...email, subjectB: e.target.value})} placeholder="Subject line B — urgency/FOMO driven" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Preheader <span className="text-gray-400 text-xs">(≤90 chars)</span></label>
+                  <div className="flex items-center gap-1"><CharBadge text={email.preheader} max={90} /><CopyBtn text={email.preheader} k="epre" /></div>
+                </div>
+                <input value={email.preheader} onChange={e => setEmail({...email, preheader: e.target.value.slice(0,90)})} placeholder="Preview text shown after subject line…" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Hero Headline</label>
+                  <CopyBtn text={email.heroHeadline} k="ehero" />
+                </div>
+                <input value={email.heroHeadline} onChange={e => setEmail({...email, heroHeadline: e.target.value})} placeholder="Bold, attention-grabbing hero headline" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">Email Body</label>
+                  <CopyBtn text={email.body} k="ebody" />
+                </div>
+                <textarea value={email.body} onChange={e => setEmail({...email, body: e.target.value})} placeholder="Email body with paragraphs covering benefits, features, social proof…" rows={6} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-green-300 resize-none" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-700">CTA Button Text</label>
+                    <CopyBtn text={email.ctaText} k="ecta" />
+                  </div>
+                  <input value={email.ctaText} onChange={e => setEmail({...email, ctaText: e.target.value})} placeholder="Shop Now →" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-700">Urgency Line</label>
+                    <CopyBtn text={email.urgency} k="eur" />
+                  </div>
+                  <input value={email.urgency} onChange={e => setEmail({...email, urgency: e.target.value})} placeholder="⏰ Offer ends midnight Friday!" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                </div>
+              </div>
+            </div>
+
+            {/* Email Preview */}
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Monitor size={14} /> Email Preview</h3>
+              <div className="border border-gray-200 rounded-xl overflow-hidden text-xs">
+                <div className="bg-gray-50 p-3 border-b border-gray-200">
+                  <p className="text-gray-600"><span className="font-semibold text-gray-800">From:</span> Luxedge &lt;hello@luxedge.com&gt;</p>
+                  <p className="text-gray-600"><span className="font-semibold text-gray-800">Subject:</span> {email.subjectA || '(no subject yet)'}</p>
+                  <p className="text-gray-400 text-xs italic">{email.preheader || '(preheader)'}</p>
+                </div>
+                <div className="bg-white p-4 space-y-3 max-h-80 overflow-y-auto">
+                  <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg p-4 text-center">
+                    <p className="font-bold text-base">{email.heroHeadline || 'Your Hero Headline'}</p>
+                  </div>
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{email.body || 'Your email body will appear here.'}</p>
+                  {email.urgency && <p className="text-amber-600 font-semibold">{email.urgency}</p>}
+                  <div className="text-center">
+                    <button className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold text-sm">{email.ctaText || 'Shop Now →'}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIDEO TAB ── */}
+      {tab === 'video' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Zap size={18} className="text-red-600" /> Video Scripts &amp; YouTube</h2>
+            <div className="flex gap-2">
+              <button onClick={() => saveVault('video', JSON.stringify(video, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <RegenBtn section="video" loading={generating && genSection === 'video'} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">▶️ YouTube Title <span className="text-gray-400 text-xs">(≤60 chars)</span></label>
+                  <div className="flex items-center gap-1"><CharBadge text={video.youtubeTitle} max={60} /><CopyBtn text={video.youtubeTitle} k="yt" /></div>
+                </div>
+                <input value={video.youtubeTitle} onChange={e => setVideo({...video, youtubeTitle: e.target.value.slice(0,60)})} placeholder="Engaging YouTube video title" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300" />
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">YouTube Description</label>
+                  <CopyBtn text={video.youtubeDesc} k="ydesc" />
+                </div>
+                <textarea value={video.youtubeDesc} onChange={e => setVideo({...video, youtubeDesc: e.target.value})} placeholder="YouTube description with timestamps, links, keywords…" rows={5} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">YouTube Tags</label>
+                  <CopyBtn text={video.youtubeTags.join(', ')} k="ytags" />
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {video.youtubeTags.map((t, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded-full">
+                      {t}
+                      <button onClick={() => setVideo({...video, youtubeTags: video.youtubeTags.filter((_,j) => j !== i)})} className="hover:text-red-600">×</button>
+                    </span>
+                  ))}
+                </div>
+                <input onKeyDown={e => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) { setVideo({...video, youtubeTags: [...video.youtubeTags, v]}); (e.target as HTMLInputElement).value = ''; } } }} placeholder="Add tag, press Enter" className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-red-300" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">⚡ Reels / TikTok Hook</label>
+                  <CopyBtn text={video.reelHook} k="rhook" />
+                </div>
+                <textarea value={video.reelHook} onChange={e => setVideo({...video, reelHook: e.target.value})} placeholder="First 3-second hook line — must stop the scroll…" rows={3} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" />
+                <p className="text-xs text-gray-400 mt-1">This is the most critical line — it determines if viewers keep watching</p>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">🎵 TikTok / Reels Full Script</label>
+                  <CopyBtn text={video.tiktokScript} k="tts" />
+                </div>
+                <textarea value={video.tiktokScript} onChange={e => setVideo({...video, tiktokScript: e.target.value})} placeholder="60-second script:\n[0:00] Hook\n[0:05] Problem\n[0:15] Solution demo\n[0:45] CTA" rows={10} className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none font-mono" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── VAULT TAB ── */}
+      {tab === 'vault' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Wand2 size={18} className="text-gray-600" /> Copy Vault ({vault.length})</h2>
+            <div className="flex gap-2">
+              <button onClick={() => { const blob = new Blob([JSON.stringify(vault, null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'luxedge-marketing-vault.json'; a.click(); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Upload size={12} /> Export JSON</button>
+              {vault.length > 0 && <button onClick={() => { if (confirm('Clear all saved copies?')) { setVault([]); localStorage.removeItem('luxedge_mkt_vault'); } }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium"><Trash2 size={12} /> Clear All</button>}
+            </div>
+          </div>
+
+          {vault.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-dashed border-gray-200 rounded-xl">
+              <Megaphone size={40} className="text-gray-200 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">No saved copies yet</p>
+              <p className="text-gray-400 text-sm">Click "Save" on any tab to archive marketing copy here</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {vault.map(item => (
+                <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">{item.type}</span>
+                      <span className="text-sm font-medium text-gray-800">{item.productName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</span>
+                      <CopyBtn text={item.content} k={`v${item.id}`} />
+                      <button onClick={() => { const updated = vault.filter(v => v.id !== item.id); setVault(updated); localStorage.setItem('luxedge_mkt_vault', JSON.stringify(updated)); }} className="p-1 text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+                  <pre className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 overflow-auto max-h-32 whitespace-pre-wrap">{item.content.slice(0, 300)}{item.content.length > 300 ? '…' : ''}</pre>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// ENTERPRISE SEO & CONTENT ENGINE
+// ============================================================================
+type SEOTab = 'seo'|'schema'|'social'|'content'|'analysis'|'preview';
+type ToneOption = 'Luxury'|'Premium'|'Friendly'|'Professional'|'Technical'|'Luxury Brand'|'Minimalist';
+const SEO_TONES: ToneOption[] = ['Luxury','Premium','Friendly','Professional','Technical','Luxury Brand','Minimalist'];
+const SEO_SCHEMA_KEYS = ['product','breadcrumb','organization','website','faq'] as const;
+type SchemaKey = typeof SEO_SCHEMA_KEYS[number];
+
+function _scoreColor(n: number): string {
+  return n >= 70 ? 'text-green-600' : n >= 45 ? 'text-amber-500' : 'text-red-500';
+}
+function _scoreBg(n: number): string {
+  return n >= 70 ? 'bg-green-50 border-green-200' : n >= 45 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+}
+function _issueIcon(t: 'good'|'warning'|'error'): string {
+  return t === 'good' ? '✅' : t === 'warning' ? '⚠️' : '❌';
+}
+
+function _computeSEO(seo: SEOData, content: ContentData): SEOScore {
+  const issues: SEOScore['issues'] = [];
+  let score = 100;
+
+  const tl = seo.title.length;
+  if (tl >= 50 && tl <= 60) issues.push({ type: 'good', msg: `Title: ${tl} chars (ideal 50–60)` });
+  else if (tl >= 30 && tl <= 70) { score -= 7; issues.push({ type: 'warning', msg: `Title: ${tl} chars (ideal: 50–60)` }); }
+  else if (tl > 0) { score -= 18; issues.push({ type: 'error', msg: `Title: ${tl} chars (${tl < 30 ? 'too short' : 'too long — truncated in SERPs'})` }); }
+  else { score -= 25; issues.push({ type: 'error', msg: 'SEO title is empty' }); }
+
+  const ml = seo.metaDescription.length;
+  if (ml >= 120 && ml <= 160) issues.push({ type: 'good', msg: `Meta: ${ml} chars (ideal 120–160)` });
+  else if (ml >= 80 && ml <= 200) { score -= 8; issues.push({ type: 'warning', msg: `Meta: ${ml} chars (ideal: 120–160)` }); }
+  else if (ml > 0) { score -= 18; issues.push({ type: 'error', msg: `Meta: ${ml} chars (${ml < 80 ? 'too short' : 'too long'})` }); }
+  else { score -= 25; issues.push({ type: 'error', msg: 'Meta description is empty' }); }
+
+  const fk = seo.focusKeyword.toLowerCase().trim();
+  if (fk) {
+    if (seo.title.toLowerCase().includes(fk)) issues.push({ type: 'good', msg: 'Focus keyword in title ✓' });
+    else { score -= 12; issues.push({ type: 'error', msg: 'Focus keyword missing from title' }); }
+    if (seo.metaDescription.toLowerCase().includes(fk)) issues.push({ type: 'good', msg: 'Focus keyword in meta ✓' });
+    else { score -= 6; issues.push({ type: 'warning', msg: 'Focus keyword missing from meta description' }); }
+    if (seo.slug.toLowerCase().includes(fk.replace(/\s+/g, '-'))) issues.push({ type: 'good', msg: 'Focus keyword in URL slug ✓' });
+    else { score -= 4; issues.push({ type: 'warning', msg: 'Focus keyword not in URL slug' }); }
+  } else {
+    score -= 15; issues.push({ type: 'error', msg: 'Focus keyword not set' });
+  }
+
+  if (seo.imageAlt.trim()) issues.push({ type: 'good', msg: 'Image ALT text set ✓' });
+  else { score -= 8; issues.push({ type: 'error', msg: 'Image ALT text is missing' }); }
+
+  if (seo.slug.trim()) issues.push({ type: 'good', msg: 'URL slug defined ✓' });
+  else { score -= 8; issues.push({ type: 'error', msg: 'URL slug not set' }); }
+
+  if (seo.keywords.length >= 5) issues.push({ type: 'good', msg: `${seo.keywords.length} SEO keywords defined ✓` });
+  else if (seo.keywords.length >= 3) { score -= 4; issues.push({ type: 'warning', msg: `${seo.keywords.length} keywords — aim for 5+` }); }
+  else { score -= 10; issues.push({ type: 'error', msg: 'Too few keywords (add at least 5)' }); }
+
+  const desc = content.luxuryDescription || '';
+  const words = desc.split(/\s+/).filter(Boolean);
+  const wc = words.length;
+  if (wc >= 200) issues.push({ type: 'good', msg: `Description: ${wc} words ✓` });
+  else if (wc >= 100) { score -= 6; issues.push({ type: 'warning', msg: `Description: ${wc} words (aim for 200+)` }); }
+  else if (wc > 0) { score -= 14; issues.push({ type: 'error', msg: `Description: ${wc} words (thin content)` }); }
+  else { score -= 20; issues.push({ type: 'error', msg: 'Luxury description is empty' }); }
+
+  const sentences = desc.split(/[.!?]+/).filter(s => s.trim().length > 5);
+  const avgWPS = sentences.length > 0 ? wc / sentences.length : 0;
+  let readability = 100;
+  if (avgWPS > 30) { readability = 35; issues.push({ type: 'error', msg: `Sentences too long (avg ${avgWPS.toFixed(0)} words)` }); }
+  else if (avgWPS > 20) { readability = 65; issues.push({ type: 'warning', msg: `Sentences a bit long (avg ${avgWPS.toFixed(0)} words)` }); }
+  else if (avgWPS > 5) { issues.push({ type: 'good', msg: `Readability good (avg ${avgWPS.toFixed(0)} words/sentence)` }); }
+
+  const kwCount = fk ? words.filter(w => w.toLowerCase().includes(fk)).length : 0;
+  const density = wc > 0 ? (kwCount / wc) * 100 : 0;
+  if (fk) {
+    if (density >= 1 && density <= 3) issues.push({ type: 'good', msg: `Keyword density: ${density.toFixed(1)}% (ideal 1–3%)` });
+    else if (density > 0) { score -= 4; issues.push({ type: 'warning', msg: `Keyword density: ${density.toFixed(1)}% (ideal: 1–3%)` }); }
+    else { score -= 8; issues.push({ type: 'warning', msg: 'Keyword not found in description' }); }
+  }
+
+  if (content.bulletFeatures.length >= 4) issues.push({ type: 'good', msg: `${content.bulletFeatures.length} bullet features ✓` });
+  else if (content.bulletFeatures.length > 0) { score -= 3; issues.push({ type: 'warning', msg: `Only ${content.bulletFeatures.length} features listed (aim for 6+)` }); }
+
+  return {
+    overall: Math.max(0, Math.min(100, score)),
+    readability: Math.max(0, Math.min(100, readability)),
+    keywordDensity: density,
+    metaLength: ml,
+    titleLength: tl,
+    missingAlt: seo.imageAlt ? 0 : 1,
+    issues,
+  };
+}
+
+function _genProductSchema(p: Product, seo: SEOData, c: ContentData): string {
+  return JSON.stringify({
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": seo.title || p.name,
+    "description": c.shortDescription || p.shortDesc,
+    "image": p.images?.length ? [p.images[0]] : [],
+    "sku": p.id,
+    "brand": { "@type": "Brand", "name": p.brand || "Luxedge" },
+    "offers": {
+      "@type": "Offer",
+      "url": `https://luxedge.us/#/products/${p.id}`,
+      "priceCurrency": "USD",
+      "price": p.price.toFixed(2),
+      "priceValidUntil": new Date(Date.now() + 86400000 * 90).toISOString().split('T')[0],
+      "availability": p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "seller": { "@type": "Organization", "name": "Luxedge" }
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": p.rating.toString(),
+      "reviewCount": p.reviews.toString(),
+      "bestRating": "5",
+      "worstRating": "1"
+    }
+  }, null, 2);
+}
+
+function _genBreadcrumbSchema(p: Product, seo: SEOData): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://luxedge.us" },
+      { "@type": "ListItem", "position": 2, "name": p.category, "item": `https://luxedge.us/#/category/${p.category.toLowerCase().replace(/\s+/g,'-')}` },
+      { "@type": "ListItem", "position": 3, "name": seo.title || p.name, "item": `https://luxedge.us/#/products/${seo.slug || p.id}` }
+    ]
+  }, null, 2);
+}
+
+function _genOrgSchema(): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Luxedge",
+    "url": "https://luxedge.us",
+    "logo": { "@type": "ImageObject", "url": "https://luxedge.us/logo.png" },
+    "contactPoint": { "@type": "ContactPoint", "contactType": "customer service", "email": "support@luxedge.us", "availableLanguage": "English" },
+    "address": { "@type": "PostalAddress", "addressCountry": "US" },
+    "sameAs": ["https://twitter.com/luxedge", "https://facebook.com/luxedge", "https://instagram.com/luxedge"]
+  }, null, 2);
+}
+
+function _genWebsiteSchema(): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Luxedge",
+    "url": "https://luxedge.us",
+    "description": "Premium curated products for modern living",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": { "@type": "EntryPoint", "urlTemplate": "https://luxedge.us/#/search?q={search_term_string}" },
+      "query-input": "required name=search_term_string"
+    }
+  }, null, 2);
+}
+
+function _genFAQSchema(faqs: { q: string; a: string }[]): string {
+  if (!faqs.length) return '';
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqs.map(f => ({
+      "@type": "Question",
+      "name": f.q,
+      "acceptedAnswer": { "@type": "Answer", "text": f.a }
+    }))
+  }, null, 2);
+}
+
+function _tryValidate(json: string): boolean {
+  if (!json.trim()) return false;
+  try { JSON.parse(json); return true; } catch { return false; }
+}
+
+function ASEOEngine() {
+  const { products, setProducts, notify } = useApp();
+  const navigate = useNavigate();
+
+  const [selId, setSelId] = useState('');
+  const [tab, setTab] = useState<SEOTab>('seo');
+  const [tone, setTone] = useState<ToneOption>('Luxury');
+  const [previewMode, setPreviewMode] = useState<'desktop'|'mobile'|'facebook'|'twitter'>('desktop');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSection, setAiSection] = useState('');
+  const [aiStatus, setAiStatus] = useState('');
+  const [newKw, setNewKw] = useState('');
+  const [newSecKw, setNewSecKw] = useState('');
+  const [copied, setCopied] = useState('');
+  const [schemaValid, setSchemaValid] = useState<Record<SchemaKey, boolean>>({ product: false, breadcrumb: false, organization: false, website: false, faq: false });
+  const [aiProviders] = useState<AIProvider[]>(() => {
+    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers')||'null')||DEFAULT_AI_PROVIDERS; }
+    catch { return DEFAULT_AI_PROVIDERS; }
+  });
+
+  const [seo, setSeo] = useState<SEOData>({
+    title: '', metaDescription: '', keywords: [], slug: '', canonicalUrl: '',
+    focusKeyword: '', secondaryKeywords: [], imageAlt: '', imageTitle: '', imageCaption: '',
+  });
+  const [social, setSocial] = useState<SocialSEO>({
+    ogTitle: '', ogDescription: '', ogImage: '',
+    twitterCard: 'summary_large_image', twitterTitle: '', twitterDescription: '',
+    pinterestDescription: '', pinterestImage: '',
+  });
+  const [content, setContent] = useState<ContentData>({
+    premiumTitle: '', luxuryDescription: '', shortDescription: '',
+    bulletFeatures: [], specifications: {}, benefits: [],
+    useCases: [], careInstructions: '', packageContents: [],
+    warrantyText: '', shippingInfo: '', faqs: [],
+  });
+  const [schemas, setSchemas] = useState<StructuredSchemas>({
+    product: '', breadcrumb: '', organization: _genOrgSchema(), website: _genWebsiteSchema(), faq: '',
+  });
+  const [score, setScore] = useState<SEOScore>({
+    overall: 0, readability: 0, keywordDensity: 0, metaLength: 0, titleLength: 0, missingAlt: 0, issues: [],
+  });
+
+  const selProduct = products.find(p => p.id === selId);
+
+  // Auto-populate from product
+  useEffect(() => {
+    const p = products.find(x => x.id === selId);
+    if (!p) return;
+    const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    setSeo(prev => ({
+      ...prev,
+      title: prev.title || p.name,
+      slug: prev.slug || slug,
+      canonicalUrl: `https://luxedge.us/#/products/${slug}`,
+      imageAlt: prev.imageAlt || (p.name + ' product image'),
+      imageTitle: prev.imageTitle || p.name,
+    }));
+    setSocial(prev => ({
+      ...prev,
+      ogTitle: prev.ogTitle || p.name,
+      ogDescription: prev.ogDescription || p.shortDesc,
+      ogImage: prev.ogImage || (p.images?.[0] || ''),
+      twitterTitle: prev.twitterTitle || p.name,
+      twitterDescription: prev.twitterDescription || p.shortDesc,
+      pinterestImage: prev.pinterestImage || (p.images?.[0] || ''),
+    }));
+    setContent(prev => ({
+      ...prev,
+      premiumTitle: prev.premiumTitle || p.name,
+      shortDescription: prev.shortDescription || p.shortDesc,
+    }));
+  }, [selId, products]);
+
+  // Live SEO score
+  useEffect(() => {
+    setScore(_computeSEO(seo, content));
+  }, [seo, content]);
+
+  function generateSchemas() {
+    if (!selProduct) return;
+    const faqJson = _genFAQSchema(content.faqs);
+    const next: StructuredSchemas = {
+      product: _genProductSchema(selProduct, seo, content),
+      breadcrumb: _genBreadcrumbSchema(selProduct, seo),
+      organization: _genOrgSchema(),
+      website: _genWebsiteSchema(),
+      faq: faqJson,
+    };
+    setSchemas(next);
+    const valid: Record<SchemaKey, boolean> = { product: false, breadcrumb: false, organization: false, website: false, faq: false };
+    SEO_SCHEMA_KEYS.forEach(k => { valid[k] = _tryValidate(next[k]); });
+    setSchemaValid(valid);
+    notify('Schemas generated & validated', 'success');
+  }
+
+  async function generateAll() {
+    if (!selProduct) { notify('Select a product first', 'error'); return; }
+    const prompt = `You are a luxury e-commerce SEO expert for Luxedge (premium US dropshipping brand).
+
+Generate complete SEO content for this product:
+Name: ${selProduct.name}
+Category: ${selProduct.category}
+Price: $${selProduct.price} (was $${selProduct.originalPrice})
+Description: ${selProduct.shortDesc}
+Brand: ${selProduct.brand}
+Rating: ${selProduct.rating}/5 (${selProduct.reviews} reviews)
+Writing Tone: ${tone}
+
+Return ONLY valid JSON (no markdown):
+{
+  "premiumTitle": "...",
+  "luxuryDescription": "...",
+  "shortDescription": "...",
+  "bulletFeatures": ["feature 1","feature 2","feature 3","feature 4","feature 5","feature 6"],
+  "specifications": {"Spec Name":"Value"},
+  "benefits": ["benefit 1","benefit 2","benefit 3","benefit 4"],
+  "useCases": ["use case 1","use case 2","use case 3"],
+  "careInstructions": "...",
+  "packageContents": ["item 1","item 2"],
+  "warrantyText": "...",
+  "shippingInfo": "...",
+  "faqs": [{"q":"question?","a":"answer."},{"q":"question?","a":"answer."},{"q":"question?","a":"answer."}],
+  "seoTitle": "...",
+  "metaDescription": "...",
+  "keywords": ["kw1","kw2","kw3","kw4","kw5","kw6","kw7","kw8"],
+  "slug": "url-friendly-slug",
+  "focusKeyword": "primary keyword",
+  "secondaryKeywords": ["secondary1","secondary2","secondary3"],
+  "imageAlt": "...",
+  "imageTitle": "...",
+  "imageCaption": "...",
+  "ogTitle": "...",
+  "ogDescription": "...",
+  "twitterTitle": "...",
+  "twitterDescription": "...",
+  "pinterestDescription": "..."
+}
+
+Rules:
+- Tone: ${tone}
+- luxuryDescription: 200+ words, compelling, conversion-focused, ${tone} voice
+- seoTitle: 50-60 chars, include focus keyword near start
+- metaDescription: 120-160 chars, include CTA
+- All copy must target US market
+- Return ONLY the JSON`;
+
+    setAiLoading(true); setAiSection('all'); setAiStatus('Generating all SEO content…');
+    try {
+      const raw = await callAIProvider(prompt, aiProviders, m => setAiStatus(m));
+      const cleaned = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      const d = JSON.parse(cleaned) as Record<string, unknown>;
+      const arr = (k: string): string[] => Array.isArray(d[k]) ? (d[k] as string[]) : [];
+      const str = (k: string): string => typeof d[k] === 'string' ? d[k] as string : '';
+      const obj = (k: string): Record<string,string> => (d[k] && typeof d[k] === 'object' && !Array.isArray(d[k])) ? d[k] as Record<string,string> : {};
+      const faqArr = (d['faqs'] as {q:string;a:string}[] | undefined) || [];
+
+      setContent({
+        premiumTitle: str('premiumTitle'), luxuryDescription: str('luxuryDescription'),
+        shortDescription: str('shortDescription'), bulletFeatures: arr('bulletFeatures'),
+        specifications: obj('specifications'), benefits: arr('benefits'),
+        useCases: arr('useCases'), careInstructions: str('careInstructions'),
+        packageContents: arr('packageContents'), warrantyText: str('warrantyText'),
+        shippingInfo: str('shippingInfo'), faqs: faqArr,
+      });
+      setSeo(prev => ({
+        ...prev,
+        title: str('seoTitle') || prev.title,
+        metaDescription: str('metaDescription') || prev.metaDescription,
+        keywords: arr('keywords').length ? arr('keywords') : prev.keywords,
+        slug: str('slug') || prev.slug,
+        focusKeyword: str('focusKeyword') || prev.focusKeyword,
+        secondaryKeywords: arr('secondaryKeywords').length ? arr('secondaryKeywords') : prev.secondaryKeywords,
+        imageAlt: str('imageAlt') || prev.imageAlt,
+        imageTitle: str('imageTitle') || prev.imageTitle,
+        imageCaption: str('imageCaption') || prev.imageCaption,
+        canonicalUrl: `https://luxedge.us/#/products/${str('slug') || prev.slug}`,
+      }));
+      setSocial(prev => ({
+        ...prev,
+        ogTitle: str('ogTitle') || prev.ogTitle,
+        ogDescription: str('ogDescription') || prev.ogDescription,
+        twitterTitle: str('twitterTitle') || prev.twitterTitle,
+        twitterDescription: str('twitterDescription') || prev.twitterDescription,
+        pinterestDescription: str('pinterestDescription') || prev.pinterestDescription,
+      }));
+      notify('All SEO content generated!', 'success');
+    } catch (e: any) {
+      notify(`AI error: ${e.message}`, 'error');
+    } finally {
+      setAiLoading(false); setAiSection(''); setAiStatus('');
+    }
+  }
+
+  async function regenSection(section: string, fieldHint: string) {
+    if (!selProduct) return;
+    const prompt = `You are a luxury e-commerce copywriter. Rewrite only the ${section} for this product in ${tone} tone.
+Product: ${selProduct.name} ($${selProduct.price})
+Category: ${selProduct.category}
+${content.focusKeyword ? `Focus keyword: ${seo.focusKeyword}` : ''}
+
+Return ONLY a JSON object with a single key "${fieldHint}".
+Example: {"${fieldHint}": "your content here"}`;
+    setAiLoading(true); setAiSection(section); setAiStatus(`Regenerating ${section}…`);
+    try {
+      const raw = await callAIProvider(prompt, aiProviders, m => setAiStatus(m));
+      const cleaned = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      const d = JSON.parse(cleaned) as Record<string, unknown>;
+      const val = d[fieldHint];
+      if (fieldHint === 'bulletFeatures' || fieldHint === 'benefits' || fieldHint === 'useCases' || fieldHint === 'packageContents') {
+        setContent(prev => ({ ...prev, [fieldHint]: Array.isArray(val) ? val : prev[fieldHint as keyof ContentData] }));
+      } else {
+        setContent(prev => ({ ...prev, [fieldHint]: typeof val === 'string' ? val : prev[fieldHint as keyof ContentData] }));
+      }
+      notify(`${section} regenerated`, 'success');
+    } catch (e: any) { notify(`AI error: ${e.message}`, 'error'); }
+    finally { setAiLoading(false); setAiSection(''); setAiStatus(''); }
+  }
+
+  function copySchema(key: SchemaKey) {
+    const text = schemas[key];
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(''), 2000);
+    }).catch(() => notify('Copy failed — use Ctrl+A in the text area', 'error'));
+  }
+
+  function saveToProduct() {
+    if (!selProduct) { notify('Select a product first', 'error'); return; }
+    const updates: Partial<Product> = {};
+    if (content.premiumTitle) updates.name = content.premiumTitle;
+    if (content.luxuryDescription) updates.description = content.luxuryDescription;
+    if (content.shortDescription) updates.shortDesc = content.shortDescription;
+    setProducts(prev => prev.map(p => p.id === selProduct.id ? { ...p, ...updates } : p));
+    localStorage.setItem(`luxedge_seo_${selProduct.id}`, JSON.stringify({ seo, social, schemas, content }));
+    notify(`SEO data saved to "${selProduct.name}"`, 'success');
+  }
+
+  // ── Reusable UI pieces ───────────────────────────────────────────────────
+  const RegenBtn = ({ section, field }: { section: string; field: string }) => (
+    <button onClick={() => regenSection(section, field)} disabled={aiLoading}
+      className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 px-2 py-1 border border-purple-200 rounded-lg hover:bg-purple-50 disabled:opacity-40 transition-colors">
+      {aiLoading && aiSection === section ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+      Regen
+    </button>
+  );
+
+  const FieldRow = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <div>
+      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{label}</label>
+      {children}
+    </div>
+  );
+
+  const inp = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none';
+  const ta = inp + ' resize-none';
+
+  const ScoreCircle = ({ label, value, unit = '' }: { label: string; value: number; unit?: string }) => (
+    <div className={`rounded-xl border p-3 text-center ${_scoreBg(value)}`}>
+      <p className={`text-2xl font-bold ${_scoreColor(value)}`}>{Math.round(value)}{unit}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    </div>
+  );
+
+  const TAB_ITEMS: { key: SEOTab; label: string }[] = [
+    { key: 'seo', label: '🔍 SEO' },
+    { key: 'schema', label: '{ } Schema' },
+    { key: 'social', label: '📱 Social' },
+    { key: 'content', label: '✍️ Content' },
+    { key: 'analysis', label: '📊 Analysis' },
+    { key: 'preview', label: '👁 Preview' },
+  ];
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Search size={24} className="text-purple-600" /> Enterprise SEO & Content Engine
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">AI-powered SEO · Structured Data · Social SEO · Content · Live Analysis</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={saveToProduct} disabled={!selId}
+            className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+            <Save size={15} /> Save to Product
+          </button>
+          <button onClick={() => navigate('/admin/products')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 px-3 py-2 border border-gray-200 rounded-xl transition-colors">
+            <ArrowLeft size={15} /> Back
+          </button>
+        </div>
+      </div>
+
+      {/* Product selector + AI generate bar */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-48">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Product</label>
+          <select value={selId} onChange={e => setSelId(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+            <option value="">-- Select a product --</option>
+            {products.map(p => <option key={p.id} value={p.id}>{p.name} · ${p.price}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI Tone</label>
+          <select value={tone} onChange={e => setTone(e.target.value as ToneOption)}
+            className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+            {SEO_TONES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <button onClick={generateAll} disabled={aiLoading || !selId}
+          className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50 transition-colors whitespace-nowrap">
+          {aiLoading && aiSection === 'all' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+          {aiLoading && aiSection === 'all' ? aiStatus || 'Generating…' : 'Generate All with AI'}
+        </button>
+        {selProduct && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-xl border border-purple-100 text-xs">
+            {selProduct.images?.[0] && <img src={selProduct.images[0]} alt="" className="w-8 h-8 object-cover rounded-lg" />}
+            <div>
+              <p className="font-semibold text-gray-900 max-w-32 truncate">{selProduct.name}</p>
+              <p className="text-purple-600">${selProduct.price} · {selProduct.category}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl flex-wrap">
+        {TAB_ITEMS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 min-w-fit px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${tab === t.key ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TAB: Product SEO ──────────────────────────────────────────────── */}
+      {tab === 'seo' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Globe size={18} className="text-purple-600" /> Product SEO Fields</h2>
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${_scoreBg(score.overall)} ${_scoreColor(score.overall)}`}>
+              SEO Score: {score.overall}/100
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FieldRow label="SEO Title (50–60 chars)">
+              <div className="relative">
+                <input value={seo.title} onChange={e => setSeo(p => ({...p, title: e.target.value}))} className={inp} placeholder="Enter SEO title…" maxLength={80} />
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${seo.title.length >= 50 && seo.title.length <= 60 ? 'text-green-600' : seo.title.length > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{seo.title.length}</span>
+              </div>
+            </FieldRow>
+            <FieldRow label="URL Slug">
+              <input value={seo.slug} onChange={e => setSeo(p => ({...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-')}))} className={inp} placeholder="url-friendly-slug" />
+            </FieldRow>
+            <FieldRow label="Meta Description (120–160 chars)">
+              <div className="relative">
+                <textarea value={seo.metaDescription} onChange={e => setSeo(p => ({...p, metaDescription: e.target.value}))} rows={3} className={ta} placeholder="Compelling meta description with CTA…" />
+                <span className={`absolute right-3 bottom-3 text-xs font-bold ${seo.metaDescription.length >= 120 && seo.metaDescription.length <= 160 ? 'text-green-600' : seo.metaDescription.length > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{seo.metaDescription.length}/160</span>
+              </div>
+            </FieldRow>
+            <FieldRow label="Canonical URL">
+              <input value={seo.canonicalUrl} onChange={e => setSeo(p => ({...p, canonicalUrl: e.target.value}))} className={inp} placeholder="https://luxedge.us/#/products/…" />
+            </FieldRow>
+            <FieldRow label="Focus Keyword">
+              <input value={seo.focusKeyword} onChange={e => setSeo(p => ({...p, focusKeyword: e.target.value}))} className={inp} placeholder="Primary SEO keyword" />
+            </FieldRow>
+            <FieldRow label="Image ALT Text">
+              <input value={seo.imageAlt} onChange={e => setSeo(p => ({...p, imageAlt: e.target.value}))} className={inp} placeholder="Descriptive ALT text for main image" />
+            </FieldRow>
+            <FieldRow label="Image Title">
+              <input value={seo.imageTitle} onChange={e => setSeo(p => ({...p, imageTitle: e.target.value}))} className={inp} placeholder="Image title attribute" />
+            </FieldRow>
+            <FieldRow label="Image Caption">
+              <input value={seo.imageCaption} onChange={e => setSeo(p => ({...p, imageCaption: e.target.value}))} className={inp} placeholder="Optional image caption" />
+            </FieldRow>
+          </div>
+          {/* Keywords */}
+          <FieldRow label="SEO Keywords">
+            <div className="flex flex-wrap gap-1.5 mb-2 min-h-8">
+              {seo.keywords.map(k => (
+                <span key={k} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs px-2.5 py-1 rounded-full border border-purple-100">
+                  {k}<button onClick={() => setSeo(p => ({...p, keywords: p.keywords.filter(x => x !== k)}))} className="hover:text-red-500"><X size={10} /></button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input value={newKw} onChange={e => setNewKw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newKw.trim()) { setSeo(p => ({...p, keywords: [...p.keywords, newKw.trim()]})); setNewKw(''); e.preventDefault(); }}} placeholder="Add keyword…" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+              <button onClick={() => { if (newKw.trim()) { setSeo(p => ({...p, keywords: [...p.keywords, newKw.trim()]})); setNewKw(''); }}} className="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm hover:bg-purple-700"><Plus size={14} /></button>
+            </div>
+          </FieldRow>
+          {/* Secondary Keywords */}
+          <FieldRow label="Secondary Keywords">
+            <div className="flex flex-wrap gap-1.5 mb-2 min-h-8">
+              {seo.secondaryKeywords.map(k => (
+                <span key={k} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-full border border-indigo-100">
+                  {k}<button onClick={() => setSeo(p => ({...p, secondaryKeywords: p.secondaryKeywords.filter(x => x !== k)}))} className="hover:text-red-500"><X size={10} /></button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input value={newSecKw} onChange={e => setNewSecKw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newSecKw.trim()) { setSeo(p => ({...p, secondaryKeywords: [...p.secondaryKeywords, newSecKw.trim()]})); setNewSecKw(''); e.preventDefault(); }}} placeholder="Add secondary keyword…" className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+              <button onClick={() => { if (newSecKw.trim()) { setSeo(p => ({...p, secondaryKeywords: [...p.secondaryKeywords, newSecKw.trim()]})); setNewSecKw(''); }}} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm hover:bg-indigo-700"><Plus size={14} /></button>
+            </div>
+          </FieldRow>
+        </div>
+      )}
+
+      {/* ── TAB: Structured Data ─────────────────────────────────────────── */}
+      {tab === 'schema' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Code size={18} className="text-purple-600" /> JSON-LD Structured Data</h2>
+            <button onClick={generateSchemas} disabled={!selId}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+              <RefreshCw size={14} /> Generate All Schemas
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {SEO_SCHEMA_KEYS.map(key => (
+              <div key={key} className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900 capitalize">{key === 'faq' ? 'FAQ' : key} Schema</span>
+                    {schemas[key] && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${schemaValid[key] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                        {schemaValid[key] ? '✓ Valid' : '✗ Invalid'}
+                      </span>
+                    )}
+                    {key === 'faq' && !content.faqs.length && <span className="text-xs text-gray-400 italic">(no FAQs — generate AI content first)</span>}
+                  </div>
+                  <button onClick={() => copySchema(key)} disabled={!schemas[key]}
+                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40">
+                    <Clipboard size={12} /> {copied === key ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <pre className="p-4 text-xs text-gray-700 bg-gray-50 overflow-x-auto max-h-56 font-mono leading-relaxed">
+                  {schemas[key] || <span className="text-gray-400 italic">Not generated yet — click "Generate All Schemas"</span>}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: Social SEO ──────────────────────────────────────────────── */}
+      {tab === 'social' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
+          <h2 className="font-bold text-gray-900 flex items-center gap-2"><Share2 size={18} className="text-purple-600" /> Social SEO</h2>
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Open Graph (Facebook / LinkedIn)</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FieldRow label="OG Title (60–90 chars)"><input value={social.ogTitle} onChange={e => setSocial(p => ({...p, ogTitle: e.target.value}))} className={inp} placeholder="Open Graph title" /></FieldRow>
+              <FieldRow label="OG Image URL"><input value={social.ogImage} onChange={e => setSocial(p => ({...p, ogImage: e.target.value}))} className={inp} placeholder="https://…" /></FieldRow>
+              <div className="md:col-span-2">
+                <FieldRow label="OG Description (100–200 chars)"><textarea value={social.ogDescription} onChange={e => setSocial(p => ({...p, ogDescription: e.target.value}))} rows={2} className={ta} placeholder="Engaging social description" /></FieldRow>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Twitter / X Card</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FieldRow label="Card Type">
+                <select value={social.twitterCard} onChange={e => setSocial(p => ({...p, twitterCard: e.target.value}))} className={inp + ' bg-white'}>
+                  <option value="summary_large_image">Summary Large Image</option>
+                  <option value="summary">Summary</option>
+                  <option value="product">Product</option>
+                </select>
+              </FieldRow>
+              <FieldRow label="Twitter Title"><input value={social.twitterTitle} onChange={e => setSocial(p => ({...p, twitterTitle: e.target.value}))} className={inp} placeholder="Twitter card title" /></FieldRow>
+              <div className="md:col-span-2">
+                <FieldRow label="Twitter Description"><textarea value={social.twitterDescription} onChange={e => setSocial(p => ({...p, twitterDescription: e.target.value}))} rows={2} className={ta} placeholder="Twitter card description" /></FieldRow>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Pinterest Rich Pin</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <FieldRow label="Pinterest Image URL"><input value={social.pinterestImage} onChange={e => setSocial(p => ({...p, pinterestImage: e.target.value}))} className={inp} placeholder="https://…" /></FieldRow>
+              <div className="md:col-span-2">
+                <FieldRow label="Pinterest Description"><textarea value={social.pinterestDescription} onChange={e => setSocial(p => ({...p, pinterestDescription: e.target.value}))} rows={2} className={ta} placeholder="Pinterest description with keywords" /></FieldRow>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: AI Content ──────────────────────────────────────────────── */}
+      {tab === 'content' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Sparkles size={18} className="text-purple-600" /> AI Content</h2>
+            {aiLoading && aiSection !== 'all' && <p className="text-xs text-purple-600 animate-pulse">{aiStatus}</p>}
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {[
+              { label: 'Premium Product Title', field: 'premiumTitle', section: 'Premium Title', type: 'input' },
+              { label: 'Short Description (2–3 sentences)', field: 'shortDescription', section: 'Short Description', type: 'textarea2' },
+              { label: 'Luxury Product Description (200+ words)', field: 'luxuryDescription', section: 'Luxury Description', type: 'textarea6' },
+              { label: 'Care Instructions', field: 'careInstructions', section: 'Care Instructions', type: 'textarea2' },
+              { label: 'Warranty Text', field: 'warrantyText', section: 'Warranty Text', type: 'textarea2' },
+              { label: 'Shipping Information', field: 'shippingInfo', section: 'Shipping Info', type: 'textarea2' },
+            ].map(({ label, field, section, type }) => (
+              <div key={field} className="bg-white rounded-2xl border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-gray-700">{label}</label>
+                  <RegenBtn section={section} field={field} />
+                </div>
+                {type === 'input' ? (
+                  <input value={(content[field as keyof ContentData] as string) || ''} onChange={e => setContent(p => ({...p, [field]: e.target.value}))} className={inp} placeholder={`AI will generate ${label.toLowerCase()}…`} />
+                ) : (
+                  <textarea value={(content[field as keyof ContentData] as string) || ''} onChange={e => setContent(p => ({...p, [field]: e.target.value}))} rows={type === 'textarea6' ? 6 : 2} className={ta} placeholder={`AI will generate ${label.toLowerCase()}…`} />
+                )}
+              </div>
+            ))}
+            {/* Bullet Features */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Bullet Features</label>
+                <RegenBtn section="Bullet Features" field="bulletFeatures" />
+              </div>
+              <div className="space-y-2">
+                {content.bulletFeatures.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-purple-400 text-sm">•</span>
+                    <input value={f} onChange={e => setContent(p => ({...p, bulletFeatures: p.bulletFeatures.map((x,j) => j===i ? e.target.value : x)}))} className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                    <button onClick={() => setContent(p => ({...p, bulletFeatures: p.bulletFeatures.filter((_,j) => j !== i)}))} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ))}
+                <button onClick={() => setContent(p => ({...p, bulletFeatures: [...p.bulletFeatures, '']}))} className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"><Plus size={12} /> Add Feature</button>
+              </div>
+            </div>
+            {/* Benefits */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Benefits</label>
+                <RegenBtn section="Benefits" field="benefits" />
+              </div>
+              <div className="space-y-2">
+                {content.benefits.map((b, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-green-400 text-sm">✓</span>
+                    <input value={b} onChange={e => setContent(p => ({...p, benefits: p.benefits.map((x,j) => j===i ? e.target.value : x)}))} className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                    <button onClick={() => setContent(p => ({...p, benefits: p.benefits.filter((_,j) => j !== i)}))} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ))}
+                <button onClick={() => setContent(p => ({...p, benefits: [...p.benefits, '']}))} className="text-xs text-green-600 hover:text-green-800 flex items-center gap-1"><Plus size={12} /> Add Benefit</button>
+              </div>
+            </div>
+            {/* Use Cases */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Use Cases</label>
+                <RegenBtn section="Use Cases" field="useCases" />
+              </div>
+              <div className="space-y-2">
+                {content.useCases.map((u, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-blue-400 text-sm">→</span>
+                    <input value={u} onChange={e => setContent(p => ({...p, useCases: p.useCases.map((x,j) => j===i ? e.target.value : x)}))} className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                    <button onClick={() => setContent(p => ({...p, useCases: p.useCases.filter((_,j) => j !== i)}))} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ))}
+                <button onClick={() => setContent(p => ({...p, useCases: [...p.useCases, '']}))} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"><Plus size={12} /> Add Use Case</button>
+              </div>
+            </div>
+            {/* Specs */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Technical Specifications</label>
+                <RegenBtn section="Specifications" field="specifications" />
+              </div>
+              <div className="space-y-2">
+                {Object.entries(content.specifications).map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-2">
+                    <input value={k} readOnly className="w-36 border border-gray-100 rounded-lg px-2.5 py-1.5 text-xs bg-gray-50 font-medium text-gray-600" />
+                    <span className="text-gray-400">:</span>
+                    <input value={v} onChange={e => setContent(p => ({ ...p, specifications: { ...p.specifications, [k]: e.target.value } }))} className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                    <button onClick={() => setContent(p => { const s = {...p.specifications}; delete s[k]; return {...p, specifications: s}; })} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ))}
+                {!Object.keys(content.specifications).length && <p className="text-xs text-gray-400 italic">No specs yet — use AI Generate or add manually</p>}
+              </div>
+            </div>
+            {/* Package Contents */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">Package Contents</label>
+                <RegenBtn section="Package Contents" field="packageContents" />
+              </div>
+              <div className="space-y-2">
+                {content.packageContents.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-gray-400 text-sm">📦</span>
+                    <input value={item} onChange={e => setContent(p => ({...p, packageContents: p.packageContents.map((x,j) => j===i ? e.target.value : x)}))} className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                    <button onClick={() => setContent(p => ({...p, packageContents: p.packageContents.filter((_,j) => j !== i)}))} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                  </div>
+                ))}
+                <button onClick={() => setContent(p => ({...p, packageContents: [...p.packageContents, '']}))} className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1"><Plus size={12} /> Add Item</button>
+              </div>
+            </div>
+            {/* FAQs */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700">FAQs (used in FAQ Schema)</label>
+                <RegenBtn section="FAQs" field="faqs" />
+              </div>
+              <div className="space-y-3">
+                {content.faqs.map((faq, i) => (
+                  <div key={i} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <input value={faq.q} onChange={e => setContent(p => ({...p, faqs: p.faqs.map((x,j) => j===i ? {...x, q: e.target.value} : x)}))} className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white font-medium focus:ring-1 focus:ring-purple-500 focus:outline-none" placeholder="Question?" />
+                      <button onClick={() => setContent(p => ({...p, faqs: p.faqs.filter((_,j) => j !== i)}))} className="text-gray-400 hover:text-red-500 mt-1"><X size={14} /></button>
+                    </div>
+                    <textarea value={faq.a} onChange={e => setContent(p => ({...p, faqs: p.faqs.map((x,j) => j===i ? {...x, a: e.target.value} : x)}))} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none resize-none" placeholder="Answer…" />
+                  </div>
+                ))}
+                <button onClick={() => setContent(p => ({...p, faqs: [...p.faqs, {q:'', a:''}]}))} className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"><Plus size={12} /> Add FAQ</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: SEO Analysis ────────────────────────────────────────────── */}
+      {tab === 'analysis' && (
+        <div className="space-y-4">
+          <h2 className="font-bold text-gray-900 flex items-center gap-2"><TrendingUp size={18} className="text-purple-600" /> Live SEO Analysis</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <ScoreCircle label="SEO Score" value={score.overall} />
+            <ScoreCircle label="Readability" value={score.readability} />
+            <ScoreCircle label="KW Density" value={score.keywordDensity} unit="%" />
+            <ScoreCircle label="Meta Chars" value={score.metaLength >= 120 && score.metaLength <= 160 ? 100 : score.metaLength >= 80 ? 65 : 30} />
+            <ScoreCircle label="Title Chars" value={score.titleLength >= 50 && score.titleLength <= 60 ? 100 : score.titleLength >= 30 ? 65 : 30} />
+            <ScoreCircle label="Image ALT" value={score.missingAlt === 0 ? 100 : 0} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-3xl font-bold text-gray-900">{score.titleLength}</p>
+              <p className="text-xs text-gray-500">Title length <span className="text-gray-400">(ideal 50–60)</span></p>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.titleLength >= 50 && score.titleLength <= 60 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (score.titleLength/70)*100)}%` }} /></div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-3xl font-bold text-gray-900">{score.metaLength}</p>
+              <p className="text-xs text-gray-500">Meta length <span className="text-gray-400">(ideal 120–160)</span></p>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.metaLength >= 120 && score.metaLength <= 160 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (score.metaLength/200)*100)}%` }} /></div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <p className="text-3xl font-bold text-gray-900">{score.keywordDensity.toFixed(1)}%</p>
+              <p className="text-xs text-gray-500">Keyword density <span className="text-gray-400">(ideal 1–3%)</span></p>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.keywordDensity >= 1 && score.keywordDensity <= 3 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, score.keywordDensity * 25)}%` }} /></div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 mb-3">Issues & Recommendations</h3>
+            {score.issues.length === 0 ? (
+              <p className="text-gray-400 text-sm italic">Generate content to see analysis…</p>
+            ) : (
+              <div className="space-y-1.5">
+                {score.issues.map((issue, i) => (
+                  <div key={i} className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${issue.type === 'good' ? 'bg-green-50' : issue.type === 'warning' ? 'bg-amber-50' : 'bg-red-50'}`}>
+                    <span>{_issueIcon(issue.type)}</span>
+                    <span className={issue.type === 'good' ? 'text-green-800' : issue.type === 'warning' ? 'text-amber-800' : 'text-red-800'}>{issue.msg}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Internal Link Suggestions */}
+          {selProduct && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-5">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Link2 size={15} /> Internal Link Suggestions</h3>
+              <div className="space-y-2">
+                {products.filter(p => p.id !== selId && p.category === selProduct.category).slice(0,4).map(p => (
+                  <div key={p.id} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-gray-50">
+                    <span className="text-purple-400">→</span>
+                    <span className="text-gray-700">{p.name}</span>
+                    <span className="text-gray-400 text-xs ml-auto font-mono">/#/products/{p.id}</span>
+                  </div>
+                ))}
+                {!products.filter(p => p.id !== selId && p.category === selProduct.category).length && <p className="text-gray-400 text-sm italic">No related products in same category</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: Preview ─────────────────────────────────────────────────── */}
+      {tab === 'preview' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            {([['desktop','💻 Desktop'],['mobile','📱 Mobile'],['facebook','👥 Facebook'],['twitter','🐦 Twitter']] as const).map(([mode, label]) => (
+              <button key={mode} onClick={() => setPreviewMode(mode)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${previewMode === mode ? 'bg-purple-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-purple-50'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Google Desktop Preview */}
+          {previewMode === 'desktop' && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Monitor size={16} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-500">Google Search — Desktop</span>
+              </div>
+              <div className="border border-gray-200 rounded-xl p-5 max-w-2xl bg-white font-sans">
+                <p className="text-xs text-gray-500 mb-1">https://luxedge.us › products › {seo.slug || 'product'}</p>
+                <p className="text-xl text-blue-700 hover:underline cursor-pointer font-medium leading-tight mb-1">{seo.title || selProduct?.name || 'SEO Title will appear here'}</p>
+                <p className="text-sm text-gray-600 leading-relaxed">{seo.metaDescription || 'Meta description will appear here. It shows up to 160 characters in Google search results.'}</p>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">Title: {seo.title.length}/60 chars · Meta: {seo.metaDescription.length}/160 chars</p>
+            </div>
+          )}
+
+          {/* Google Mobile Preview */}
+          {previewMode === 'mobile' && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Smartphone size={16} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-500">Google Search — Mobile</span>
+              </div>
+              <div className="max-w-sm mx-auto">
+                <div className="border border-gray-200 rounded-2xl p-4 bg-white font-sans shadow-sm">
+                  <p className="text-xs text-green-600 mb-0.5">luxedge.us › {seo.slug || 'products'}</p>
+                  <p className="text-base text-blue-700 font-medium leading-tight mb-1 line-clamp-2">{seo.title || 'SEO Title'}</p>
+                  <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">{seo.metaDescription || 'Meta description shown in mobile search results.'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Facebook Preview */}
+          {previewMode === 'facebook' && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Share2 size={16} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-500">Facebook / Open Graph Preview</span>
+              </div>
+              <div className="max-w-lg mx-auto border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
+                {social.ogImage ? (
+                  <img src={social.ogImage} alt="" className="w-full h-52 object-cover" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                ) : (
+                  <div className="w-full h-52 bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
+                    <p className="text-gray-400 text-sm">1200×630 OG Image</p>
+                  </div>
+                )}
+                <div className="p-3 bg-gray-50 border-t border-gray-200">
+                  <p className="text-xs text-gray-500 uppercase">LUXEDGE.US</p>
+                  <p className="font-bold text-gray-900 text-sm leading-tight mt-0.5">{social.ogTitle || seo.title || 'OG Title'}</p>
+                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{social.ogDescription || seo.metaDescription || 'OG Description'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Twitter Preview */}
+          {previewMode === 'twitter' && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-gray-400 text-sm font-bold">𝕏</span>
+                <span className="text-sm font-medium text-gray-500">Twitter / X Card Preview</span>
+              </div>
+              <div className="max-w-lg mx-auto border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                {social.ogImage ? (
+                  <img src={social.ogImage} alt="" className="w-full h-48 object-cover" onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                ) : (
+                  <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                    <p className="text-gray-400 text-sm">Twitter Card Image</p>
+                  </div>
+                )}
+                <div className="p-3">
+                  <p className="font-bold text-gray-900 text-sm">{social.twitterTitle || seo.title || 'Twitter Title'}</p>
+                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{social.twitterDescription || seo.metaDescription || 'Twitter description'}</p>
+                  <p className="text-xs text-gray-400 mt-1">luxedge.us</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ============================================================================
 // ENTERPRISE VARIANT GENERATOR
@@ -4689,6 +6452,8 @@ export default function App() {
           <Route path="/admin/categories" element={<AdminLayout><ACategories /></AdminLayout>} />
           <Route path="/admin/reviews" element={<AdminLayout><AReviews /></AdminLayout>} />
           <Route path="/admin/blogs" element={<AdminLayout><ABlogs /></AdminLayout>} />
+          <Route path="/admin/seo-engine" element={<AdminLayout><ASEOEngine /></AdminLayout>} />
+          <Route path="/admin/marketing" element={<AdminLayout><AMarketingGen /></AdminLayout>} />
           <Route path="/admin/variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />
           <Route path="/admin/ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
           <Route path="/admin/settings" element={<AdminLayout><ASettings /></AdminLayout>} />
