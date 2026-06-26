@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, Save, ArrowLeft, DollarSign, Upload, ImageIcon,
   Globe, Clock, Send, Headphones, ChevronLeft, Sparkles, TrendingUp,
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
-  Bot, Clipboard, Link2, RefreshCw, Wand2, History,
+  Bot, Clipboard, Link2, RefreshCw, Wand2, History, Layers, Shuffle, Table2, Sliders,
 } from 'lucide-react';
 
 // ============================================================================
@@ -75,6 +75,15 @@ interface AIExtractedProduct {
   images: string[]; faqs: {q:string;a:string}[];
   warranty: string; careInstructions: string; safetyNotes: string;
   confidence: Record<string,number>;
+}
+interface EnterpriseVariant {
+  id: string; combo: Record<string,string>;
+  sku: string; barcode: string; costPrice: number; sellingPrice: number;
+  comparePrice: number; inventory: number; weight: string; dimensions: string;
+  image: string; status: 'active'|'inactive'|'draft'; lowStockThreshold: number;
+}
+interface VariantAttribute {
+  id: string; name: string; values: string[]; autoDetected: boolean;
 }
 
 const DEFAULT_AI_PROVIDERS: AIProvider[] = [
@@ -2573,6 +2582,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/categories', icon: FolderTree, label: 'Categories' },
     { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     { to: '/admin/blogs', icon: FileText, label: 'Blog Posts' },
+    { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
@@ -3286,6 +3296,734 @@ function ASettings() {
 }
 
 // ============================================================================
+// ENTERPRISE VARIANT GENERATOR
+// ============================================================================
+const VARIANT_ATTRIBUTE_PRESETS: Record<string, string[]> = {
+  Colors: ['Black','White','Gray','Navy','Red','Blue','Green','Yellow','Pink','Purple','Orange','Brown','Beige','Gold','Silver'],
+  Sizes: ['XS','S','M','L','XL','XXL','XXXL','One Size','6','7','8','9','10','11','12'],
+  Materials: ['Cotton','Polyester','Nylon','Leather','Stainless Steel','Aluminum','Silicone','Wood','Bamboo','Canvas','Linen'],
+  Storage: ['16GB','32GB','64GB','128GB','256GB','512GB','1TB'],
+  Styles: ['Classic','Modern','Vintage','Minimalist','Sport','Casual','Formal','Bohemian'],
+  'Bundle Options': ['Single','2-Pack','3-Pack','5-Pack','10-Pack','Starter Kit','Pro Kit','Family Pack'],
+};
+
+const ATTR_ICONS: Record<string, string> = {
+  Colors: '🎨', Sizes: '📏', Materials: '🧵', Storage: '💾', Styles: '✨', 'Bundle Options': '📦',
+};
+
+function _makeVid(): string {
+  return 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function _cartesian(attrs: VariantAttribute[]): Record<string,string>[] {
+  const active = attrs.filter(a => a.values.length > 0);
+  if (!active.length) return [];
+  return active.reduce<Record<string,string>[]>((acc, attr) => {
+    if (!acc.length) return attr.values.map(v => ({ [attr.name]: v }));
+    return acc.flatMap(combo => attr.values.map(v => ({ ...combo, [attr.name]: v })));
+  }, []);
+}
+
+function _genSKU(base: string, combo: Record<string,string>, idx: number): string {
+  const suffix = Object.values(combo).map(v => v.slice(0,3).toUpperCase().replace(/\s/g,'')).join('-');
+  return base ? `${base}-${suffix}` : `SKU-${String(idx).padStart(3,'0')}-${suffix}`;
+}
+
+function _comboKey(combo: Record<string,string>): string {
+  return Object.entries(combo).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join('|');
+}
+
+function _detectAttrsFromProduct(product: Product): VariantAttribute[] {
+  const out: VariantAttribute[] = [];
+  const colors = new Set<string>();
+  const sizes = new Set<string>();
+  (product.variants || []).forEach(pv => {
+    if (pv.color) colors.add(pv.color);
+    if (pv.size && pv.size !== 'One Size') sizes.add(pv.size);
+  });
+  if (colors.size) out.push({ id: _makeVid(), name: 'Colors', values: [...colors], autoDetected: true });
+  if (sizes.size) out.push({ id: _makeVid(), name: 'Sizes', values: [...sizes], autoDetected: true });
+  return out;
+}
+
+function AVariantGen() {
+  const { products, setProducts, notify } = useApp();
+  const navigate = useNavigate();
+
+  type VGStep = 'product'|'attributes'|'matrix'|'done';
+  const [step, setStep] = useState<VGStep>('product');
+  const [selId, setSelId] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualSku, setManualSku] = useState('');
+  const [manualPrice, setManualPrice] = useState(0);
+  const [attrs, setAttrs] = useState<VariantAttribute[]>([
+    { id: _makeVid(), name: 'Colors', values: [], autoDetected: false },
+    { id: _makeVid(), name: 'Sizes', values: [], autoDetected: false },
+  ]);
+  const [variants, setVariants] = useState<EnterpriseVariant[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiStatus, setAiStatus] = useState('');
+  const [newAttrName, setNewAttrName] = useState('');
+  const [newValInputs, setNewValInputs] = useState<Record<string,string>>({});
+  const [editId, setEditId] = useState<string|null>(null);
+  const [dupKeys, setDupKeys] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState(false);
+  const [aiProviders] = useState<AIProvider[]>(() => {
+    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers')||'null')||DEFAULT_AI_PROVIDERS; }
+    catch { return DEFAULT_AI_PROVIDERS; }
+  });
+
+  const selProduct = products.find(p => p.id === selId);
+
+  useEffect(() => {
+    const p = products.find(x => x.id === selId);
+    if (p) {
+      const detected = _detectAttrsFromProduct(p);
+      if (detected.length) {
+        setAttrs(prev => [...detected, ...prev.filter(a => !a.autoDetected)]);
+      }
+      setManualSku(`PROD-${p.id}`);
+      setManualPrice(p.price);
+    }
+  }, [selId, products]);
+
+  useEffect(() => {
+    const keys = variants.map(v => _comboKey(v.combo));
+    const seen = new Set<string>();
+    const dups = new Set<string>();
+    keys.forEach(k => { if (seen.has(k)) dups.add(k); else seen.add(k); });
+    setDupKeys(dups);
+  }, [variants]);
+
+  function generateMatrix() {
+    const combos = _cartesian(attrs);
+    if (!combos.length) { notify('Add at least one attribute with values first.', 'error'); return; }
+    const base = selProduct ? selProduct.id.toUpperCase() : (manualSku || 'SKU');
+    const basePrice = selProduct ? selProduct.price : manualPrice;
+    setVariants(combos.map((combo, i) => ({
+      id: _makeVid(),
+      combo,
+      sku: _genSKU(base, combo, i),
+      barcode: '',
+      costPrice: Math.round(basePrice * 0.45 * 100) / 100,
+      sellingPrice: basePrice,
+      comparePrice: Math.round(basePrice * 1.25 * 100) / 100,
+      inventory: 50,
+      weight: selProduct?.weight || '',
+      dimensions: selProduct?.dimensions || '',
+      image: selProduct?.images?.[0] || '',
+      status: 'active' as const,
+      lowStockThreshold: 5,
+    })));
+    setStep('matrix');
+  }
+
+  async function aiSuggest() {
+    const info = selProduct
+      ? `Product: ${selProduct.name}\nCategory: ${selProduct.category}\nDescription: ${selProduct.shortDesc}`
+      : `Product: ${manualName}`;
+    const prompt = `You are an expert e-commerce product specialist.
+
+For this product, suggest variant attributes with specific realistic values:
+${info}
+
+Return ONLY valid JSON:
+{
+  "attributes": [
+    {"name": "Colors", "values": ["Black", "White"]},
+    {"name": "Sizes", "values": ["S", "M", "L"]}
+  ]
+}
+
+Rules:
+- Only include attributes that make sense for this specific product
+- Provide realistic and specific values (not generic placeholders)
+- Max 4 attribute groups, max 6 values each
+- Focus on: Colors, Sizes, Materials, Storage, Styles, Bundle Options
+- Return ONLY the JSON, no other text`;
+
+    setAiLoading(true);
+    setAiStatus('Analyzing product with AI…');
+    try {
+      const raw = await callAIProvider(prompt, aiProviders, m => setAiStatus(m));
+      const cleaned = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      const parsed = JSON.parse(cleaned) as { attributes: { name: string; values: string[] }[] };
+      if (parsed.attributes?.length) {
+        setAttrs(parsed.attributes.map(a => ({ id: _makeVid(), name: a.name, values: a.values, autoDetected: true })));
+        notify(`AI suggested ${parsed.attributes.length} attribute groups`, 'success');
+      }
+    } catch (e: any) {
+      notify(`AI error: ${e.message}`, 'error');
+    } finally {
+      setAiLoading(false);
+      setAiStatus('');
+    }
+  }
+
+  function addVal(attrId: string) {
+    const val = (newValInputs[attrId] || '').trim();
+    if (!val) return;
+    setAttrs(prev => prev.map(a =>
+      a.id === attrId && !a.values.includes(val) ? { ...a, values: [...a.values, val] } : a
+    ));
+    setNewValInputs(prev => ({ ...prev, [attrId]: '' }));
+  }
+
+  function removeVal(attrId: string, val: string) {
+    setAttrs(prev => prev.map(a =>
+      a.id === attrId ? { ...a, values: a.values.filter(v => v !== val) } : a
+    ));
+  }
+
+  function removeAttr(attrId: string) {
+    setAttrs(prev => prev.filter(a => a.id !== attrId));
+  }
+
+  function addAttr() {
+    if (!newAttrName.trim()) return;
+    setAttrs(prev => [...prev, { id: _makeVid(), name: newAttrName.trim(), values: [], autoDetected: false }]);
+    setNewAttrName('');
+  }
+
+  function applyPresets(attrId: string, attrName: string) {
+    const presets = VARIANT_ATTRIBUTE_PRESETS[attrName] || [];
+    setAttrs(prev => prev.map(a =>
+      a.id !== attrId ? a : { ...a, values: [...new Set([...a.values, ...presets])] }
+    ));
+  }
+
+  function updateV(id: string, field: string, value: string | number) {
+    setVariants(prev => prev.map(v => v.id === id ? ({ ...v, [field]: value } as EnterpriseVariant) : v));
+  }
+
+  function removeV(id: string) {
+    setVariants(prev => prev.filter(v => v.id !== id));
+  }
+
+  function removeDuplicates() {
+    setVariants(prev => {
+      const seen = new Set<string>();
+      const keep: EnterpriseVariant[] = [];
+      for (const v of prev) {
+        const k = _comboKey(v.combo);
+        if (!seen.has(k)) { seen.add(k); keep.push(v); }
+      }
+      return keep;
+    });
+  }
+
+  function saveToProduct() {
+    if (!selProduct) { notify('Select a product first', 'error'); return; }
+    const newVars: ProductVariant[] = variants.map(v => ({
+      id: v.id,
+      color: v.combo['Colors'] || v.combo[Object.keys(v.combo)[0]] || 'Default',
+      size: v.combo['Sizes'] || v.combo[Object.keys(v.combo)[1]] || 'One Size',
+      price: v.sellingPrice,
+      salePrice: v.sellingPrice,
+      stock: v.inventory,
+      sku: v.sku,
+      image: v.image || undefined,
+    }));
+    setProducts(prev => prev.map(p => p.id === selProduct.id ? { ...p, variants: newVars } : p));
+    setSaved(true);
+    setStep('done');
+    notify(`Saved ${variants.length} variants to "${selProduct.name}"`, 'success');
+  }
+
+  function resetAll() {
+    setSaved(false);
+    setStep('product');
+    setVariants([]);
+    setSelId('');
+    setManualName('');
+    setManualSku('');
+    setManualPrice(0);
+    setAttrs([
+      { id: _makeVid(), name: 'Colors', values: [], autoDetected: false },
+      { id: _makeVid(), name: 'Sizes', values: [], autoDetected: false },
+    ]);
+  }
+
+  const totalCombos = _cartesian(attrs).length;
+  const dupCount = dupKeys.size;
+  const editedV = variants.find(v => v.id === editId) ?? null;
+
+  const VG_STEPS: { key: VGStep; label: string }[] = [
+    { key: 'product', label: '1. Product' },
+    { key: 'attributes', label: '2. Attributes' },
+    { key: 'matrix', label: '3. Matrix' },
+    { key: 'done', label: '4. Done' },
+  ];
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Layers size={24} className="text-purple-600" /> Enterprise Variant Generator
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">Auto-detect attributes · AI suggestions · Complete variant matrix</p>
+        </div>
+        <button onClick={() => navigate('/admin/products')} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
+          <ArrowLeft size={16} /> Products
+        </button>
+      </div>
+
+      {/* Step Progress */}
+      <div className="flex items-center gap-0">
+        {VG_STEPS.map((s, i) => (
+          <div key={s.key} className="flex items-center">
+            <button
+              onClick={() => { if (s.key !== 'done' || saved) setStep(s.key); }}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                step === s.key ? 'bg-purple-600 text-white' :
+                (VG_STEPS.findIndex(x => x.key === step) > i) ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' :
+                'text-gray-400 cursor-default'
+              }`}
+            >{s.label}</button>
+            {i < VG_STEPS.length - 1 && <ChevronRight size={16} className="text-gray-400 mx-1" />}
+          </div>
+        ))}
+      </div>
+
+      {/* ── STEP 1: Product ─────────────────────────────────────────────────── */}
+      {step === 'product' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Package size={18} className="text-purple-600" /> Select Product
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Existing Product</label>
+                <select value={selId} onChange={e => setSelId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
+                  <option value="">-- Select a product to generate variants for --</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} · ${p.price}</option>)}
+                </select>
+              </div>
+              {selProduct && (
+                <div className="flex items-center gap-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+                  {selProduct.images?.[0] && (
+                    <img src={selProduct.images[0]} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-semibold text-gray-900">{selProduct.name}</p>
+                    <p className="text-sm text-gray-500">{selProduct.category} · ${selProduct.price}</p>
+                    <p className="text-xs text-purple-600 mt-1">
+                      {selProduct.variants?.length || 0} existing variants · will be replaced on save
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Or set manually (for new products)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Product Name</label>
+                    <input value={manualName} onChange={e => setManualName(e.target.value)}
+                      placeholder="e.g. Premium T-Shirt"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Base SKU</label>
+                    <input value={manualSku} onChange={e => setManualSku(e.target.value)}
+                      placeholder="e.g. TSHIRT-001"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Base Price ($)</label>
+                    <input type="number" value={manualPrice || ''} onChange={e => setManualPrice(parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                if (!selId && !manualName.trim()) { notify('Select a product or enter a product name', 'error'); return; }
+                setStep('attributes');
+              }}
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+            >
+              Next: Configure Attributes <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 2: Attributes ──────────────────────────────────────────────── */}
+      {step === 'attributes' && (
+        <div className="space-y-4">
+          {/* AI Banner */}
+          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl p-5 flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="font-semibold">AI Attribute Suggestions</p>
+              <p className="text-sm text-purple-100">Let AI analyze your product and suggest realistic variant attributes and values</p>
+              {aiStatus && <p className="text-xs text-purple-200 mt-1 animate-pulse">{aiStatus}</p>}
+            </div>
+            <button onClick={aiSuggest} disabled={aiLoading}
+              className="flex items-center gap-2 bg-white text-purple-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-purple-50 disabled:opacity-60 transition-colors whitespace-nowrap flex-shrink-0">
+              {aiLoading ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+              {aiLoading ? 'Analyzing…' : 'AI Suggest'}
+            </button>
+          </div>
+
+          {/* Attribute Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {attrs.map(attr => (
+              <div key={attr.id} className="bg-white rounded-2xl border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-lg">{ATTR_ICONS[attr.name] || '📋'}</span>
+                    <span className="font-semibold text-gray-900">{attr.name}</span>
+                    {attr.autoDetected && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Auto-detected</span>
+                    )}
+                    <span className="text-xs text-gray-400">{attr.values.length} value{attr.values.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {VARIANT_ATTRIBUTE_PRESETS[attr.name] && (
+                      <button onClick={() => applyPresets(attr.id, attr.name)}
+                        className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-purple-50 transition-colors">
+                        <Shuffle size={12} /> Presets
+                      </button>
+                    )}
+                    <button onClick={() => removeAttr(attr.id)}
+                      className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                {/* Values */}
+                <div className="flex flex-wrap gap-1.5 mb-3 min-h-8">
+                  {attr.values.map(v => (
+                    <span key={v} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 text-xs px-2.5 py-1 rounded-full border border-purple-100 group">
+                      {v}
+                      <button onClick={() => removeVal(attr.id, v)} className="hover:text-red-500 ml-0.5 opacity-60 group-hover:opacity-100">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                  {!attr.values.length && (
+                    <span className="text-xs text-gray-400 italic py-1">No values yet — type below or load presets</span>
+                  )}
+                </div>
+                {/* Add value input */}
+                <div className="flex gap-2">
+                  <input
+                    value={newValInputs[attr.id] || ''}
+                    onChange={e => setNewValInputs(p => ({ ...p, [attr.id]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addVal(attr.id); } }}
+                    placeholder={`Add ${attr.name.toLowerCase()} value…`}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none"
+                  />
+                  <button onClick={() => addVal(attr.id)}
+                    className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors">
+                    <Plus size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add custom attribute */}
+          <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Add Custom Attribute</p>
+            <div className="flex gap-2">
+              <input value={newAttrName} onChange={e => setNewAttrName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addAttr(); } }}
+                placeholder="e.g. Connectivity, Voltage, Finish, Scent…"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none" />
+              <button onClick={addAttr}
+                className="px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm hover:bg-gray-800 flex items-center gap-2 transition-colors">
+                <Plus size={16} /> Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {Object.keys(VARIANT_ATTRIBUTE_PRESETS).map(preset => (
+                <button key={preset} onClick={() => {
+                  if (!attrs.find(a => a.name === preset)) {
+                    setAttrs(prev => [...prev, { id: _makeVid(), name: preset, values: [], autoDetected: false }]);
+                  }
+                }} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full hover:bg-purple-50 hover:text-purple-700 transition-colors">
+                  + {preset}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Matrix preview count */}
+          {totalCombos > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  Will generate <strong>{totalCombos}</strong> variant{totalCombos !== 1 ? 's' : ''}
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {attrs.filter(a => a.values.length).map(a => `${a.name}(${a.values.length})`).join(' × ')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between">
+            <button onClick={() => setStep('product')} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 px-4 py-2.5">
+              <ArrowLeft size={16} /> Back
+            </button>
+            <button onClick={generateMatrix} disabled={totalCombos === 0}
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
+              <Shuffle size={16} /> Generate {totalCombos > 0 ? `${totalCombos} Variants` : 'Matrix'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 3: Matrix ──────────────────────────────────────────────────── */}
+      {step === 'matrix' && (
+        <div className="space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Variants', value: variants.length, cls: 'text-purple-600' },
+              { label: 'Duplicates', value: dupCount, cls: dupCount ? 'text-red-600' : 'text-green-600' },
+              { label: 'Active', value: variants.filter(v => v.status === 'active').length, cls: 'text-green-600' },
+              { label: 'Low Stock', value: variants.filter(v => v.inventory <= v.lowStockThreshold).length, cls: 'text-amber-600' },
+            ].map(s => (
+              <div key={s.label} className={`bg-white rounded-xl border p-3 text-center ${s.label === 'Duplicates' && dupCount ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                <p className={`text-2xl font-bold ${s.cls}`}>{s.value}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {dupCount > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-sm text-red-700">
+              <AlertTriangle size={16} className="flex-shrink-0" />
+              <span>{dupCount} duplicate combination{dupCount > 1 ? 's' : ''} detected — remove before saving</span>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Table2 size={18} className="text-purple-600" /> Variant Matrix ({variants.length})
+              </h3>
+              <div className="flex gap-2">
+                <button onClick={() => setStep('attributes')}
+                  className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg transition-colors">
+                  <Sliders size={14} /> Attributes
+                </button>
+                <button onClick={removeDuplicates} disabled={!dupCount}
+                  className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-lg disabled:opacity-40 transition-colors">
+                  <Trash2 size={14} /> Remove Dupes
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium">Combination</th>
+                    <th className="text-left px-4 py-3 font-medium">SKU</th>
+                    <th className="text-right px-4 py-3 font-medium">Cost</th>
+                    <th className="text-right px-4 py-3 font-medium">Price</th>
+                    <th className="text-right px-4 py-3 font-medium">Compare</th>
+                    <th className="text-right px-4 py-3 font-medium">Stock</th>
+                    <th className="text-center px-4 py-3 font-medium">Status</th>
+                    <th className="text-center px-4 py-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {variants.map(v => {
+                    const isDup = dupKeys.has(_comboKey(v.combo));
+                    const isEd = editId === v.id;
+                    return (
+                      <tr key={v.id} className={`hover:bg-gray-50 transition-colors ${isDup ? 'bg-red-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(v.combo).map(([k, val]) => (
+                              <span key={k} className="inline-flex items-center gap-0.5 text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full border border-purple-100">
+                                <span className="text-purple-400 text-[10px]">{k}:</span>{val}
+                              </span>
+                            ))}
+                            {isDup && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-semibold">DUPLICATE</span>}
+                          </div>
+                        </td>
+                        {isEd ? (
+                          <>
+                            <td className="px-3 py-2">
+                              <input value={v.sku} onChange={e => updateV(v.id,'sku',e.target.value)} className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" value={v.costPrice} onChange={e => updateV(v.id,'costPrice',parseFloat(e.target.value)||0)} className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" value={v.sellingPrice} onChange={e => updateV(v.id,'sellingPrice',parseFloat(e.target.value)||0)} className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" value={v.comparePrice} onChange={e => updateV(v.id,'comparePrice',parseFloat(e.target.value)||0)} className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" value={v.inventory} onChange={e => updateV(v.id,'inventory',parseInt(e.target.value)||0)} className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <select value={v.status} onChange={e => updateV(v.id,'status',e.target.value)} className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="draft">Draft</option>
+                              </select>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{v.sku}</td>
+                            <td className="px-4 py-3 text-right text-xs text-gray-500">${v.costPrice.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-semibold">${v.sellingPrice.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-xs text-gray-400 line-through">${v.comparePrice.toFixed(2)}</td>
+                            <td className={`px-4 py-3 text-right font-medium ${v.inventory <= v.lowStockThreshold ? 'text-amber-600' : ''}`}>{v.inventory}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.status === 'active' ? 'bg-green-100 text-green-700' : v.status === 'draft' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-600'}`}>
+                                {v.status}
+                              </span>
+                            </td>
+                          </>
+                        )}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => setEditId(isEd ? null : v.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${isEd ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}>
+                              {isEd ? <Save size={14} /> : <Edit2 size={14} />}
+                            </button>
+                            <button onClick={() => removeV(v.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Extended fields panel */}
+            {editedV && (
+              <div className="p-5 bg-purple-50 border-t border-purple-100">
+                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-4">
+                  Extended Fields — {Object.values(editedV.combo).join(' / ')}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Barcode (UPC/EAN)</label>
+                    <input value={editedV.barcode} onChange={e => updateV(editedV.id,'barcode',e.target.value)}
+                      placeholder="123456789012"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Weight</label>
+                    <input value={editedV.weight} onChange={e => updateV(editedV.id,'weight',e.target.value)}
+                      placeholder="0.5 lbs"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Dimensions</label>
+                    <input value={editedV.dimensions} onChange={e => updateV(editedV.id,'dimensions',e.target.value)}
+                      placeholder="10×5×2 in"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Low Stock Alert</label>
+                    <input type="number" value={editedV.lowStockThreshold}
+                      onChange={e => updateV(editedV.id,'lowStockThreshold',parseInt(e.target.value)||0)}
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Variant Image URL</label>
+                    <input value={editedV.image} onChange={e => updateV(editedV.id,'image',e.target.value)}
+                      placeholder="https://…"
+                      className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:ring-1 focus:ring-purple-500 focus:outline-none" />
+                  </div>
+                  {editedV.image && (
+                    <div className="flex items-center gap-2">
+                      <img src={editedV.image} alt="" className="h-12 w-12 object-cover rounded-lg border border-gray-200"
+                        onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />
+                      <span className="text-xs text-gray-500">Preview</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setEditId(null)}
+                  className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors">
+                  <Save size={14} /> Done Editing
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between items-center">
+            <button onClick={() => setStep('attributes')} className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 px-4 py-2.5">
+              <ArrowLeft size={16} /> Back to Attributes
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-500">{variants.length} variant{variants.length !== 1 ? 's' : ''} ready</span>
+              {selId ? (
+                <button onClick={saveToProduct} disabled={!!dupCount || !variants.length}
+                  className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+                  <Save size={16} /> Save All to Product
+                </button>
+              ) : (
+                <button onClick={() => { notify('Select a product to save variants', 'error'); setStep('product'); }}
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+                  <AlertTriangle size={16} /> Select Product First
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 4: Done ────────────────────────────────────────────────────── */}
+      {step === 'done' && (
+        <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+            <CheckCircle size={40} className="text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">Variants Saved!</h2>
+          <p className="text-gray-500 max-w-sm">
+            <strong>{variants.length}</strong> variant{variants.length !== 1 ? 's' : ''} created for{' '}
+            <strong>{selProduct?.name || 'your product'}</strong>
+          </p>
+          <div className="bg-gray-50 rounded-xl p-4 text-left w-full max-w-sm">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Summary</p>
+            <div className="space-y-1 text-sm">
+              <p><span className="text-gray-500">Attributes:</span> {attrs.filter(a => a.values.length).map(a => `${a.name}(${a.values.length})`).join(' × ')}</p>
+              <p><span className="text-gray-500">Total combinations:</span> {variants.length}</p>
+              <p><span className="text-gray-500">Price range:</span> ${Math.min(...variants.map(v => v.sellingPrice)).toFixed(2)} – ${Math.max(...variants.map(v => v.sellingPrice)).toFixed(2)}</p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={resetAll}
+              className="px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+              Start Over
+            </button>
+            <button onClick={() => navigate('/admin/products')}
+              className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-800 flex items-center gap-2 transition-colors">
+              <Package size={16} /> View Products
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // AI PRODUCT IMPORT ENGINE
 // ============================================================================
 const SUPPORTED_PLATFORMS = ['AliExpress','Alibaba','Amazon','eBay','Etsy','Walmart','Temu','CJ Dropshipping','Any public product page'];
@@ -3951,6 +4689,7 @@ export default function App() {
           <Route path="/admin/categories" element={<AdminLayout><ACategories /></AdminLayout>} />
           <Route path="/admin/reviews" element={<AdminLayout><AReviews /></AdminLayout>} />
           <Route path="/admin/blogs" element={<AdminLayout><ABlogs /></AdminLayout>} />
+          <Route path="/admin/variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />
           <Route path="/admin/ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
           <Route path="/admin/settings" element={<AdminLayout><ASettings /></AdminLayout>} />
           {/* Fallback */}
