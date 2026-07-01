@@ -300,6 +300,13 @@ export default function ProductsPage() {
                 For reliable imports: Settings → API Keys → add free scrape.do key (1000/month free).
               </p>
             )}
+            {apiKeys.openRouterKey || apiKeys.openAiKey ? (
+              <p className="text-xs text-purple-700 mt-1 font-medium">✓ AI Provider connected — Smart parsing enabled</p>
+            ) : (
+              <p className="text-xs text-orange-500 mt-1">
+                Add OpenRouter key in Settings for advanced AI features.
+              </p>
+            )}
           </div>
 
           <div>

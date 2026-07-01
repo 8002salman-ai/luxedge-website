@@ -4,7 +4,8 @@ import { persist } from 'zustand/middleware';
 export interface ApiKeys {
   scrapedoKey: string;       // scrape.do — 1000 free/month, permanent, no credit card
   scraperApiKey: string;     // ScraperAPI — fallback
-  openAiKey: string;
+  openAiKey: string;         // OpenAI — AI descriptions
+  openRouterKey: string;     // OpenRouter — Multi-model AI access
   supabaseUrl: string;
   supabaseAnonKey: string;
   stripePublishableKey: string;
@@ -34,6 +35,7 @@ export const useSettingsStore = create<SettingsStore>()(
         scrapedoKey: '',
         scraperApiKey: '',
         openAiKey: '',
+        openRouterKey: '',
         supabaseUrl: '',
         supabaseAnonKey: '',
         stripePublishableKey: '',

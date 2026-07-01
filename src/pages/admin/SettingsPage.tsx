@@ -160,6 +160,48 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* OpenRouter — RECOMMENDED FOR MULTI-MODEL AI */}
+            <div className="border-2 border-purple-200 rounded-xl p-4 bg-purple-50/30">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 text-sm">OpenRouter API Key</p>
+                    <span className="px-2 py-0.5 text-[9px] font-bold bg-purple-500 text-white rounded-full">RECOMMENDED</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">Access 100+ AI models (Claude, Gemini, Llama) through one key. Best for AI Import.</p>
+                </div>
+                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-purple-600 hover:underline shrink-0 ml-3">
+                  Get Free Key <ExternalLink size={10} />
+                </a>
+              </div>
+              {!keysData.openRouterKey && (
+                <div className="mb-3 bg-white rounded-lg p-3 border border-purple-100">
+                  <p className="text-xs font-semibold text-purple-800 mb-1">Setup (2 minutes):</p>
+                  <ol className="text-xs text-purple-700 space-y-0.5 list-decimal list-inside">
+                    <li>openrouter.ai par jao → "Sign In" click karo</li>
+                    <li>Free account banao (Google/GitHub se)</li>
+                    <li>"Keys" section se API key copy karo</li>
+                    <li>Neeche paste karo aur Save karo</li>
+                  </ol>
+                </div>
+              )}
+              <div className="relative">
+                <input
+                  type={showKey.openRouterKey ? 'text' : 'password'}
+                  placeholder="sk-or-v1-..."
+                  value={keysData.openRouterKey}
+                  onChange={(e) => setKeysData({ ...keysData, openRouterKey: e.target.value })}
+                  className="w-full px-4 py-2.5 pr-10 border border-purple-300 rounded-lg text-sm font-mono focus:outline-none focus:border-purple-500 bg-white"
+                />
+                <button type="button" onClick={() => toggleKey('openRouterKey')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  {showKey.openRouterKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {keysData.openRouterKey && (
+                <p className="mt-2 text-xs text-purple-600 font-semibold">✓ OpenRouter connected — AI Import ready!</p>
+              )}
+            </div>
+
             {/* Supabase */}
             <div className="border border-gray-200 rounded-xl p-4">
               <div className="flex items-start justify-between mb-2">
