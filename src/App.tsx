@@ -30,6 +30,7 @@ interface Product {
   freeShipping: boolean; shippingCost: string;
   variants: ProductVariant[];
 }
+type NotifType = 'success' | 'error' | 'info' | 'warning';
 interface CartItem { product: Product; quantity: number; }
 interface AppUser { id: string; email: string; password: string; name: string; role: 'admin' | 'buyer'; isBlocked?: boolean; joined?: string; }
 interface Order {
@@ -356,7 +357,7 @@ interface Ctx {
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
-  notif: string | null; notify: (m: string) => void;
+  notif: { msg: string; type: NotifType } | null; notify: (m: string, type?: NotifType) => void;
 }
 const AC = createContext<Ctx | null>(null);
 function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
@@ -371,8 +372,8 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
   const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
-  const [notif, setNotif] = useState<string | null>(null);
-  const notify = (m: string) => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
+  const [notif, setNotif] = useState<{ msg: string; type: NotifType } | null>(null);
+  const notify = (m: string, type: NotifType = 'success') => { setNotif({ msg: m, type }); setTimeout(() => setNotif(null), 3000); };
 
   const login = (e: string, p: string, admin = false) => {
     // Admin login — checks against live adminCreds state
@@ -460,7 +461,13 @@ function AppProvider({ children }: { children: ReactNode }) {
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle size={18} className="text-green-400" />{notif}</div></div>; }
+function Toast() {
+  const { notif } = useApp();
+  if (!notif) return null;
+  const iconColor = notif.type === 'error' ? 'text-red-400' : notif.type === 'warning' ? 'text-amber-400' : notif.type === 'info' ? 'text-blue-400' : 'text-green-400';
+  const Icon = notif.type === 'error' ? AlertTriangle : notif.type === 'warning' ? AlertTriangle : notif.type === 'info' ? Bot : CheckCircle;
+  return <div className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><Icon size={18} className={iconColor} />{notif.msg}</div></div>;
+}
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
@@ -3389,7 +3396,7 @@ const EMPTY_VIDEO: VideoScript = { youtubeTitle: '', youtubeDesc: '', youtubeTag
 const META_CTA_OPTIONS = ['Shop Now','Learn More','Get Offer','Order Now','Sign Up','Book Now','Contact Us','Download'];
 
 function AMarketingGen() {
-  const { products } = useAppContext();
+  const { products } = useApp();
   const [tab, setTab] = useState<MktTab>('google');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [aiProvider, setAiProvider] = useState('');
@@ -4469,7 +4476,7 @@ Rules:
     const prompt = `You are a luxury e-commerce copywriter. Rewrite only the ${section} for this product in ${tone} tone.
 Product: ${selProduct.name} ($${selProduct.price})
 Category: ${selProduct.category}
-${content.focusKeyword ? `Focus keyword: ${seo.focusKeyword}` : ''}
+${seo.focusKeyword ? `Focus keyword: ${seo.focusKeyword}` : ''}
 
 Return ONLY a JSON object with a single key "${fieldHint}".
 Example: {"${fieldHint}": "your content here"}`;
