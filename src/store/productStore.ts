@@ -161,15 +161,197 @@ const initialProducts: Product[] = [
     createdAt: '2024-03-05T09:00:00Z',
     updatedAt: '2024-03-15T12:00:00Z',
   },
+  {
+    id: 'prod-009',
+    name: 'AeroClean Portable Blender',
+    description: 'USB-C rechargeable personal blender with 6 stainless-steel blades and a 380ml Tritan bottle. Blend smoothies, protein shakes, and baby food anywhere on a single charge. BPA-free, leak-proof, and dishwasher-safe. One of the top-selling kitchen gadgets on Amazon and AliExpress right now.',
+    price: 27.99,
+    originalPrice: 49.99,
+    category: 'Home & Living',
+    stock: 120,
+    images: [
+      { id: 'img-10', url: 'https://images.pexels.com/photos/3945667/pexels-photo-3945667.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.7,
+    reviewCount: 4120,
+    sku: 'LE-BLD-001',
+    isActive: true,
+    createdAt: '2024-03-18T09:00:00Z',
+    updatedAt: '2024-03-18T09:00:00Z',
+  },
+  {
+    id: 'prod-010',
+    name: 'PulseFit Smart Fitness Tracker',
+    description: 'Slim fitness band with 24/7 heart-rate, blood-oxygen (SpO2), and sleep tracking. 1.1" color touch display, 14-day battery, IP68 waterproof, and 100+ sport modes. Syncs with iOS and Android. A viral bestseller across AliExpress fitness stores.',
+    price: 22.99,
+    originalPrice: 44.99,
+    category: 'Wellness',
+    stock: 95,
+    images: [
+      { id: 'img-11', url: 'https://images.pexels.com/photos/4498138/pexels-photo-4498138.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.6,
+    reviewCount: 3287,
+    sku: 'LE-TRK-001',
+    isActive: true,
+    createdAt: '2024-03-18T10:00:00Z',
+    updatedAt: '2024-03-18T10:00:00Z',
+  },
+  {
+    id: 'prod-011',
+    name: 'LumiCast Star Galaxy Projector',
+    description: 'Transform any room into a starry galaxy with 10 nebula colors, rotating star patterns, and Bluetooth music sync. App and remote control, timer, and adjustable brightness. A top trending home-decor gadget on TikTok, Amazon, and AliExpress.',
+    price: 35.99,
+    originalPrice: 69.99,
+    category: 'Home & Living',
+    stock: 74,
+    images: [
+      { id: 'img-12', url: 'https://images.pexels.com/photos/1279107/pexels-photo-1279107.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.8,
+    reviewCount: 5643,
+    sku: 'LE-PRJ-001',
+    isActive: true,
+    createdAt: '2024-03-18T11:00:00Z',
+    updatedAt: '2024-03-18T11:00:00Z',
+  },
+  {
+    id: 'prod-012',
+    name: 'GripPro Magnetic Phone Mount',
+    description: 'Strong N52 magnetic car phone holder with 360° rotation and one-hand operation. Fits all MagSafe and non-MagSafe phones (metal ring included). Vent-clip and dashboard mounts in the box. Best-selling car accessory on Amazon.',
+    price: 15.99,
+    originalPrice: 29.99,
+    category: 'Accessories',
+    stock: 210,
+    images: [
+      { id: 'img-13', url: 'https://images.pexels.com/photos/4062561/pexels-photo-4062561.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.5,
+    reviewCount: 1892,
+    sku: 'LE-MNT-001',
+    isActive: true,
+    createdAt: '2024-03-18T12:00:00Z',
+    updatedAt: '2024-03-18T12:00:00Z',
+  },
+  {
+    id: 'prod-013',
+    name: 'SonicGlow Electric Toothbrush',
+    description: 'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A skincare-and-hygiene bestseller across AliExpress and Amazon.',
+    price: 26.99,
+    originalPrice: 54.99,
+    category: 'Wellness',
+    stock: 88,
+    images: [
+      { id: 'img-14', url: 'https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.7,
+    reviewCount: 2456,
+    sku: 'LE-TBR-001',
+    isActive: true,
+    createdAt: '2024-03-18T13:00:00Z',
+    updatedAt: '2024-03-18T13:00:00Z',
+  },
+  {
+    id: 'prod-014',
+    name: 'FlexCore Adjustable Dumbbell',
+    description: 'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.',
+    price: 64.99,
+    originalPrice: 119.99,
+    category: 'Wellness',
+    stock: 42,
+    images: [
+      { id: 'img-15', url: 'https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.8,
+    reviewCount: 1367,
+    sku: 'LE-DMB-001',
+    isActive: true,
+    createdAt: '2024-03-18T14:00:00Z',
+    updatedAt: '2024-03-18T14:00:00Z',
+  },
+  {
+    id: 'prod-015',
+    name: 'AuroraCharge 3-in-1 Wireless Station',
+    description: 'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.',
+    price: 33.99,
+    originalPrice: 59.99,
+    category: 'Tech & Gadgets',
+    stock: 130,
+    images: [
+      { id: 'img-16', url: 'https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.6,
+    reviewCount: 2078,
+    sku: 'LE-CHG-001',
+    isActive: true,
+    createdAt: '2024-03-18T15:00:00Z',
+    updatedAt: '2024-03-18T15:00:00Z',
+  },
+  {
+    id: 'prod-016',
+    name: 'ZenMist Ultrasonic Aroma Diffuser',
+    description: '300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.',
+    price: 21.99,
+    originalPrice: 39.99,
+    category: 'Home & Living',
+    stock: 156,
+    images: [
+      { id: 'img-17', url: 'https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.8,
+    reviewCount: 3945,
+    sku: 'LE-DIF-001',
+    isActive: true,
+    createdAt: '2024-03-18T16:00:00Z',
+    updatedAt: '2024-03-18T16:00:00Z',
+  },
+  {
+    id: 'prod-017',
+    name: 'CoreFlex Non-Slip Yoga Mat',
+    description: 'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.',
+    price: 19.99,
+    originalPrice: 36.99,
+    category: 'Wellness',
+    stock: 187,
+    images: [
+      { id: 'img-18', url: 'https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.7,
+    reviewCount: 2611,
+    sku: 'LE-YMT-001',
+    isActive: true,
+    createdAt: '2024-03-18T17:00:00Z',
+    updatedAt: '2024-03-18T17:00:00Z',
+  },
+  {
+    id: 'prod-018',
+    name: 'ClarityPro Blue-Light Glasses',
+    description: 'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.',
+    price: 17.99,
+    originalPrice: 34.99,
+    category: 'Accessories',
+    stock: 164,
+    images: [
+      { id: 'img-19', url: 'https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940', isPrimary: true },
+    ],
+    rating: 4.6,
+    reviewCount: 1743,
+    sku: 'LE-GLS-001',
+    isActive: true,
+    createdAt: '2024-03-18T18:00:00Z',
+    updatedAt: '2024-03-18T18:00:00Z',
+  },
 ];
 
+
 const initialCategories: Category[] = [
-  { id: 'cat-1', name: 'Tech & Gadgets', productCount: 3 },
-  { id: 'cat-2', name: 'Home & Living', productCount: 2 },
-  { id: 'cat-3', name: 'Wellness', productCount: 1 },
-  { id: 'cat-4', name: 'Accessories', productCount: 1 },
+  { id: 'cat-1', name: 'Tech & Gadgets', productCount: 4 },
+  { id: 'cat-2', name: 'Home & Living', productCount: 5 },
+  { id: 'cat-3', name: 'Wellness', productCount: 5 },
+  { id: 'cat-4', name: 'Accessories', productCount: 3 },
   { id: 'cat-5', name: 'Style', productCount: 1 },
 ];
+
 
 export const useProductStore = create<ProductStore>()(
   persist(
@@ -240,6 +422,26 @@ export const useProductStore = create<ProductStore>()(
     }),
     {
       name: 'luxedge-products',
+      version: 2,
+      // When the seed catalog changes, merge any new seed products into the
+      // persisted state so returning visitors (with an older cached list) still
+      // receive them — without dropping products an admin added locally.
+      migrate: (persistedState) => {
+        const state = (persistedState as Partial<ProductStore>) || {};
+        const existing = Array.isArray(state.products) ? state.products : [];
+        const existingIds = new Set(existing.map((p) => p.id));
+        const merged = [
+          ...existing,
+          ...initialProducts.filter((p) => !existingIds.has(p.id)),
+        ];
+        return {
+          ...state,
+          products: merged,
+          categories: initialCategories,
+        } as ProductStore;
+      },
     }
   )
 );
+
+
