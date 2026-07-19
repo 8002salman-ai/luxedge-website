@@ -419,6 +419,116 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* ============================================================
+ * LUXE GLOSSY THEME — scoped to storefront (.luxe-glossy)
+ * Premium glassy look: soft gradients, glow, depth, sheen.
+ * Admin panel is intentionally excluded.
+ * ============================================================ */
+.luxe-glossy {
+  --glossy-shadow: 0 10px 30px -12px rgba(17, 24, 39, 0.18);
+  --glossy-shadow-hover: 0 22px 48px -16px rgba(217, 119, 6, 0.28);
+  --glossy-ring: rgba(245, 158, 11, 0.35);
+}
+
+/* Glossy card surfaces — any white card in the storefront */
+.luxe-glossy .bg-white {
+  background-image: linear-gradient(160deg, #ffffff 0%, #fbfaf8 55%, #f6f4ef 100%);
+  box-shadow: var(--glossy-shadow);
+  backdrop-filter: saturate(1.05);
+}
+
+/* Rounded white cards get a hairline top sheen + smoother borders */
+.luxe-glossy .bg-white.rounded-xl,
+.luxe-glossy .bg-white.rounded-2xl {
+  border-color: rgba(226, 221, 213, 0.9);
+  position: relative;
+  transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Product / content cards lift with a warm glow on hover */
+.luxe-glossy .group.hover\:shadow-xl:hover,
+.luxe-glossy .hover\:shadow-xl:hover {
+  box-shadow: var(--glossy-shadow-hover) !important;
+  transform: translateY(-4px);
+}
+
+/* Amber primary buttons → glossy gradient with sheen */
+.luxe-glossy .bg-amber-500 {
+  background-image: linear-gradient(180deg, #fbbf24 0%, #f59e0b 55%, #d97706 100%);
+  box-shadow: 0 6px 16px -6px rgba(217, 119, 6, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.luxe-glossy .hover\:bg-amber-600:hover {
+  background-image: linear-gradient(180deg, #f59e0b 0%, #d97706 60%, #b45309 100%);
+  box-shadow: 0 10px 22px -8px rgba(217, 119, 6, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Dark hero / CTA / gray-900 surfaces → deep glossy gradient */
+.luxe-glossy .bg-gray-900,
+.luxe-glossy .bg-gray-950 {
+  background-image: linear-gradient(155deg, #111827 0%, #0b0f17 60%, #05070b 100%);
+}
+.luxe-glossy .hover\:bg-gray-800:hover {
+  background-image: linear-gradient(155deg, #1f2937 0%, #111827 100%);
+}
+
+/* Dark primary buttons (Add to Cart, Buy Now) get subtle sheen */
+.luxe-glossy .bg-gray-900:not(header):not(section) {
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Sticky header → frosted glass */
+.luxe-glossy header.sticky {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  box-shadow: 0 4px 20px -12px rgba(17, 24, 39, 0.35);
+}
+
+/* Amber "soft" panels (price box, badges) get a gentle sheen */
+.luxe-glossy .bg-amber-50 {
+  background-image: linear-gradient(160deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+/* Inputs & selects → soft inset glass */
+.luxe-glossy input,
+.luxe-glossy textarea,
+.luxe-glossy select {
+  background-image: linear-gradient(180deg, #ffffff 0%, #fbfaf8 100%);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.luxe-glossy input:focus,
+.luxe-glossy textarea:focus,
+.luxe-glossy select:focus {
+  box-shadow: 0 0 0 3px var(--glossy-ring);
+}
+
+/* Product image zoom container — glossy overlay sheen */
+.luxe-glossy .aspect-square img,
+.luxe-glossy .group img {
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), filter 0.4s ease;
+}
+.luxe-glossy .group:hover img {
+  filter: saturate(1.08) contrast(1.03);
+}
+
+/* Smooth momentum on all interactive lifts */
+.luxe-glossy a,
+.luxe-glossy button {
+  transition-property: transform, box-shadow, background-color, background-image, color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 250ms;
+}
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .luxe-glossy *,
+  .luxe-glossy *::before,
+  .luxe-glossy *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 /* Line clamp */
 .line-clamp-1 {
   display: -webkit-box;

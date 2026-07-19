@@ -772,7 +772,7 @@ function ScrollToTop() {
 
 function SLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col luxe-glossy">
       <ScrollToTop />
       <Header />
       <main className="flex-1">{children}</main>
