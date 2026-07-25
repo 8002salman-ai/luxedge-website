@@ -1,5 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import ProtectedRoute from './components/common/ProtectedRoute';
+import { useAuthStore } from './store/authStore';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
   Shield, Star, Truck, RotateCcw, Award, Zap, ArrowRight, Mail, Phone,
@@ -6442,21 +6444,21 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
-          {/* Admin - EACH SECTION IS ITS OWN ROUTE */}
-          <Route path="/admin" element={<AdminLayout><ADashboard /></AdminLayout>} />
-          <Route path="/admin/products" element={<AdminLayout><AProducts /></AdminLayout>} />
-          <Route path="/admin/products/new" element={<AdminLayout><AProductEdit /></AdminLayout>} />
-          <Route path="/admin/products/edit/:id" element={<AdminLayout><AProductEdit /></AdminLayout>} />
-          <Route path="/admin/orders" element={<AdminLayout><AOrders /></AdminLayout>} />
-          <Route path="/admin/users" element={<AdminLayout><AUsers /></AdminLayout>} />
-          <Route path="/admin/categories" element={<AdminLayout><ACategories /></AdminLayout>} />
-          <Route path="/admin/reviews" element={<AdminLayout><AReviews /></AdminLayout>} />
-          <Route path="/admin/blogs" element={<AdminLayout><ABlogs /></AdminLayout>} />
-          <Route path="/admin/seo-engine" element={<AdminLayout><ASEOEngine /></AdminLayout>} />
-          <Route path="/admin/marketing" element={<AdminLayout><AMarketingGen /></AdminLayout>} />
-          <Route path="/admin/variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />
-          <Route path="/admin/ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
-          <Route path="/admin/settings" element={<AdminLayout><ASettings /></AdminLayout>} />
+          {/* Admin - EACH SECTION IS ITS OWN ROUTE with Protection */}
+          <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ADashboard /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/products" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProducts /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/products/new" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/products/edit/:id" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AOrders /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AUsers /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/categories" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ACategories /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/reviews" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AReviews /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/blogs" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ABlogs /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/seo-engine" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASEOEngine /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/marketing" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AMarketingGen /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/variant-gen" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AVariantGen /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/ai-import" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIImport /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASettings /></AdminLayout></ProtectedRoute>} />
           {/* Fallback */}
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>
