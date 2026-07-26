@@ -33,7 +33,7 @@ export default function HomePage({ onNavigate, onAddToCart, onQuickView }: HomeP
   return (
     <div>
       {/* ========== HERO SECTION ========== */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-luxe-black">
+      <section className="relative min-h-[650px] flex items-center overflow-hidden" style={{ background: 'linear-gradient(to right, #2563eb, #7c3aed, #db2777)' }}>
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{
@@ -43,34 +43,31 @@ export default function HomePage({ onNavigate, onAddToCart, onQuickView }: HomeP
         </div>
 
         {/* Gradient Orbs */}
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-luxe-gold/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 left-1/4 w-72 h-72 bg-luxe-gold/5 rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-72 h-72 bg-white/5 rounded-full blur-[100px]" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
             <div className="space-y-8">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-luxe-gold text-xs tracking-widest uppercase font-semibold animate-fade-in">
-                <Zap size={12} />
-                Curated Excellence — New Arrivals Weekly
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black font-bold rounded-full text-xs tracking-widest uppercase animate-fade-in">
+                LUXEDGE REDESIGN TEST
               </div>
 
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-white leading-[1.1] animate-fade-in-up">
-                Discover Products
-                <br />
-                <span className="text-gold-gradient">Worth Owning.</span>
+                Welcome to the New Luxedge Experience
               </h1>
 
-              <p className="text-lg text-luxe-silver max-w-lg leading-relaxed animate-fade-in-up delay-200">
-                We sift through thousands of products so you don't have to. Every item on Luxedge is handpicked for quality, design, and value — then delivered straight to your door.
+              <p className="text-lg text-white max-w-lg leading-relaxed animate-fade-in-up delay-200">
+                Premium products, bold design, and a completely refreshed shopping experience.
               </p>
 
               <div className="flex flex-wrap gap-4 animate-fade-in-up delay-300">
                 <button
                   onClick={() => onNavigate('shop')}
-                  className="group px-8 py-4 bg-luxe-gold hover:bg-luxe-gold-light text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-3 text-sm uppercase tracking-wider btn-shimmer"
+                  className="group px-8 py-4 bg-white hover:bg-white/90 text-black font-semibold rounded-lg transition-all duration-300 flex items-center gap-3 text-sm uppercase tracking-wider"
                 >
-                  Shop Now
+                  Explore Luxedge
                   <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                 </button>
                 <button
