@@ -6,10 +6,18 @@ export interface ApiKeys {
   scraperApiKey: string;     // ScraperAPI — fallback
   openAiKey: string;         // OpenAI — AI descriptions
   openRouterKey: string;     // OpenRouter — Multi-model AI access
+  geminiApiKey: string;      // Google Gemini Studio API
   supabaseUrl: string;
   supabaseAnonKey: string;
   stripePublishableKey: string;
   googleClientId: string;
+}
+
+export interface OpenRouterCredits {
+  totalCredits: number;
+  usedCredits: number;
+  remainingCredits: number;
+  lastChecked: string;
 }
 
 export interface StoreConfig {
@@ -24,8 +32,10 @@ export interface StoreConfig {
 interface SettingsStore {
   apiKeys: ApiKeys;
   storeConfig: StoreConfig;
+  openRouterCredits: OpenRouterCredits;
   updateApiKeys: (keys: Partial<ApiKeys>) => void;
   updateStoreConfig: (config: Partial<StoreConfig>) => void;
+  updateOpenRouterCredits: (credits: Partial<OpenRouterCredits>) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -36,6 +46,7 @@ export const useSettingsStore = create<SettingsStore>()(
         scraperApiKey: '',
         openAiKey: '',
         openRouterKey: '',
+        geminiApiKey: '',
         supabaseUrl: '',
         supabaseAnonKey: '',
         stripePublishableKey: '',
@@ -49,10 +60,18 @@ export const useSettingsStore = create<SettingsStore>()(
         freeShippingThreshold: 50,
         shippingFee: 4.99,
       },
+      openRouterCredits: {
+        totalCredits: 0,
+        usedCredits: 0,
+        remainingCredits: 0,
+        lastChecked: '',
+      },
       updateApiKeys: (keys) =>
         set((state) => ({ apiKeys: { ...state.apiKeys, ...keys } })),
       updateStoreConfig: (config) =>
         set((state) => ({ storeConfig: { ...state.storeConfig, ...config } })),
+      updateOpenRouterCredits: (credits) =>
+        set((state) => ({ openRouterCredits: { ...state.openRouterCredits, ...credits } })),
     }),
     { name: 'luxedge-settings' }
   )

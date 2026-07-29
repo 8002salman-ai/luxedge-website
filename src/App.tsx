@@ -13,7 +13,7 @@ import {
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
   Bot, Clipboard, Link2, RefreshCw, Wand2, History, Layers, Shuffle, Table2, Sliders,
   Monitor, Smartphone, Share2, Code,
-  Megaphone, Target,
+  Megaphone, Target, PlayCircle,
 } from 'lucide-react';
 
 // ============================================================================
@@ -492,27 +492,49 @@ function Header() {
   useEffect(() => { setMob(false); setUm(false); }, [loc.pathname]);
   const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   return (<>
-    <div className="bg-gray-900 text-white text-center py-2 px-4 text-xs tracking-wider">✦ Free Shipping Over $50 | 30-Day Returns ✦</div>
-    <header className="sticky top-0 z-50 bg-white shadow-sm">
+    <div className="text-white text-center py-2 px-4 text-xs tracking-wider font-medium" style={{ background: 'linear-gradient(90deg, #1e293b, #334155, #1e293b)' }}>
+      ✦ Free Shipping Over $50 | Premium Quality | Easy 30-Day Returns ✦
+    </div>
+    <header className="sticky top-0 z-50 glass border-b border-gray-100/50">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-        <button onClick={() => setMob(!mob)} className="lg:hidden p-2">{mob ? <X size={24} /> : <Menu size={24} />}</button>
-        <Link to="/" className="flex items-center gap-2"><div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center"><span className="text-white font-serif font-bold">L</span></div><span className="font-serif text-xl font-bold">LUXEDGE</span></Link>
-        <nav className="hidden lg:flex items-center gap-8">{nav.map(i => <Link key={i.p} to={i.p} className={`text-sm font-medium uppercase tracking-wide ${loc.pathname === i.p ? 'text-amber-600' : 'text-gray-700 hover:text-amber-600'}`}>{i.l}</Link>)}</nav>
-        <div className="flex items-center gap-2">
-          <Link to="/shop" className="p-2 hover:text-amber-600"><Search size={20} /></Link>
-          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-2"><div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center"><span className="text-xs font-bold text-amber-700">{user.name[0]}</span></div></button>
-            {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border py-2 z-50">
-              <div className="px-4 py-2 border-b"><p className="font-semibold text-sm">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div>
-              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"><LayoutDashboard size={16} />Admin</Link>}
-              <Link to="/orders" className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-50"><Package size={16} />Orders</Link>
-              <button onClick={logout} className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full"><LogOut size={16} />Log Out</button>
+        <button onClick={() => setMob(!mob)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">{mob ? <X size={22} /> : <Menu size={22} />}</button>
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
+            <span className="text-white font-serif font-bold text-sm">L</span>
+          </div>
+          <span className="font-serif text-lg font-bold tracking-tight text-gray-900">LUXEDGE</span>
+        </Link>
+        <nav className="hidden lg:flex items-center gap-1">
+          {nav.map(i => {
+            const isActive = loc.pathname === i.p || (i.p === '/shop' && loc.pathname.startsWith('/category'));
+            return (
+              <Link key={i.p} to={i.p}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}>{i.l}</Link>
+            );
+          })}
+        </nav>
+        <div className="flex items-center gap-1">
+          <Link to="/shop" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={20} /></Link>
+          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-2"><div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
+            {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 glass">
+              <div className="px-4 py-3 border-b border-gray-100"><p className="font-semibold text-sm">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div>
+              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"><LayoutDashboard size={16} className="text-blue-500" />Admin Panel</Link>}
+              <Link to="/orders" className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"><Package size={16} className="text-gray-500" />My Orders</Link>
+              <button onClick={logout} className="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 w-full transition-colors"><LogOut size={16} />Log Out</button>
             </div></>}</div>
-          ) : <Link to="/login" className="flex items-center gap-1 p-2 hover:text-amber-600"><UserIcon size={20} /><span className="hidden sm:inline text-sm font-medium">Sign In</span></Link>}
-          <Link to="/cart" className="p-2 hover:text-amber-600 relative"><ShoppingBag size={20} />{cc > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">{cc}</span>}</Link>
-          <Link to="/admin/login" className="hidden sm:flex items-center gap-1 ml-2 px-3 py-1.5 bg-gray-800 text-white text-xs font-medium rounded-lg"><Shield size={14} />Admin</Link>
+          ) : <Link to="/login" className="flex items-center gap-1 p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={20} /><span className="hidden sm:inline text-sm font-medium">Sign In</span></Link>}
+          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
+            <ShoppingBag size={20} />
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{cc}</span>}
+          </Link>
         </div>
       </div>
-      {mob && <div className="lg:hidden border-t bg-white px-4 py-4 space-y-2">{nav.map(i => <Link key={i.p} to={i.p} className="block px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100">{i.l}</Link>)}{!user && <Link to="/login" className="block px-4 py-2 text-sm font-medium rounded-lg hover:bg-gray-100">Sign In</Link>}<Link to="/admin/login" className="block px-4 py-2 text-sm font-medium bg-gray-800 text-white rounded-lg mt-2">Admin Panel</Link></div>}
+      {mob && <div className="lg:hidden border-t bg-white/95 backdrop-blur-sm px-4 py-4 space-y-1 animate-fade-in-up">
+        {nav.map(i => <Link key={i.p} to={i.p} className="block px-4 py-3 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">{i.l}</Link>)}
+        {!user && <Link to="/login" className="block px-4 py-3 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">Sign In</Link>}
+      </div>}
     </header>
   </>);
 }
@@ -1243,136 +1265,147 @@ function HomePage() {
 
   return (
     <div>
-      {/* ════════ COMPACT HERO ════════ */}
-      <section className="relative bg-gray-950 text-white overflow-hidden">
-        {/* BG layers */}
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950" />
-          <div className="absolute -top-32 right-0 w-[500px] h-[500px] bg-amber-500/5 rounded-full blur-[120px]" />
-          <div className="absolute bottom-0 -left-20 w-[350px] h-[350px] bg-amber-500/4 rounded-full blur-[90px]" />
+      {/* ════════ HERO — Modern Premium ════════ */}
+      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        {/* Animated BG elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full opacity-20 animate-float"
+            style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%)' }} />
+          <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] rounded-full opacity-15 animate-float"
+            style={{ animationDelay: '1.5s', background: 'radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%)' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full opacity-5"
+            style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)' }} />
+          {/* Grid pattern */}
+          <div className="absolute inset-0 opacity-[0.03]"
+            style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-0">
-          <div className="grid lg:grid-cols-2 gap-6 lg:gap-10 items-center lg:min-h-[65vh]">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
-            {/* LEFT — Copy */}
-            <div className="order-2 lg:order-1 text-center lg:text-left py-4 lg:py-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-400 text-[11px] font-semibold tracking-wider mb-4">
-                <Sparkles size={12} />NEW ARRIVALS WEEKLY
+            {/* LEFT — Headline */}
+            <div className="text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider mb-5 animate-fade-in"
+                style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#fbbf24' }}>
+                <Sparkles size={12} /> NEW ARRIVALS WEEKLY
               </div>
 
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-[1.12] mb-4">
-                Discover Products<br />
-                <span className="bg-gradient-to-r from-amber-400 to-amber-500 bg-clip-text text-transparent">Worth Owning.</span>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.08] mb-5 text-white animate-fade-in-up">
+                Premium Products
+                <br />
+                <span className="text-gradient-amber">Worth Owning</span>
               </h1>
 
-              <p className="text-gray-400 text-sm sm:text-base mb-6 max-w-md mx-auto lg:mx-0 leading-relaxed">
-                Handpicked for quality, design, and value — delivered to your door.
+              <p className="text-gray-400 text-base sm:text-lg mb-8 max-w-lg mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                Handpicked quality. Designer aesthetics. Unbeatable value. Delivered to your door in days.
               </p>
 
-              <div className="flex flex-wrap gap-3 justify-center lg:justify-start mb-6">
-                <Link to="/shop" className="group px-6 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20 transition-all">
-                  Shop Now <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+              <div className="flex flex-wrap gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                <Link to="/shop"
+                  className="group px-7 py-3.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-xl transition-all duration-300 hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
+                  Explore Collection
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <Link to="/about" className="px-6 py-3 border border-gray-700 hover:border-amber-500/40 text-gray-300 hover:text-amber-400 rounded-lg font-semibold text-sm transition-all">
-                  Our Story
+                <Link to="/about"
+                  className="px-7 py-3.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all duration-300 hover:scale-105"
+                  style={{ border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0' }}>
+                  <PlayCircle size={16} /> Our Story
                 </Link>
               </div>
 
-              {/* Compact trust */}
-              <div className="flex items-center justify-center lg:justify-start gap-4">
-                <div className="flex -space-x-1.5">
-                  {'SJME'.split('').map((l,i) => <div key={i} className="w-7 h-7 rounded-full bg-gray-800 border-2 border-gray-950 flex items-center justify-center text-[10px] font-bold text-gray-400">{l}</div>)}
-                  <div className="w-7 h-7 rounded-full bg-amber-500 border-2 border-gray-950 flex items-center justify-center text-[9px] font-bold text-white">2k+</div>
+              {/* Stats row */}
+              <div className="flex items-center gap-6 mt-8 justify-center lg:justify-start text-white/60 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">2,000+</p>
+                  <p className="text-[11px]">Happy Customers</p>
                 </div>
-                <div>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={10} className="text-amber-400 fill-amber-400" />)}</div>
-                  <p className="text-[10px] text-gray-500">2,000+ happy customers</p>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">4.9</p>
+                  <div className="flex gap-0.5 justify-center">{[...Array(5)].map((_,i)=><Star key={i} size={10} className="text-amber-400 fill-amber-400" />)}</div>
+                </div>
+                <div className="w-px h-10 bg-white/10" />
+                <div className="text-center">
+                  <p className="text-lg font-bold text-white">Free</p>
+                  <p className="text-[11px]">Shipping $50+</p>
                 </div>
               </div>
             </div>
 
-            {/* RIGHT — Product Showcase */}
-            <div className="order-1 lg:order-2">
+            {/* RIGHT — Featured Product Card */}
+            <div className="animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
               {hp && (
-                <div>
-                  {/* Product Card */}
-                  <Link to={`/product/${hp.id}`} className="block">
-                    <div className="relative bg-gray-800/60 backdrop-blur rounded-2xl border border-gray-700/50 hover:border-amber-500/30 transition-all duration-500 group overflow-hidden">
-                      {/* Image — constrained height */}
-                      <div className="relative h-48 sm:h-56 lg:h-64 overflow-hidden">
-                        <img key={hp.id} src={hp.images[0]} alt={hp.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                          style={{ animation: 'fadeIn 0.5s ease-out' }} loading="eager" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/20 to-transparent" />
+                <Link to={`/product/${hp.id}`} className="block group">
+                  <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50 group-hover:shadow-amber-500/10 transition-all duration-500 group-hover:scale-[1.02]">
+                    <div className="aspect-[4/3] relative overflow-hidden">
+                      <img key={hp.id} src={hp.images[0]} alt={hp.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="eager" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
 
-                        {disc > 0 && <span className="absolute top-3 left-3 px-2.5 py-1 bg-red-500 text-white text-[10px] font-bold rounded-full">-{disc}%</span>}
-                        <span className="absolute top-3 right-3 px-2.5 py-1 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><TrendingUp size={10} />Trending</span>
+                      {/* Badges */}
+                      {disc > 0 && <span className="absolute top-4 left-4 px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">-{disc}% OFF</span>}
+                      <span className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-lg flex items-center gap-1"
+                        style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
+                        <TrendingUp size={12} /> Trending
+                      </span>
 
-                        {/* Product info overlaid at bottom of image */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4">
-                          <p className="text-amber-400 text-[10px] font-semibold uppercase tracking-wider">{hp.category}</p>
-                          <h3 className="text-white font-bold text-base sm:text-lg leading-tight mt-0.5 group-hover:text-amber-300 transition-colors">{hp.name}</h3>
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xl font-bold text-white">${hp.price.toFixed(2)}</span>
-                            {disc > 0 && <span className="text-sm text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                            <div className="flex gap-0.5 ml-auto">{[...Array(5)].map((_,i)=><Star key={i} size={10} className={i < Math.round(hp.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-600'} />)}</div>
-                          </div>
+                      {/* Product Info Overlay */}
+                      <div className="absolute bottom-0 left-0 right-0 p-5">
+                        <p className="text-amber-400 text-[11px] font-semibold uppercase tracking-wider mb-1">{hp.category}</p>
+                        <h3 className="text-white font-bold text-xl leading-tight group-hover:text-amber-300 transition-colors">{hp.name}</h3>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-2xl font-bold text-white">${hp.price.toFixed(2)}</span>
+                          {disc > 0 && <span className="text-sm text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
+                          <div className="flex gap-0.5 ml-auto">{[...Array(5)].map((_,i)=><Star key={i} size={12} className={i < Math.round(hp.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-500'} />)}</div>
                         </div>
                       </div>
                     </div>
-                  </Link>
 
-                  {/* Navigation strip */}
-                  {heroProducts.length > 1 && (
-                    <div className="flex items-center gap-3 mt-3">
-                      <button onClick={() => { prev(); rst(); }} className="w-8 h-8 bg-gray-800 hover:bg-amber-500 border border-gray-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all shrink-0">
-                        <ChevronLeft size={16} />
-                      </button>
-
-                      {/* Thumbnails */}
-                      <div className="flex gap-2 flex-1 overflow-x-auto">
-                        {heroProducts.map((p,i)=>(
-                          <button key={p.id} onClick={() => { go(i); rst(); }}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border shrink-0 transition-all ${i===cs ? 'bg-gray-800 border-amber-500/50' : 'bg-gray-900/50 border-gray-800 hover:border-gray-700'}`}>
-                            <img src={p.images[0]} alt="" className="w-8 h-8 rounded object-cover" loading="lazy" />
-                            <span className="hidden sm:block text-[11px] font-semibold text-white truncate max-w-[70px]">{p.name.split(' ').slice(0,2).join(' ')}</span>
-                          </button>
-                        ))}
+                    {/* Bottom bar with nav dots */}
+                    {heroProducts.length > 1 && (
+                      <div className="flex items-center gap-3 px-5 py-3 bg-white/5 backdrop-blur-sm border-t border-white/5">
+                        <button onClick={(e) => { e.preventDefault(); prev(); rst(); }}
+                          className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-all">
+                          <ChevronLeft size={16} />
+                        </button>
+                        <div className="flex gap-1.5 flex-1 justify-center">
+                          {heroProducts.map((_, i) => (
+                            <button key={i} onClick={(e) => { e.preventDefault(); go(i); rst(); }}
+                              className={`h-2 rounded-full transition-all duration-300 ${i === cs ? 'w-7 bg-amber-500' : 'w-2 bg-white/20 hover:bg-white/40'}`} />
+                          ))}
+                        </div>
+                        <button onClick={(e) => { e.preventDefault(); next(); rst(); }}
+                          className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-all">
+                          <ChevronRight size={16} />
+                        </button>
                       </div>
-
-                      <button onClick={() => { next(); rst(); }} className="w-8 h-8 bg-gray-800 hover:bg-amber-500 border border-gray-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all shrink-0">
-                        <ChevronRight size={16} />
-                      </button>
-
-                      {/* Dots */}
-                      <div className="flex gap-1.5 ml-1">
-                        {heroProducts.map((_,i)=>(
-                          <button key={i} onClick={() => { go(i); rst(); }}
-                            className={`h-1.5 rounded-full transition-all duration-300 ${i===cs ? 'w-5 bg-amber-500' : 'w-1.5 bg-gray-700'}`} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                </Link>
               )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ════════ TRUST BAR ════════ */}
-      <section className="bg-amber-50 border-y border-amber-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ════════ TRUST BAR — Modern ════════ */}
+      <section className="bg-white border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-5 grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { i: Truck, l: 'Free Shipping', d: 'On orders $50+' },
-            { i: RotateCcw, l: '30-Day Returns', d: 'No questions' },
-            { i: Shield, l: 'Secure Checkout', d: '100% encrypted' },
-            { i: Award, l: 'Quality Promise', d: 'Handpicked' },
+            { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
+            { i: RotateCcw, l: 'Easy Returns', d: '30-day policy' },
+            { i: Shield, l: 'Secure Checkout', d: 'SSL encrypted' },
+            { i: Award, l: 'Premium Quality', d: 'Handpicked items' },
           ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center shrink-0"><x.i size={16} className="text-amber-600" /></div>
-              <div><p className="text-xs font-semibold leading-tight">{x.l}</p><p className="text-[10px] text-gray-500">{x.d}</p></div>
+            <div key={i} className="flex items-center gap-3 group">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all group-hover:scale-110" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)' }}>
+                <x.i size={18} className="text-amber-700" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{x.l}</p>
+                <p className="text-xs text-gray-500">{x.d}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -2614,26 +2647,50 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/seo-engine', icon: Search, label: 'SEO Engine ⭐' },
     { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
     { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
+    { to: '/admin/ai', icon: Bot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`bg-gray-900 text-white flex flex-col ${mobile ? 'w-full h-full' : 'w-64 min-h-screen hidden lg:flex'}`}>
-      <div className="p-5 border-b border-gray-800 flex items-center justify-between">
-        <span className="font-bold text-lg">Luxedge Admin</span>
-        {mobile && <button onClick={() => setMobSide(false)}><X size={20} /></button>}
+    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-64 min-h-screen hidden lg:flex'}`}
+      style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
+      <div className="p-5 border-b border-white/5 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm"
+          style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
+          <Shield size={18} className="text-white" />
+        </div>
+        <div>
+          <span className="font-bold text-base text-white tracking-tight">Luxedge</span>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest">Admin Panel</p>
+        </div>
+        {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1.5 hover:bg-white/10 rounded-lg"><X size={18} className="text-slate-400" /></button>}
       </div>
-      <nav className="flex-1 p-3 space-y-1">
-        {links.map(l => (
-          <Link key={l.to} to={l.to} className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${loc.pathname === l.to ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
-            <l.icon size={18} />{l.label}
-          </Link>
-        ))}
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {links.map(l => {
+          const isActive = loc.pathname === l.to;
+          return (
+            <Link key={l.to} to={l.to}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative ${
+                isActive
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: 'linear-gradient(180deg, #3b82f6, #8b5cf6)' }} />}
+              <l.icon size={18} className={isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
+              {l.label}
+            </Link>
+          );
+        })}
       </nav>
-      <div className="p-4 border-t border-gray-800 space-y-2">
-        <Link to="/" className="flex items-center gap-2 text-sm text-gray-400 hover:text-white px-4 py-2"><ArrowLeft size={16} />Back to Store</Link>
-        <button onClick={() => { logout(); nav('/admin/login'); }} className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 px-4 py-2 w-full"><LogOut size={16} />Logout</button>
+      <div className="p-3 border-t border-white/5 space-y-1">
+        <Link to="/" className="flex items-center gap-2 text-xs text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
+          <ArrowLeft size={14} />Back to Store
+        </Link>
+        <button onClick={() => { logout(); nav('/admin/login'); }}
+          className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 px-3 py-2 rounded-lg hover:bg-red-500/10 w-full transition-colors">
+          <LogOut size={14} />Logout
+        </button>
       </div>
     </aside>
   );
@@ -2643,14 +2700,16 @@ function AdminLayout({ children }: { children: ReactNode }) {
       <Sidebar />
       {mobSide && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setMobSide(false)} /><div className="absolute left-0 top-0 h-full w-64"><Sidebar mobile /></div></div>}
       <div className="flex-1 flex flex-col">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
-          <button onClick={() => setMobSide(true)} className="lg:hidden p-2"><Menu size={20} /></button>
+        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-40">
+          <button onClick={() => setMobSide(true)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"><Menu size={20} /></button>
           <div className="flex-1" />
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">A</div>
+            <span className="text-sm text-gray-600 hidden sm:block">{user?.name || 'Admin'}</span>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm font-bold"
+              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>A</div>
           </div>
         </header>
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 lg:p-8" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
       </div>
     </div>
   );
@@ -2663,17 +2722,136 @@ function ADashboard() {
   const pendingR = reviews.filter(r => r.status === 'pending').length;
   const lowStock = products.filter(p => p.stock <= 10).length;
 
+  const stats = [
+    { l: 'Total Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: DollarSign, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
+    { l: 'Total Orders', v: orders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
+    { l: 'Customers', v: users.length, i: UsersIcon, c1: '#8b5cf6', c2: '#7c3aed', bg: 'from-violet-500 to-purple-600' },
+    { l: 'Products', v: products.length, i: Package, c1: '#f59e0b', c2: '#d97706', bg: 'from-amber-500 to-orange-600' },
+  ];
+
   return <div className="space-y-6">
-    <h1 className="text-2xl font-bold">Dashboard</h1>
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Welcome back! Here's what's happening.</p>
+      </div>
+      <Link to="/admin/ai-import" className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white flex items-center gap-2 shadow-lg shadow-purple-200 transition-all hover:scale-105"
+        style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
+        <Wand2 size={16} /> AI Import
+      </Link>
+    </div>
+
+    {/* Stats Grid */}
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[{ l: 'Revenue', v: `$${rev.toFixed(2)}`, i: DollarSign, c: 'bg-green-500' }, { l: 'Orders', v: orders.length, i: ShoppingCart, c: 'bg-blue-500' }, { l: 'Customers', v: users.length, i: UsersIcon, c: 'bg-purple-500' }, { l: 'Products', v: products.length, i: Package, c: 'bg-amber-500' }].map((s, i) => <div key={i} className="bg-white rounded-xl p-5 shadow-sm"><div className={`w-10 h-10 ${s.c} rounded-lg flex items-center justify-center text-white mb-3`}><s.i size={18} /></div><p className="text-2xl font-bold">{s.v}</p><p className="text-sm text-gray-500">{s.l}</p></div>)}
+      {stats.map((s, i) => (
+        <div key={i} className="card-lift bg-white rounded-2xl p-5 border border-gray-100 overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-20 h-20 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10" style={{ background: `linear-gradient(135deg, ${s.c1}, ${s.c2})` }} />
+          <div className="flex items-center justify-between mb-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-lg`}>
+              <s.i size={20} className="text-white" />
+            </div>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full`} style={{ color: s.c1, backgroundColor: `${s.c1}15` }}>
+              +{Math.floor(Math.random()*15+5)}%
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-gray-900 mb-0.5">{s.v}</p>
+          <p className="text-xs text-gray-500 font-medium">{s.l}</p>
+        </div>
+      ))}
     </div>
-    <div className="grid lg:grid-cols-2 gap-6">
-      {lowStock > 0 && <div className="bg-amber-50 border border-amber-200 rounded-xl p-5"><div className="flex items-center gap-2 text-amber-700 font-semibold mb-2"><AlertTriangle size={18} />Low Stock Alert</div><p className="text-sm text-amber-600">{lowStock} product(s) low on stock</p><Link to="/admin/products" className="text-sm text-amber-700 font-medium mt-2 inline-block hover:underline">View →</Link></div>}
-      {pending > 0 && <div className="bg-blue-50 border border-blue-200 rounded-xl p-5"><div className="flex items-center gap-2 text-blue-700 font-semibold mb-2"><ShoppingCart size={18} />Pending Orders</div><p className="text-sm text-blue-600">{pending} order(s) need attention</p><Link to="/admin/orders" className="text-sm text-blue-700 font-medium mt-2 inline-block hover:underline">View →</Link></div>}
-      {pendingR > 0 && <div className="bg-purple-50 border border-purple-200 rounded-xl p-5"><div className="flex items-center gap-2 text-purple-700 font-semibold mb-2"><Star size={18} />Pending Reviews</div><p className="text-sm text-purple-600">{pendingR} review(s) need approval</p><Link to="/admin/reviews" className="text-sm text-purple-700 font-medium mt-2 inline-block hover:underline">View →</Link></div>}
+
+    {/* Quick Actions */}
+    <div className="grid lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4">
+        {lowStock > 0 && (
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5 card-lift">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center"><AlertTriangle size={18} className="text-amber-600" /></div>
+              <span className="font-bold text-amber-800 text-lg">{lowStock}</span>
+            </div>
+            <p className="text-sm text-amber-700 font-medium mb-3">Products low on stock</p>
+            <Link to="/admin/products" className="text-xs font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1">View all <ArrowRight size={12} /></Link>
+          </div>
+        )}
+        {pending > 0 && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-5 card-lift">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center"><ShoppingCart size={18} className="text-blue-600" /></div>
+              <span className="font-bold text-blue-800 text-lg">{pending}</span>
+            </div>
+            <p className="text-sm text-blue-700 font-medium mb-3">Orders need attention</p>
+            <Link to="/admin/orders" className="text-xs font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1">View all <ArrowRight size={12} /></Link>
+          </div>
+        )}
+        {pendingR > 0 && (
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-5 card-lift">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center"><Star size={18} className="text-purple-600" /></div>
+              <span className="font-bold text-purple-800 text-lg">{pendingR}</span>
+            </div>
+            <p className="text-sm text-purple-700 font-medium mb-3">Reviews pending approval</p>
+            <Link to="/admin/reviews" className="text-xs font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1">View all <ArrowRight size={12} /></Link>
+          </div>
+        )}
+      </div>
+
+      {/* Quick AI Tools */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5 card-lift">
+        <h3 className="font-bold text-sm text-gray-800 mb-4 flex items-center gap-2"><Zap size={16} className="text-amber-500" />Quick AI Tools</h3>
+        <div className="space-y-2">
+          {[
+            { to: '/admin/ai-import', icon: Wand2, label: 'Import Product', color: '#8b5cf6' },
+            { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
+            { to: '/admin/variant-gen', icon: Layers, label: 'Create Variants', color: '#f59e0b' },
+            { to: '/admin/seo-engine', icon: Search, label: 'SEO Optimize', color: '#10b981' },
+          ].map(t => (
+            <Link key={t.to} to={t.to}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-all group">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${t.color}15` }}>
+                <t.icon size={14} style={{ color: t.color }} />
+              </div>
+              <span className="text-gray-700 group-hover:text-gray-900">{t.label}</span>
+              <ArrowRight size={14} className="ml-auto text-gray-300 group-hover:text-gray-500" />
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
-    <div className="bg-white rounded-xl shadow-sm p-6"><h2 className="font-semibold mb-4">Recent Orders</h2>{orders.slice(0, 5).map(o => <div key={o.id} className="flex items-center justify-between py-3 border-b last:border-0"><div><p className="font-medium text-sm">{o.id}</p><p className="text-xs text-gray-500">{o.userName}</p></div><div className="text-right"><p className="font-semibold text-sm">${o.total.toFixed(2)}</p><span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{o.status}</span></div></div>)}</div>
+
+    {/* Recent Orders */}
+    <div className="bg-white rounded-2xl border border-gray-100 p-6 card-lift">
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="font-bold text-gray-800">Recent Orders</h2>
+        <Link to="/admin/orders" className="text-xs font-semibold text-blue-600 hover:text-blue-800">View All →</Link>
+      </div>
+      <div className="space-y-1">
+        {orders.slice(0,5).map(o => (
+          <div key={o.id} className="flex items-center justify-between py-3 px-3 rounded-xl hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${
+                o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
+                o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                'bg-gray-100 text-gray-600'
+              }`}>#{(orders.indexOf(o)+1).toString().padStart(2,'0')}</div>
+              <div>
+                <p className="font-medium text-sm">{o.id}</p>
+                <p className="text-xs text-gray-500">{o.userName}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-bold text-sm">${o.total.toFixed(2)}</p>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
+                o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                'bg-gray-100 text-gray-600'
+              }`}>{o.status}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   </div>;
 }
 
@@ -3087,8 +3265,8 @@ function AReviews() {
 
 function ASettings() {
   const { user, changePassword, updateAdminProfile, notify } = useApp();
+  const navigate = useNavigate();
 
-  // API Keys (persisted in localStorage)
   const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}'); } catch { return {}; }
   });
@@ -3096,15 +3274,12 @@ function ASettings() {
   const [apiSaved, setApiSaved] = useState(false);
   const toggleShow = (k: string) => setShowKeys(s => ({ ...s, [k]: !s[k] }));
 
-  // Accordion open state
   const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false });
   const toggle = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }));
 
-  // Profile form
   const [profName, setProfName] = useState(user?.name || '');
   const [profEmail, setProfEmail] = useState(user?.email || '');
 
-  // Password form
   const [curPass, setCurPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confPass, setConfPass] = useState('');
@@ -3174,19 +3349,6 @@ function ASettings() {
     </div>
   );
 
-  // AI Providers
-  const [aiProviders, setAiProviders] = useState<AIProvider[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null') || DEFAULT_AI_PROVIDERS; }
-    catch { return DEFAULT_AI_PROVIDERS; }
-  });
-  const [aiSaved, setAiSaved] = useState(false);
-  const saveAIProviders = (updated: AIProvider[]) => {
-    setAiProviders(updated);
-    localStorage.setItem('luxedge_ai_providers', JSON.stringify(updated));
-    setAiSaved(true); notify('AI Providers saved!');
-    setTimeout(() => setAiSaved(false), 3000);
-  };
-
   return (
     <div className="space-y-4 max-w-3xl">
       <h1 className="text-2xl font-bold">Settings</h1>
@@ -3194,47 +3356,10 @@ function ASettings() {
       {/* ── AI Providers ── */}
       <Accordion id="ai" title="AI Providers" icon={<Bot size={18} className="text-purple-600" />} borderClass="border-purple-300">
         <div className="pt-5 space-y-4">
-          <p className="text-sm text-gray-500">Configure AI providers for the AI Product Import Engine. Add API keys and select your default provider and model.</p>
-          <div className="space-y-3">
-            {aiProviders.map((provider, idx) => (
-              <div key={provider.id} className={`border rounded-xl p-4 ${provider.isDefault ? 'border-purple-300 bg-purple-50' : 'border-gray-200'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => saveAIProviders(aiProviders.map((p,i) => ({...p, enabled: i===idx ? !p.enabled : p.enabled})))}
-                      className={`text-sm font-semibold ${provider.enabled ? 'text-gray-900' : 'text-gray-400'}`}>
-                      {provider.enabled ? <ToggleRight size={24} className="text-green-500" /> : <ToggleLeft size={24} className="text-gray-400" />}
-                    </button>
-                    <span className="font-semibold text-sm">{provider.name}</span>
-                    {provider.isDefault && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Default</span>}
-                  </div>
-                  {!provider.isDefault && provider.apiKey && (
-                    <button type="button" onClick={() => saveAIProviders(aiProviders.map(p => ({...p, isDefault: p.id === provider.id})))}
-                      className="text-xs text-purple-600 hover:text-purple-800 font-medium">Set Default</button>
-                  )}
-                </div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <div className="relative">
-                    <input type={showKeys[`ai_${provider.id}`] ? 'text' : 'password'}
-                      value={provider.apiKey}
-                      onChange={e => setAiProviders(prev => prev.map((p,i) => i===idx ? {...p, apiKey: e.target.value} : p))}
-                      onBlur={() => localStorage.setItem('luxedge_ai_providers', JSON.stringify(aiProviders))}
-                      className={I + ' pr-10 text-xs'} placeholder={`${provider.name} API Key`} />
-                    <button type="button" onClick={() => toggleShow(`ai_${provider.id}`)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showKeys[`ai_${provider.id}`] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                  <select value={provider.defaultModel} onChange={e => setAiProviders(prev => prev.map((p,i) => i===idx ? {...p, defaultModel: e.target.value} : p))}
-                    onBlur={() => localStorage.setItem('luxedge_ai_providers', JSON.stringify(aiProviders))}
-                    className={I + ' text-xs'}>
-                    {provider.models.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-              </div>
-            ))}
-          </div>
-          {aiSaved && <div className="flex items-center gap-2 p-3 bg-purple-50 border border-purple-200 rounded-xl text-purple-700 text-sm"><CheckCircle size={16} /> AI Providers saved!</div>}
-          <button type="button" onClick={() => saveAIProviders(aiProviders)} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <Save size={16} /> Save AI Provider Settings
+          <p className="text-sm text-gray-500">For full AI provider management including API keys, model selection, credit tracking, and connection testing, visit the dedicated AI Hub.</p>
+          <button type="button" onClick={() => navigate('/admin/ai')}
+            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+            <Bot size={16} /> Open AI Hub →
           </button>
         </div>
       </Accordion>
@@ -5789,9 +5914,302 @@ Rules:
 }
 
 // ============================================================================
+// AI HUB — Unified AI Management Dashboard
+// ============================================================================
+function AAIHub() {
+  const { notify } = useApp();
+  const navigate = useNavigate();
+  const [aiProviders, setAiProviders] = useState<AIProvider[]>(() => {
+    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null') || DEFAULT_AI_PROVIDERS; }
+    catch { return DEFAULT_AI_PROVIDERS; }
+  });
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, string>>({});
+  const [orCredits, setOrCredits] = useState<{ total: number; used: number } | null>(null);
+  const [checkingCredits, setCheckingCredits] = useState(false);
+
+  const I = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all';
+
+  const save = (updated: AIProvider[]) => {
+    setAiProviders(updated);
+    localStorage.setItem('luxedge_ai_providers', JSON.stringify(updated));
+    setSaving(true); notify('AI Providers saved!'); setTimeout(() => setSaving(false), 3000);
+  };
+
+  const toggleShow = (k: string) => setShowKeys(s => ({ ...s, [k]: !s[k] }));
+
+  const testProvider = async (provider: AIProvider) => {
+    if (!provider.apiKey.trim()) { setTestResult({ ...testResult, [provider.id]: 'No API key provided' }); return; }
+    setTesting(provider.id);
+    try {
+      const p = await callAIProvider('Reply with only: OK', [provider]);
+      setTestResult({ ...testResult, [provider.id]: p.includes('OK') ? 'Connected successfully!' : 'Response: OK' });
+    } catch (e: any) {
+      setTestResult({ ...testResult, [provider.id]: `Error: ${e.message?.slice(0, 80)}` });
+    } finally { setTesting(null); }
+  };
+
+  const checkOpenRouterCredits = async () => {
+    const or = aiProviders.find(p => p.id === 'openrouter');
+    if (!or?.apiKey) { notify('Add OpenRouter API key first'); return; }
+    setCheckingCredits(true);
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/auth/key', {
+        headers: { 'Authorization': `Bearer ${or.apiKey}` }
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      setOrCredits({ total: d.data?.limit || 0, used: d.data?.usage || 0 });
+    } catch (e: any) { notify(`Credit check failed: ${e.message}`); }
+    finally { setCheckingCredits(false); }
+  };
+
+  const providerIcons: Record<string, string> = {
+    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
+  };
+
+  return (
+    <div className="space-y-5 max-w-4xl">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
+          <Bot size={26} className="text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">AI Hub</h1>
+          <p className="text-sm text-gray-500">Manage AI providers, API keys, credits, and import settings</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => navigate('/admin/ai-import')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+            <Wand2 size={16} /> AI Import
+          </button>
+          <button onClick={() => navigate('/admin/marketing')} className="px-4 py-2 border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+            <Megaphone size={16} /> Marketing
+          </button>
+        </div>
+      </div>
+
+      {/* OpenRouter Credits Card */}
+      {aiProviders.find(p => p.id === 'openrouter' && p.apiKey) && (
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-sm text-purple-800 flex items-center gap-2">
+              <Globe size={16} /> OpenRouter Credits
+            </h2>
+            <button onClick={checkOpenRouterCredits} disabled={checkingCredits}
+              className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
+              {checkingCredits ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              {checkingCredits ? 'Checking...' : 'Check Credits'}
+            </button>
+          </div>
+          {orCredits ? (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-purple-700">${orCredits.total.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Total Limit</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-amber-600">${orCredits.used.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Used</p>
+              </div>
+              <div className="bg-white rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-green-600">${(orCredits.total - orCredits.used).toFixed(2)}</p>
+                <p className="text-xs text-gray-500">Remaining</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-purple-600">Click "Check Credits" to view your OpenRouter balance.</p>
+          )}
+          <p className="text-xs text-purple-400 mt-2">
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-purple-600">Get OpenRouter credits →</a>
+          </p>
+        </div>
+      )}
+
+      {/* AI Providers */}
+      <div className="bg-white rounded-2xl border border-purple-200 p-5">
+        <h2 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
+          <Bot size={16} className="text-purple-500" /> AI Provider Configuration
+        </h2>
+        <p className="text-sm text-gray-500 mb-5">Add API keys and select models for each provider. The default provider is used for all AI operations.</p>
+        <div className="space-y-3">
+          {aiProviders.map((provider, idx) => (
+            <div key={provider.id} className={`border rounded-xl p-4 transition-all ${provider.isDefault ? 'border-purple-300 bg-purple-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => save(aiProviders.map((p, i) => ({ ...p, enabled: i === idx ? !p.enabled : p.enabled })))}>
+                    {provider.enabled ? <ToggleRight size={24} className="text-green-500" /> : <ToggleLeft size={24} className="text-gray-400" />}
+                  </button>
+                  <div>
+                    <span className="font-semibold text-sm">{providerIcons[provider.id] || ''} {provider.name}</span>
+                    {provider.isDefault && <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Default</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => testProvider(provider)} disabled={testing === provider.id || !provider.apiKey}
+                    className="px-3 py-1.5 text-xs border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
+                    {testing === provider.id ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                    Test
+                  </button>
+                  {!provider.isDefault && provider.apiKey && (
+                    <button type="button" onClick={() => save(aiProviders.map(p => ({ ...p, isDefault: p.id === provider.id })))}
+                      className="text-xs text-purple-600 hover:text-purple-800 font-medium">Make Default</button>
+                  )}
+                </div>
+              </div>
+              {testResult[provider.id] && (
+                <div className={`mb-3 p-2 rounded-lg text-xs ${testResult[provider.id].startsWith('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                  {testResult[provider.id]}
+                </div>
+              )}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">API Key</label>
+                  <div className="relative">
+                    <input type={showKeys[`ai_${provider.id}`] ? 'text' : 'password'}
+                      value={provider.apiKey}
+                      onChange={e => setAiProviders(prev => prev.map((p, i) => i === idx ? { ...p, apiKey: e.target.value } : p))}
+                      className={I + ' pr-10 text-xs'} placeholder={`Enter ${provider.name} API key...`} />
+                    <button type="button" onClick={() => toggleShow(`ai_${provider.id}`)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showKeys[`ai_${provider.id}`] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Model</label>
+                  <select value={provider.defaultModel} onChange={e => setAiProviders(prev => prev.map((p, i) => i === idx ? { ...p, defaultModel: e.target.value } : p))}
+                    className={I + ' text-xs'}>
+                    {provider.models.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+              {provider.id === 'openrouter' && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Free models: google/gemini-2.0-flash-exp:free, meta-llama/llama-3.1-8b-instruct:free
+                  <br />Paid models require credits. <a href="https://openrouter.ai/docs" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Docs</a>
+                </p>
+              )}
+              {provider.id === 'gemini' && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Free tier: 1,500 requests/day. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Get API key</a>
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+        {saving && (
+          <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-purple-700 text-sm flex items-center gap-2">
+            <CheckCircle size={16} /> AI Providers saved successfully!
+          </div>
+        )}
+        <button type="button" onClick={() => save(aiProviders)}
+          className="mt-4 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors w-full sm:w-auto justify-center">
+          <Save size={16} /> Save All AI Providers
+        </button>
+      </div>
+
+      {/* Quick Start Cards */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Wand2 size={18} className="text-blue-600" />
+            <h3 className="font-bold text-sm">AI Product Import</h3>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">Paste any product URL from AliExpress, Amazon, eBay, Etsy, Walmart, Temu — AI extracts all details.</p>
+          <button onClick={() => navigate('/admin/ai-import')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors">
+            Launch Import →
+          </button>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Megaphone size={18} className="text-green-600" />
+            <h3 className="font-bold text-sm">AI Content Generators</h3>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">Generate product descriptions, ad copy, emails, social posts, blog ideas with AI.</p>
+          <button onClick={() => navigate('/admin/marketing')} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-semibold transition-colors">
+            Open Marketing →
+          </button>
+        </div>
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Search size={18} className="text-amber-600" />
+            <h3 className="font-bold text-sm">SEO Engine</h3>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">AI-powered SEO optimization: meta tags, structured data, keyword analysis, content scoring.</p>
+          <button onClick={() => navigate('/admin/seo-engine')} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-colors">
+            Open SEO Engine →
+          </button>
+        </div>
+        <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Layers size={18} className="text-pink-600" />
+            <h3 className="font-bold text-sm">Variant Generator</h3>
+          </div>
+          <p className="text-xs text-gray-600 mb-3">AI generates product variants (colors, sizes, materials) with SKUs and pricing.</p>
+          <button onClick={() => navigate('/admin/variant-gen')} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-semibold transition-colors">
+            Open Variant Gen →
+          </button>
+        </div>
+      </div>
+
+      {/* Scraping Configuration */}
+      <div className="bg-white rounded-2xl border border-green-200 p-5">
+        <h2 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
+          <Link2 size={16} className="text-green-500" /> Web Scraping Configuration
+        </h2>
+        <div className="rounded-xl border border-dashed border-green-300 bg-green-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-bold text-green-700">scrape.do — Free Web Scraper</p>
+            <p className="text-xs text-green-600 mt-0.5">1,000 free requests/month · No credit card · Permanent free tier</p>
+          </div>
+          <ol className="text-xs text-green-700 space-y-1 list-decimal list-inside">
+            <li>Go to scrape.do and create a free account</li>
+            <li>Copy your token from the dashboard</li>
+            <li>Paste below — enables AliExpress, Amazon, and any URL import</li>
+          </ol>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">scrape.do Token</label>
+            <input type="password" value={(() => { try { return JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}').scrapedoKey || ''; } catch { return ''; } })()}
+              onChange={e => {
+                try {
+                  const keys = JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}');
+                  keys.scrapedoKey = e.target.value;
+                  localStorage.setItem('luxedge_api_keys', JSON.stringify(keys));
+                } catch {}
+              }}
+              className={I} placeholder="Paste your scrape.do token here" />
+          </div>
+          <p className="text-xs text-green-500 flex items-center gap-1">
+            <CheckCircle size={12} /> Token is saved automatically
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // AI PRODUCT IMPORT ENGINE
 // ============================================================================
-const SUPPORTED_PLATFORMS = ['AliExpress','Alibaba','Amazon','eBay','Etsy','Walmart','Temu','CJ Dropshipping','Any public product page'];
+const SUPPORTED_PLATFORMS = ['AliExpress','Alibaba','Amazon','eBay','Etsy','Walmart','Temu','CJ Dropshipping','Daraz','Shopify Stores','Any public product page'];
+
+function detectPlatform(url: string): string | null {
+  if (!url) return null;
+  const u = url.toLowerCase();
+  if (u.includes('aliexpress.com') || u.includes('aliexpress.us')) return 'AliExpress';
+  if (u.includes('alibaba.com')) return 'Alibaba';
+  if (u.includes('amazon.com') || u.includes('amzn.to')) return 'Amazon';
+  if (u.includes('ebay.com') || u.includes('ebay.co')) return 'eBay';
+  if (u.includes('etsy.com')) return 'Etsy';
+  if (u.includes('walmart.com')) return 'Walmart';
+  if (u.includes('temu.com')) return 'Temu';
+  if (u.includes('daraz.pk') || u.includes('daraz.com')) return 'Daraz';
+  if (u.includes('cjdropshipping.com')) return 'CJ Dropshipping';
+  if (u.includes('myshopify.com') || u.includes('shopify.com')) return 'Shopify Store';
+  if (u.startsWith('http')) return 'Website';
+  return null;
+}
 
 function ConfidenceBadge({ score }: { score: number }) {
   const color = score >= 80 ? 'text-green-600 bg-green-50' : score >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
@@ -6053,16 +6471,32 @@ function AAIImport() {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Product URL</label>
               <div className="flex gap-2">
-                <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleImport()}
-                  className={inputCls + ' flex-1'} placeholder="https://www.aliexpress.com/item/..." />
+                <div className="relative flex-1">
+                  <input value={urlInput} onChange={e=>setUrlInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleImport()}
+                    className={inputCls + ' w-full'} placeholder="https://www.aliexpress.com/item/... or any product page URL" />
+                  {urlInput.trim() && detectPlatform(urlInput) && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                      {detectPlatform(urlInput)}
+                    </span>
+                  )}
+                </div>
                 <button onClick={handleImport} disabled={!urlInput.trim()}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-colors">
                   <Wand2 size={16}/> Import
                 </button>
               </div>
             </div>
+            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+              <p className="text-xs text-blue-700">
+                <span className="font-semibold">Smart Import:</span> Paste any product URL — {
+                  urlInput.trim() && detectPlatform(urlInput)
+                    ? <span>detected as <span className="font-bold text-blue-800">{detectPlatform(urlInput)}</span> product</span>
+                    : 'AI will extract title, price, images, specs, description, variants, SEO data automatically'
+                }
+              </p>
+            </div>
             <div className="text-xs text-gray-500">
-              <p className="font-medium mb-1">Supported:</p>
+              <p className="font-medium mb-1">Supported platforms:</p>
               <div className="flex flex-wrap gap-1">{SUPPORTED_PLATFORMS.map(p=><span key={p} className="px-2 py-0.5 bg-gray-100 rounded">{p}</span>)}</div>
             </div>
           </div>
@@ -6457,6 +6891,7 @@ export default function App() {
           <Route path="/admin/seo-engine" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASEOEngine /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/marketing" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AMarketingGen /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/variant-gen" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AVariantGen /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/ai" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIHub /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/ai-import" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIImport /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASettings /></AdminLayout></ProtectedRoute>} />
           {/* Fallback */}
