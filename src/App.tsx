@@ -1280,56 +1280,44 @@ function HomePage() {
             style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
-          <div className="grid lg:grid-cols-2 gap-6 lg:gap-8 items-center">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="grid lg:grid-cols-2 gap-5 lg:gap-6 items-center">
 
             {/* LEFT — Headline */}
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold tracking-wider mb-3 animate-fade-in"
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-wider mb-2 animate-fade-in"
                 style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#fbbf24' }}>
-                <Sparkles size={10} /> NEW ARRIVALS WEEKLY
+                <Sparkles size={9} /> NEW ARRIVALS WEEKLY
               </div>
 
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-[1.08] mb-3 text-white animate-fade-in-up">
-                Premium Products
-                <br />
-                <span className="text-gradient-amber">Worth Owning</span>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-[1.05] mb-2 text-white animate-fade-in-up">
+                Premium Products <span className="text-gradient-amber">Worth Owning</span>
               </h1>
 
-              <p className="text-gray-400 text-sm sm:text-base mb-5 max-w-lg mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                Handpicked quality. Designer aesthetics. Unbeatable value. Delivered to your door.
+              <p className="text-gray-400 text-xs sm:text-sm mb-4 max-w-md mx-auto lg:mx-0 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                Handpicked quality. Unbeatable value. Delivered to your door.
               </p>
 
-              <div className="flex flex-wrap gap-2.5 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+              <div className="flex flex-wrap gap-2 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
                 <Link to="/shop"
-                  className="group px-5 py-2.5 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-lg transition-all duration-300 hover:scale-105"
+                  className="group px-4 py-2 rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-lg transition-all duration-300 hover:scale-105"
                   style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
-                  Explore Collection
-                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  Explore <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link to="/about"
-                  className="px-5 py-2.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 transition-all duration-300 hover:scale-105"
+                  className="px-4 py-2 rounded-lg font-semibold text-[11px] flex items-center gap-1 transition-all duration-300 hover:scale-105"
                   style={{ border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0' }}>
-                  <PlayCircle size={14} /> Our Story
+                  <PlayCircle size={12} /> Story
                 </Link>
               </div>
 
               {/* Stats row */}
-              <div className="flex items-center gap-4 mt-6 justify-center lg:justify-start text-white/60 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                <div className="text-center">
-                  <p className="text-base font-bold text-white">2K+</p>
-                  <p className="text-[10px]">Happy Customers</p>
-                </div>
-                <div className="w-px h-8 bg-white/10" />
-                <div className="text-center">
-                  <p className="text-base font-bold text-white">4.9</p>
-                  <div className="flex gap-0.5 justify-center">{[...Array(5)].map((_,i)=><Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
-                </div>
-                <div className="w-px h-8 bg-white/10" />
-                <div className="text-center">
-                  <p className="text-base font-bold text-white">Free</p>
-                  <p className="text-[10px]">Shipping $50+</p>
-                </div>
+              <div className="flex items-center gap-3 mt-4 justify-center lg:justify-start text-white/60 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                <span className="text-sm font-bold text-white">2K+ Customers</span>
+                <span className="text-white/20">|</span>
+                <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={10} className="text-amber-400 fill-amber-400" />)}</div>
+                <span className="text-white/20">|</span>
+                <span className="text-sm font-bold text-white">Free Ship $50+</span>
               </div>
             </div>
 
@@ -1391,48 +1379,42 @@ function HomePage() {
 
       {/* ════════ TRUST BAR ════════ */}
       <section className="bg-white border-y border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="max-w-7xl mx-auto px-4 py-2 grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
             { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
-            { i: RotateCcw, l: 'Easy Returns', d: '30-day policy' },
-            { i: Shield, l: 'Secure Checkout', d: 'SSL encrypted' },
-            { i: Award, l: 'Premium Quality', d: 'Handpicked' },
+            { i: RotateCcw, l: 'Easy Returns', d: '30-day' },
+            { i: Shield, l: 'Secure', d: 'SSL' },
+            { i: Award, l: 'Premium', d: 'Handpicked' },
           ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all group-hover:scale-110" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)' }}>
-                <x.i size={15} className="text-amber-700" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-900">{x.l}</p>
-                <p className="text-[10px] text-gray-500">{x.d}</p>
-              </div>
+            <div key={i} className="flex items-center gap-1.5">
+              <x.i size={14} className="text-amber-600" />
+              <div className="flex items-baseline gap-1"><p className="text-[11px] font-semibold text-gray-900">{x.l}</p><p className="text-[10px] text-gray-400">·{x.d}</p></div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ════════ CATEGORIES ════════ */}
-      <section className="py-8 bg-white">
+      <section className="py-6 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-6">
-            <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Browse</p>
-            <h2 className="text-xl font-bold text-gray-900">Shop by Category</h2>
+          <div className="text-center mb-4">
+            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Browse</p>
+            <h2 className="text-lg font-bold text-gray-900">Shop by Category</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {CAT_LIST.filter(c => c !== 'All').map(c => {
               const meta = CAT_META[c];
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-lg transition-all duration-300">
-                  {/* Background Image */}
+                  className="group relative rounded-lg overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-md transition-all duration-300">
                   <div className="aspect-[3/2] relative">
                     <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-gray-900/10 group-hover:from-amber-900/80 transition-all duration-300" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-end p-3 text-center">
-                      <span className="text-lg mb-0.5">{meta?.icon}</span>
-                      <h3 className="text-white font-bold text-xs">{c}</h3>
-                      <p className="text-gray-300 text-[10px]">{count} item{count !== 1 ? 's' : ''}</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/30 to-transparent" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-end p-2 text-center">
+                      <span className="text-base mb-0.5">{meta?.icon}</span>
+                      <h3 className="text-white font-bold text-[11px]">{c}</h3>
+                      <p className="text-gray-300 text-[9px]">{count} items</p>
                     </div>
                   </div>
                 </Link>
@@ -1443,30 +1425,30 @@ function HomePage() {
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-8 bg-gray-50">
+      <section className="py-6 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-6">
-            <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Handpicked For You</p>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Trending This Week</h2>
+          <div className="text-center mb-4">
+            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Handpicked For You</p>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Trending This Week</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
           </div>
-          <div className="text-center mt-6">
-            <Link to="/shop" className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors text-xs">
-              View All Products <ArrowRight size={13} />
+          <div className="text-center mt-4">
+            <Link to="/shop" className="inline-flex items-center gap-1 px-4 py-2 bg-gray-900 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors text-[11px]">
+              View All <ArrowRight size={12} />
             </Link>
           </div>
         </div>
       </section>
 
       {/* ════════ CTA ════════ */}
-      <section className="py-10 bg-gray-900 text-white relative overflow-hidden">
+      <section className="py-8 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent" />
         <div className="max-w-3xl mx-auto px-4 text-center relative">
-          <h2 className="text-xl sm:text-2xl font-bold mb-2">Ready to Upgrade Your Life?</h2>
-          <p className="text-gray-400 mb-5 text-sm max-w-lg mx-auto">Join 2,000+ customers who shop smarter with Luxedge.</p>
-          <div className="flex flex-wrap gap-2.5 justify-center">
+          <h2 className="text-lg sm:text-xl font-bold mb-1.5">Ready to Upgrade?</h2>
+          <p className="text-gray-400 mb-4 text-xs max-w-lg mx-auto">Join 2,000+ customers who shop smarter with Luxedge.</p>
+          <div className="flex flex-wrap gap-2 justify-center">
             <Link to="/signup" className="px-7 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20">Create Account <ArrowRight size={15} /></Link>
             <Link to="/shop" className="px-7 py-3 border border-gray-700 hover:border-amber-500/40 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
           </div>
@@ -2652,43 +2634,38 @@ function AdminLayout({ children }: { children: ReactNode }) {
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-64 min-h-screen hidden lg:flex'}`}
+    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-52 min-h-screen hidden lg:flex'}`}
       style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
-      <div className="p-4 border-b border-white/5 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs"
+      <div className="p-3 border-b border-white/5 flex items-center gap-2">
+        <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-[10px]"
           style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
-          <Shield size={16} className="text-white" />
+          <Shield size={14} className="text-white" />
         </div>
-        <div>
-          <span className="font-bold text-sm text-white tracking-tight">Luxedge</span>
-          <p className="text-[9px] text-slate-400 uppercase tracking-widest">Admin</p>
-        </div>
-        {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1 hover:bg-white/10 rounded-lg"><X size={16} className="text-slate-400" /></button>}
+        <span className="font-bold text-sm text-white tracking-tight">Luxedge</span>
+        {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1 hover:bg-white/10 rounded-md"><X size={14} className="text-slate-400" /></button>}
       </div>
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 p-1.5 space-y-0.5 overflow-y-auto">
         {links.map(l => {
           const isActive = loc.pathname === l.to;
           return (
             <Link key={l.to} to={l.to}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group relative ${
-                isActive
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 group relative ${
+                isActive ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}>
-              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full" style={{ background: 'linear-gradient(180deg, #3b82f6, #8b5cf6)' }} />}
-              <l.icon size={16} className={isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
+              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r-full" style={{ background: 'linear-gradient(180deg, #3b82f6, #8b5cf6)' }} />}
+              <l.icon size={14} className={isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
               {l.label}
             </Link>
           );
         })}
       </nav>
-      <div className="p-2 border-t border-white/5 space-y-0.5">
-        <Link to="/" className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
-          <ArrowLeft size={12} />Back to Store
+      <div className="p-1.5 border-t border-white/5 space-y-0.5">
+        <Link to="/" className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-2.5 py-1 rounded-md hover:bg-white/5 transition-colors">
+          <ArrowLeft size={10} />Store
         </Link>
         <button onClick={() => { logout(); nav('/admin/login'); }}
-          className="flex items-center gap-1.5 text-[10px] text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/10 w-full transition-colors">
-          <LogOut size={12} />Logout
+          className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 px-2.5 py-1 rounded-md hover:bg-red-500/10 w-full transition-colors">
+          <LogOut size={10} />Logout
         </button>
       </div>
     </aside>
