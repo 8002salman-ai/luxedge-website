@@ -938,7 +938,176 @@ function ProductDetailPage() {
 
           <h1 className="text-sm sm:text-base font-medium text-gray-900 mb-1.5">{product.name}</h1>
 
-          {activeStock === 0 && <p className="text-[9px] font-medium">Out of Stock</p>}
+          {/* Rating */}
+          <div className="flex items-center gap-1 mb-2">
+            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={10} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-[10px] text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
+            <span className="text-[10px] text-gray-400">|</span>
+            <span className="text-[10px] text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
+          </div>
+
+          {/* Price */}
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-lg font-bold text-gray-900">${activePrice.toFixed(2)}</span>
+            {discount > 0 && <span className="text-xs text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
+            {discount > 0 && <span className="text-[10px] text-red-600 font-medium">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
+          </div>
+
+          {/* Stock + Shipping */}
+          <div className="mb-2 text-[10px]">
+            {activeStock > 10 && <span className="text-green-700"><CheckCircle size={10} className="inline mr-0.5" />In Stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-amber-700"><AlertTriangle size={10} className="inline mr-0.5" />Only {activeStock} left</span>}
+            {activeStock === 0 && <span className="text-red-600"><X size={10} className="inline mr-0.5" />Out of Stock</span>}
+            {product.freeShipping && <span className="text-gray-500 ml-2">| <Truck size={10} className="inline mr-0.5" />Free shipping</span>}
+          </div>
+
+          {/* Short Desc */}
+          {product.shortDesc && <p className="text-[10px] text-gray-600 mb-2 leading-relaxed">{product.shortDesc}</p>}
+
+          {/* Color */}
+          {uniqueColors.length > 0 && (
+            <div className="mb-2">
+              <span className="text-[9px] text-gray-500 font-medium">Color: {selColor}</span>
+              <div className="flex gap-1 mt-0.5">
+                {uniqueColors.map(c => (
+                  <button key={c} onClick={() => setSelColor(c)}
+                    className={`w-5 h-5 rounded-full border ${selColor === c ? 'ring-1 ring-gray-900 ring-offset-1' : ''}`}
+                    style={{ backgroundColor: ({ Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' })[c] || '#ccc' }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Size */}
+          {uniqueSizes.length > 0 && uniqueSizes[0] !== 'One Size' && (
+            <div className="mb-2">
+              <span className="text-[9px] text-gray-500 font-medium">Size: {selSize}</span>
+              <div className="flex gap-1 mt-0.5 flex-wrap">
+                {uniqueSizes.map(s => (
+                  <button key={s} onClick={() => setSelSize(s)}
+                    className={`px-2 py-0.5 text-[9px] border rounded ${selSize === s ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-700 hover:border-gray-500'}`}>{s}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="flex items-center border rounded">
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-2 py-1 hover:bg-gray-50 text-[10px]"><Minus size={10} /></button>
+              <span className="px-2 py-1 text-[10px] font-medium border-x min-w-[1.5rem] text-center">{qty}</span>
+              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-2 py-1 hover:bg-gray-50 text-[10px]"><Plus size={10} /></button>
+            </div>
+            <button onClick={handleAddToCart} disabled={activeStock === 0}
+              className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white text-[10px] font-semibold rounded disabled:cursor-not-allowed">
+              {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+            </button>
+            <button onClick={handleBuyNow} disabled={activeStock === 0}
+              className="flex-1 py-1.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 text-white text-[10px] font-semibold rounded disabled:cursor-not-allowed">
+              Buy Now
+            </button>
+          </div>
+
+          {/* Trust */}
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { icon: Truck, t: 'Free ship $50+' },
+              { icon: RotateCcw, t: '30-day returns' },
+              { icon: Shield, t: 'Guarantee' },
+              { icon: Lock, t: 'Secure' },
+            ].map((b, i) => (
+              <div key={i} className="flex items-center gap-1 p-1.5 bg-gray-50 rounded"><b.icon size={10} className="text-gray-500 shrink-0" /><span className="text-[8px] text-gray-600">{b.t}</span></div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-3 border-b mt-4 mb-3">
+        {([['desc', 'Description'], ['specs', 'Specifications'], ['reviews', `Reviews (${reviews.length})`]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`pb-1.5 text-[10px] font-medium border-b-2 transition-colors ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Description */}
+      {tab === 'desc' && (
+        <div>
+          <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-line">{product.description}</p>
+          {product.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t">
+              {product.tags.map(t => <span key={t} className="text-[9px] text-blue-600 hover:underline cursor-pointer">#{t}</span>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Specs */}
+      {tab === 'specs' && (
+        <table className="w-full text-[10px]">
+          <tbody>
+            {[
+              ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
+              ['Weight', product.weight], ['Dimensions', product.dimensions],
+              ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : `$${product.shippingCost}`],
+            ].filter(([, v]) => v).map(([k, v], i) => (
+              <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
+                <td className="px-2 py-1.5 font-medium text-gray-600 w-1/3">{k}</td>
+                <td className="px-2 py-1.5 text-gray-900">{v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Reviews */}
+      {tab === 'reviews' && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg font-bold">{avgRating.toFixed(1)}</span>
+            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-[10px] text-gray-500">{reviews.length} reviews</span>
+          </div>
+
+          {user ? (
+            <button onClick={() => setShowRevForm(!showRevForm)} className="text-[10px] text-blue-600 hover:underline mb-2 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
+          ) : (
+            <p className="text-[10px] text-gray-500 mb-2"><Link to="/login" className="text-blue-600 hover:underline">Sign in</Link> to review</p>
+          )}
+
+          {showRevForm && (
+            <form onSubmit={submitReview} className="bg-gray-50 rounded p-2.5 mb-3 space-y-2">
+              <div className="flex gap-0.5">{[1, 2, 3, 4, 5].map(s => (
+                <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
+                  <Star size={14} className={s <= revForm.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} />
+                </button>
+              ))}</div>
+              <textarea required rows={2} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-2 py-1.5 border rounded text-[10px] focus:outline-none resize-none" placeholder="Write your review..." />
+              <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-[10px] font-medium rounded">Submit</button>
+            </form>
+          )}
+
+          <div className="space-y-3">
+            {reviews.length > 0 ? reviews.map(r => (
+              <div key={r.id} className="border-b border-gray-100 pb-3 last:border-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[9px] font-bold text-gray-700">{r.userName}</span>
+                  <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={8} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+                  <span className="text-[9px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
+                </div>
+                <p className="text-[10px] text-gray-600">{r.comment}</p>
+              </div>
+            )) : <p className="text-[10px] text-gray-400">No reviews yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Related */}
+      <div className="mt-6 pt-4 border-t">
+        <h2 className="text-xs font-bold text-gray-900 mb-3">Related Products</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {(related.length > 0 ? related : relatedFallback).map(p => <PCard key={p.id} product={p} />)}
         </div>
       </div>
     </div>
