@@ -915,7 +915,7 @@ function ProductDetailPage() {
       <div className="grid lg:grid-cols-2 gap-4">
         {/* LEFT: Image Gallery */}
         <div>
-          <div className="aspect-square bg-gray-100 rounded overflow-hidden relative">
+          <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden relative">
             <img src={product.images[selImg] || product.images[0]} alt={product.name} className="w-full h-full object-cover" />
             {discount > 0 && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{discount}%</span>}
           </div>
