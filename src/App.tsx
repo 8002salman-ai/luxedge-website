@@ -753,26 +753,32 @@ function Footer() {
 function PCard({ product }: { product: Product }) {
   const { addToCart, user } = useApp(); const nav = useNavigate();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
+  const hasSold = product.reviews > 0;
   return (
-    <div className="bg-white rounded-xl border overflow-hidden group hover:shadow-xl transition-all">
-      <Link to={`/product/${product.id}`} className="block">
-        <div className="relative aspect-square overflow-hidden bg-gray-100">
-          <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-          <span className="absolute top-3 right-3 px-2 py-1 bg-red-500 text-white text-xs font-bold rounded-full">-{d}%</span>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-3 left-3 px-2 py-1 bg-amber-500 text-white text-xs font-bold rounded-full">Low Stock</span>}
-          {product.stock === 0 && <span className="absolute top-3 left-3 px-2 py-1 bg-red-600 text-white text-xs font-bold rounded-full">Sold Out</span>}
+    <Link to={`/product/${product.id}`} className="block group">
+      <div className="bg-white rounded overflow-hidden border hover:shadow-sm transition-shadow">
+        <div className="relative bg-gray-100">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300" />
+          {d > 0 && <span className="absolute top-1 left-1 px-1 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{d}%</span>}
         </div>
-        <div className="p-4">
-          <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-1">{product.category}</p>
-          <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2 min-h-[2.5rem]">{product.name}</h3>
-          <div className="flex items-center gap-1 mb-2">{[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}<span className="text-xs text-gray-500 ml-1">({product.reviews})</span></div>
-          <div className="flex items-center gap-2 mb-3"><span className="text-lg font-bold">${product.price}</span><span className="text-sm text-gray-400 line-through">${product.originalPrice}</span></div>
+        <div className="px-2 py-1.5">
+          <p className="text-[9px] text-gray-500 uppercase truncate">{product.category}</p>
+          <h3 className="text-[10px] font-medium text-gray-900 leading-tight line-clamp-2 mt-0.5">{product.name}</h3>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[11px] font-bold text-gray-900">${product.price}</span>
+            {d > 0 && <span className="text-[9px] text-gray-400 line-through">${product.originalPrice}</span>}
+          </div>
+          <div className="flex items-center gap-1 mt-0.5">
+            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={8} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-[9px] text-gray-400">({product.reviews})</span>
+          </div>
+          {hasSold && <p className="text-[9px] text-gray-400 mt-0.5">{Math.floor(product.reviews * 0.87)} sold</p>}
         </div>
-      </Link>
-      <div className="px-4 pb-4">
-        <button onClick={(e) => { e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-2.5 bg-gray-900 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg transition-colors">Add to Cart</button>
+        <div className="px-2 pb-2">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -812,8 +818,6 @@ function ProductDetailPage() {
   const [selImg, setSelImg] = useState(0);
   const [selVariant, setSelVariant] = useState<ProductVariant | null>(null);
   const [tab, setTab] = useState<'desc' | 'specs' | 'reviews'>('desc');
-  const [zoom, setZoom] = useState(false);
-  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [revForm, setRevForm] = useState({ rating: 5, comment: '' });
   const [showRevForm, setShowRevForm] = useState(false);
   const [selColor, setSelColor] = useState('');
@@ -892,352 +896,54 @@ function ProductDetailPage() {
     setShowRevForm(false);
   };
 
-  const handleZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setZoomPos({ x: ((e.clientX - rect.left) / rect.width) * 100, y: ((e.clientY - rect.top) / rect.height) * 100 });
-  };
-
   const related = products.filter(p => p.isActive && p.id !== product.id && p.category === product.category).slice(0, 4);
   const relatedFallback = related.length === 0 ? products.filter(p => p.isActive && p.id !== product.id).slice(0, 4) : [];
 
   return (
-    <div className="bg-white">
+    <div className="max-w-7xl mx-auto px-3 py-3">
       {/* Breadcrumb */}
-      <div className="bg-gray-50 border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <nav className="flex items-center gap-2 text-sm text-gray-500">
-            <Link to="/" className="hover:text-amber-600 transition-colors">Home</Link>
-            <ChevronRight size={14} />
-            <Link to="/shop" className="hover:text-amber-600 transition-colors">Shop</Link>
-            <ChevronRight size={14} />
-            <Link to="/shop" className="hover:text-amber-600 transition-colors">{product.category}</Link>
-            <ChevronRight size={14} />
-            <span className="text-gray-900 font-medium truncate max-w-[200px]">{product.name}</span>
-          </nav>
-        </div>
-      </div>
+      <nav className="flex items-center gap-1 text-[10px] text-gray-500 mb-3">
+        <Link to="/" className="hover:text-blue-600">Home</Link>
+        <ChevronRight size={9} />
+        <Link to="/shop" className="hover:text-blue-600">Shop</Link>
+        <ChevronRight size={9} />
+        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-blue-600">{product.category}</Link>
+        <ChevronRight size={9} />
+        <span className="text-gray-800 truncate max-w-[200px]">{product.name}</span>
+      </nav>
 
-      {/* Main Product Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-14">
-
-          {/* ─── LEFT: Image Gallery ─── */}
-          <div className="space-y-4">
-            {/* Main Image with Zoom */}
-            <div
-              className="aspect-square rounded-2xl overflow-hidden bg-gray-100 relative cursor-crosshair group"
-              onMouseEnter={() => setZoom(true)}
-              onMouseLeave={() => setZoom(false)}
-              onMouseMove={handleZoomMove}
-            >
-              <img
-                src={product.images[selImg] || product.images[0]}
-                alt={product.name}
-                className={`w-full h-full object-cover transition-transform duration-200 ${zoom ? 'scale-[2]' : 'scale-100'}`}
-                style={zoom ? { transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` } : undefined}
-              />
-              {/* Badges */}
-              {discount > 0 && <div className="absolute top-4 left-4 px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">-{discount}% OFF</div>}
-              {activeStock > 0 && activeStock <= 10 && <div className="absolute top-4 right-4 px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1"><Zap size={12} />Low Stock</div>}
-              {activeStock === 0 && <div className="absolute top-4 right-4 px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded-full shadow-lg">Sold Out</div>}
-              <div className="absolute bottom-4 right-4 text-[10px] text-gray-400 bg-white/80 px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">🔍 Hover to zoom</div>
-            </div>
-
-            {/* Thumbnails */}
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {product.images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelImg(i)}
-                  className={`w-20 h-20 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-amber-500 shadow-md ring-2 ring-amber-200' : 'border-gray-200 hover:border-gray-300'}`}
-                >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* LEFT: Image Gallery */}
+        <div>
+          <div className="aspect-square bg-gray-100 rounded overflow-hidden relative">
+            <img src={product.images[selImg] || product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+            {discount > 0 && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{discount}%</span>}
           </div>
-
-          {/* ─── RIGHT: Product Info ─── */}
-          <div>
-            {/* Brand & Category */}
-            <div className="flex items-center gap-3 mb-2">
-              {product.brand && <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">{product.brand}</span>}
-              <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">{product.category}</span>
-              {product.condition !== 'New' && <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">{product.condition}</span>}
-            </div>
-
-            {/* Title */}
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-3 leading-tight">{product.name}</h1>
-
-            {/* Rating Summary */}
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-              <span className="text-sm text-gray-500">{avgRating.toFixed(1)}</span>
-              <span className="text-sm text-gray-300">|</span>
-              <button onClick={() => setTab('reviews')} className="text-sm text-blue-600 hover:underline">{product.reviews.toLocaleString()} reviews</button>
-              <span className="text-sm text-gray-300">|</span>
-              <span className="text-xs text-green-600 font-medium">✓ {Math.floor(product.reviews * 0.87)} sold</span>
-            </div>
-
-            {/* Price Block */}
-            <div className="bg-amber-50 rounded-xl p-5 mb-6">
-              <div className="flex items-end gap-3 mb-1">
-                <span className="text-3xl font-bold text-gray-900">${activePrice.toFixed(2)}</span>
-                {discount > 0 && <>
-                  <span className="text-lg text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>
-                  <span className="px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full">-{discount}%</span>
-                </>}
-              </div>
-              {discount > 0 && <p className="text-sm text-green-700">You save <span className="font-bold">${(activeOriginal - activePrice).toFixed(2)}</span></p>}
-              {product.freeShipping && <p className="text-xs text-amber-700 mt-2 flex items-center gap-1"><Truck size={12} /> Free Shipping</p>}
-            </div>
-
-            {/* Short Description */}
-            {product.shortDesc && <p className="text-gray-600 mb-6">{product.shortDesc}</p>}
-
-            {/* ─── Variant Selection ─── */}
-            {product.variants.length > 0 && (
-              <div className="space-y-5 mb-6">
-                {/* Color Selector */}
-                {uniqueColors.length > 0 && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
-                      Color: <span className="text-gray-900 normal-case">{selColor}</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {uniqueColors.map(c => {
-                        const colorMap: Record<string, string> = { Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' };
-                        const bg = colorMap[c];
-                        return (
-                          <button key={c} onClick={() => setSelColor(c)} className={`relative rounded-lg transition-all ${selColor === c ? 'ring-2 ring-amber-500 ring-offset-2' : 'hover:ring-2 hover:ring-gray-300 hover:ring-offset-1'}`}>
-                            {bg ? (
-                              <div className={`w-10 h-10 rounded-lg border-2 ${c === 'White' ? 'border-gray-200' : 'border-transparent'}`} style={{ backgroundColor: bg }} />
-                            ) : (
-                              <div className="px-4 py-2 border-2 rounded-lg text-sm font-medium" style={{ borderColor: selColor === c ? '#f59e0b' : '#e5e7eb' }}>{c}</div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Size Selector */}
-                {uniqueSizes.length > 0 && uniqueSizes[0] !== 'One Size' && uniqueSizes[0] !== 'Standard' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
-                      Size: <span className="text-gray-900 normal-case">{selSize}</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {uniqueSizes.map(s => (
-                        <button key={s} onClick={() => setSelSize(s)}
-                          className={`min-w-[3rem] px-4 py-2.5 border-2 rounded-lg text-sm font-medium transition-all ${selSize === s ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 hover:border-gray-300 text-gray-700'}`}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Variant Info */}
-                {selVariant && (
-                  <div className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
-                    Selected: <span className="font-medium text-gray-700">{selVariant.color} / {selVariant.size}</span>
-                    {selVariant.sku && <span className="ml-2">· SKU: {selVariant.sku}</span>}
-                    <span className="ml-2">· Stock: {selVariant.stock}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Stock Status */}
-            <div className="mb-5">
-              {activeStock > 10 && <p className="text-green-600 text-sm font-medium flex items-center gap-1.5"><CheckCircle size={14} /> In Stock ({activeStock} available)</p>}
-              {activeStock > 0 && activeStock <= 10 && <p className="text-amber-600 text-sm font-medium flex items-center gap-1.5"><AlertTriangle size={14} /> Only {activeStock} left — order soon!</p>}
-              {activeStock === 0 && <p className="text-red-600 text-sm font-medium flex items-center gap-1.5"><X size={14} /> Out of Stock</p>}
-            </div>
-
-            {/* Quantity + Buttons */}
-            <div className="space-y-3 mb-8">
-              <div className="flex flex-wrap gap-3">
-                {/* Quantity */}
-                <div className="flex items-center border border-gray-200 rounded-xl">
-                  <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-4 py-3 hover:bg-gray-50 rounded-l-xl transition-colors"><Minus size={16} /></button>
-                  <span className="px-4 py-3 font-semibold min-w-[3rem] text-center border-x border-gray-200">{qty}</span>
-                  <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-4 py-3 hover:bg-gray-50 rounded-r-xl transition-colors"><Plus size={16} /></button>
-                </div>
-
-                {/* Add to Cart */}
-                <button onClick={handleAddToCart} disabled={activeStock === 0}
-                  className="flex-1 min-w-[180px] py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
-                  <ShoppingBag size={18} />{activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
-                </button>
-              </div>
-
-              {/* Buy Now */}
-              <button onClick={handleBuyNow} disabled={activeStock === 0}
-                className="w-full py-3.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
-                <Zap size={16} /> Buy Now
-              </button>
-            </div>
-
-            {/* Trust Badges */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { icon: Truck, t: 'Free Shipping', s: 'On orders $50+' },
-                { icon: RotateCcw, t: '30-Day Returns', s: 'No questions asked' },
-                { icon: Shield, t: 'Quality Guarantee', s: 'Money back' },
-                { icon: Lock, t: 'Secure Checkout', s: 'SSL encrypted' },
-              ].map((b, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                  <b.icon size={18} className="text-amber-500 shrink-0" />
-                  <div><p className="text-xs font-semibold text-gray-800">{b.t}</p><p className="text-[10px] text-gray-400">{b.s}</p></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── Tabs: Description / Specs / Reviews ─── */}
-        <div className="mt-14 border-t pt-10">
-          <div className="flex border-b mb-8 overflow-x-auto">
-            {([['desc', '📝 Description'], ['specs', '📋 Specifications'], ['reviews', `⭐ Reviews (${reviews.length})`]] as const).map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`px-6 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${tab === key ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                {label}
+          <div className="flex gap-1.5 mt-1.5 overflow-x-auto">
+            {product.images.map((img, i) => (
+              <button key={i} onClick={() => setSelImg(i)}
+                className={`w-12 h-12 rounded overflow-hidden border shrink-0 ${selImg === i ? 'border-gray-900' : 'border-gray-200 hover:border-gray-400'}`}>
+                <img src={img} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
-
-          {/* Description Tab */}
-          {tab === 'desc' && (
-            <div className="max-w-3xl">
-              <p className="text-gray-700 leading-relaxed whitespace-pre-line">{product.description}</p>
-              {product.tags.length > 0 && (
-                <div className="mt-6 pt-6 border-t flex flex-wrap gap-2">
-                  {product.tags.map(t => <span key={t} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">#{t}</span>)}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Specifications Tab */}
-          {tab === 'specs' && (
-            <div className="max-w-2xl">
-              <table className="w-full text-sm">
-                <tbody>
-                  {[
-                    ['Brand', product.brand],
-                    ['Category', product.category],
-                    ['Condition', product.condition],
-                    ['Weight', product.weight],
-                    ['Dimensions', product.dimensions],
-                    ['Country of Origin', product.origin],
-                    ['Shipping', product.freeShipping ? 'Free Shipping' : `$${product.shippingCost}`],
-                    ['Variants', product.variants.length > 0 ? `${product.variants.length} options` : 'None'],
-                  ].filter(([, v]) => v).map(([k, v], i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
-                      <td className="px-4 py-3 font-medium text-gray-600 w-1/3">{k}</td>
-                      <td className="px-4 py-3 text-gray-900">{v}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Reviews Tab */}
-          {tab === 'reviews' && (
-            <div className="max-w-3xl">
-              {/* Review Summary */}
-              <div className="flex flex-col sm:flex-row gap-8 mb-8 p-6 bg-gray-50 rounded-xl">
-                <div className="text-center sm:pr-8 sm:border-r">
-                  <p className="text-5xl font-bold text-gray-900">{avgRating.toFixed(1)}</p>
-                  <div className="flex gap-0.5 justify-center my-2">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-                  <p className="text-sm text-gray-500">{reviews.length} review{reviews.length !== 1 ? 's' : ''}</p>
-                </div>
-                <div className="flex-1 space-y-2">
-                  {[5, 4, 3, 2, 1].map(stars => {
-                    const count = reviews.filter(r => r.rating === stars).length;
-                    const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
-                    return (
-                      <div key={stars} className="flex items-center gap-3">
-                        <span className="text-sm text-gray-500 w-8">{stars}★</span>
-                        <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} /></div>
-                        <span className="text-xs text-gray-400 w-8">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Write Review */}
-              {user ? (
-                <div className="mb-8">
-                  {!showRevForm ? (
-                    <button onClick={() => setShowRevForm(true)} className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg">Write a Review</button>
-                  ) : (
-                    <form onSubmit={submitReview} className="bg-gray-50 rounded-xl p-6 space-y-4">
-                      <h3 className="font-semibold text-gray-900">Your Review</h3>
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Rating</label>
-                        <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
-                          <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                            <Star size={24} className={s <= revForm.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} />
-                          </button>
-                        ))}</div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Comment</label>
-                        <textarea required rows={4} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:border-amber-400 resize-none" placeholder="Share your experience..." />
-                      </div>
-                      <div className="flex gap-3">
-                        <button type="submit" className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg">Submit</button>
-                        <button type="button" onClick={() => setShowRevForm(false)} className="px-6 py-2.5 border rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 mb-8"><Link to="/login" className="text-amber-600 font-semibold hover:underline">Sign in</Link> to write a review</p>
-              )}
-
-              {/* Reviews List */}
-              {reviews.length > 0 ? (
-                <div className="space-y-6">
-                  {reviews.map(r => (
-                    <div key={r.id} className="border-b border-gray-100 pb-6 last:border-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center"><span className="font-bold text-amber-700 text-sm">{r.userName.charAt(0)}</span></div>
-                        <div>
-                          <p className="font-semibold text-sm text-gray-900">{r.userName}</p>
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-                            <span className="text-xs text-gray-400">{new Date(r.date).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-600 ml-[52px]">{r.comment}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 bg-gray-50 rounded-xl"><p className="text-gray-400">No reviews yet. Be the first to review!</p></div>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* ─── Related Products ─── */}
-        <div className="mt-14 pt-10 border-t">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">You May Also Like</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {(related.length > 0 ? related : relatedFallback).map(p => <PCard key={p.id} product={p} />)}
+        {/* RIGHT: Product Info - eBay style */}
+        <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            {product.brand && <span className="text-[9px] text-blue-600 font-medium">{product.brand}</span>}
+            {product.condition !== 'New' && <span className="text-[9px] text-gray-500">| {product.condition}</span>}
           </div>
+
+          <h1 className="text-sm sm:text-base font-medium text-gray-900 mb-1.5">{product.name}</h1>
+
+          {activeStock === 0 && <p className="text-[9px] font-medium">Out of Stock</p>}
         </div>
       </div>
     </div>
   );
+
 }
 
 // ============================================================================
@@ -1265,114 +971,47 @@ function HomePage() {
 
   return (
     <div>
-      {/* ════════ HERO — Modern Premium ════════ */}
-      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
-        {/* Animated BG elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full opacity-20 animate-float"
-            style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%)' }} />
-          <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] rounded-full opacity-15 animate-float"
-            style={{ animationDelay: '1.5s', background: 'radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%)' }} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full opacity-5"
-            style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)' }} />
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-[0.03]"
-            style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <div className="grid lg:grid-cols-2 gap-5 lg:gap-6 items-center">
-
-            {/* LEFT — Headline */}
-            <div className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-wider mb-2 animate-fade-in"
-                style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', color: '#fbbf24' }}>
-                <Sparkles size={9} /> NEW ARRIVALS WEEKLY
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-[1.05] mb-2 text-white animate-fade-in-up">
-                Premium Products <span className="text-gradient-amber">Worth Owning</span>
-              </h1>
-
-              <p className="text-gray-400 text-xs sm:text-sm mb-4 max-w-md mx-auto lg:mx-0 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                Handpicked quality. Unbeatable value. Delivered to your door.
-              </p>
-
-              <div className="flex flex-wrap gap-2 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-                <Link to="/shop"
-                  className="group px-4 py-2 rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-lg transition-all duration-300 hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
-                  Explore <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link to="/about"
-                  className="px-4 py-2 rounded-lg font-semibold text-[11px] flex items-center gap-1 transition-all duration-300 hover:scale-105"
-                  style={{ border: '1px solid rgba(255,255,255,0.15)', color: '#e2e8f0' }}>
-                  <PlayCircle size={12} /> Story
-                </Link>
-              </div>
-
-              {/* Stats row */}
-              <div className="flex items-center gap-3 mt-4 justify-center lg:justify-start text-white/60 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <span className="text-sm font-bold text-white">2K+ Customers</span>
-                <span className="text-white/20">|</span>
-                <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={10} className="text-amber-400 fill-amber-400" />)}</div>
-                <span className="text-white/20">|</span>
-                <span className="text-sm font-bold text-white">Free Ship $50+</span>
-              </div>
+      {/* ════════ HERO — Ultra Minimal ════════ */}
+      <section className="relative" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:py-6 flex flex-col lg:flex-row items-center gap-4 lg:gap-6">
+          {/* LEFT */}
+          <div className="flex-1 text-center lg:text-left">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight text-white">
+              Premium Products <span className="text-gradient-amber">Worth Owning</span>
+            </h1>
+            <p className="text-gray-400 text-xs mt-1 mb-3">Handpicked quality delivered to your door.</p>
+            <div className="flex items-center gap-2 justify-center lg:justify-start">
+              <Link to="/shop"
+                className="px-4 py-1.5 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all hover:scale-105"
+                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
+                Shop Now <ArrowRight size={12} />
+              </Link>
+              <span className="text-white/30 text-xs">|</span>
+              <span className="text-white/40 text-[10px]">2K+ Customers</span>
+              <span className="text-white/30 text-xs">|</span>
+              <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
             </div>
-
-            {/* RIGHT — Featured Product Card */}
-            <div className="animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-              {hp && (
-                <Link to={`/product/${hp.id}`} className="block group">
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-2xl shadow-black/50 group-hover:shadow-amber-500/10 transition-all duration-500 group-hover:scale-[1.02]">
-                      <div className="aspect-[5/3] relative overflow-hidden">
-                        <img key={hp.id} src={hp.images[0]} alt={hp.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="eager" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-
-                        {/* Badges */}
-                        {disc > 0 && <span className="absolute top-3 left-3 px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded-full shadow-lg">-{disc}% OFF</span>}
-                        <span className="absolute top-3 right-3 px-2 py-1 rounded-full text-[10px] font-bold text-white shadow-lg flex items-center gap-1"
-                          style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
-                          <TrendingUp size={10} /> Trending
-                        </span>
-
-                        {/* Product Info Overlay */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4">
-                          <p className="text-amber-400 text-[10px] font-semibold uppercase tracking-wider mb-0.5">{hp.category}</p>
-                          <h3 className="text-white font-bold text-lg leading-tight group-hover:text-amber-300 transition-colors">{hp.name}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xl font-bold text-white">${hp.price.toFixed(2)}</span>
-                            {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                            <div className="flex gap-0.5 ml-auto">{[...Array(5)].map((_,i)=><Star key={i} size={10} className={i < Math.round(hp.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-500'} />)}</div>
-                          </div>
-                        </div>
+          </div>
+          {/* RIGHT — mini product card */}
+          <div className="w-full lg:w-auto shrink-0">
+            {hp && (
+              <Link to={`/product/${hp.id}`} className="block group">
+                <div className="relative rounded-lg overflow-hidden border border-white/10 shadow-lg w-full lg:w-64">
+                  <div className="aspect-[16/9] relative">
+                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="eager" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-2.5">
+                      <p className="text-white font-bold text-xs leading-tight truncate">{hp.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-bold text-white">${hp.price.toFixed(2)}</span>
+                        {disc > 0 && <span className="text-[10px] text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
+                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">-{disc}%</span>}
                       </div>
-
-                      {/* Bottom bar with nav dots */}
-                      {heroProducts.length > 1 && (
-                        <div className="flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm border-t border-white/5">
-                          <button onClick={(e) => { e.preventDefault(); prev(); rst(); }}
-                            className="w-7 h-7 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-all">
-                            <ChevronLeft size={14} />
-                          </button>
-                          <div className="flex gap-1 flex-1 justify-center">
-                            {heroProducts.map((_, i) => (
-                              <button key={i} onClick={(e) => { e.preventDefault(); go(i); rst(); }}
-                                className={`h-1.5 rounded-full transition-all duration-300 ${i === cs ? 'w-6 bg-amber-500' : 'w-1.5 bg-white/20 hover:bg-white/40'}`} />
-                            ))}
-                          </div>
-                          <button onClick={(e) => { e.preventDefault(); next(); rst(); }}
-                            className="w-7 h-7 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-all">
-                            <ChevronRight size={14} />
-                          </button>
-                        </div>
-                      )}
                     </div>
-                </Link>
-              )}
-            </div>
+                  </div>
+                </div>
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -1491,80 +1130,66 @@ function ShopPage() {
 
   return (
     <div>
-      {/* Hero */}
-      <section className="bg-gray-900 py-10">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          {/* Breadcrumb */}
-          <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mb-4">
-            <Link to="/" className="hover:text-amber-400 transition-colors">Home</Link>
-            <ChevronRight size={12} />
+      {/* Breadcrumb */}
+      <div className="border-b">
+        <div className="max-w-7xl mx-auto px-3 py-2">
+          <nav className="flex items-center gap-1 text-[10px] text-gray-500">
+            <Link to="/" className="hover:text-amber-600">Home</Link>
+            <ChevronRight size={9} />
+            <Link to="/shop" className="hover:text-amber-600">Shop</Link>
+            <ChevronRight size={9} />
             {cat !== 'All' ? <>
-              <Link to="/shop" className="hover:text-amber-400 transition-colors">Shop</Link>
-              <ChevronRight size={12} />
-              <span className="text-amber-400">{cat}</span>
-            </> : <span className="text-amber-400">Shop</span>}
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{pageTitle}</h1>
-          <p className="text-gray-400 text-sm">{pageDesc}</p>
+              <Link to="/shop" className="hover:text-amber-600">{cat}</Link>
+              <ChevronRight size={9} />
+              <span className="text-gray-900 font-medium truncate">{pageTitle}</span>
+            </> : <span className="text-gray-800 font-medium">All Products</span>}
+          </nav>
         </div>
-      </section>
+      </div>
 
-      {/* Category Pills */}
-      <section className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {CAT_LIST.map(c => (
-              <button key={c} onClick={() => handleCatChange(c)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  cat === c
-                    ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}>
-                {c !== 'All' && <span className="mr-1.5">{CAT_META[c]?.icon}</span>}
-                {c}
-              </button>
-            ))}
-          </div>
+      {/* Filter bar */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-3 py-2 flex items-center gap-2 overflow-x-auto">
+          {CAT_LIST.map(c => (
+            <button key={c} onClick={() => handleCatChange(c)}
+              className={`whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors ${
+                cat === c ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}>
+              {c}
+            </button>
+          ))}
+          <span className="text-gray-300 ml-auto">|</span>
+          <select value={sort} onChange={e => setSort(e.target.value)}
+            className="text-[10px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
+            <option value="featured">Featured</option>
+            <option value="price-low">Low→High</option>
+            <option value="price-high">High→Low</option>
+            <option value="rating">Top Rated</option>
+          </select>
         </div>
-      </section>
+      </div>
 
-      {/* Products */}
-      <section className="py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          {/* Search + Sort */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="flex-1 relative">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100" />
-            </div>
-            <select value={sort} onChange={e => setSort(e.target.value)}
-              className="px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400">
-              <option value="featured">Featured</option>
-              <option value="price-low">Price: Low → High</option>
-              <option value="price-high">Price: High → Low</option>
-              <option value="rating">Highest Rated</option>
-            </select>
-          </div>
-
-          <p className="text-sm text-gray-500 mb-4">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
-
-          {f.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              {f.map(p => <PCard key={p.id} product={p} />)}
-            </div>
-          ) : (
-            <div className="text-center py-20 bg-white rounded-xl border">
-              <p className="text-4xl mb-3">🔍</p>
-              <p className="text-lg font-semibold text-gray-700 mb-1">No products found</p>
-              <p className="text-sm text-gray-500 mb-6">{cat !== 'All' ? `No items in "${cat}" match your search.` : 'Try different search terms.'}</p>
-              <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="px-5 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium">
-                View All Products
-              </button>
-            </div>
-          )}
+      {/* Search + Results */}
+      <div className="max-w-7xl mx-auto px-3 py-2">
+        <div className="relative mb-2">
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
+            className="w-full pl-7 pr-2 py-1.5 border rounded text-[10px] focus:outline-none focus:border-gray-400" />
         </div>
-      </section>
+
+        <p className="text-[10px] text-gray-500 mb-2">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+
+        {f.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {f.map(p => <PCard key={p.id} product={p} />)}
+          </div>
+        ) : (
+          <div className="text-center py-10">
+            <p className="text-xs text-gray-500 mb-2">No products found for your search</p>
+            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[10px] font-medium text-blue-600 hover:underline">Clear all filters</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
