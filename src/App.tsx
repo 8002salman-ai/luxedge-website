@@ -281,6 +281,13 @@ const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'6', name:'CloudRest Memory Foam Pillow', shortDesc:'Cooling gel pillow', description:'Ergonomic cooling gel memory foam pillow for perfect sleep.', price:39.99, originalPrice:69.99, category:'Home & Living', stock:5, images:['https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:2876, isActive:true, brand:'CloudRest', weight:'2.5 lbs', tags:['pillow','memory foam','sleep'] },
   { ...DP, id:'7', name:'TechPro Laptop Stand', shortDesc:'Aluminum laptop riser', description:'Adjustable aluminum stand for better posture and airflow.', price:32.99, originalPrice:59.99, category:'Tech & Gadgets', stock:67, images:['https://images.pexels.com/photos/4065891/pexels-photo-4065891.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:1534, isActive:true, brand:'TechPro', weight:'1.5 lbs', tags:['laptop','stand','ergonomic'] },
   { ...DP, id:'8', name:'Signature Fragrance Collection', shortDesc:'Premium unisex perfume', description:'Premium unisex long-lasting fragrance. Notes of sandalwood & bergamot.', price:44.99, originalPrice:79.99, category:'Style', stock:56, images:['https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:765, isActive:true, brand:'Luxedge', weight:'0.5 lbs', tags:['fragrance','perfume','unisex'] },
+  { ...DP, id:'9', name:'CozyCloud Orthopedic Pet Bed', shortDesc:'Memory foam dog bed', description:'Orthopedic memory foam pet bed with washable cover. Supports joints, relieves pressure points, and keeps your furry friend comfortable all night.', price:42.99, originalPrice:79.99, category:'Pet', stock:64, images:['https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:1123, isActive:true, brand:'CozyCloud', weight:'4.2 lbs', tags:['dog bed','memory foam','pet'], variants:[{id:'v7',color:'Gray',size:'Medium',price:42.99,salePrice:42.99,stock:30,sku:'CC-M-GY'},{id:'v8',color:'Gray',size:'Large',price:54.99,salePrice:54.99,stock:34,sku:'CC-L-GY'}] },
+  { ...DP, id:'10', name:'WhiskerWand Interactive Cat Toy', shortDesc:'Self-play cat teaser', description:'Motion-activated interactive cat toy that mimics prey movement. Keeps indoor cats active, entertained, and mentally stimulated for hours.', price:24.99, originalPrice:44.99, category:'Pet', stock:132, images:['https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:876, isActive:true, brand:'WhiskerWand', weight:'0.6 lbs', tags:['cat toy','interactive','pet'] },
+  { ...DP, id:'11', name:'TrailMate No-Pull Dog Harness', shortDesc:'Reflective walking harness', description:'No-pull reflective dog harness with padded chest and adjustable straps. Ensures comfortable, secure walks for dogs of all sizes.', price:29.99, originalPrice:54.99, category:'Pet', stock:98, images:['https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:654, isActive:true, brand:'TrailMate', weight:'0.8 lbs', tags:['dog harness','walking','reflective'], variants:[{id:'v9',color:'Black',size:'Medium',price:29.99,salePrice:29.99,stock:50,sku:'TM-M-BK'},{id:'v10',color:'Black',size:'Large',price:32.99,salePrice:32.99,stock:48,sku:'TM-L-BK'}] },
+  { ...DP, id:'12', name:'FurFresh Pet Grooming Kit', shortDesc:'7-piece grooming set', description:'Complete 7-piece pet grooming kit with stainless steel brush, comb, nail clipper, and deshedding tool. Gentle on skin, perfect for shedding control.', price:19.99, originalPrice:39.99, category:'Pet', stock:210, images:['https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:432, isActive:true, brand:'FurFresh', weight:'1.1 lbs', tags:['grooming','pet care','brush'] },
+  { ...DP, id:'13', name:'AquaPure Pet Water Fountain', shortDesc:'Stainless steel fountain', description:'3-liter stainless steel pet water fountain with triple filtration and quiet pump. Encourages pets to drink more fresh, filtered water.', price:34.99, originalPrice:59.99, category:'Pet', stock:76, images:['https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:521, isActive:true, brand:'AquaPure', weight:'2.3 lbs', tags:['water fountain','cat','pet care'] },
+  { ...DP, id:'14', name:'SnackSmart Treat Dispenser', shortDesc:'Interactive puzzle feeder', description:'Stimulating puzzle treat dispenser that slows down fast eaters and provides mental enrichment. Great for dogs and cats.', price:16.99, originalPrice:29.99, category:'Pet', stock:143, images:['https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:389, isActive:true, brand:'SnackSmart', weight:'0.9 lbs', tags:['puzzle','treat toy','enrichment'] },
+  { ...DP, id:'15', name:'CleanPaw Pet Waste Bags & Dispenser', shortDesc:'Eco-friendly poop bags', description:'100-pack eco-friendly biodegradable poop bags with clip-on dispenser and waste bag holder. Strong, leak-proof, and scented.', price:12.99, originalPrice:22.99, category:'Pet', stock:256, images:['https://images.pexels.com/photos/1003875/pexels-photo-1003875.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.5, reviews:298, isActive:true, brand:'CleanPaw', weight:'0.4 lbs', tags:['poop bags','walking','eco friendly'] },
 ];
 
 const INIT_ADMIN: AppUser = { id: 'adm', email: 'admin@luxedge.us', password: 'admin123', name: 'Admin', role: 'admin', joined: '2024-01-01' };
@@ -310,6 +317,7 @@ const INIT_CATEGORIES: AdminCategory[] = [
   { id: 'c3', name: 'Wellness', isActive: true, subs: [] },
   { id: 'c4', name: 'Accessories', isActive: true, subs: [] },
   { id: 'c5', name: 'Style', isActive: true, subs: [] },
+  { id: 'c6', name: 'Pet', isActive: true, subs: [{ id: 'c6s1', name: 'Dogs', isActive: true }, { id: 'c6s2', name: 'Cats', isActive: true }] },
 ];
 
 const INIT_BLOGS: BlogPost[] = [
@@ -327,13 +335,14 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b12', slug:'work-from-home-productivity-hacks', title:'15 Work From Home Productivity Hacks That Actually Work', excerpt:'Boost your remote work output with these proven strategies used by top performers.', content:'Remote work productivity requires intentional habits. Here are 15 that actually work.\n\n## 1. Start with Your Hardest Task\nTackle the most challenging work when your energy is highest — usually first thing in the morning.\n\n## 2. Use the Pomodoro Technique\n25 minutes of focused work, 5-minute break. Repeat. It prevents burnout and maintains concentration.\n\n## 3. Create Physical Boundaries\nA dedicated workspace — even a corner — signals to your brain that it\'s work time.\n\n## 4. Upgrade Your Setup\nAn ergonomic laptop stand, proper lighting, and a comfortable chair are investments in your productivity.\n\n## 5. Batch Similar Tasks\nGroup emails, calls, and admin work together. Context-switching kills efficiency.\n\n## 6. Use Noise-Cancelling Earbuds\nBlock distractions with ANC earbuds. ProSound Elite are designed for exactly this.\n\n## 7. Take Walking Breaks\nMovement between work blocks refreshes your mind and body.\n\n## 8-15: Advanced Tips\nTime-block your calendar. Say no to unnecessary meetings. Use a second monitor. Keep a done list. Optimize your lighting. Stay hydrated. End your day with a shutdown ritual. Review weekly.', image:'https://images.pexels.com/photos/4065891/pexels-photo-4065891.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['productivity','WFH','remote work','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
 ];
 
-const CAT_LIST = ['All', 'Tech & Gadgets', 'Home & Living', 'Wellness', 'Accessories', 'Style'];
+const CAT_LIST = ['All', 'Tech & Gadgets', 'Home & Living', 'Wellness', 'Accessories', 'Style', 'Pet'];
 const CAT_META: Record<string, { icon: string; emoji: string; desc: string; img: string }> = {
   'Tech & Gadgets': { icon: '💻', emoji: '⚡', desc: 'Smart tech & electronics', img: 'https://images.pexels.com/photos/3780681/pexels-photo-3780681.jpeg?auto=compress&cs=tinysrgb&w=300' },
   'Home & Living': { icon: '🏠', emoji: '✨', desc: 'Decor, lighting & comfort', img: 'https://images.pexels.com/photos/1112598/pexels-photo-1112598.jpeg?auto=compress&cs=tinysrgb&w=300' },
   'Wellness': { icon: '💪', emoji: '🧘', desc: 'Health & fitness gear', img: 'https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=300' },
   'Accessories': { icon: '👜', emoji: '🎒', desc: 'Wallets, bags & more', img: 'https://images.pexels.com/photos/2079171/pexels-photo-2079171.jpeg?auto=compress&cs=tinysrgb&w=300' },
   'Style': { icon: '✨', emoji: '👔', desc: 'Fragrance & fashion', img: 'https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Pet': { icon: '🐾', emoji: '🐶', desc: 'Everything for your furry friends', img: 'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=300' },
 };
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';
@@ -496,36 +505,36 @@ function Header() {
       Free Shipping Over $50 | Premium Quality | Easy 30-Day Returns
     </div>
     <header className="sticky top-0 z-50 glass border-b border-gray-100/50">
-      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
+      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
         <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg">{mob ? <X size={20} /> : <Menu size={20} />}</button>
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-md transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
-            <span className="text-white font-serif font-bold text-xs">L</span>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
+            <span className="text-white font-serif font-bold text-sm">L</span>
           </div>
-          <span className="font-serif text-base font-bold tracking-tight text-gray-900">LUXEDGE</span>
+          <span className="font-serif text-lg font-bold tracking-tight text-gray-900">LUXEDGE</span>
         </Link>
-        <nav className="hidden lg:flex items-center gap-0.5">
+        <nav className="hidden lg:flex items-center gap-1">
           {nav.map(i => {
             const isActive = loc.pathname === i.p || (i.p === '/shop' && loc.pathname.startsWith('/category'));
             return (
               <Link key={i.p} to={i.p}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
                   isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}>{i.l}</Link>
             );
           })}
         </nav>
-        <div className="flex items-center gap-0.5">
-          <Link to="/shop" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={18} /></Link>
-          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
+        <div className="flex items-center gap-1">
+          <Link to="/shop" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={18} /></Link>
+          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
             {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-lg shadow-2xl border border-gray-100 py-1.5 z-50 glass">
               <div className="px-3 py-2 border-b border-gray-100"><p className="font-semibold text-xs">{user.name}</p><p className="text-[10px] text-gray-500">{user.email}</p></div>
               {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><LayoutDashboard size={14} className="text-blue-500" />Admin Panel</Link>}
               <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><Package size={14} className="text-gray-500" />My Orders</Link>
               <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-600 hover:bg-red-50 w-full transition-colors"><LogOut size={14} />Log Out</button>
             </div></>}</div>
-          ) : <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
-          <Link to="/cart" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
+          ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
+          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
             <ShoppingBag size={18} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{cc}</span>}
           </Link>
@@ -756,26 +765,30 @@ function PCard({ product }: { product: Product }) {
   const hasSold = product.reviews > 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded overflow-hidden border hover:shadow-sm transition-shadow">
-        <div className="relative bg-gray-100">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300" />
-          {d > 0 && <span className="absolute top-1 left-1 px-1 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{d}%</span>}
-        </div>
-        <div className="px-2 py-1.5">
-          <p className="text-[9px] text-gray-500 uppercase truncate">{product.category}</p>
-          <h3 className="text-[10px] font-medium text-gray-900 leading-tight line-clamp-2 mt-0.5">{product.name}</h3>
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-[11px] font-bold text-gray-900">${product.price}</span>
-            {d > 0 && <span className="text-[9px] text-gray-400 line-through">${product.originalPrice}</span>}
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
+        <div className="relative bg-gray-100 overflow-hidden">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
+          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">-{d}%</span>}
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-2 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded-full">Low Stock</span>}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <span className="px-3 py-1.5 bg-white/95 backdrop-blur rounded-full text-[10px] font-bold text-gray-900 shadow-lg">Quick View</span>
           </div>
-          <div className="flex items-center gap-1 mt-0.5">
-            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={8} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-            <span className="text-[9px] text-gray-400">({product.reviews})</span>
-          </div>
-          {hasSold && <p className="text-[9px] text-gray-400 mt-0.5">{Math.floor(product.reviews * 0.87)} sold</p>}
         </div>
-        <div className="px-2 pb-2">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
+        <div className="px-3 py-2.5">
+          <p className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold truncate">{product.category}</p>
+          <h3 className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2 mt-1 min-h-[2rem]">{product.name}</h3>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-[15px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
+            {d > 0 && <span className="text-[11px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
+          </div>
+          <div className="flex items-center gap-1 mt-1">
+            <div className="flex gap-[2px]">{[...Array(5)].map((_, i) => <Star key={i} size={9} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-[10px] text-gray-400">({product.reviews})</span>
+          </div>
+          {hasSold && <p className="text-[10px] text-gray-400 mt-1">{Math.floor(product.reviews * 0.87)} sold</p>}
+        </div>
+        <div className="px-3 pb-3">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-2 bg-gray-900 hover:bg-amber-500 text-white text-[11px] font-bold rounded-lg transition-colors">Add to Cart</button>
         </div>
       </div>
     </Link>
@@ -1141,40 +1154,59 @@ function HomePage() {
   return (
     <div>
       {/* ════════ HERO — Ultra Minimal ════════ */}
-      <section className="relative" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
-        <div className="max-w-7xl mx-auto px-4 py-5 sm:py-6 flex flex-col lg:flex-row items-center gap-4 lg:gap-6">
+      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <div className="absolute inset-0 opacity-[0.07]">
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+        </div>
+        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[140px]" />
+
+        <div className="max-w-7xl mx-auto px-4 py-12 sm:py-16 lg:py-20 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
           {/* LEFT */}
           <div className="flex-1 text-center lg:text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight text-white">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mb-6">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+              </span>
+              <span className="text-white/70 text-[11px] tracking-wider font-medium uppercase">New Arrivals Weekly</span>
+            </div>
+            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight text-white mb-5">
               Premium Products <span className="text-gradient-amber">Worth Owning</span>
             </h1>
-            <p className="text-gray-400 text-xs mt-1 mb-3">Handpicked quality delivered to your door.</p>
-            <div className="flex items-center gap-2 justify-center lg:justify-start">
+            <p className="text-gray-400 text-sm sm:text-base mb-7 max-w-lg mx-auto lg:mx-0 leading-relaxed">
+              We curate the world's best products — from smart tech to premium lifestyle essentials — so you shop with confidence.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
               <Link to="/shop"
-                className="px-4 py-1.5 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all hover:scale-105"
+                className="group px-7 py-3.5 rounded-lg font-bold text-[13px] flex items-center gap-2 transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/20"
                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
-                Shop Now <ArrowRight size={12} />
+                Shop Now <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
               </Link>
-              <span className="text-white/30 text-xs">|</span>
-              <span className="text-white/40 text-[10px]">2K+ Customers</span>
-              <span className="text-white/30 text-xs">|</span>
-              <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
+              <Link to="/about"
+                className="px-7 py-3.5 rounded-lg border border-white/15 text-white text-[13px] font-semibold hover:bg-white/5 hover:border-white/30 transition-all">
+                Our Story
+              </Link>
+              <div className="hidden sm:flex items-center gap-2 ml-2">
+                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className="text-amber-400 fill-amber-400" />)}</div>
+                <span className="text-white/50 text-[11px]">Trusted by 2,000+ customers</span>
+              </div>
             </div>
           </div>
           {/* RIGHT — mini product card */}
           <div className="w-full lg:w-auto shrink-0">
             {hp && (
               <Link to={`/product/${hp.id}`} className="block group">
-                <div className="relative rounded-lg overflow-hidden border border-white/10 shadow-lg w-full lg:w-64">
-                  <div className="aspect-[16/9] relative">
-                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="eager" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-2.5">
-                      <p className="text-white font-bold text-xs leading-tight truncate">{hp.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-bold text-white">${hp.price.toFixed(2)}</span>
-                        {disc > 0 && <span className="text-[10px] text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">-{disc}%</span>}
+                <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl w-full lg:w-80">
+                  <div className="aspect-[4/3] relative">
+                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="eager" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <p className="text-white font-bold text-sm leading-tight truncate mb-1">{hp.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-amber-400">${hp.price.toFixed(2)}</span>
+                        {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
+                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">-{disc}%</span>}
                       </div>
                     </div>
                   </div>
@@ -1186,43 +1218,53 @@ function HomePage() {
       </section>
 
       {/* ════════ TRUST BAR ════════ */}
-      <section className="bg-white border-y border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+      <section className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
             { i: RotateCcw, l: 'Easy Returns', d: '30-day' },
             { i: Shield, l: 'Secure', d: 'SSL' },
             { i: Award, l: 'Premium', d: 'Handpicked' },
           ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-1.5">
-              <x.i size={14} className="text-amber-600" />
-              <div className="flex items-baseline gap-1"><p className="text-[11px] font-semibold text-gray-900">{x.l}</p><p className="text-[10px] text-gray-400">·{x.d}</p></div>
+            <div key={i} className="flex items-center gap-2.5 justify-center py-1">
+              <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
+                <x.i size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900">{x.l}</p>
+                <p className="text-[10px] text-gray-400">{x.d}</p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ════════ CATEGORIES ════════ */}
-      <section className="py-6 bg-white">
+      <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-4">
-            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Browse</p>
-            <h2 className="text-lg font-bold text-gray-900">Shop by Category</h2>
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Browse</p>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Shop by Category</h2>
+            </div>
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
+              View All <ArrowRight size={13} />
+            </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {CAT_LIST.filter(c => c !== 'All').map(c => {
               const meta = CAT_META[c];
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-lg overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-md transition-all duration-300">
-                  <div className="aspect-[3/2] relative">
+                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+                  <div className="aspect-[4/5] relative">
                     <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/30 to-transparent" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-end p-2 text-center">
-                      <span className="text-base mb-0.5">{meta?.icon}</span>
-                      <h3 className="text-white font-bold text-[11px]">{c}</h3>
-                      <p className="text-gray-300 text-[9px]">{count} items</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/95 via-gray-900/40 to-transparent" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-end p-3 text-center">
+                      <span className="text-2xl mb-1.5 drop-shadow">{meta?.icon}</span>
+                      <h3 className="text-white font-bold text-xs sm:text-sm">{c}</h3>
+                      <p className="text-gray-300 text-[10px] mt-0.5">{count} items</p>
                     </div>
                   </div>
                 </Link>
@@ -1233,32 +1275,36 @@ function HomePage() {
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-6 bg-gray-50">
+      <section className="py-12 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-4">
-            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Handpicked For You</p>
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Trending This Week</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
-          </div>
-          <div className="text-center mt-4">
-            <Link to="/shop" className="inline-flex items-center gap-1 px-4 py-2 bg-gray-900 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors text-[11px]">
-              View All <ArrowRight size={12} />
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Handpicked For You</p>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Trending This Week</h2>
+            </div>
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
+              View All <ArrowRight size={13} />
             </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
           </div>
         </div>
       </section>
 
       {/* ════════ CTA ════════ */}
-      <section className="py-8 bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent" />
+      <section className="py-16 bg-gray-900 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
+        <div className="absolute top-0 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[100px]" />
         <div className="max-w-3xl mx-auto px-4 text-center relative">
-          <h2 className="text-lg sm:text-xl font-bold mb-1.5">Ready to Upgrade?</h2>
-          <p className="text-gray-400 mb-4 text-xs max-w-lg mx-auto">Join 2,000+ customers who shop smarter with Luxedge.</p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            <Link to="/signup" className="px-7 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20">Create Account <ArrowRight size={15} /></Link>
-            <Link to="/shop" className="px-7 py-3 border border-gray-700 hover:border-amber-500/40 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[11px] font-semibold uppercase tracking-widest mb-6">
+            <Zap size={12} /> Join The Inner Circle
+          </span>
+          <h2 className="font-serif text-3xl sm:text-4xl font-bold mb-4">Ready to Upgrade Your Life?</h2>
+          <p className="text-gray-400 mb-8 text-sm sm:text-base max-w-lg mx-auto">Join 2,000+ customers who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link to="/signup" className="group px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" /></Link>
+            <Link to="/shop" className="px-8 py-3.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
           </div>
         </div>
       </section>
@@ -1299,37 +1345,32 @@ function ShopPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <div className="border-b">
-        <div className="max-w-7xl mx-auto px-3 py-2">
-          <nav className="flex items-center gap-1 text-[10px] text-gray-500">
-            <Link to="/" className="hover:text-amber-600">Home</Link>
-            <ChevronRight size={9} />
-            <Link to="/shop" className="hover:text-amber-600">Shop</Link>
-            <ChevronRight size={9} />
-            {cat !== 'All' ? <>
-              <Link to="/shop" className="hover:text-amber-600">{cat}</Link>
-              <ChevronRight size={9} />
-              <span className="text-gray-900 font-medium truncate">{pageTitle}</span>
-            </> : <span className="text-gray-800 font-medium">All Products</span>}
-          </nav>
+      {/* Page Header */}
+      <section className="relative bg-gray-950 text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.05]">
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
         </div>
-      </div>
+        <div className="max-w-7xl mx-auto px-4 py-10 text-center relative">
+          <p className="text-amber-400 text-[10px] uppercase tracking-[0.25em] font-semibold mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <h1 className="font-serif text-2xl sm:text-4xl font-bold mb-2">{pageTitle}</h1>
+          <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto">{pageDesc}</p>
+        </div>
+      </section>
 
       {/* Filter bar */}
       <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-3 py-2 flex items-center gap-2 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 overflow-x-auto">
           {CAT_LIST.map(c => (
             <button key={c} onClick={() => handleCatChange(c)}
-              className={`whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors ${
-                cat === c ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+              className={`whitespace-nowrap text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${
+                cat === c ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
               }`}>
               {c}
             </button>
           ))}
           <span className="text-gray-300 ml-auto">|</span>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="text-[10px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
+            className="text-[11px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
             <option value="featured">Featured</option>
             <option value="price-low">Low→High</option>
             <option value="price-high">High→Low</option>
@@ -1339,23 +1380,23 @@ function ShopPage() {
       </div>
 
       {/* Search + Results */}
-      <div className="max-w-7xl mx-auto px-3 py-2">
+      <div className="max-w-7xl mx-auto px-3 py-3">
         <div className="relative mb-2">
-          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-            className="w-full pl-7 pr-2 py-1.5 border rounded text-[10px] focus:outline-none focus:border-gray-400" />
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100" />
         </div>
 
-        <p className="text-[10px] text-gray-500 mb-2">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+        <p className="text-[11px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
 
         {f.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {f.map(p => <PCard key={p.id} product={p} />)}
           </div>
         ) : (
-          <div className="text-center py-10">
-            <p className="text-xs text-gray-500 mb-2">No products found for your search</p>
-            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[10px] font-medium text-blue-600 hover:underline">Clear all filters</button>
+          <div className="text-center py-16">
+            <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
+            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[11px] font-medium text-amber-600 hover:underline">Clear all filters</button>
           </div>
         )}
       </div>
