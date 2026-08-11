@@ -4,27 +4,41 @@ import { getStripe } from "@/lib/stripe/server";
 
 export const runtime = "nodejs";
 
+const payableEventTypes = new Set(["payment_intent.succeeded", "payment_intent.payment_failed"]);
+
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!signature || !secret || !process.env.STRIPE_SECRET_KEY) return Response.json({ error: "Webhook is not configured." }, { status: 503 });
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  if (!signature || !secret || !stripeSecret) return Response.json({ error: "Webhook is not configured." }, { status: 503 });
   let event: Stripe.Event;
   try { event = getStripe().webhooks.constructEvent(await request.text(), signature, secret); }
   catch { return Response.json({ error: "Invalid webhook signature." }, { status: 400 }); }
 
   const db = createAdminClient();
+  let order: { id: string; total_amount: number; currency: string; stripe_payment_intent_id: string | null; payment_status: string } | null = null;
+  let intent: Stripe.PaymentIntent | null = null;
+  if (payableEventTypes.has(event.type)) {
+    intent = event.data.object as Stripe.PaymentIntent;
+    const orderId = intent.metadata.order_id;
+    if (!orderId || !/^[0-9a-f-]{36}$/i.test(orderId)) return Response.json({ error: "Payment event has no valid order." }, { status: 400 });
+    const result = await db.from("orders").select("id,total_amount,currency,stripe_payment_intent_id,payment_status").eq("id", orderId).maybeSingle();
+    order = result.data;
+    const amountMatches = intent.amount === order?.total_amount && (event.type !== "payment_intent.succeeded" || intent.amount_received === order?.total_amount);
+    const expectedLiveMode = stripeSecret.startsWith("sk_live_");
+    if (result.error || !order || order.stripe_payment_intent_id !== intent.id || !amountMatches || intent.currency !== order.currency || intent.livemode !== expectedLiveMode) return Response.json({ error: "Payment event does not match the stored order." }, { status: 409 });
+  }
+
   const { error: replayError } = await db.from("processed_webhook_events").insert({ stripe_event_id: event.id, event_type: event.type });
   if (replayError?.code === "23505") return Response.json({ received: true, duplicate: true });
   if (replayError) return Response.json({ error: "Webhook could not be recorded." }, { status: 500 });
 
-  if (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed") {
-    const intent = event.data.object as Stripe.PaymentIntent;
-    const orderId = intent.metadata.order_id;
-    if (orderId) {
-      const update = event.type === "payment_intent.succeeded"
-        ? { payment_status: "paid", status: "paid" }
-        : { payment_status: "failed", status: "payment_pending" };
-      await db.from("orders").update(update).eq("id", orderId).eq("stripe_payment_intent_id", intent.id);
+  if (intent && order) {
+    const update = event.type === "payment_intent.succeeded" ? { payment_status: "paid", status: "paid" } : { payment_status: "failed", status: "payment_pending" };
+    const { data, error } = await db.from("orders").update(update).eq("id", order.id).eq("stripe_payment_intent_id", intent.id).eq("total_amount", intent.amount).eq("currency", intent.currency).select("id").maybeSingle();
+    if (error || !data) {
+      await db.from("processed_webhook_events").delete().eq("stripe_event_id", event.id);
+      return Response.json({ error: "Order payment state could not be updated." }, { status: 500 });
     }
   }
   return Response.json({ received: true });

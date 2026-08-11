@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Footer } from "@/components/site/footer";
 import { Header } from "@/components/site/header";
+import { CartProvider } from "@/components/commerce/cart-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,5 +15,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: "#171713", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" style={{ "--font-display": '"Iowan Old Style", "Palatino Linotype", Georgia', "--font-body": 'Inter, Manrope, "Segoe UI", Arial' } as React.CSSProperties}><body><Header /><main>{children}</main><Footer /></body></html>;
+  return <html lang="en" style={{ "--font-display": '"Iowan Old Style", "Palatino Linotype", Georgia', "--font-body": 'Inter, Manrope, "Segoe UI", Arial' } as React.CSSProperties}><body><CartProvider><Header /><main>{children}</main><Footer /></CartProvider></body></html>;
 }

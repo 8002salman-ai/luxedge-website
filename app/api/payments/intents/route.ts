@@ -6,7 +6,7 @@ import { getStripe } from "@/lib/stripe/server";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  if (!process.env.STRIPE_SECRET_KEY) return Response.json({ error: "Payments are not configured." }, { status: 503 });
+  if (process.env.CHECKOUT_ENABLED !== "true" || !process.env.STRIPE_SECRET_KEY) return Response.json({ error: "Payments are not configured." }, { status: 503 });
   let body: { orderId?: unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON." }, { status: 400 }); }
   const orderId = typeof body.orderId === "string" && /^[0-9a-f-]{36}$/i.test(body.orderId) ? body.orderId : null;
@@ -19,8 +19,11 @@ export async function POST(request: Request) {
   const ownsOrder = user?.id === order.user_id || Boolean(guestHash && order.guest_session_hash === guestHash);
   if (!ownsOrder) return Response.json({ error: "Forbidden." }, { status: 403 });
   if (order.status !== "payment_pending" && order.status !== "pending") return Response.json({ error: "Order is not payable." }, { status: 409 });
+  if (!Number.isSafeInteger(order.total_amount) || order.total_amount < 50 || !/^[a-z]{3}$/.test(order.currency)) return Response.json({ error: "Order total is not payable." }, { status: 409 });
   if (order.stripe_payment_intent_id) {
     const existing = await getStripe().paymentIntents.retrieve(order.stripe_payment_intent_id);
+    const expectedLiveMode = process.env.STRIPE_SECRET_KEY.startsWith("sk_live_");
+    if (existing.amount !== order.total_amount || existing.currency !== order.currency || existing.metadata.order_id !== order.id || existing.livemode !== expectedLiveMode || existing.status === "canceled") return Response.json({ error: "Stored payment does not match this order." }, { status: 409 });
     return Response.json({ clientSecret: existing.client_secret, paymentIntentId: existing.id }, { headers: { "Cache-Control": "no-store" } });
   }
 

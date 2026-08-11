@@ -1,5 +1,9 @@
-import { LockKeyhole } from "lucide-react";
+import type { Metadata } from "next";
+import { CheckoutClient } from "@/components/commerce/checkout-client";
+
+export const metadata: Metadata = { title: "Secure checkout" };
 
 export default function CheckoutPage() {
-  return <section className="empty-page"><LockKeyhole size={38} strokeWidth={1.3} /><p className="eyebrow"><span /> Secure checkout</p><h1>Payments are not<br />enabled yet.</h1><p>Checkout will open only after server pricing, order security and Stripe test-mode verification pass.</p></section>;
+  const checkoutEnabled = process.env.CHECKOUT_ENABLED === "true" && Boolean(process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+  return <CheckoutClient checkoutEnabled={checkoutEnabled} publishableKey={checkoutEnabled ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY! : null} />;
 }
