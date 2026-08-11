@@ -1,7 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import ProtectedRoute from './components/common/ProtectedRoute';
-import { useAuthStore } from './store/authStore';
+import { HashRouter, Routes, Route, Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
   Shield, Star, Truck, RotateCcw, Award, Zap, ArrowRight, Mail, Phone,
@@ -352,7 +350,7 @@ interface Ctx {
   updateAdminProfile: (name: string, email: string) => void;
   addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
   updateQty: (id: string, q: number) => void; clearCart: () => void;
-  placeOrder: (addr: string) => string;
+  placeOrder: (addr: string, customerName?: string) => string;
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
@@ -363,9 +361,78 @@ interface Ctx {
 const AC = createContext<Ctx | null>(null);
 function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
+const CART_STORAGE_KEY = 'luxedge_guest_cart_v1';
+const GUEST_CHECKOUT_ID_KEY = 'luxedge_guest_checkout_id_v1';
+const ADMIN_SESSION_KEY = 'luxedge_admin_session_v1';
+const PAYMENT_ENABLED = false;
+
+function loadAdminSession(): AppUser | null {
+  try {
+    const stored = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const session = parsed as Partial<Pick<AppUser, 'id' | 'email' | 'name' | 'role'>>;
+    if (session.role !== 'admin' || typeof session.email !== 'string' || typeof session.name !== 'string') return null;
+    return { ...INIT_ADMIN, id: typeof session.id === 'string' ? session.id : INIT_ADMIN.id, email: session.email, name: session.name };
+  } catch {
+    return null;
+  }
+}
+
+function saveAdminSession(admin: AppUser) {
+  try {
+    window.sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: 'admin',
+    }));
+  } catch {
+    // Admin access remains usable until the current page is refreshed.
+  }
+}
+
+function clearAdminSession() {
+  try {
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  } catch {
+    // There is no stored session to clear when browser storage is unavailable.
+  }
+}
+
+function loadStoredCart(): CartItem[] {
+  try {
+    const stored = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is CartItem => {
+      if (!item || typeof item !== 'object') return false;
+      const candidate = item as Partial<CartItem>;
+      return Boolean(
+        candidate.product && typeof candidate.product.id === 'string' &&
+        Number.isInteger(candidate.quantity) && candidate.quantity! > 0 && candidate.quantity! <= 25
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function getGuestCheckoutId(): string {
+  const existing = window.localStorage.getItem(GUEST_CHECKOUT_ID_KEY);
+  if (existing) return existing;
+  const id = typeof window.crypto.randomUUID === 'function'
+    ? `guest_${window.crypto.randomUUID()}`
+    : `guest_${Array.from(window.crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  window.localStorage.setItem(GUEST_CHECKOUT_ID_KEY, id);
+  return id;
+}
+
 function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [user, setUser] = useState<AppUser | null>(loadAdminSession);
+  const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
   const [products, setProducts] = useState<Product[]>(INIT_PRODUCTS);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
@@ -376,11 +443,20 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [notif, setNotif] = useState<string | null>(null);
   const notify = (m: string) => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch {
+      // The cart remains usable in memory when browser storage is unavailable.
+    }
+  }, [cart]);
+
   const login = (e: string, p: string, admin = false) => {
     // Admin login — checks against live adminCreds state
     if (admin) {
       if (e === adminCreds.email && p === adminCreds.password) {
         setUser({ ...adminCreds });
+        saveAdminSession(adminCreds);
         notify('Welcome Admin!');
         return true;
       }
@@ -408,7 +484,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  const logout = () => { setUser(null); notify('Logged out'); };
+  const logout = () => { clearAdminSession(); setUser(null); notify('Logged out'); };
 
   const signup = (n: string, e: string, p: string) => {
     if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
@@ -431,6 +507,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...adminCreds, password: newPass };
       setAdminCreds(updated);
       setUser(updated);
+      saveAdminSession(updated);
       return { ok: true, msg: 'Password updated successfully!' };
     } else {
       if (current !== user.password) return { ok: false, msg: 'Current password is incorrect' };
@@ -447,14 +524,15 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...adminCreds, name, email };
       setAdminCreds(updated);
       setUser(updated);
+      saveAdminSession(updated);
       notify('Profile updated!');
     }
   };
-  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); notify(`Added to cart!`); };
+  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: Math.min(25, i.quantity + 1) } : i) : [...prev, { product: p, quantity: 1 }]; }); notify(`Added to cart!`); };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
-  const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
+  const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: Math.min(25, q) } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
+  const placeOrder = (addr: string, customerName?: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || getGuestCheckoutId(), userName: user?.name || customerName || 'Guest customer', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
 
   return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
 }
@@ -751,7 +829,7 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const { addToCart } = useApp();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
   const hasSold = product.reviews > 0;
   return (
@@ -775,7 +853,7 @@ function PCard({ product }: { product: Product }) {
           {hasSold && <p className="text-[9px] text-gray-400 mt-0.5">{Math.floor(product.reviews * 0.87)} sold</p>}
         </div>
         <div className="px-2 pb-2">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart(product); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
         </div>
       </div>
     </Link>
@@ -874,14 +952,12 @@ function ProductDetailPage() {
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
 
   const handleAddToCart = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     notify(`${qty}× ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     nav('/cart');
@@ -1364,12 +1440,12 @@ function ShopPage() {
 }
 
 function CartPage() {
-  const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
+  const { cart, updateQty, removeFromCart } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
   if (cart.length === 0) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">Cart Empty</h2><Link to="/shop" className="px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg inline-block mt-4">Shop Now</Link></div></div>;
   return (<div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">Shopping Cart</h1>
     <div className="bg-white rounded-xl border p-6 mb-6">{cart.map(i => <div key={i.product.id} className="flex gap-4 py-4 border-b last:border-0"><img src={i.product.images[0]} alt="" className="w-20 h-20 object-cover rounded-lg" /><div className="flex-1"><h3 className="font-semibold">{i.product.name}</h3><p className="text-amber-600 text-sm">${i.product.price}</p><div className="flex items-center gap-2 mt-2"><button onClick={() => updateQty(i.product.id, i.quantity - 1)} className="p-1 border rounded"><Minus size={14} /></button><span className="w-8 text-center">{i.quantity}</span><button onClick={() => updateQty(i.product.id, i.quantity + 1)} className="p-1 border rounded"><Plus size={14} /></button><button onClick={() => removeFromCart(i.product.id)} className="p-1 text-red-500 ml-4"><Trash2 size={16} /></button></div></div><p className="font-bold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
-    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav(user ? '/checkout' : '/login')} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">{user ? 'Checkout' : 'Sign In to Checkout'}</button></div>
+    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav('/checkout')} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">Continue as guest</button><p className="text-center text-xs text-gray-500 mt-3">No account required. You can sign in later to manage saved orders.</p></div>
   </div></div>);
 }
 
@@ -1385,7 +1461,6 @@ function CheckoutPage() {
 
   const [f, setF] = useState({ firstName: user?.name.split(' ')[0] || '', lastName: user?.name.split(' ').slice(1).join(' ') || '', email: user?.email || '', phone: '', address: '', city: '', state: '', zip: '', cardNum: '', cardExp: '', cardCvc: '', cardName: '' });
 
-  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
@@ -1428,7 +1503,7 @@ function CheckoutPage() {
       setStep(3);
       await new Promise(r => setTimeout(r, 2500));
       const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
-      const oid = placeOrder(addr);
+      const oid = placeOrder(addr, `${f.firstName} ${f.lastName}`.trim());
       setOrderId(oid);
       setStep(4);
     }
@@ -1441,6 +1516,18 @@ function CheckoutPage() {
 
   if (cart.length === 0 && step < 4) { nav('/cart'); return null; }
 
+  if (step === 2 && !PAYMENT_ENABLED) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-lg w-full bg-white rounded-2xl border p-8 text-center">
+        <Shield size={38} className="mx-auto text-amber-500 mb-4" />
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">Guest checkout secured</p>
+        <h1 className="text-2xl font-bold mb-3">Secure payment activation is pending.</h1>
+        <p className="text-sm text-gray-500 leading-6 mb-6">Your cart and shipping details are ready without an account. Card fields stay disabled until the real Stripe checkout is connected and verified, so this site never collects payment details in a demo form.</p>
+        <button onClick={() => setStep(1)} className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-xl">Back to shipping information</button>
+      </div>
+    </div>
+  );
+
   // ── Success ──
   if (step === 4) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -1448,7 +1535,7 @@ function CheckoutPage() {
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle size={40} className="text-green-500" /></div>
         <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
         <p className="text-gray-500 mb-1">Order <span className="font-mono font-semibold text-gray-700">#{orderId}</span></p>
-        <p className="text-sm text-gray-400 mb-6">Confirmation sent to {f.email}</p>
+        <p className="text-sm text-gray-400 mb-6">Checkout email: {f.email}</p>
         <div className="bg-white rounded-xl border p-5 text-left mb-6">
           <h3 className="font-semibold text-sm mb-3">Shipping to:</h3>
           <p className="text-sm text-gray-600">{f.firstName} {f.lastName}</p>
@@ -1457,7 +1544,7 @@ function CheckoutPage() {
           <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
         </div>
         <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link>
+          {user ? <Link to="/orders" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link> : <Link to="/signup" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">Create Account</Link>}
           <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
         </div>
       </div>
@@ -1505,14 +1592,15 @@ function CheckoutPage() {
             {/* Step 1: Shipping */}
             {step === 1 && (
               <>
+                {!user && <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl"><ShoppingBag size={18} className="text-amber-600 shrink-0 mt-0.5" /><div><p className="text-sm font-semibold text-amber-900">Checking out as a guest</p><p className="text-xs text-amber-700 mt-1">No account is required. Enter an email for the future confirmation and tracking flow.</p></div></div>}
                 {/* Contact */}
                 <div className="bg-white rounded-2xl border p-6">
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-amber-500" /> Contact Information</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
-                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
-                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({...f, email: e.target.value})} className={I} placeholder="john@example.com" />{ER('email')}</div>
-                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({...f, phone: e.target.value})} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
+                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF(prev => ({...prev, firstName: e.target.value}))} className={I} placeholder="John" />{ER('firstName')}</div>
+                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF(prev => ({...prev, lastName: e.target.value}))} className={I} placeholder="Doe" />{ER('lastName')}</div>
+                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF(prev => ({...prev, email: e.target.value}))} className={I} placeholder="john@example.com" />{ER('email')}</div>
+                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF(prev => ({...prev, phone: e.target.value}))} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
                   </div>
                 </div>
 
@@ -1520,11 +1608,11 @@ function CheckoutPage() {
                 <div className="bg-white rounded-2xl border p-6">
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-amber-500" /> Shipping Address</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
-                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
+                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF(prev => ({...prev, address: e.target.value}))} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
+                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF(prev => ({...prev, city: e.target.value}))} className={I} placeholder="Irving" />{ER('city')}</div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({...f, state: e.target.value})} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
-                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({...f, zip: e.target.value})} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
+                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF(prev => ({...prev, state: e.target.value}))} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
+                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF(prev => ({...prev, zip: e.target.value}))} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
                     </div>
                   </div>
                 </div>
@@ -1584,12 +1672,12 @@ function CheckoutPage() {
 
                   {payMethod === 'card' ? (
                     <div className="space-y-4">
-                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF({...f, cardNum: fmtCard(e.target.value)})} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
+                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF(prev => ({...prev, cardNum: fmtCard(e.target.value)}))} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF({...f, cardExp: fmtExp(e.target.value)})} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
-                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF({...f, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)})} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
+                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF(prev => ({...prev, cardExp: fmtExp(e.target.value)}))} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
+                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF(prev => ({...prev, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)}))} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
                       </div>
-                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF({...f, cardName: e.target.value})} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
+                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF(prev => ({...prev, cardName: e.target.value}))} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
                     </div>
                   ) : (
                     <div className="text-center py-8 bg-gray-50 rounded-xl">
@@ -2401,13 +2489,21 @@ function ABlogs() {
 
 // ADMIN PANEL - FULL WORKING SYSTEM
 // ============================================================================
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { user } = useApp();
+  const location = useLocation();
+
+  if (!user) return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  if (user.role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const [mobSide, setMobSide] = useState(false);
 
-  useEffect(() => { if (!user || user.role !== 'admin') nav('/admin/login'); }, [user, nav]);
   useEffect(() => { setMobSide(false); }, [loc.pathname]);
   if (!user || user.role !== 'admin') return null;
 
@@ -6640,21 +6736,21 @@ export default function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
           {/* Admin - EACH SECTION IS ITS OWN ROUTE with Protection */}
-          <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ADashboard /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProducts /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products/new" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products/edit/:id" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AOrders /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AUsers /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/categories" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ACategories /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/reviews" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AReviews /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/blogs" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ABlogs /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/seo-engine" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASEOEngine /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/marketing" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AMarketingGen /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/variant-gen" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AVariantGen /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/ai" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIHub /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/ai-import" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIImport /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASettings /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminRoute><AdminLayout><ADashboard /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products" element={<AdminRoute><AdminLayout><AProducts /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products/new" element={<AdminRoute><AdminLayout><AProductEdit /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products/edit/:id" element={<AdminRoute><AdminLayout><AProductEdit /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/orders" element={<AdminRoute><AdminLayout><AOrders /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminLayout><AUsers /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/categories" element={<AdminRoute><AdminLayout><ACategories /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/reviews" element={<AdminRoute><AdminLayout><AReviews /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/blogs" element={<AdminRoute><AdminLayout><ABlogs /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/seo-engine" element={<AdminRoute><AdminLayout><ASEOEngine /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/marketing" element={<AdminRoute><AdminLayout><AMarketingGen /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/variant-gen" element={<AdminRoute><AdminLayout><AVariantGen /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/ai" element={<AdminRoute><AdminLayout><AAIHub /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/ai-import" element={<AdminRoute><AdminLayout><AAIImport /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/settings" element={<AdminRoute><AdminLayout><ASettings /></AdminLayout></AdminRoute>} />
           {/* Fallback */}
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>
