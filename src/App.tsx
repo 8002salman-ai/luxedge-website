@@ -1,7 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import ProtectedRoute from './components/common/ProtectedRoute';
-import { useAuthStore } from './store/authStore';
+import { HashRouter, Routes, Route, Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
   Shield, Star, Truck, RotateCcw, Award, Zap, ArrowRight, Mail, Phone,
@@ -365,7 +363,43 @@ function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx');
 
 const CART_STORAGE_KEY = 'luxedge_guest_cart_v1';
 const GUEST_CHECKOUT_ID_KEY = 'luxedge_guest_checkout_id_v1';
+const ADMIN_SESSION_KEY = 'luxedge_admin_session_v1';
 const PAYMENT_ENABLED = false;
+
+function loadAdminSession(): AppUser | null {
+  try {
+    const stored = window.sessionStorage.getItem(ADMIN_SESSION_KEY);
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const session = parsed as Partial<Pick<AppUser, 'id' | 'email' | 'name' | 'role'>>;
+    if (session.role !== 'admin' || typeof session.email !== 'string' || typeof session.name !== 'string') return null;
+    return { ...INIT_ADMIN, id: typeof session.id === 'string' ? session.id : INIT_ADMIN.id, email: session.email, name: session.name };
+  } catch {
+    return null;
+  }
+}
+
+function saveAdminSession(admin: AppUser) {
+  try {
+    window.sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: 'admin',
+    }));
+  } catch {
+    // Admin access remains usable until the current page is refreshed.
+  }
+}
+
+function clearAdminSession() {
+  try {
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  } catch {
+    // There is no stored session to clear when browser storage is unavailable.
+  }
+}
 
 function loadStoredCart(): CartItem[] {
   try {
@@ -397,7 +431,7 @@ function getGuestCheckoutId(): string {
 }
 
 function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(loadAdminSession);
   const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
   const [products, setProducts] = useState<Product[]>(INIT_PRODUCTS);
@@ -422,6 +456,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     if (admin) {
       if (e === adminCreds.email && p === adminCreds.password) {
         setUser({ ...adminCreds });
+        saveAdminSession(adminCreds);
         notify('Welcome Admin!');
         return true;
       }
@@ -449,7 +484,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  const logout = () => { setUser(null); notify('Logged out'); };
+  const logout = () => { clearAdminSession(); setUser(null); notify('Logged out'); };
 
   const signup = (n: string, e: string, p: string) => {
     if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
@@ -472,6 +507,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...adminCreds, password: newPass };
       setAdminCreds(updated);
       setUser(updated);
+      saveAdminSession(updated);
       return { ok: true, msg: 'Password updated successfully!' };
     } else {
       if (current !== user.password) return { ok: false, msg: 'Current password is incorrect' };
@@ -488,6 +524,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...adminCreds, name, email };
       setAdminCreds(updated);
       setUser(updated);
+      saveAdminSession(updated);
       notify('Profile updated!');
     }
   };
@@ -2452,13 +2489,21 @@ function ABlogs() {
 
 // ADMIN PANEL - FULL WORKING SYSTEM
 // ============================================================================
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { user } = useApp();
+  const location = useLocation();
+
+  if (!user) return <Navigate to="/admin/login" state={{ from: location }} replace />;
+  if (user.role !== 'admin') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const [mobSide, setMobSide] = useState(false);
 
-  useEffect(() => { if (!user || user.role !== 'admin') nav('/admin/login'); }, [user, nav]);
   useEffect(() => { setMobSide(false); }, [loc.pathname]);
   if (!user || user.role !== 'admin') return null;
 
@@ -6691,21 +6736,21 @@ export default function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
           {/* Admin - EACH SECTION IS ITS OWN ROUTE with Protection */}
-          <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ADashboard /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProducts /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products/new" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/products/edit/:id" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AProductEdit /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AOrders /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AUsers /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/categories" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ACategories /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/reviews" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AReviews /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/blogs" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ABlogs /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/seo-engine" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASEOEngine /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/marketing" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AMarketingGen /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/variant-gen" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AVariantGen /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/ai" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIHub /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/ai-import" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIImport /></AdminLayout></ProtectedRoute>} />
-          <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASettings /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminRoute><AdminLayout><ADashboard /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products" element={<AdminRoute><AdminLayout><AProducts /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products/new" element={<AdminRoute><AdminLayout><AProductEdit /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/products/edit/:id" element={<AdminRoute><AdminLayout><AProductEdit /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/orders" element={<AdminRoute><AdminLayout><AOrders /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminLayout><AUsers /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/categories" element={<AdminRoute><AdminLayout><ACategories /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/reviews" element={<AdminRoute><AdminLayout><AReviews /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/blogs" element={<AdminRoute><AdminLayout><ABlogs /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/seo-engine" element={<AdminRoute><AdminLayout><ASEOEngine /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/marketing" element={<AdminRoute><AdminLayout><AMarketingGen /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/variant-gen" element={<AdminRoute><AdminLayout><AVariantGen /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/ai" element={<AdminRoute><AdminLayout><AAIHub /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/ai-import" element={<AdminRoute><AdminLayout><AAIImport /></AdminLayout></AdminRoute>} />
+          <Route path="/admin/settings" element={<AdminRoute><AdminLayout><ASettings /></AdminLayout></AdminRoute>} />
           {/* Fallback */}
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>
