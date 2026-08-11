@@ -352,7 +352,7 @@ interface Ctx {
   updateAdminProfile: (name: string, email: string) => void;
   addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
   updateQty: (id: string, q: number) => void; clearCart: () => void;
-  placeOrder: (addr: string) => string;
+  placeOrder: (addr: string, customerName?: string) => string;
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
@@ -363,9 +363,42 @@ interface Ctx {
 const AC = createContext<Ctx | null>(null);
 function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
+const CART_STORAGE_KEY = 'luxedge_guest_cart_v1';
+const GUEST_CHECKOUT_ID_KEY = 'luxedge_guest_checkout_id_v1';
+const PAYMENT_ENABLED = false;
+
+function loadStoredCart(): CartItem[] {
+  try {
+    const stored = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is CartItem => {
+      if (!item || typeof item !== 'object') return false;
+      const candidate = item as Partial<CartItem>;
+      return Boolean(
+        candidate.product && typeof candidate.product.id === 'string' &&
+        Number.isInteger(candidate.quantity) && candidate.quantity! > 0 && candidate.quantity! <= 25
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function getGuestCheckoutId(): string {
+  const existing = window.localStorage.getItem(GUEST_CHECKOUT_ID_KEY);
+  if (existing) return existing;
+  const id = typeof window.crypto.randomUUID === 'function'
+    ? `guest_${window.crypto.randomUUID()}`
+    : `guest_${Array.from(window.crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  window.localStorage.setItem(GUEST_CHECKOUT_ID_KEY, id);
+  return id;
+}
+
 function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(loadStoredCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
   const [products, setProducts] = useState<Product[]>(INIT_PRODUCTS);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
@@ -375,6 +408,14 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
   const [notif, setNotif] = useState<string | null>(null);
   const notify = (m: string) => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch {
+      // The cart remains usable in memory when browser storage is unavailable.
+    }
+  }, [cart]);
 
   const login = (e: string, p: string, admin = false) => {
     // Admin login — checks against live adminCreds state
@@ -450,11 +491,11 @@ function AppProvider({ children }: { children: ReactNode }) {
       notify('Profile updated!');
     }
   };
-  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); notify(`Added to cart!`); };
+  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: Math.min(25, i.quantity + 1) } : i) : [...prev, { product: p, quantity: 1 }]; }); notify(`Added to cart!`); };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
-  const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
+  const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: Math.min(25, q) } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
+  const placeOrder = (addr: string, customerName?: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || getGuestCheckoutId(), userName: user?.name || customerName || 'Guest customer', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
 
   return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
 }
@@ -751,7 +792,7 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const { addToCart } = useApp();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
   const hasSold = product.reviews > 0;
   return (
@@ -775,7 +816,7 @@ function PCard({ product }: { product: Product }) {
           {hasSold && <p className="text-[9px] text-gray-400 mt-0.5">{Math.floor(product.reviews * 0.87)} sold</p>}
         </div>
         <div className="px-2 pb-2">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart(product); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
         </div>
       </div>
     </Link>
@@ -874,14 +915,12 @@ function ProductDetailPage() {
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
 
   const handleAddToCart = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     notify(`${qty}× ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     nav('/cart');
@@ -1364,12 +1403,12 @@ function ShopPage() {
 }
 
 function CartPage() {
-  const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
+  const { cart, updateQty, removeFromCart } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
   if (cart.length === 0) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">Cart Empty</h2><Link to="/shop" className="px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg inline-block mt-4">Shop Now</Link></div></div>;
   return (<div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">Shopping Cart</h1>
     <div className="bg-white rounded-xl border p-6 mb-6">{cart.map(i => <div key={i.product.id} className="flex gap-4 py-4 border-b last:border-0"><img src={i.product.images[0]} alt="" className="w-20 h-20 object-cover rounded-lg" /><div className="flex-1"><h3 className="font-semibold">{i.product.name}</h3><p className="text-amber-600 text-sm">${i.product.price}</p><div className="flex items-center gap-2 mt-2"><button onClick={() => updateQty(i.product.id, i.quantity - 1)} className="p-1 border rounded"><Minus size={14} /></button><span className="w-8 text-center">{i.quantity}</span><button onClick={() => updateQty(i.product.id, i.quantity + 1)} className="p-1 border rounded"><Plus size={14} /></button><button onClick={() => removeFromCart(i.product.id)} className="p-1 text-red-500 ml-4"><Trash2 size={16} /></button></div></div><p className="font-bold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
-    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav(user ? '/checkout' : '/login')} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">{user ? 'Checkout' : 'Sign In to Checkout'}</button></div>
+    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav('/checkout')} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">Continue as guest</button><p className="text-center text-xs text-gray-500 mt-3">No account required. You can sign in later to manage saved orders.</p></div>
   </div></div>);
 }
 
@@ -1385,7 +1424,6 @@ function CheckoutPage() {
 
   const [f, setF] = useState({ firstName: user?.name.split(' ')[0] || '', lastName: user?.name.split(' ').slice(1).join(' ') || '', email: user?.email || '', phone: '', address: '', city: '', state: '', zip: '', cardNum: '', cardExp: '', cardCvc: '', cardName: '' });
 
-  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
@@ -1428,7 +1466,7 @@ function CheckoutPage() {
       setStep(3);
       await new Promise(r => setTimeout(r, 2500));
       const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
-      const oid = placeOrder(addr);
+      const oid = placeOrder(addr, `${f.firstName} ${f.lastName}`.trim());
       setOrderId(oid);
       setStep(4);
     }
@@ -1441,6 +1479,18 @@ function CheckoutPage() {
 
   if (cart.length === 0 && step < 4) { nav('/cart'); return null; }
 
+  if (step === 2 && !PAYMENT_ENABLED) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-lg w-full bg-white rounded-2xl border p-8 text-center">
+        <Shield size={38} className="mx-auto text-amber-500 mb-4" />
+        <p className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">Guest checkout secured</p>
+        <h1 className="text-2xl font-bold mb-3">Secure payment activation is pending.</h1>
+        <p className="text-sm text-gray-500 leading-6 mb-6">Your cart and shipping details are ready without an account. Card fields stay disabled until the real Stripe checkout is connected and verified, so this site never collects payment details in a demo form.</p>
+        <button onClick={() => setStep(1)} className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-xl">Back to shipping information</button>
+      </div>
+    </div>
+  );
+
   // ── Success ──
   if (step === 4) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -1448,7 +1498,7 @@ function CheckoutPage() {
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle size={40} className="text-green-500" /></div>
         <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
         <p className="text-gray-500 mb-1">Order <span className="font-mono font-semibold text-gray-700">#{orderId}</span></p>
-        <p className="text-sm text-gray-400 mb-6">Confirmation sent to {f.email}</p>
+        <p className="text-sm text-gray-400 mb-6">Checkout email: {f.email}</p>
         <div className="bg-white rounded-xl border p-5 text-left mb-6">
           <h3 className="font-semibold text-sm mb-3">Shipping to:</h3>
           <p className="text-sm text-gray-600">{f.firstName} {f.lastName}</p>
@@ -1457,7 +1507,7 @@ function CheckoutPage() {
           <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
         </div>
         <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link>
+          {user ? <Link to="/orders" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link> : <Link to="/signup" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">Create Account</Link>}
           <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
         </div>
       </div>
@@ -1505,6 +1555,7 @@ function CheckoutPage() {
             {/* Step 1: Shipping */}
             {step === 1 && (
               <>
+                {!user && <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl"><ShoppingBag size={18} className="text-amber-600 shrink-0 mt-0.5" /><div><p className="text-sm font-semibold text-amber-900">Checking out as a guest</p><p className="text-xs text-amber-700 mt-1">No account is required. Enter an email for the future confirmation and tracking flow.</p></div></div>}
                 {/* Contact */}
                 <div className="bg-white rounded-2xl border p-6">
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-amber-500" /> Contact Information</h2>
