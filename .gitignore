@@ -1,7 +1,8 @@
-```
 # Build artifacts
+.next/
 dist/
 build/
+*.tsbuildinfo
 *.pyc
 __pycache__/
 
@@ -9,9 +10,13 @@ __pycache__/
 node_modules/
 venv/
 .venv/
+
+# Local environment and secrets
 .env
 .env.local
+.env.*.local
 *.env.*
+!.env.example
 
 # Editors
 .vscode/
@@ -21,10 +26,10 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs and temporary files
 *.log
-
-# Temp files
 *.tmp
 *.swp
-```
+
+# Local research artifacts (kept outside the website release)
+outputs/

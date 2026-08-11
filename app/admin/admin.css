@@ -1,0 +1,19 @@
+.admin-sidebar nav a.active{background:rgba(255,255,255,.06);color:white;box-shadow:inset 2px 0 var(--gold)}
+.admin-form select,.catalog-admin-row input,.catalog-admin-row select,.order-admin-row input,.order-admin-row select{width:100%;border:1px solid var(--line);background:white;padding:11px;font:inherit;color:var(--ink)}
+.catalog-admin-list{display:grid}
+.catalog-admin-row,.order-admin-row,.category-admin-row{display:grid;grid-template-columns:minmax(220px,1.7fr) repeat(3,minmax(110px,.7fr)) auto;gap:16px;align-items:end;padding:18px 0;border-bottom:1px solid var(--line)}
+.catalog-admin-row>div,.order-admin-row>div,.category-admin-row>div{display:grid;gap:5px;align-self:center}
+.catalog-admin-row small,.order-admin-row small,.category-admin-row small{color:#77776e}
+.catalog-admin-row label,.order-admin-row label{display:grid;gap:7px;font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:800}
+.order-admin-row{grid-template-columns:minmax(230px,1.5fr) repeat(3,minmax(130px,.8fr)) auto}
+.order-admin-row .status-pill{margin-top:4px}
+.category-admin-row{grid-template-columns:1fr auto auto;align-items:center}
+.category-admin-row p{margin:3px 0 0;color:#77776e;font-size:12px}
+.admin-secondary{min-height:40px;border:1px solid var(--line);background:var(--cream);padding:0 15px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;cursor:pointer}
+.admin-stat-grid.compact{grid-template-columns:repeat(3,1fr)}
+.ranked-list{list-style:none;padding:0;margin:0}
+.ranked-list li{display:flex;justify-content:space-between;gap:20px;padding:15px 0;border-bottom:1px solid var(--line)}
+.ranked-list b{color:var(--gold)}
+.table-row.customer-row{grid-template-columns:1.3fr 1.8fr 1fr .6fr .8fr .6fr;min-width:950px}
+@media(max-width:1050px){.admin-stat-grid.compact{grid-template-columns:repeat(2,1fr)}.catalog-admin-row,.order-admin-row{grid-template-columns:1fr 1fr}.catalog-admin-row>div,.order-admin-row>div{grid-column:1/-1}}
+@media(max-width:760px){.catalog-admin-row,.order-admin-row,.category-admin-row{grid-template-columns:1fr;align-items:stretch}.catalog-admin-row>div,.order-admin-row>div{grid-column:auto}}
