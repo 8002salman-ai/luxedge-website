@@ -33,3 +33,5 @@ Thumbs.db
 
 # Local research artifacts (kept outside the website release)
 outputs/
+
+.vercel

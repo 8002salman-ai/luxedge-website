@@ -14,11 +14,15 @@ export async function POST(request: Request) {
 
   const [user, guestHash] = await Promise.all([getCurrentUser(), getVerifiedGuestSessionHash()]);
   const db = createAdminClient();
-  const { data: order, error } = await db.from("orders").select("id,user_id,guest_session_hash,email,total_amount,currency,status,stripe_payment_intent_id,idempotency_key").eq("id", orderId).single();
+  const { data: order, error } = await db.from("orders").select("id,user_id,guest_session_hash,email,total_amount,currency,status,stripe_payment_intent_id,idempotency_key,reservation_expires_at,reservation_released_at,stripe_tax_calculation_id").eq("id", orderId).single();
   if (error || !order) return Response.json({ error: "Order not found." }, { status: 404 });
   const ownsOrder = user?.id === order.user_id || Boolean(guestHash && order.guest_session_hash === guestHash);
   if (!ownsOrder) return Response.json({ error: "Forbidden." }, { status: 403 });
   if (order.status !== "payment_pending" && order.status !== "pending") return Response.json({ error: "Order is not payable." }, { status: 409 });
+  if (order.reservation_released_at || !order.reservation_expires_at || Date.parse(order.reservation_expires_at) <= Date.now()) {
+    await db.rpc("server_release_order_reservation", { p_order_id: order.id });
+    return Response.json({ error: "This inventory reservation expired. Please create a new order." }, { status: 409 });
+  }
   if (!Number.isSafeInteger(order.total_amount) || order.total_amount < 50 || !/^[a-z]{3}$/.test(order.currency)) return Response.json({ error: "Order total is not payable." }, { status: 409 });
   if (order.stripe_payment_intent_id) {
     const existing = await getStripe().paymentIntents.retrieve(order.stripe_payment_intent_id);
@@ -30,11 +34,11 @@ export async function POST(request: Request) {
   const intent = await getStripe().paymentIntents.create({
     amount: order.total_amount,
     currency: order.currency,
-    automatic_payment_methods: { enabled: true },
+    payment_method_types: ["card"],
     receipt_email: order.email,
-    metadata: { order_id: order.id },
+    metadata: { order_id: order.id, ...(order.stripe_tax_calculation_id ? { tax_calculation_id: order.stripe_tax_calculation_id } : {}) },
   }, { idempotencyKey: String(order.idempotency_key) });
-  const { error: updateError } = await db.from("orders").update({ stripe_payment_intent_id: intent.id, status: "payment_pending" }).eq("id", order.id).is("stripe_payment_intent_id", null);
+  const { error: updateError } = await db.from("orders").update({ stripe_payment_intent_id: intent.id, status: "payment_pending", reservation_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() }).eq("id", order.id).is("stripe_payment_intent_id", null);
   if (updateError) return Response.json({ error: "Payment state could not be saved." }, { status: 500 });
   return Response.json({ clientSecret: intent.client_secret, paymentIntentId: intent.id }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
