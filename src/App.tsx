@@ -1597,10 +1597,10 @@ function CheckoutPage() {
                 <div className="bg-white rounded-2xl border p-6">
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-amber-500" /> Contact Information</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
-                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
-                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({...f, email: e.target.value})} className={I} placeholder="john@example.com" />{ER('email')}</div>
-                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({...f, phone: e.target.value})} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
+                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF(prev => ({...prev, firstName: e.target.value}))} className={I} placeholder="John" />{ER('firstName')}</div>
+                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF(prev => ({...prev, lastName: e.target.value}))} className={I} placeholder="Doe" />{ER('lastName')}</div>
+                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF(prev => ({...prev, email: e.target.value}))} className={I} placeholder="john@example.com" />{ER('email')}</div>
+                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF(prev => ({...prev, phone: e.target.value}))} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
                   </div>
                 </div>
 
@@ -1608,11 +1608,11 @@ function CheckoutPage() {
                 <div className="bg-white rounded-2xl border p-6">
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-amber-500" /> Shipping Address</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
-                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
+                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF(prev => ({...prev, address: e.target.value}))} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
+                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF(prev => ({...prev, city: e.target.value}))} className={I} placeholder="Irving" />{ER('city')}</div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({...f, state: e.target.value})} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
-                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({...f, zip: e.target.value})} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
+                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF(prev => ({...prev, state: e.target.value}))} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
+                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF(prev => ({...prev, zip: e.target.value}))} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
                     </div>
                   </div>
                 </div>
@@ -1672,12 +1672,12 @@ function CheckoutPage() {
 
                   {payMethod === 'card' ? (
                     <div className="space-y-4">
-                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF({...f, cardNum: fmtCard(e.target.value)})} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
+                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF(prev => ({...prev, cardNum: fmtCard(e.target.value)}))} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF({...f, cardExp: fmtExp(e.target.value)})} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
-                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF({...f, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)})} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
+                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF(prev => ({...prev, cardExp: fmtExp(e.target.value)}))} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
+                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF(prev => ({...prev, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)}))} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
                       </div>
-                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF({...f, cardName: e.target.value})} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
+                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF(prev => ({...prev, cardName: e.target.value}))} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
                     </div>
                   ) : (
                     <div className="text-center py-8 bg-gray-50 rounded-xl">
