@@ -220,7 +220,7 @@ Return this EXACT JSON structure (use empty string/array/0 if not found):
   "slug": "url-friendly-slug",
   "brand": "brand name",
   "manufacturer": "manufacturer",
-  "category": "best matching: Dog Supplies | Cat Supplies | Pet Beds | Pet Toys | Feeding & Water | Grooming | Pet Accessories",
+  "category": "best matching: Tech & Gadgets | Home & Living | Wellness | Accessories | Style",
   "subcategory": "specific subcategory",
   "collection": "product collection name",
   "shortDescription": "2-3 sentence product summary",
@@ -259,7 +259,7 @@ Return this EXACT JSON structure (use empty string/array/0 if not found):
 }
 
 Rules:
-- luxuryTitle: make it sound premium, e.g. "Orthopedic Memory Foam Dog Bed" → "Luxe Joint-Support Memory Foam Bed | LuxePaws"
+- luxuryTitle: make it sound premium, e.g. "ProSound Elite Wireless Earbuds" → "Elite Noise-Cancelling Audio Experience | ProSound"
 - sellingPrice: use actual price from content; if not found estimate market price
 - comparePrice: 20-30% higher than sellingPrice (to show "was" price)
 - costPrice: 40-50% of sellingPrice  
@@ -273,18 +273,14 @@ Rules:
 // ============================================================================
 const DP: Omit<Product,'id'|'name'|'description'|'price'|'originalPrice'|'category'|'stock'|'images'|'rating'|'reviews'|'isActive'> = { shortDesc:'', brand:'Luxedge', condition:'New', tags:[], weight:'', dimensions:'', origin:'China', freeShipping:true, shippingCost:'0', variants:[] };
 const INIT_PRODUCTS: Product[] = [
-  { ...DP, id:'1', name:'Orthopedic Memory Foam Dog Bed', shortDesc:'Joint-supporting dog bed', description:'Orthopedic memory foam dog bed with a washable, removable cover. Supports joints and relieves pressure points so your dog sleeps deeply and wakes up refreshed.', price:49.99, originalPrice:89.99, category:'Pet Beds', stock:64, images:['https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:1123, isActive:true, brand:'LuxePaws', weight:'4.2 lbs', tags:['dog bed','memory foam','orthopedic'], variants:[{id:'v1',color:'Gray',size:'Medium',price:49.99,salePrice:49.99,stock:30,sku:'PB-M-GY'},{id:'v2',color:'Gray',size:'Large',price:62.99,salePrice:62.99,stock:34,sku:'PB-L-GY'}] },
-  { ...DP, id:'2', name:'Interactive Cat Feather Toy', shortDesc:'Motion-activated cat teaser', description:'Motion-activated interactive feather toy that mimics prey movement. Keeps indoor cats active, entertained, and mentally stimulated for hours.', price:24.99, originalPrice:44.99, category:'Pet Toys', stock:132, images:['https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:876, isActive:true, brand:'WhiskerWand', weight:'0.6 lbs', tags:['cat toy','interactive','feather'] },
-  { ...DP, id:'3', name:'Stainless Steel Pet Water Fountain', shortDesc:'Triple-filter fountain', description:'3-liter stainless steel pet water fountain with triple filtration and a quiet pump. Encourages pets to drink more fresh, filtered water every day.', price:34.99, originalPrice:59.99, category:'Feeding & Water', stock:76, images:['https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:521, isActive:true, brand:'AquaPure', weight:'2.3 lbs', tags:['water fountain','hydration','stainless steel'] },
-  { ...DP, id:'4', name:'Adjustable No-Pull Dog Harness', shortDesc:'Reflective walking harness', description:'No-pull reflective dog harness with padded chest and fully adjustable straps. Ensures comfortable, secure walks for dogs of all sizes.', price:29.99, originalPrice:54.99, category:'Dog Supplies', stock:98, images:['https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:654, isActive:true, brand:'TrailMate', weight:'0.8 lbs', tags:['dog harness','walking','reflective'], variants:[{id:'v3',color:'Black',size:'Medium',price:29.99,salePrice:29.99,stock:50,sku:'DH-M-BK'},{id:'v4',color:'Black',size:'Large',price:32.99,salePrice:32.99,stock:48,sku:'DH-L-BK'}] },
-  { ...DP, id:'5', name:'Self-Cleaning Slicker Grooming Brush', shortDesc:'Deshedding grooming brush', description:'Self-cleaning slicker brush with retractable bristles for easy cleanup. Gently removes loose fur, tangles, and mats while massaging your pet\u2019s skin.', price:19.99, originalPrice:39.99, category:'Grooming', stock:210, images:['https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:432, isActive:true, brand:'FurFresh', weight:'1.1 lbs', tags:['grooming','brush','deshedding'] },
-  { ...DP, id:'6', name:'Premium Cat Scratching Post', shortDesc:'Sturdy sisal scratch tower', description:'Premium sisal scratching post with a cozy perch and dangling toy. Satisfies your cat\u2019s natural scratching instinct while protecting your furniture.', price:45.99, originalPrice:79.99, category:'Cat Supplies', stock:57, images:['https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:389, isActive:true, brand:'CatHaven', weight:'8.5 lbs', tags:['scratching post','sisal','cat furniture'] },
-  { ...DP, id:'7', name:'Slow Feeder Dog Bowl', shortDesc:'Anti-gulp puzzle bowl', description:'Non-slip slow feeder bowl with raised ridges that slows down fast eaters. Reduces bloating and improves digestion for happier mealtimes.', price:17.99, originalPrice:29.99, category:'Feeding & Water', stock:143, images:['https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:298, isActive:true, brand:'BowlWell', weight:'0.9 lbs', tags:['slow feeder','bowl','anti-gulp'] },
-  { ...DP, id:'8', name:'Portable Pet Travel Water Bottle', shortDesc:'Leak-proof one-hand dispenser', description:'Portable pet travel water bottle with a one-hand dispensing cup and leak-proof design. Perfect for walks, hikes, and road trips with your furry friend.', price:15.99, originalPrice:27.99, category:'Pet Accessories', stock:188, images:['https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:245, isActive:true, brand:'TravelPaw', weight:'0.7 lbs', tags:['travel','water bottle','portable'] },
-  { ...DP, id:'9', name:'Durable Rope Dog Toy Set', shortDesc:'Chew & fetch rope toys', description:'Set of 3 durable cotton rope dog toys designed for chewing, tug-of-war, and fetch. Helps clean teeth and satisfies natural chewing instincts.', price:14.99, originalPrice:24.99, category:'Pet Toys', stock:201, images:['https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:512, isActive:true, brand:'PlayBone', weight:'0.5 lbs', tags:['rope toy','chew','fetch'] },
-  { ...DP, id:'10', name:'Cozy Calming Cat Bed', shortDesc:'Cuddler donut cat bed', description:'Cozy donut-shaped cat bed with a raised rim for security and warmth. Machine-washable plush design gives cats a calm, snug place to curl up.', price:32.99, originalPrice:54.99, category:'Pet Beds', stock:84, images:['https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:734, isActive:true, brand:'SnugglePet', weight:'1.8 lbs', tags:['cat bed','calming','cuddler'] },
-  { ...DP, id:'11', name:'Automatic Pet Food Dispenser', shortDesc:'Programmable meal feeder', description:'Automatic pet food dispenser with programmable portions and a built-in voice recorder. Keeps your pet on a consistent feeding schedule even when you are away.', price:54.99, originalPrice:89.99, category:'Feeding & Water', stock:46, images:['https://images.pexels.com/photos/1805164/pexels-photo-1805164.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:318, isActive:true, brand:'SmartFeed', weight:'3.6 lbs', tags:['food dispenser','automatic','programmable'] },
-  { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://images.pexels.com/photos/617278/pexels-photo-617278.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
+  { ...DP, id:'1', name:'ProSound Elite Wireless Earbuds', shortDesc:'Noise-cancelling wireless earbuds', description:'Crystal-clear audio with active noise cancellation, 36-hour battery life, Bluetooth 5.3.', price:49.99, originalPrice:89.99, category:'Tech & Gadgets', stock:145, images:['https://images.pexels.com/photos/3780681/pexels-photo-3780681.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:2341, isActive:true, brand:'ProSound', weight:'0.15 lbs', tags:['earbuds','wireless','audio'], variants:[{id:'v1',color:'Black',size:'One Size',price:49.99,salePrice:49.99,stock:80,sku:'PS-BLK'},{id:'v2',color:'White',size:'One Size',price:49.99,salePrice:49.99,stock:65,sku:'PS-WHT'}] },
+  { ...DP, id:'2', name:'LuxeTime Pro Smartwatch', shortDesc:'Premium health smartwatch', description:'Health monitoring, GPS, and premium design. Heart rate, sleep tracking, 100+ workout modes.', price:79.99, originalPrice:149.99, category:'Tech & Gadgets', stock:89, images:['https://images.pexels.com/photos/437037/pexels-photo-437037.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:1856, isActive:true, brand:'LuxeTime', weight:'0.12 lbs', tags:['smartwatch','fitness','gps'], variants:[{id:'v3',color:'Black',size:'42mm',price:79.99,salePrice:79.99,stock:50,sku:'LT-B42'},{id:'v4',color:'Silver',size:'46mm',price:89.99,salePrice:89.99,stock:39,sku:'LT-S46'}] },
+  { ...DP, id:'3', name:'AuraGlow LED Desk Lamp', shortDesc:'Smart RGB desk lamp', description:'Smart ambient lighting with 16M colors and app control.', price:34.99, originalPrice:59.99, category:'Home & Living', stock:234, images:['https://images.pexels.com/photos/1112598/pexels-photo-1112598.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:3102, isActive:true, brand:'AuraGlow', weight:'1.2 lbs', tags:['lamp','led','smart home'] },
+  { ...DP, id:'4', name:'VortexFit Resistance Band Set', shortDesc:'5-level resistance bands', description:'Professional-grade bands for home workouts. 5 levels included.', price:29.99, originalPrice:54.99, category:'Wellness', stock:8, images:['https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:1245, isActive:true, brand:'VortexFit', weight:'0.8 lbs', tags:['fitness','bands','workout'] },
+  { ...DP, id:'5', name:'Luxe Minimalist Leather Wallet', shortDesc:'RFID-blocking slim wallet', description:'RFID-blocking genuine leather. Slim profile, maximum organization.', price:24.99, originalPrice:44.99, category:'Accessories', stock:178, images:['https://images.pexels.com/photos/2079171/pexels-photo-2079171.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:987, isActive:true, brand:'Luxedge', weight:'0.2 lbs', tags:['wallet','leather','rfid'], variants:[{id:'v5',color:'Black',size:'Standard',price:24.99,salePrice:24.99,stock:90,sku:'W-BLK'},{id:'v6',color:'Brown',size:'Standard',price:24.99,salePrice:24.99,stock:88,sku:'W-BRN'}] },
+  { ...DP, id:'6', name:'CloudRest Memory Foam Pillow', shortDesc:'Cooling gel pillow', description:'Ergonomic cooling gel memory foam pillow for perfect sleep.', price:39.99, originalPrice:69.99, category:'Home & Living', stock:5, images:['https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.9, reviews:2876, isActive:true, brand:'CloudRest', weight:'2.5 lbs', tags:['pillow','memory foam','sleep'] },
+  { ...DP, id:'7', name:'TechPro Laptop Stand', shortDesc:'Aluminum laptop riser', description:'Adjustable aluminum stand for better posture and airflow.', price:32.99, originalPrice:59.99, category:'Tech & Gadgets', stock:67, images:['https://images.pexels.com/photos/4065891/pexels-photo-4065891.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.7, reviews:1534, isActive:true, brand:'TechPro', weight:'1.5 lbs', tags:['laptop','stand','ergonomic'] },
+  { ...DP, id:'8', name:'Signature Fragrance Collection', shortDesc:'Premium unisex perfume', description:'Premium unisex long-lasting fragrance. Notes of sandalwood & bergamot.', price:44.99, originalPrice:79.99, category:'Style', stock:56, images:['https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.8, reviews:765, isActive:true, brand:'Luxedge', weight:'0.5 lbs', tags:['fragrance','perfume','unisex'] },
 ];
 
 const INIT_ADMIN: AppUser = { id: 'adm', email: 'admin@luxedge.us', password: 'admin123', name: 'Admin', role: 'admin', joined: '2024-01-01' };
@@ -297,51 +293,47 @@ const INIT_USERS: AppUser[] = [
 const INIT_ORDERS: Order[] = [
   { id: 'ORD-001', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[0], quantity: 1 }], total: 49.99, status: 'Delivered', date: '2024-03-01', address: '123 Main St, Austin TX' },
   { id: 'ORD-002', userId: 'u2', userName: 'Sarah Johnson', items: [{ product: INIT_PRODUCTS[2], quantity: 2 }], total: 69.98, status: 'Shipped', date: '2024-03-10', address: '456 Oak Ave, Dallas TX' },
-  { id: 'ORD-003', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[4], quantity: 1 }], total: 19.99, status: 'Processing', date: '2024-03-14', address: '123 Main St, Austin TX' },
-  { id: 'ORD-004', userId: 'u3', userName: 'Mike Williams', items: [{ product: INIT_PRODUCTS[6], quantity: 1 }, { product: INIT_PRODUCTS[7], quantity: 1 }], total: 33.98, status: 'Pending', date: '2024-03-15', address: '789 Pine St, Houston TX' },
+  { id: 'ORD-003', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[4], quantity: 1 }], total: 24.99, status: 'Processing', date: '2024-03-14', address: '123 Main St, Austin TX' },
+  { id: 'ORD-004', userId: 'u3', userName: 'Mike Williams', items: [{ product: INIT_PRODUCTS[6], quantity: 1 }, { product: INIT_PRODUCTS[7], quantity: 1 }], total: 77.98, status: 'Pending', date: '2024-03-15', address: '789 Pine St, Houston TX' },
 ];
 
 const INIT_REVIEWS: Review[] = [
-  { id: 'r1', productId: '1', productName: 'Orthopedic Memory Foam Dog Bed', userName: 'John Smith', rating: 5, comment: 'Best dog bed ever! My pup sleeps great.', status: 'approved', date: '2024-03-05' },
-  { id: 'r2', productId: '3', productName: 'Stainless Steel Pet Water Fountain', userName: 'Sarah Johnson', rating: 4, comment: 'Great fountain, my cat drinks way more now.', status: 'approved', date: '2024-03-08' },
-  { id: 'r3', productId: '5', productName: 'Self-Cleaning Slicker Grooming Brush', userName: 'Mike Williams', rating: 5, comment: 'Sleek and functional! Shedding is under control.', status: 'pending', date: '2024-03-14' },
-  { id: 'r4', productId: '6', productName: 'Premium Cat Scratching Post', userName: 'Sarah Johnson', rating: 5, comment: 'Furniture is safe now. Kitty loves the perch!', status: 'pending', date: '2024-03-15' },
+  { id: 'r1', productId: '1', productName: 'ProSound Elite Wireless Earbuds', userName: 'John Smith', rating: 5, comment: 'Best earbuds ever!', status: 'approved', date: '2024-03-05' },
+  { id: 'r2', productId: '3', productName: 'AuraGlow LED Desk Lamp', userName: 'Sarah Johnson', rating: 4, comment: 'Great lamp, love the colors.', status: 'approved', date: '2024-03-08' },
+  { id: 'r3', productId: '5', productName: 'Luxe Minimalist Leather Wallet', userName: 'Mike Williams', rating: 5, comment: 'Sleek and functional!', status: 'pending', date: '2024-03-14' },
+  { id: 'r4', productId: '6', productName: 'CloudRest Memory Foam Pillow', userName: 'Sarah Johnson', rating: 5, comment: 'Sleep has never been better.', status: 'pending', date: '2024-03-15' },
 ];
 
 const INIT_CATEGORIES: AdminCategory[] = [
-  { id: 'c1', name: 'Dog Supplies', isActive: true, subs: [{ id: 'c1s1', name: 'Dogs', isActive: true }, { id: 'c1s2', name: 'Puppies', isActive: true }] },
-  { id: 'c2', name: 'Cat Supplies', isActive: true, subs: [{ id: 'c2s1', name: 'Cats', isActive: true }, { id: 'c2s2', name: 'Kittens', isActive: true }] },
-  { id: 'c3', name: 'Pet Beds', isActive: true, subs: [] },
-  { id: 'c4', name: 'Pet Toys', isActive: true, subs: [] },
-  { id: 'c5', name: 'Feeding & Water', isActive: true, subs: [] },
-  { id: 'c6', name: 'Grooming', isActive: true, subs: [] },
-  { id: 'c7', name: 'Pet Accessories', isActive: true, subs: [] },
+  { id: 'c1', name: 'Tech & Gadgets', isActive: true, subs: [{ id: 'c1s1', name: 'Smartwatches', isActive: true }, { id: 'c1s2', name: 'Audio', isActive: true }] },
+  { id: 'c2', name: 'Home & Living', isActive: true, subs: [{ id: 'c2s1', name: 'Lighting', isActive: true }, { id: 'c2s2', name: 'Bedding', isActive: true }] },
+  { id: 'c3', name: 'Wellness', isActive: true, subs: [] },
+  { id: 'c4', name: 'Accessories', isActive: true, subs: [] },
+  { id: 'c5', name: 'Style', isActive: true, subs: [] },
 ];
 
 const INIT_BLOGS: BlogPost[] = [
-  { id:'b1', slug:'essential-supplies-new-puppy', title:'10 Essential Supplies Every New Puppy Needs', excerpt:'From comfy beds to chew-proof toys, here are the must-have products for welcoming a puppy into your home.', content:'Bringing home a puppy is exciting — and a little overwhelming. Here are the essentials every new pet parent needs.\n\n## 1. A Comfortable Bed\nThe Orthopedic Memory Foam Dog Bed supports growing joints and gives your puppy a cozy place to recharge after all that play.\n\n## 2. A No-Pull Harness\nPuppies pull! An Adjustable No-Pull Dog Harness makes walks comfortable and teaches good leash manners from day one.\n\n## 3. Durable Chew Toys\nPuppies teethe — a lot. A set of rope toys gives them something safe to chew instead of your furniture.\n\n## 4. Slow Feeder Bowl\nPuppies eat fast. A slow feeder bowl slows them down and prevents bloating.\n\n## 5. Grooming Basics\nA self-cleaning slicker brush keeps their coat shiny and makes grooming a bonding moment.\n\n## 6. Training Treats & More\nStock up on quality food, treats, and a sturdy collar. Preparation makes the first few weeks smooth and fun for everyone.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','dog supplies','new pet','essentials'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-10' },
-  { id:'b2', slug:'cozy-corner-for-your-cat', title:'How to Create the Perfect Cozy Corner for Your Cat', excerpt:'Cats love having a place to call their own. Here\u2019s how to build a calming space your feline will adore.', content:'Every cat deserves a sanctuary. Here\u2019s how to design a cozy corner your kitty will love.\n\n## Choose the Right Bed\nCats feel safest when they can curl up with their back protected. A donut-style Cozy Calming Cat Bed with raised edges is perfect.\n\n## Add a Scratching Post\nScratching is instinct. A sturdy Premium Cat Scratching Post keeps claws happy and your sofa safe.\n\n## Include a View\nCats love watching the world go by. Place their bed near a window for hours of gentle entertainment.\n\n## Keep It Quiet\nChoose a corner away from high-traffic areas. Calm, quiet, and warm is the winning formula.\n\n## Fresh Water Close By\nA Stainless Steel Pet Water Fountain encourages hydration and fits beautifully in their new space.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','cat bed','cozy','home'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-05' },
-  { id:'b3', slug:'grooming-routine-long-haired-pets', title:'A Simple Grooming Routine for Long-Haired Pets', excerpt:'Keep mats, tangles, and shedding under control with this easy weekly grooming routine.', content:'Long-haired pets are gorgeous — and high-maintenance. A simple routine keeps them healthy and comfortable.\n\n## Brush Daily, If You Can\nDaily brushing with a self-cleaning slicker brush removes loose fur before it becomes mats. It also spreads natural oils for a shinier coat.\n\n## Detangle Gently\nWork from the tips toward the skin. Never yank — patience prevents pain and keeps grooming a positive experience.\n\n## Watch the Pads\nLong fur grows between paw pads too. Regular trims prevent slipping and keep paws clean.\n\n## Make It a Ritual\nEnd each session with a treat. Your pet will start looking forward to grooming time instead of dreading it.\n\n## Seasonal Shedding\nExpect heavier shedding in spring and fall. Extra brushing during these months keeps your home much cleaner.', image:'https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['grooming','long hair','brushing','coat care'], authorId:'u1', authorName:'John Smith', status:'published', date:'2025-02-28' },
-  { id:'b4', slug:'best-gifts-under-50-for-pets', title:'Best Gift Ideas Under $50 for Dogs and Cats', excerpt:'Surprise your furry best friend with these thoughtful, premium pet gifts that cost less than fifty dollars.', content:'Your pet deserves the best — without breaking the bank. Here are gift ideas under $50.\n\n## 1. Orthopedic Dog Bed ($49.99)\nThe gift of great sleep. Joint-supporting memory foam keeps senior dogs and puppies comfortable.\n\n## 2. Interactive Cat Toy ($24.99)\nA motion-activated feather toy that mimics prey keeps indoor cats active and entertained for hours.\n\n## 3. Self-Cleaning Grooming Brush ($19.99)\nPractical and appreciated — less shedding around the house is a gift for you too.\n\n## 4. Slow Feeder Bowl ($17.99)\nHealthier mealtimes for fast eaters. A thoughtful upgrade to the everyday bowl.\n\n## 5. Travel Water Bottle ($15.99)\nPerfect for pet parents on the go. Fresh water during walks, hikes, and road trips.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['gifts','budget','under 50','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-20' },
-  { id:'b5', slug:'interactive-toys-pet-enrichment', title:'Interactive Toys: A Beginner\u2019s Guide to Pet Enrichment', excerpt:'Mental stimulation is just as important as exercise. Learn how interactive toys keep pets happy and sharp.', content:'Enrichment isn\u2019t a luxury — it\u2019s essential for a happy, well-behaved pet.\n\n## Why Enrichment Matters\nBored pets develop destructive habits. Interactive toys channel natural instincts like hunting and foraging into healthy play.\n\n## Start with Feather Toys\nMotion-activated teasers like the Interactive Cat Feather Toy simulate prey and trigger your cat\u2019s hunting instinct.\n\n## Add Tug & Chew Toys\nRope toys are perfect for tug-of-war and chewing. They clean teeth and satisfy your dog\u2019s urge to chew.\n\n## Rotate the Fun\nPets get bored of the same toys. Rotate a small selection weekly to keep playtime fresh and exciting.\n\n## Play Together\nInteractive play strengthens your bond. Ten minutes of focused play a day makes a world of difference.', image:'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['enrichment','toys','play','cats and dogs'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-15' },
-  { id:'b6', slug:'get-pet-to-drink-more-water', title:'How to Get Your Pet to Drink More Water', excerpt:'Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.', content:'Pets often don\u2019t drink enough water. Here\u2019s how to keep them properly hydrated.\n\n## Upgrade to a Fountain\nMany pets prefer running water. A Stainless Steel Pet Water Fountain with triple filtration is irresistible to most cats and dogs.\n\n## Keep Bowls Clean\nPets refuse stale water. Wash bowls daily and refresh water at least twice a day.\n\n## Add Water to Food\nMix a little warm water into dry kibble or add broth to increase daily intake.\n\n## Multiple Stations\nPlace water bowls in several rooms so water is always nearby.\n\n## Watch the Signs\nCheck for dry gums, lethargy, or loss of appetite. If you\u2019re worried about dehydration, contact your vet.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['hydration','water fountain','health','cat and dog'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
-  { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding — and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
-  { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle — great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
-  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Curated stores like Luxedge use 256-bit SSL encryption.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Luxedge offers 30-day hassle-free returns.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
-  { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability — here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
-  { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions — even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase — not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
-  { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
+  { id:'b1', slug:'top-5-tech-gadgets-2025', title:'Top 5 Tech Gadgets You Need in 2025', excerpt:'From smart earbuds to next-gen smartwatches, here are the must-have tech products this year.', content:'Technology is evolving rapidly, and 2025 brings some incredible innovations to everyday life.\n\n## 1. Wireless Earbuds with ANC\nNoise-cancelling earbuds have become essential. The ProSound Elite offers crystal-clear audio with 36-hour battery life. With Bluetooth 5.3 and IPX5 water resistance, these are perfect for commuters and gym-goers alike.\n\n## 2. Health-Focused Smartwatches\nThe LuxeTime Pro tracks heart rate, sleep, and 100+ workouts while looking premium on your wrist. With a 7-day battery life and AMOLED display, it rivals watches costing twice the price.\n\n## 3. Smart Lighting\nLED desk lamps like the AuraGlow transform your workspace with 16 million colors controlled via app. They reduce eye strain and boost productivity during late-night work sessions.\n\n## 4. Ergonomic Laptop Stands\nWork-from-home setups demand proper posture. Aluminum stands improve airflow, reduce neck strain, and create a cleaner workspace. The TechPro stand is adjustable for any laptop size.\n\n## 5. Portable Fitness Gear\nResistance bands and compact equipment let you work out anywhere without a gym membership. The VortexFit set includes 5 resistance levels for full-body training.', image:'https://images.pexels.com/photos/3780681/pexels-photo-3780681.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['tech','gadgets','2025','best products'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-10' },
+  { id:'b2', slug:'how-to-create-perfect-workspace', title:'How to Create the Perfect Home Workspace', excerpt:'Tips for building a productive and stylish home office that boosts your focus and creativity.', content:'Working from home is here to stay. Here\'s how to create a workspace that makes you actually want to sit down and be productive.\n\n## Choose the Right Desk\nYour desk is your foundation. Go for something spacious with cable management. A standing desk converter can add flexibility to your routine.\n\n## Lighting Matters\nNatural light is king, but a smart LED lamp like the AuraGlow adds ambient warmth for evening work sessions. Studies show proper lighting reduces eye fatigue by up to 50%.\n\n## Invest in Ergonomics\nA good laptop stand, ergonomic chair, and proper monitor height prevent back pain and improve focus. Your screen should be at eye level to avoid neck strain.\n\n## Keep It Minimal\nClutter kills productivity. Use organizers and keep only essentials on your desk. A clean workspace leads to a clear mind.\n\n## Add Personal Touches\nA plant, a fragrance diffuser, or a quality leather desk mat can make your space feel premium. Small upgrades have a big impact on your daily motivation.', image:'https://images.pexels.com/photos/1112598/pexels-photo-1112598.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['workspace','home office','productivity','remote work'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-05' },
+  { id:'b3', slug:'wellness-routine-for-busy-people', title:'A Simple Wellness Routine for Busy People', excerpt:'Stay healthy without spending hours at the gym. Quick routines that actually work for real schedules.', content:'You don\'t need two hours at the gym to stay fit. Here\'s a realistic wellness routine for people with packed schedules.\n\n## Morning Stretch (5 min)\nStart your day with basic stretches. Use resistance bands for added benefit. Just 5 minutes of morning movement increases energy levels by 20%.\n\n## Walk More\nAim for 8,000 steps daily. Take calls while walking, use stairs instead of elevators, and park further away from entrances.\n\n## Stay Hydrated\nKeep a water bottle at your desk. Aim for 8 glasses daily. Dehydration is the #1 cause of afternoon fatigue.\n\n## Evening Wind-Down\nA memory foam pillow and proper sleep hygiene can transform your recovery. The CloudRest pillow is designed with cooling gel for optimal neck support.\n\n## Quick Home Workouts\nResistance band sets offer 5 intensity levels for full-body workouts in under 20 minutes. No gym required — just consistency.', image:'https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['wellness','fitness','health','self care'], authorId:'u1', authorName:'John Smith', status:'published', date:'2025-02-28' },
+  { id:'b4', slug:'best-gifts-under-50-dollars', title:'Best Gift Ideas Under $50 That Look Expensive', excerpt:'Impress anyone without breaking the bank. These curated gift ideas look premium but cost less than fifty dollars.', content:'Finding the perfect gift doesn\'t mean spending a fortune. Here are premium-looking gifts that won\'t break the bank.\n\n## 1. Leather Wallet ($24.99)\nAn RFID-blocking slim wallet is practical, stylish, and something everyone needs. It looks like a $100 gift.\n\n## 2. Smart LED Lamp ($34.99)\nThe AuraGlow creates ambient lighting with millions of colors. It\'s a unique, memorable gift for any home.\n\n## 3. Wireless Earbuds ($49.99)\nProSound Elite earbuds deliver premium sound quality at a fraction of brand-name prices.\n\n## 4. Memory Foam Pillow ($39.99)\nThe CloudRest pillow with cooling gel technology is the gift of better sleep.\n\n## 5. Fragrance Collection ($44.99)\nA signature unisex fragrance is always a classy choice. Long-lasting notes of sandalwood and bergamot.', image:'https://images.pexels.com/photos/2079171/pexels-photo-2079171.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['gifts','budget','under 50','holiday'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-20' },
+  { id:'b5', slug:'smart-home-gadgets-beginners-guide', title:'Smart Home Gadgets: A Beginner\'s Complete Guide', excerpt:'Transform your home with affordable smart tech. No technical skills required.', content:'Smart home technology isn\'t just for tech experts anymore. Here\'s how anyone can get started.\n\n## Start with Smart Lighting\nSmart bulbs and LED lamps are the easiest entry point. Control colors, brightness, and schedules from your phone.\n\n## Add Smart Speakers\nVoice assistants help you control lights, play music, set timers, and get answers hands-free.\n\n## Smart Plugs Are Underrated\nTurn any device into a smart device. Schedule your coffee maker, fans, or lamps to turn on automatically.\n\n## Security Basics\nSmart doorbells and cameras provide peace of mind. Many work without monthly subscriptions.\n\n## Build Gradually\nDon\'t buy everything at once. Start with one room and expand as you learn what works for your lifestyle.', image:'https://images.pexels.com/photos/1112598/pexels-photo-1112598.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['smart home','technology','IoT','beginner guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-15' },
+  { id:'b6', slug:'how-to-sleep-better-tonight', title:'How to Sleep Better Tonight: Science-Backed Tips', excerpt:'Struggling with sleep? These proven techniques will help you fall asleep faster and wake up refreshed.', content:'Sleep quality affects everything from productivity to mood. Here are science-backed strategies.\n\n## Temperature Matters\nKeep your bedroom between 65-68°F. A cooling memory foam pillow helps regulate head temperature throughout the night.\n\n## The 10-3-2-1-0 Rule\n10 hours before bed: no caffeine. 3 hours: no food. 2 hours: no work. 1 hour: no screens. 0: the number of times you hit snooze.\n\n## Invest in Your Pillow\nYour pillow is the most important sleep investment. The CloudRest ergonomic pillow supports proper neck alignment.\n\n## Create a Dark Environment\nBlackout curtains or a sleep mask block light that disrupts your circadian rhythm.\n\n## Consistent Schedule\nGo to bed and wake up at the same time every day, even weekends. Your body thrives on routine.', image:'https://images.pexels.com/photos/6311392/pexels-photo-6311392.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sleep','health','wellness','self improvement'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
+  { id:'b7', slug:'minimalist-edc-essentials', title:'Minimalist EDC: 7 Everyday Carry Essentials for Men', excerpt:'Streamline your pockets with these essential everyday carry items that combine function and style.', content:'Every Day Carry (EDC) is about having just what you need, nothing more.\n\n## 1. Slim Wallet\nDitch the bulky bifold. A minimalist RFID-blocking wallet holds essentials without the bulk.\n\n## 2. Quality Watch\nA smartwatch combines timekeeping with health tracking. The LuxeTime Pro is perfect for daily wear.\n\n## 3. Wireless Earbuds\nCompact earbuds for calls, music, and podcasts on the go. ANC blocks distractions in noisy environments.\n\n## 4. Key Organizer\nStop the jingle. Key organizers keep everything compact and scratch-free.\n\n## 5. Portable Charger\nA slim power bank ensures you never run out of battery when it matters most.\n\n## 6. Quality Pen\nFor signing documents or jotting notes, a good pen makes an impression.\n\n## 7. Fragrance\nA subtle signature scent completes your daily carry with confidence.', image:'https://images.pexels.com/photos/2079171/pexels-photo-2079171.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['EDC','minimalist','men','accessories'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
+  { id:'b8', slug:'resistance-band-workout-guide', title:'Complete Resistance Band Workout Guide for Beginners', excerpt:'Build muscle and improve flexibility with just resistance bands. Full workout plan included.', content:'Resistance bands are the most underrated fitness tool. Here\'s a complete beginner guide.\n\n## Why Bands Over Weights?\nBands provide constant tension, are portable, joint-friendly, and cost a fraction of gym equipment.\n\n## Upper Body Routine\nBicep curls, shoulder press, chest fly, and rows — all possible with bands. Start with medium resistance.\n\n## Lower Body Routine\nSquats with bands, lateral walks, glute bridges, and leg press alternatives target every major muscle group.\n\n## Core Workout\nWoodchops, pallof press, and band-resisted planks build functional core strength.\n\n## Sample Weekly Plan\nMonday: Upper body. Wednesday: Lower body. Friday: Full body + core. Weekend: Active recovery with stretching.\n\n## Progressive Overload\nStart with lighter bands and progress to heavier resistance as you get stronger. The VortexFit set includes 5 levels for exactly this progression.', image:'https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['fitness','workout','resistance bands','exercise'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
+  { id:'b9', slug:'online-shopping-safety-tips', title:'10 Online Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while shopping online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Curated stores like Luxedge use 256-bit SSL encryption.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager for convenience.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Luxedge offers 30-day hassle-free returns.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks. Use mobile data or a VPN instead.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
+  { id:'b10', slug:'fragrance-guide-choosing-right-scent', title:'How to Choose the Right Fragrance: A Complete Guide', excerpt:'Find your signature scent with this expert guide to fragrances, notes, and occasions.', content:'Choosing a fragrance is personal. Here\'s how to find one that suits you.\n\n## Understanding Fragrance Notes\nTop notes hit first (citrus, bergamot). Middle notes develop (floral, spice). Base notes linger (sandalwood, vanilla, musk).\n\n## Fragrance Concentration\nEau de Toilette lasts 3-5 hours. Eau de Parfum lasts 6-8 hours. Choose based on your needs.\n\n## Season Matters\nLight, fresh scents for summer. Warm, woody scents for winter. Our Signature Collection works year-round.\n\n## Where to Apply\nPulse points: wrists, neck, behind ears. Don\'t rub — it breaks down the molecules.\n\n## Less is More\n2-3 sprays is enough. You want people to notice when they\'re close, not from across the room.\n\n## Test Before You Commit\nWear a sample for a full day. Fragrance reacts differently with each person\'s skin chemistry.', image:'https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['fragrance','perfume','style','grooming'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
+  { id:'b11', slug:'sustainable-shopping-eco-friendly', title:'Sustainable Shopping: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices without sacrificing quality or style.', content:'Sustainability starts with intentional purchasing decisions.\n\n## Buy Quality Over Quantity\nOne well-made item that lasts years beats five cheap items that break in months. Luxedge curates for durability.\n\n## Check Materials\nLook for genuine leather over faux, aluminum over plastic, bamboo over synthetic materials.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nProper maintenance extends product life. Clean your leather wallet, charge devices properly, wash with care.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If you still want it, it\'s a genuine need — not a passing urge.', image:'https://images.pexels.com/photos/4065891/pexels-photo-4065891.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
+  { id:'b12', slug:'work-from-home-productivity-hacks', title:'15 Work From Home Productivity Hacks That Actually Work', excerpt:'Boost your remote work output with these proven strategies used by top performers.', content:'Remote work productivity requires intentional habits. Here are 15 that actually work.\n\n## 1. Start with Your Hardest Task\nTackle the most challenging work when your energy is highest — usually first thing in the morning.\n\n## 2. Use the Pomodoro Technique\n25 minutes of focused work, 5-minute break. Repeat. It prevents burnout and maintains concentration.\n\n## 3. Create Physical Boundaries\nA dedicated workspace — even a corner — signals to your brain that it\'s work time.\n\n## 4. Upgrade Your Setup\nAn ergonomic laptop stand, proper lighting, and a comfortable chair are investments in your productivity.\n\n## 5. Batch Similar Tasks\nGroup emails, calls, and admin work together. Context-switching kills efficiency.\n\n## 6. Use Noise-Cancelling Earbuds\nBlock distractions with ANC earbuds. ProSound Elite are designed for exactly this.\n\n## 7. Take Walking Breaks\nMovement between work blocks refreshes your mind and body.\n\n## 8-15: Advanced Tips\nTime-block your calendar. Say no to unnecessary meetings. Use a second monitor. Keep a done list. Optimize your lighting. Stay hydrated. End your day with a shutdown ritual. Review weekly.', image:'https://images.pexels.com/photos/4065891/pexels-photo-4065891.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['productivity','WFH','remote work','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
 ];
 
-const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories'];
+const CAT_LIST = ['All', 'Tech & Gadgets', 'Home & Living', 'Wellness', 'Accessories', 'Style'];
 const CAT_META: Record<string, { icon: string; emoji: string; desc: string; img: string }> = {
-  'Dog Supplies': { icon: '🐕', emoji: '🐶', desc: 'Harnesses, training & dog essentials', img: 'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Cat Supplies': { icon: '🐈', emoji: '🐱', desc: 'Scratchers, towers & cat must-haves', img: 'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Pet Beds': { icon: '🛏️', emoji: '😴', desc: 'Orthopedic & cozy beds for deep sleep', img: 'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Pet Toys': { icon: '🧸', emoji: '🪀', desc: 'Interactive toys for play & enrichment', img: 'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Feeding & Water': { icon: '🍽️', emoji: '🥣', desc: 'Bowls, fountains & smart feeders', img: 'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Grooming': { icon: '✂️', emoji: '🐾', desc: 'Brushes, clippers & coat care', img: 'https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=300' },
-  'Pet Accessories': { icon: '🎒', emoji: '🐾', desc: 'Travel, car care & everyday extras', img: 'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Tech & Gadgets': { icon: '💻', emoji: '⚡', desc: 'Smart tech & electronics', img: 'https://images.pexels.com/photos/3780681/pexels-photo-3780681.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Home & Living': { icon: '🏠', emoji: '✨', desc: 'Decor, lighting & comfort', img: 'https://images.pexels.com/photos/1112598/pexels-photo-1112598.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Wellness': { icon: '💪', emoji: '🧘', desc: 'Health & fitness gear', img: 'https://images.pexels.com/photos/4498362/pexels-photo-4498362.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Accessories': { icon: '👜', emoji: '🎒', desc: 'Wallets, bags & more', img: 'https://images.pexels.com/photos/2079171/pexels-photo-2079171.jpeg?auto=compress&cs=tinysrgb&w=300' },
+  'Style': { icon: '✨', emoji: '👔', desc: 'Fragrance & fashion', img: 'https://images.pexels.com/photos/965989/pexels-photo-965989.jpeg?auto=compress&cs=tinysrgb&w=300' },
 };
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';
@@ -501,39 +493,39 @@ function Header() {
   const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   return (<>
     <div className="text-white text-center py-1.5 px-4 text-[10px] tracking-wider font-medium" style={{ background: 'linear-gradient(90deg, #1e293b, #334155, #1e293b)' }}>
-      Free Shipping Over $50 | Premium Pet Essentials | Easy 30-Day Returns
+      Free Shipping Over $50 | Premium Quality | Easy 30-Day Returns
     </div>
     <header className="sticky top-0 z-50 glass border-b border-gray-100/50">
-      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
+      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
         <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg">{mob ? <X size={20} /> : <Menu size={20} />}</button>
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
-            <span className="text-white font-serif font-bold text-sm">L</span>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-md transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
+            <span className="text-white font-serif font-bold text-xs">L</span>
           </div>
-          <span className="font-serif text-lg font-bold tracking-tight text-gray-900">LUXEDGE</span>
+          <span className="font-serif text-base font-bold tracking-tight text-gray-900">LUXEDGE</span>
         </Link>
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden lg:flex items-center gap-0.5">
           {nav.map(i => {
             const isActive = loc.pathname === i.p || (i.p === '/shop' && loc.pathname.startsWith('/category'));
             return (
               <Link key={i.p} to={i.p}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
                   isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}>{i.l}</Link>
             );
           })}
         </nav>
-        <div className="flex items-center gap-1">
-          <Link to="/shop" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={18} /></Link>
-          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
+        <div className="flex items-center gap-0.5">
+          <Link to="/shop" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={18} /></Link>
+          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
             {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-lg shadow-2xl border border-gray-100 py-1.5 z-50 glass">
               <div className="px-3 py-2 border-b border-gray-100"><p className="font-semibold text-xs">{user.name}</p><p className="text-[10px] text-gray-500">{user.email}</p></div>
               {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><LayoutDashboard size={14} className="text-blue-500" />Admin Panel</Link>}
               <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><Package size={14} className="text-gray-500" />My Orders</Link>
               <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-600 hover:bg-red-50 w-full transition-colors"><LogOut size={14} />Log Out</button>
             </div></>}</div>
-          ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
-          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
+          ) : <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
+          <Link to="/cart" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
             <ShoppingBag size={18} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{cc}</span>}
           </Link>
@@ -599,7 +591,7 @@ function Footer() {
               <span className="font-serif text-xl font-bold tracking-tight">LUXEDGE</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xs">
-              Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
+              Curating the world's best products so you shop with confidence. Premium quality, honest prices, delivered to your door.
             </p>
 
             {/* Social Icons */}
@@ -764,30 +756,26 @@ function PCard({ product }: { product: Product }) {
   const hasSold = product.reviews > 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
-        <div className="relative bg-gray-100 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
-          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">-{d}%</span>}
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-2 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded-full">Low Stock</span>}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <span className="px-3 py-1.5 bg-white/95 backdrop-blur rounded-full text-[10px] font-bold text-gray-900 shadow-lg">Quick View</span>
-          </div>
+      <div className="bg-white rounded overflow-hidden border hover:shadow-sm transition-shadow">
+        <div className="relative bg-gray-100">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300" />
+          {d > 0 && <span className="absolute top-1 left-1 px-1 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{d}%</span>}
         </div>
-        <div className="px-3 py-2.5">
-          <p className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold truncate">{product.category}</p>
-          <h3 className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2 mt-1 min-h-[2rem]">{product.name}</h3>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[15px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[11px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
+        <div className="px-2 py-1.5">
+          <p className="text-[9px] text-gray-500 uppercase truncate">{product.category}</p>
+          <h3 className="text-[10px] font-medium text-gray-900 leading-tight line-clamp-2 mt-0.5">{product.name}</h3>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[11px] font-bold text-gray-900">${product.price}</span>
+            {d > 0 && <span className="text-[9px] text-gray-400 line-through">${product.originalPrice}</span>}
           </div>
-          <div className="flex items-center gap-1 mt-1">
-            <div className="flex gap-[2px]">{[...Array(5)].map((_, i) => <Star key={i} size={9} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-            <span className="text-[10px] text-gray-400">({product.reviews})</span>
+          <div className="flex items-center gap-1 mt-0.5">
+            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={8} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-[9px] text-gray-400">({product.reviews})</span>
           </div>
-          {hasSold && <p className="text-[10px] text-gray-400 mt-1">{Math.floor(product.reviews * 0.87)} sold</p>}
+          {hasSold && <p className="text-[9px] text-gray-400 mt-0.5">{Math.floor(product.reviews * 0.87)} sold</p>}
         </div>
-        <div className="px-3 pb-3">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-2 bg-gray-900 hover:bg-amber-500 text-white text-[11px] font-bold rounded-lg transition-colors">Add to Cart</button>
+        <div className="px-2 pb-2">
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-1 bg-gray-900 hover:bg-gray-700 text-white text-[9px] font-semibold rounded transition-colors">+ Cart</button>
         </div>
       </div>
     </Link>
@@ -1153,59 +1141,40 @@ function HomePage() {
   return (
     <div>
       {/* ════════ HERO — Ultra Minimal ════════ */}
-      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
-        <div className="absolute inset-0 opacity-[0.07]">
-          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-        </div>
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[140px]" />
-
-        <div className="max-w-7xl mx-auto px-4 py-12 sm:py-16 lg:py-20 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
+      <section className="relative" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:py-6 flex flex-col lg:flex-row items-center gap-4 lg:gap-6">
           {/* LEFT */}
           <div className="flex-1 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mb-6">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-              </span>
-              <span className="text-white/70 text-[11px] tracking-wider font-medium uppercase">Premium Pet Essentials</span>
-            </div>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight text-white mb-5">
-              Better Products <span className="text-gradient-amber">for Happier Pets</span>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight text-white">
+              Premium Products <span className="text-gradient-amber">Worth Owning</span>
             </h1>
-            <p className="text-gray-400 text-sm sm:text-base mb-7 max-w-lg mx-auto lg:mx-0 leading-relaxed">
-              Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
+            <p className="text-gray-400 text-xs mt-1 mb-3">Handpicked quality delivered to your door.</p>
+            <div className="flex items-center gap-2 justify-center lg:justify-start">
               <Link to="/shop"
-                className="group px-7 py-3.5 rounded-lg font-bold text-[13px] flex items-center gap-2 transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/20"
+                className="px-4 py-1.5 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all hover:scale-105"
                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
-                Shop Pet Essentials <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                Shop Now <ArrowRight size={12} />
               </Link>
-              <Link to="/about"
-                className="px-7 py-3.5 rounded-lg border border-white/15 text-white text-[13px] font-semibold hover:bg-white/5 hover:border-white/30 transition-all">
-                Our Story
-              </Link>
-              <div className="hidden sm:flex items-center gap-2 ml-2">
-                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className="text-amber-400 fill-amber-400" />)}</div>
-                <span className="text-white/50 text-[11px]">Trusted by 2,000+ customers</span>
-              </div>
+              <span className="text-white/30 text-xs">|</span>
+              <span className="text-white/40 text-[10px]">2K+ Customers</span>
+              <span className="text-white/30 text-xs">|</span>
+              <div className="flex gap-0.5">{[...Array(5)].map((_,i)=><Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
             </div>
           </div>
           {/* RIGHT — mini product card */}
           <div className="w-full lg:w-auto shrink-0">
             {hp && (
               <Link to={`/product/${hp.id}`} className="block group">
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl w-full lg:w-80">
-                  <div className="aspect-[4/3] relative">
-                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="eager" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <p className="text-white font-bold text-sm leading-tight truncate mb-1">{hp.name}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-amber-400">${hp.price.toFixed(2)}</span>
-                        {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">-{disc}%</span>}
+                <div className="relative rounded-lg overflow-hidden border border-white/10 shadow-lg w-full lg:w-64">
+                  <div className="aspect-[16/9] relative">
+                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="eager" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-2.5">
+                      <p className="text-white font-bold text-xs leading-tight truncate">{hp.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-sm font-bold text-white">${hp.price.toFixed(2)}</span>
+                        {disc > 0 && <span className="text-[10px] text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
+                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">-{disc}%</span>}
                       </div>
                     </div>
                   </div>
@@ -1217,53 +1186,43 @@ function HomePage() {
       </section>
 
       {/* ════════ TRUST BAR ════════ */}
-      <section className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="bg-white border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-2 grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
             { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
             { i: RotateCcw, l: 'Easy Returns', d: '30-day' },
             { i: Shield, l: 'Secure', d: 'SSL' },
             { i: Award, l: 'Premium', d: 'Handpicked' },
           ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-2.5 justify-center py-1">
-              <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
-                <x.i size={16} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900">{x.l}</p>
-                <p className="text-[10px] text-gray-400">{x.d}</p>
-              </div>
+            <div key={i} className="flex items-center gap-1.5">
+              <x.i size={14} className="text-amber-600" />
+              <div className="flex items-baseline gap-1"><p className="text-[11px] font-semibold text-gray-900">{x.l}</p><p className="text-[10px] text-gray-400">·{x.d}</p></div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ════════ CATEGORIES ════════ */}
-      <section className="py-12 bg-white">
+      <section className="py-6 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
-            <div>
-              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Browse</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Shop by Category</h2>
-            </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
-              View All <ArrowRight size={13} />
-            </Link>
+          <div className="text-center mb-4">
+            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Browse</p>
+            <h2 className="text-lg font-bold text-gray-900">Shop by Category</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {CAT_LIST.filter(c => c !== 'All').map(c => {
               const meta = CAT_META[c];
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                  <div className="aspect-[4/5] relative">
+                  className="group relative rounded-lg overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-md transition-all duration-300">
+                  <div className="aspect-[3/2] relative">
                     <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/95 via-gray-900/40 to-transparent" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-end p-3 text-center">
-                      <span className="text-2xl mb-1.5 drop-shadow">{meta?.icon}</span>
-                      <h3 className="text-white font-bold text-xs sm:text-sm">{c}</h3>
-                      <p className="text-gray-300 text-[10px] mt-0.5">{count} items</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/30 to-transparent" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-end p-2 text-center">
+                      <span className="text-base mb-0.5">{meta?.icon}</span>
+                      <h3 className="text-white font-bold text-[11px]">{c}</h3>
+                      <p className="text-gray-300 text-[9px]">{count} items</p>
                     </div>
                   </div>
                 </Link>
@@ -1274,36 +1233,32 @@ function HomePage() {
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-12 bg-gray-50">
+      <section className="py-6 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
-            <div>
-              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Handpicked For You</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Trending This Week</h2>
-            </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
-              View All <ArrowRight size={13} />
-            </Link>
+          <div className="text-center mb-4">
+            <p className="text-amber-600 text-[9px] font-semibold uppercase tracking-wider mb-0.5">Handpicked For You</p>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">Trending This Week</h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
+          </div>
+          <div className="text-center mt-4">
+            <Link to="/shop" className="inline-flex items-center gap-1 px-4 py-2 bg-gray-900 hover:bg-amber-600 text-white font-semibold rounded-lg transition-colors text-[11px]">
+              View All <ArrowRight size={12} />
+            </Link>
           </div>
         </div>
       </section>
 
       {/* ════════ CTA ════════ */}
-      <section className="py-16 bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
-        <div className="absolute top-0 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[100px]" />
+      <section className="py-8 bg-gray-900 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent" />
         <div className="max-w-3xl mx-auto px-4 text-center relative">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[11px] font-semibold uppercase tracking-widest mb-6">
-            <Zap size={12} /> Join The Inner Circle
-          </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold mb-4">Ready to Spoil Your Pet?</h2>
-          <p className="text-gray-400 mb-8 text-sm sm:text-base max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link to="/signup" className="group px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" /></Link>
-            <Link to="/shop" className="px-8 py-3.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
+          <h2 className="text-lg sm:text-xl font-bold mb-1.5">Ready to Upgrade?</h2>
+          <p className="text-gray-400 mb-4 text-xs max-w-lg mx-auto">Join 2,000+ customers who shop smarter with Luxedge.</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            <Link to="/signup" className="px-7 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20">Create Account <ArrowRight size={15} /></Link>
+            <Link to="/shop" className="px-7 py-3 border border-gray-700 hover:border-amber-500/40 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
           </div>
         </div>
       </section>
@@ -1340,36 +1295,41 @@ function ShopPage() {
   };
 
   const pageTitle = cat === 'All' ? 'Shop All Products' : cat;
-  const pageDesc = cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`;
+  const pageDesc = cat === 'All' ? 'Handpicked for quality, style, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`;
 
   return (
     <div>
-      {/* Page Header */}
-      <section className="relative bg-gray-950 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.05]">
-          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
+      {/* Breadcrumb */}
+      <div className="border-b">
+        <div className="max-w-7xl mx-auto px-3 py-2">
+          <nav className="flex items-center gap-1 text-[10px] text-gray-500">
+            <Link to="/" className="hover:text-amber-600">Home</Link>
+            <ChevronRight size={9} />
+            <Link to="/shop" className="hover:text-amber-600">Shop</Link>
+            <ChevronRight size={9} />
+            {cat !== 'All' ? <>
+              <Link to="/shop" className="hover:text-amber-600">{cat}</Link>
+              <ChevronRight size={9} />
+              <span className="text-gray-900 font-medium truncate">{pageTitle}</span>
+            </> : <span className="text-gray-800 font-medium">All Products</span>}
+          </nav>
         </div>
-        <div className="max-w-7xl mx-auto px-4 py-10 text-center relative">
-          <p className="text-amber-400 text-[10px] uppercase tracking-[0.25em] font-semibold mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
-          <h1 className="font-serif text-2xl sm:text-4xl font-bold mb-2">{pageTitle}</h1>
-          <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto">{pageDesc}</p>
-        </div>
-      </section>
+      </div>
 
       {/* Filter bar */}
       <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-3 py-2 flex items-center gap-2 overflow-x-auto">
           {CAT_LIST.map(c => (
             <button key={c} onClick={() => handleCatChange(c)}
-              className={`whitespace-nowrap text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${
-                cat === c ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              className={`whitespace-nowrap text-[10px] font-semibold px-2 py-1 rounded transition-colors ${
+                cat === c ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
               }`}>
               {c}
             </button>
           ))}
           <span className="text-gray-300 ml-auto">|</span>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="text-[11px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
+            className="text-[10px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
             <option value="featured">Featured</option>
             <option value="price-low">Low→High</option>
             <option value="price-high">High→Low</option>
@@ -1379,23 +1339,23 @@ function ShopPage() {
       </div>
 
       {/* Search + Results */}
-      <div className="max-w-7xl mx-auto px-3 py-3">
+      <div className="max-w-7xl mx-auto px-3 py-2">
         <div className="relative mb-2">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
           <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100" />
+            className="w-full pl-7 pr-2 py-1.5 border rounded text-[10px] focus:outline-none focus:border-gray-400" />
         </div>
 
-        <p className="text-[11px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+        <p className="text-[10px] text-gray-500 mb-2">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
 
         {f.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             {f.map(p => <PCard key={p.id} product={p} />)}
           </div>
         ) : (
-          <div className="text-center py-16">
-            <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
-            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[11px] font-medium text-amber-600 hover:underline">Clear all filters</button>
+          <div className="text-center py-10">
+            <p className="text-xs text-gray-500 mb-2">No products found for your search</p>
+            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[10px] font-medium text-blue-600 hover:underline">Clear all filters</button>
           </div>
         )}
       </div>
@@ -1739,12 +1699,17 @@ function AdminLoginPage() {
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   const { login } = useApp();
+  const adminLogin = useAuthStore((s) => s.adminLogin);
   const nav = useNavigate();
 
   const handleSubmit = (ev: React.FormEvent) => {
     ev.preventDefault();
     setErr('');
     if (login(e, p, true)) {
+      // Sync the zustand auth store too — ProtectedRoute checks useAuthStore,
+      // while AppContext login only sets the context user. Without this the
+      // admin gets bounced straight back to /admin/login.
+      adminLogin(e, p);
       nav('/admin');
     } else {
       setErr('Invalid email or password');
@@ -1822,7 +1787,7 @@ function AboutPage() {
       <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
       <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
-      <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
+      <p className="text-gray-600 leading-relaxed">Whether you're upgrading your workspace, looking for the perfect gift, or simply treating yourself to something well-made, Luxedge is here to help you shop smarter and live better.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
         {[{v:'2,000+',l:'Happy Customers'},{v:'500+',l:'Products Curated'},{v:'99%',l:'Satisfaction Rate'},{v:'24/7',l:'Customer Support'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-amber-500">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
@@ -1875,7 +1840,7 @@ function ReturnsPage() {
       <LS t="Our Promise"><p>At Luxedge, your satisfaction is our priority. If you're not completely happy with your purchase, we're here to make it right. We offer a straightforward 30-day return policy — no hoops, no hassle.</p></LS>
       <LS t="Return Window"><p>You have <strong>30 calendar days</strong> from the date you receive your item to initiate a return. Items received after the 30-day window may not be eligible for a refund.</p></LS>
       <LS t="Eligible Items"><p>To qualify for a return, your item must be:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Unused and in the same condition you received it</li><li>In its original packaging with all tags and accessories</li><li>Free from signs of wear, damage, or alteration</li></ul></LS>
-      <LS t="Non-Returnable Items"><p>The following items cannot be returned:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Items marked as "Final Sale" or "Non-Returnable"</li><li>Pet food, treats, and opened consumables that have been used</li><li>Gift cards and digital products</li><li>Items damaged through customer misuse</li></ul></LS>
+      <LS t="Non-Returnable Items"><p>The following items cannot be returned:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Items marked as "Final Sale" or "Non-Returnable"</li><li>Personal care products that have been opened or used (fragrances, skincare)</li><li>Gift cards and digital products</li><li>Items damaged through customer misuse</li></ul></LS>
       <LS t="How to Start a Return"><p>1. Email us at <strong>hello@luxedge.us</strong> with your order number and reason for return.<br/>2. Our team will respond within 24 hours with return instructions and a return authorization.<br/>3. Ship the item back using the method outlined in our response.<br/>4. Once received and inspected, we'll process your refund.</p></LS>
       <LS t="Refund Process"><p>Refunds are processed within <strong>5-7 business days</strong> after we receive and inspect your returned item. The refund will be credited to your original payment method. Please allow an additional 3-5 business days for the refund to appear on your bank statement.</p></LS>
       <LS t="Exchanges"><p>We don't do direct exchanges. If you need a different size, color, or product, simply return the original item for a refund and place a new order for the item you prefer.</p></LS>
@@ -2117,7 +2082,7 @@ function BlogListPage() {
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Insights & Inspiration</h1>
-          <p className="text-gray-400 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
+          <p className="text-gray-400 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of curated products.</p>
         </div>
       </section>
 
@@ -2685,7 +2650,7 @@ function AProducts() {
 // ============================================================================
 // ADVANCED PRODUCT EDITOR (eBay-style)
 // ============================================================================
-const EMPTY_PRODUCT: Product = { id:'',name:'',shortDesc:'',description:'',price:0,originalPrice:0,category:'Dog Supplies',stock:0,images:[],rating:0,reviews:0,isActive:true,brand:'',condition:'New',tags:[],weight:'',dimensions:'',origin:'China',freeShipping:true,shippingCost:'0',variants:[] };
+const EMPTY_PRODUCT: Product = { id:'',name:'',shortDesc:'',description:'',price:0,originalPrice:0,category:'Tech & Gadgets',stock:0,images:[],rating:0,reviews:0,isActive:true,brand:'',condition:'New',tags:[],weight:'',dimensions:'',origin:'China',freeShipping:true,shippingCost:'0',variants:[] };
 
 function AProductEdit() {
   const { id: paramId } = useParams<{ id: string }>();
@@ -2796,7 +2761,7 @@ function AProductEdit() {
           {/* BASIC INFO TAB */}
           {tab === 'basic' && (
             <div className="space-y-5 max-w-3xl">
-              <div><label className={L}>Product Name *</label><input value={p.name} onChange={e => setP({ ...p, name: e.target.value })} className={I} placeholder="e.g. Orthopedic Memory Foam Dog Bed" /></div>
+              <div><label className={L}>Product Name *</label><input value={p.name} onChange={e => setP({ ...p, name: e.target.value })} className={I} placeholder="e.g. ProSound Elite Wireless Earbuds" /></div>
               <div><label className={L}>Short Description</label><input value={p.shortDesc} onChange={e => setP({ ...p, shortDesc: e.target.value })} className={I} placeholder="Brief tagline for product cards" maxLength={100} /><p className="text-xs text-gray-400 mt-1">{p.shortDesc.length}/100</p></div>
               <div><label className={L}>Full Description *</label><textarea value={p.description} onChange={e => setP({ ...p, description: e.target.value })} className={I + ' resize-none'} rows={6} placeholder="Detailed product description. Use line breaks for formatting." /></div>
               <div className="grid grid-cols-2 gap-4">
@@ -4172,7 +4137,7 @@ function _genWebsiteSchema(): string {
     "@type": "WebSite",
     "name": "Luxedge",
     "url": "https://luxedge.us",
-    "description": "Premium pet essentials for dogs and cats",
+    "description": "Premium curated products for modern living",
     "potentialAction": {
       "@type": "SearchAction",
       "target": { "@type": "EntryPoint", "urlTemplate": "https://luxedge.us/#/search?q={search_term_string}" },
