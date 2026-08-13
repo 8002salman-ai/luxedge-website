@@ -774,33 +774,37 @@ function Footer() {
 function PCard({ product }: { product: Product }) {
   const { addToCart, user } = useApp(); const nav = useNavigate();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
-  const hasSold = product.reviews > 0;
+  const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-200 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300">
-        <div className="relative bg-gray-100 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" />
-          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">-{d}%</span>}
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-2 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded-full">Low Stock</span>}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <span className="px-3 py-1.5 bg-white/95 backdrop-blur rounded-full text-[10px] font-bold text-gray-900 shadow-lg">Quick View</span>
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-200 hover:shadow-[0_14px_34px_-10px_rgba(0,0,0,0.14)] hover:-translate-y-1 transition-all duration-300">
+        <div className="relative bg-gray-50 overflow-hidden">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4.2] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {d > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">-{d}%</span>}
+            {product.freeShipping && <span className="px-1.5 py-0.5 bg-gray-900/85 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">FREE SHIP</span>}
           </div>
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/95 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">Low Stock</span>}
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-white/95 backdrop-blur rounded-lg text-[10px] font-bold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
+            <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+          </button>
         </div>
-        <div className="px-3 py-2.5">
-          <p className="text-[10px] text-amber-600 uppercase tracking-wider font-semibold truncate">{product.category}</p>
-          <h3 className="text-xs font-semibold text-gray-900 leading-snug line-clamp-2 mt-1 min-h-[2rem]">{product.name}</h3>
+        <div className="px-2.5 py-2.5">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <p className="text-[9px] text-amber-600 uppercase tracking-wider font-bold truncate">{product.category}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <Star size={9} className="text-amber-400 fill-amber-400" />
+              <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
+            </div>
+          </div>
+          <h3 className="text-[11px] font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
           <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[15px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[11px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
+            <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
+            {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
+            <span className="ml-auto text-[9px] text-gray-400">{sold > 0 ? `${sold} sold` : 'New'}</span>
           </div>
-          <div className="flex items-center gap-1 mt-1">
-            <div className="flex gap-[2px]">{[...Array(5)].map((_, i) => <Star key={i} size={9} className={i < Math.round(product.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-            <span className="text-[10px] text-gray-400">({product.reviews})</span>
-          </div>
-          {hasSold && <p className="text-[10px] text-gray-400 mt-1">{Math.floor(product.reviews * 0.87)} sold</p>}
-        </div>
-        <div className="px-3 pb-3">
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }} className="w-full py-2 bg-gray-900 hover:bg-amber-500 text-white text-[11px] font-bold rounded-lg transition-colors">Add to Cart</button>
         </div>
       </div>
     </Link>
@@ -1165,63 +1169,89 @@ function HomePage() {
 
   return (
     <div>
-      {/* ════════ HERO — Ultra Minimal ════════ */}
-      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)' }}>
-        <div className="absolute inset-0 opacity-[0.07]">
-          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+      {/* ════════ HERO — Premium Compact ════════ */}
+      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #08080c 0%, #14141f 55%, #1a1a2e 100%)' }}>
+        <div className="absolute inset-0 opacity-[0.06]">
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
         </div>
-        <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[140px]" />
+        <div className="absolute -top-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-[130px]" />
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
 
-        <div className="max-w-7xl mx-auto px-4 py-12 sm:py-16 lg:py-20 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-8 lg:gap-12 relative z-10">
           {/* LEFT */}
-          <div className="flex-1 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full mb-6">
-              <span className="relative flex h-2 w-2">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-5">
+              <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
               </span>
-              <span className="text-white/70 text-[11px] tracking-wider font-medium uppercase">Premium Pet Essentials</span>
+              <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
             </div>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold leading-tight text-white mb-5">
-              Better Products <span className="text-gradient-amber">for Happier Pets</span>
+            <h1 className="font-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.12] font-bold text-white mb-4 tracking-tight">
+              Better Products<br className="hidden sm:block" />
+              <span className="text-gradient-amber">for Happier Pets</span>
             </h1>
-            <p className="text-gray-400 text-sm sm:text-base mb-7 max-w-lg mx-auto lg:mx-0 leading-relaxed">
+            <p className="text-gray-400 text-[13px] sm:text-sm mb-6 max-w-md mx-auto lg:mx-0 leading-relaxed">
               Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
             </p>
-            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
+            <div className="flex flex-wrap items-center gap-2.5 justify-center lg:justify-start">
               <Link to="/shop"
-                className="group px-7 py-3.5 rounded-lg font-bold text-[13px] flex items-center gap-2 transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/20"
+                className="group px-6 py-3 rounded-lg font-bold text-[12px] flex items-center gap-2 transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/20"
                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
-                Shop Pet Essentials <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                Shop Pet Essentials <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/about"
-                className="px-7 py-3.5 rounded-lg border border-white/15 text-white text-[13px] font-semibold hover:bg-white/5 hover:border-white/30 transition-all">
+                className="px-6 py-3 rounded-lg border border-white/15 text-white text-[12px] font-semibold hover:bg-white/5 hover:border-white/30 transition-all">
                 Our Story
               </Link>
-              <div className="hidden sm:flex items-center gap-2 ml-2">
-                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className="text-amber-400 fill-amber-400" />)}</div>
-                <span className="text-white/50 text-[11px]">Trusted by 2,000+ customers</span>
+            </div>
+            <div className="flex items-center justify-center lg:justify-start gap-4 mt-6 pt-5 border-t border-white/10">
+              <div>
+                <p className="text-white font-bold text-sm leading-none">2,000+</p>
+                <p className="text-gray-500 text-[10px] mt-0.5">Happy Customers</p>
+              </div>
+              <div className="w-px h-7 bg-white/10" />
+              <div>
+                <div className="flex gap-0.5 mb-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
+                <p className="text-gray-500 text-[10px]">4.9/5 Store Rating</p>
+              </div>
+              <div className="w-px h-7 bg-white/10" />
+              <div>
+                <p className="text-white font-bold text-sm leading-none">30-Day</p>
+                <p className="text-gray-500 text-[10px] mt-0.5">Easy Returns</p>
               </div>
             </div>
           </div>
-          {/* RIGHT — mini product card */}
-          <div className="w-full lg:w-auto shrink-0">
+          {/* RIGHT — featured product card */}
+          <div className="w-full max-w-md mx-auto lg:mx-0 lg:w-auto lg:justify-self-end">
             {hp && (
               <Link to={`/product/${hp.id}`} className="block group">
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl w-full lg:w-80">
-                  <div className="aspect-[4/3] relative">
-                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="eager" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <p className="text-white font-bold text-sm leading-tight truncate mb-1">{hp.name}</p>
+                <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+                  <div className="aspect-[4/4.4] relative">
+                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="eager" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
+                    <div className="absolute top-3 left-3 flex gap-1.5">
+                      <span className="px-2 py-1 bg-white/95 backdrop-blur rounded-md text-[9px] font-bold text-gray-900 uppercase tracking-wider shadow">Featured</span>
+                      {disc > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-md text-[9px] font-bold shadow">-{disc}%</span>}
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+                      <p className="text-white text-[10px] uppercase tracking-[0.18em] text-amber-300 font-bold mb-0.5">{hp.category}</p>
+                      <p className="text-white font-bold text-sm leading-tight truncate mb-1.5">{hp.name}</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-amber-400">${hp.price.toFixed(2)}</span>
+                        <span className="text-xl font-bold text-amber-400">${hp.price.toFixed(2)}</span>
                         {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                        {disc > 0 && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">-{disc}%</span>}
+                        <span className="ml-auto flex items-center gap-1 px-2 py-1 bg-white/10 backdrop-blur rounded-md text-[10px] font-semibold text-white">
+                          <ShoppingBag size={11} /> Quick Shop
+                        </span>
                       </div>
                     </div>
                   </div>
+                </div>
+                <div className="flex items-center justify-center gap-1.5 mt-3">
+                  {heroProducts.map((_, i) => (
+                    <button key={i} onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(i); }} aria-label={`Slide ${i + 1}`}
+                      className={`h-1 rounded-full transition-all duration-300 ${cs === i ? 'w-6 bg-amber-400' : 'w-2 bg-white/25 hover:bg-white/50'}`} />
+                  ))}
                 </div>
               </Link>
             )}
@@ -1229,22 +1259,22 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ TRUST BAR ════════ */}
+      {/* ════════ TRUST BAR — Compact ════════ */}
       <section className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-2 md:grid-cols-4">
           {[
             { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
             { i: RotateCcw, l: 'Easy Returns', d: '30-day' },
-            { i: Shield, l: 'Secure', d: 'SSL' },
-            { i: Award, l: 'Premium', d: 'Handpicked' },
+            { i: Shield, l: 'Secure Checkout', d: 'SSL Protected' },
+            { i: Award, l: 'Premium Quality', d: 'Handpicked' },
           ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-2.5 justify-center py-1">
-              <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
-                <x.i size={16} className="text-amber-600" />
+            <div key={i} className="flex items-center gap-2.5 justify-center py-1.5 border-r border-gray-50 last:border-r-0">
+              <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
+                <x.i size={14} className="text-amber-600" />
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-900">{x.l}</p>
-                <p className="text-[10px] text-gray-400">{x.d}</p>
+                <p className="text-[11px] font-bold text-gray-900 leading-none">{x.l}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{x.d}</p>
               </div>
             </div>
           ))}
@@ -1252,31 +1282,32 @@ function HomePage() {
       </section>
 
       {/* ════════ CATEGORIES ════════ */}
-      <section className="py-12 bg-white">
+      <section className="py-10 bg-white">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
+          <div className="flex items-end justify-between mb-5">
             <div>
-              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Browse</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Shop by Category</h2>
+              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Shop by Category</h2>
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
-              View All <ArrowRight size={13} />
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
+              View All <ArrowRight size={12} />
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {CAT_LIST.filter(c => c !== 'All').map(c => {
               const meta = CAT_META[c];
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-                  <div className="aspect-[4/5] relative">
+                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-[0_12px_28px_-10px_rgba(245,158,11,0.35)] hover:-translate-y-0.5 transition-all duration-300">
+                  <div className="aspect-[4/4.6] relative">
                     <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/95 via-gray-900/40 to-transparent" />
-                    <div className="absolute inset-0 flex flex-col items-center justify-end p-3 text-center">
-                      <span className="text-2xl mb-1.5 drop-shadow">{meta?.icon}</span>
-                      <h3 className="text-white font-bold text-xs sm:text-sm">{c}</h3>
-                      <p className="text-gray-300 text-[10px] mt-0.5">{count} items</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/95 via-gray-900/45 to-transparent" />
+                    <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-white/90 backdrop-blur rounded-md text-[9px] font-bold text-gray-900">{count}</div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-end p-2.5 text-center">
+                      <span className="text-xl mb-1 drop-shadow">{meta?.icon}</span>
+                      <h3 className="text-white font-bold text-[11px] sm:text-xs leading-tight">{c}</h3>
+                      <p className="text-gray-300/80 text-[9px] mt-0.5">{count} items</p>
                     </div>
                   </div>
                 </Link>
@@ -1287,36 +1318,36 @@ function HomePage() {
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-12 bg-gray-50">
+      <section className="py-10 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-8">
+          <div className="flex items-end justify-between mb-5">
             <div>
-              <p className="text-amber-600 text-[10px] font-semibold uppercase tracking-[0.2em] mb-1">Handpicked For You</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900">Trending This Week</h2>
+              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Trending This Week</h2>
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-amber-600 transition-colors">
-              View All <ArrowRight size={13} />
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
+              View All <ArrowRight size={12} />
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
           </div>
         </div>
       </section>
 
       {/* ════════ CTA ════════ */}
-      <section className="py-16 bg-gray-900 text-white relative overflow-hidden">
+      <section className="py-14 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
-        <div className="absolute top-0 left-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-[100px]" />
+        <div className="absolute top-0 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-[110px]" />
         <div className="max-w-3xl mx-auto px-4 text-center relative">
-          <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[11px] font-semibold uppercase tracking-widest mb-6">
-            <Zap size={12} /> Join The Inner Circle
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-5">
+            <Zap size={11} /> Join The Inner Circle
           </span>
-          <h2 className="font-serif text-3xl sm:text-4xl font-bold mb-4">Ready to Spoil Your Pet?</h2>
-          <p className="text-gray-400 mb-8 text-sm sm:text-base max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link to="/signup" className="group px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" /></Link>
-            <Link to="/shop" className="px-8 py-3.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-lg font-semibold text-sm transition-all">Browse Products</Link>
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
+          <p className="text-gray-400 mb-6 text-[13px] sm:text-sm max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
+          <div className="flex flex-wrap gap-2.5 justify-center">
+            <Link to="/signup" className="group px-7 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
+            <Link to="/shop" className="px-7 py-3 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-lg font-semibold text-[13px] transition-all">Browse Products</Link>
           </div>
         </div>
       </section>
@@ -2552,67 +2583,58 @@ function ADashboard() {
     { l: 'Products', v: products.length, i: Package, c1: '#f59e0b', c2: '#d97706', bg: 'from-amber-500 to-orange-600' },
   ];
 
-  return <div className="space-y-4">
+  return <div className="space-y-3.5">
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-xs text-gray-500">Welcome back! Here's what's happening.</p>
+        <h1 className="text-lg font-bold text-gray-900 tracking-tight">Dashboard</h1>
+        <p className="text-[11px] text-gray-500">Welcome back! Here's what's happening.</p>
       </div>
-      <Link to="/admin/ai-import" className="px-3 py-2 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-105"
+      <Link to="/admin/ai-import" className="px-3 py-2 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-[1.03]"
         style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
-        <Wand2 size={13} /> AI Import
+        <Wand2 size={12} /> AI Import
       </Link>
     </div>
 
     {/* Stats Grid */}
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       {stats.map((s, i) => (
-        <div key={i} className="card-lift bg-white rounded-xl p-4 border border-gray-100 overflow-hidden relative">
+        <div key={i} className="card-lift bg-white rounded-xl p-3.5 border border-gray-100 overflow-hidden relative">
           <div className="absolute top-0 right-0 w-16 h-16 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10" style={{ background: `linear-gradient(135deg, ${s.c1}, ${s.c2})` }} />
           <div className="flex items-center justify-between mb-2">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-lg`}>
-              <s.i size={16} className="text-white" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-md`}>
+              <s.i size={14} className="text-white" />
             </div>
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ color: s.c1, backgroundColor: `${s.c1}15` }}>
-              +12%
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5" style={{ color: s.c1, backgroundColor: `${s.c1}15` }}>
+              <TrendingUp size={9} /> +12%
             </span>
           </div>
-          <p className="text-xl font-bold text-gray-900">{s.v}</p>
-          <p className="text-[11px] text-gray-500 font-medium">{s.l}</p>
+          <p className="text-lg font-bold text-gray-900 leading-none">{s.v}</p>
+          <p className="text-[10px] text-gray-500 font-medium mt-1">{s.l}</p>
+          <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: `linear-gradient(90deg, ${s.c1}55, ${s.c2}55)` }} />
         </div>
       ))}
     </div>
 
     {/* Alerts + Quick Tools Row */}
-    <div className="grid lg:grid-cols-3 gap-3">
-      <div className="lg:col-span-2 grid sm:grid-cols-2 gap-3">
-        {lowStock > 0 && (
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-xl p-3 card-lift">
-            <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center"><AlertTriangle size={14} className="text-amber-600" /></div><span className="font-bold text-amber-800">{lowStock}</span></div>
-            <p className="text-xs text-amber-700 font-medium">Low stock items</p>
-            <Link to="/admin/products" className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 flex items-center gap-1 mt-1">View <ArrowRight size={10} /></Link>
-          </div>
-        )}
-        {pending > 0 && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-3 card-lift">
-            <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><ShoppingCart size={14} className="text-blue-600" /></div><span className="font-bold text-blue-800">{pending}</span></div>
-            <p className="text-xs text-blue-700 font-medium">Pending orders</p>
-            <Link to="/admin/orders" className="text-[10px] font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 mt-1">View <ArrowRight size={10} /></Link>
-          </div>
-        )}
-        {pendingR > 0 && (
-          <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-100 rounded-xl p-3 card-lift">
-            <div className="flex items-center gap-2 mb-1"><div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center"><Star size={14} className="text-purple-600" /></div><span className="font-bold text-purple-800">{pendingR}</span></div>
-            <p className="text-xs text-purple-700 font-medium">Reviews pending</p>
-            <Link to="/admin/reviews" className="text-[10px] font-semibold text-purple-700 hover:text-purple-900 flex items-center gap-1 mt-1">View <ArrowRight size={10} /></Link>
-          </div>
-        )}
+    <div className="grid lg:grid-cols-3 gap-2.5">
+      <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {[
+          { on: lowStock > 0, grad: 'from-amber-50 to-orange-50', b: 'border-amber-100', i: AlertTriangle, ic: 'bg-amber-100', tc: 'text-amber-600', n: lowStock, l: 'Low stock items', t: 'text-amber-800', s: 'text-amber-700', to: '/admin/products' },
+          { on: pending > 0, grad: 'from-blue-50 to-indigo-50', b: 'border-blue-100', i: ShoppingCart, ic: 'bg-blue-100', tc: 'text-blue-600', n: pending, l: 'Pending orders', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/orders' },
+          { on: pendingR > 0, grad: 'from-purple-50 to-pink-50', b: 'border-purple-100', i: Star, ic: 'bg-purple-100', tc: 'text-purple-600', n: pendingR, l: 'Reviews pending', t: 'text-purple-800', s: 'text-purple-700', to: '/admin/reviews' },
+        ].map((a, idx) => a.on ? (
+          <Link key={idx} to={a.to} className={`bg-gradient-to-br ${a.grad} border ${a.b} rounded-xl p-3 card-lift group`}>
+            <div className="flex items-center gap-2 mb-1.5"><div className={`w-7 h-7 ${a.ic} rounded-lg flex items-center justify-center`}><a.i size={13} className={a.tc} /></div><span className={`font-bold ${a.t}`}>{a.n}</span></div>
+            <p className={`text-[11px] ${a.s} font-medium leading-tight`}>{a.l}</p>
+            <p className={`text-[9px] font-semibold ${a.s} opacity-70 group-hover:opacity-100 flex items-center gap-0.5 mt-1 transition-opacity`}>View <ArrowRight size={9} /></p>
+          </Link>
+        ) : <div key={idx} className="hidden" />)}
       </div>
 
       {/* Quick AI Tools */}
       <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift">
-        <h3 className="font-bold text-xs text-gray-800 mb-2 flex items-center gap-1.5"><Zap size={13} className="text-amber-500" />Quick AI Tools</h3>
-        <div className="space-y-1">
+        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Zap size={11} className="text-amber-500" />Quick AI Tools</h3>
+        <div className="grid grid-cols-2 gap-1.5">
           {[
             { to: '/admin/ai-import', icon: Wand2, label: 'Import Product', color: '#8b5cf6' },
             { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
@@ -2620,12 +2642,11 @@ function ADashboard() {
             { to: '/admin/seo-engine', icon: Search, label: 'SEO Optimize', color: '#10b981' },
           ].map(t => (
             <Link key={t.to} to={t.to}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all group">
-              <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: `${t.color}15` }}>
-                <t.icon size={12} style={{ color: t.color }} />
+              className="flex flex-col items-start gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium hover:bg-gray-50 transition-all group">
+              <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: `${t.color}15` }}>
+                <t.icon size={11} style={{ color: t.color }} />
               </div>
-              <span className="text-gray-700 group-hover:text-gray-900">{t.label}</span>
-              <ArrowRight size={12} className="ml-auto text-gray-300 group-hover:text-gray-500" />
+              <span className="text-gray-700 group-hover:text-gray-900 leading-tight">{t.label}</span>
             </Link>
           ))}
         </div>
@@ -2633,38 +2654,50 @@ function ADashboard() {
     </div>
 
     {/* Recent Orders */}
-    <div className="bg-white rounded-xl border border-gray-100 p-4 card-lift">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-bold text-sm text-gray-800">Recent Orders</h2>
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden card-lift">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
+        <h2 className="font-bold text-xs text-gray-800">Recent Orders</h2>
         <Link to="/admin/orders" className="text-[10px] font-semibold text-blue-600 hover:text-blue-800">View All →</Link>
       </div>
-      <div className="space-y-0.5">
-        {orders.slice(0,5).map(o => (
-          <div key={o.id} className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors">
-            <div className="flex items-center gap-2">
-              <div className={`w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold ${
-                o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
-                'bg-gray-100 text-gray-600'
-              }`}>#{(orders.indexOf(o)+1).toString().padStart(2,'0')}</div>
-              <div>
-                <p className="font-medium text-xs">{o.id}</p>
-                <p className="text-[10px] text-gray-500">{o.userName}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="font-bold text-xs">${o.total.toFixed(2)}</p>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
-                'bg-gray-100 text-gray-600'
-              }`}>{o.status}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <table className="w-full text-left">
+        <thead>
+          <tr className="text-[9px] uppercase tracking-wider text-gray-400 border-b border-gray-50">
+            <th className="px-4 py-2 font-semibold">Order</th>
+            <th className="px-2 py-2 font-semibold hidden sm:table-cell">Customer</th>
+            <th className="px-2 py-2 font-semibold hidden md:table-cell">Date</th>
+            <th className="px-2 py-2 font-semibold text-right">Total</th>
+            <th className="px-4 py-2 font-semibold text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.slice(0,5).map(o => (
+            <tr key={o.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
+              <td className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold ${
+                    o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                    o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
+                    o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>#{String(orders.indexOf(o)+1).padStart(2,'0')}</div>
+                  <span className="font-semibold text-[11px] text-gray-900">{o.id}</span>
+                </div>
+              </td>
+              <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.userName}</td>
+              <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{o.date.slice(0,10)}</td>
+              <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${o.total.toFixed(2)}</td>
+              <td className="px-4 py-2 text-right">
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${
+                  o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                  o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
+                  o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>{o.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   </div>;
 }
