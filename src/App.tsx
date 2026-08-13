@@ -389,6 +389,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     if (admin) {
       if (e === adminCreds.email && p === adminCreds.password) {
         setUser({ ...adminCreds });
+        useAuthStore.getState().adminLogin(e, p);
         notify('Welcome Admin!');
         return true;
       }
@@ -397,6 +398,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     // Admin credentials also work through the storefront login
     if (e.toLowerCase() === adminCreds.email.toLowerCase() && p === adminCreds.password) {
       setUser({ ...adminCreds });
+      useAuthStore.getState().adminLogin(e, p);
       notify('Welcome Admin!');
       return true;
     }
@@ -406,6 +408,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       if (existing.password === p) {
         if (existing.isBlocked) { notify('Account blocked. Contact support.'); return false; }
         setUser(existing);
+        useAuthStore.getState().login(e, p);
         notify('Login successful!');
         return true;
       }
@@ -416,13 +419,14 @@ function AppProvider({ children }: { children: ReactNode }) {
       const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: e.split('@')[0], role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
       setUsers(prev => [...prev, newUser]);
       setUser(newUser);
+      useAuthStore.getState().signup(newUser.name, e, p);
       notify('Account created & logged in!');
       return true;
     }
     return false;
   };
 
-  const logout = () => { setUser(null); notify('Logged out'); };
+  const logout = () => { setUser(null); useAuthStore.getState().logout(); notify('Logged out'); };
 
   const signup = (n: string, e: string, p: string) => {
     if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
@@ -430,6 +434,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: n, role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
       setUsers(prev => [...prev, newUser]);
       setUser(newUser);
+      useAuthStore.getState().signup(n, e, p);
       notify('Account created!');
       return true;
     }
@@ -445,6 +450,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...adminCreds, password: newPass };
       setAdminCreds(updated);
       setUser(updated);
+      useAuthStore.getState().changePassword(current, newPass);
       return { ok: true, msg: 'Password updated successfully!' };
     } else {
       if (current !== user.password) return { ok: false, msg: 'Current password is incorrect' };
@@ -452,6 +458,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const updated = { ...user, password: newPass };
       setUser(updated);
       setUsers(prev => prev.map(u => u.id === user.id ? updated : u));
+      useAuthStore.getState().changePassword(current, newPass);
       return { ok: true, msg: 'Password updated successfully!' };
     }
   };
