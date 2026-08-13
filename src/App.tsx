@@ -118,6 +118,7 @@ interface StructuredSchemas {
 const DEFAULT_AI_PROVIDERS: AIProvider[] = [
   { id:'openrouter', name:'OpenRouter', models:['google/gemini-2.0-flash-exp:free','meta-llama/llama-3.1-8b-instruct:free','mistralai/mistral-7b-instruct:free','gpt-4o-mini'], defaultModel:'google/gemini-2.0-flash-exp:free', apiKey:'', enabled:true, isDefault:false },
   { id:'gemini', name:'Google Gemini', models:['gemini-2.0-flash-exp','gemini-1.5-flash','gemini-1.5-pro'], defaultModel:'gemini-2.0-flash-exp', apiKey:'', enabled:true, isDefault:false },
+  { id:'deepseek', name:'DeepSeek', models:['deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-chat', apiKey:'', enabled:true, isDefault:false },
   { id:'openai', name:'OpenAI', models:['gpt-4o-mini','gpt-4o','gpt-3.5-turbo'], defaultModel:'gpt-4o-mini', apiKey:'', enabled:true, isDefault:true },
   { id:'anthropic', name:'Anthropic Claude', models:['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-8'], defaultModel:'claude-haiku-4-5-20251001', apiKey:'', enabled:true, isDefault:false },
 ];
@@ -160,6 +161,15 @@ async function _callAnthropic(prompt: string, p: AIProvider): Promise<string> {
   if (!r.ok) throw new Error(d.error?.message||`Anthropic error ${r.status}`);
   return d.content[0].text;
 }
+async function _callDeepSeek(prompt: string, p: AIProvider): Promise<string> {
+  const r = await fetch('https://api.deepseek.com/chat/completions', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`},
+    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:4096})
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error?.message||`DeepSeek error ${r.status}`);
+  return d.choices[0].message.content;
+}
 
 async function callAIProvider(prompt: string, providers: AIProvider[], onProgress?: (m:string)=>void): Promise<string> {
   const active = providers.filter(p => p.enabled && p.apiKey.trim());
@@ -170,36 +180,60 @@ async function callAIProvider(prompt: string, providers: AIProvider[], onProgres
   if (provider.id === 'gemini') return _callGemini(prompt, provider);
   if (provider.id === 'openrouter') return _callOpenRouter(prompt, provider);
   if (provider.id === 'anthropic') return _callAnthropic(prompt, provider);
+  if (provider.id === 'deepseek') return _callDeepSeek(prompt, provider);
   throw new Error('Unknown AI provider');
 }
 
+function loadAIProviders(): AIProvider[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null');
+    if (!Array.isArray(stored) || !stored.length) return DEFAULT_AI_PROVIDERS;
+    const merged = [...stored];
+    for (const def of DEFAULT_AI_PROVIDERS) {
+      if (!merged.some((p: AIProvider) => p.id === def.id)) merged.push(def);
+    }
+    return merged;
+  } catch { return DEFAULT_AI_PROVIDERS; }
+}
+
 async function fetchPageContent(url: string, scrapedoKey?: string): Promise<string> {
-  const proxies = [
-    scrapedoKey?.trim() ? `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true` : null,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  ].filter(Boolean) as string[];
+  const proxies: { label: string; url: string }[] = [
+    scrapedoKey?.trim() ? { label: 'scrape.do', url: `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true` } : { label: 'scrape.do', url: '' },
+    { label: 'Jina Reader', url: `https://r.jina.ai/${url}` },
+    { label: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+    { label: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
+    { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(url)}` },
+  ].filter(p => p.url);
   let lastErr = '';
-  for (const proxy of proxies) {
+  for (const { label, url: proxy } of proxies) {
     try {
-      const r = await fetch(proxy, { signal: AbortSignal.timeout(20000) });
+      const r = await fetch(proxy, { signal: AbortSignal.timeout(25000), redirect: 'follow' });
       if (r.ok) {
-        const html = await r.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        doc.querySelectorAll('script,style,nav,footer,aside').forEach(el => el.remove());
-        // Extract images from the page
-        const imgs: string[] = [];
-        doc.querySelectorAll('img').forEach(img => {
-          const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-          if (src.startsWith('http') && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) {
-            imgs.push(src);
-          }
-        });
-        const text = (doc.body?.innerText || '').slice(0, 12000);
+        const raw = await r.text();
+        const lower = raw.toLowerCase();
+        if (raw.length < 200 || (lower.includes('just a moment') && raw.length < 6000)) { lastErr = `${label}: blocked`; continue; }
+        const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
+        let text = ''; let imgs: string[] = [];
+        if (isHtml) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(raw, 'text/html');
+          doc.querySelectorAll('script,style,nav,footer,aside').forEach(el => el.remove());
+          doc.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+            if (src.startsWith('http') && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) imgs.push(src);
+          });
+          text = (doc.body?.innerText || '').slice(0, 12000);
+        } else {
+          text = raw.slice(0, 12000);
+          const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g; let m;
+          while ((m = re.exec(raw))) { if (m[1].includes('.jpg') || m[1].includes('.jpeg') || m[1].includes('.png') || m[1].includes('.webp')) imgs.push(m[1]); }
+        }
+        if (!text.trim()) { lastErr = `${label}: empty page`; continue; }
         return JSON.stringify({ text, images: [...new Set(imgs)].slice(0, 30) });
+      } else {
+        lastErr = `${label}: HTTP ${r.status}`;
       }
-    } catch (e: any) { lastErr = e.message; }
+    } catch (e: any) { lastErr = `${label}: ${e.message}`; }
   }
   throw new Error(`Could not fetch page (${lastErr}). Try pasting HTML or text instead.`);
 }
@@ -3381,7 +3415,7 @@ function AMarketingGen() {
   const [newInterest, setNewInterest] = useState('');
   const [newCallout, setNewCallout] = useState('');
 
-  const allProviders: AIProvider[] = (() => { try { const s = localStorage.getItem('luxedge_ai_providers'); return s ? JSON.parse(s) : DEFAULT_AI_PROVIDERS; } catch { return DEFAULT_AI_PROVIDERS; } })();
+  const allProviders: AIProvider[] = loadAIProviders();
   const activeProviders = allProviders.filter(p => p.enabled && p.apiKey);
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -4261,8 +4295,7 @@ function ASEOEngine() {
   const [copied, setCopied] = useState('');
   const [schemaValid, setSchemaValid] = useState<Record<SchemaKey, boolean>>({ product: false, breadcrumb: false, organization: false, website: false, faq: false });
   const [aiProviders] = useState<AIProvider[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers')||'null')||DEFAULT_AI_PROVIDERS; }
-    catch { return DEFAULT_AI_PROVIDERS; }
+    return loadAIProviders();
   });
 
   const [seo, setSeo] = useState<SEOData>({
@@ -5106,8 +5139,7 @@ function AVariantGen() {
   const [dupKeys, setDupKeys] = useState<Set<string>>(new Set());
   const [saved, setSaved] = useState(false);
   const [aiProviders] = useState<AIProvider[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers')||'null')||DEFAULT_AI_PROVIDERS; }
-    catch { return DEFAULT_AI_PROVIDERS; }
+    return loadAIProviders();
   });
 
   const selProduct = products.find(p => p.id === selId);
@@ -5767,8 +5799,7 @@ function AAIHub() {
   const { notify } = useApp();
   const navigate = useNavigate();
   const [aiProviders, setAiProviders] = useState<AIProvider[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null') || DEFAULT_AI_PROVIDERS; }
-    catch { return DEFAULT_AI_PROVIDERS; }
+    return loadAIProviders();
   });
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -5942,6 +5973,11 @@ function AAIHub() {
                   Free tier: 1,500 requests/day. <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Get API key</a>
                 </p>
               )}
+              {provider.id === 'deepseek' && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Budget-friendly and fast. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Get API key</a>
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -6095,8 +6131,7 @@ function AAIImport() {
 
   // Providers
   const [aiProviders] = useState<AIProvider[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_ai_providers')||'null')||DEFAULT_AI_PROVIDERS; }
-    catch { return DEFAULT_AI_PROVIDERS; }
+    return loadAIProviders();
   });
 
   // History
