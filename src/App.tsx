@@ -394,6 +394,12 @@ function AppProvider({ children }: { children: ReactNode }) {
       }
       return false;
     }
+    // Admin credentials also work through the storefront login
+    if (e.toLowerCase() === adminCreds.email.toLowerCase() && p === adminCreds.password) {
+      setUser({ ...adminCreds });
+      notify('Welcome Admin!');
+      return true;
+    }
     // Buyer login — check registered users first, then allow new
     const existing = users.find(u => u.email.toLowerCase() === e.toLowerCase());
     if (existing) {
@@ -1725,8 +1731,8 @@ function OrdersPage() { const { orders, user } = useApp(); const nav = useNaviga
   return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-amber-600">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
 }
 
-function LoginPage() { const [e, setE] = useState(''); const [p, setP] = useState(''); const [err, setErr] = useState(''); const { login } = useApp(); const nav = useNavigate();
-  const sub = (ev: React.FormEvent) => { ev.preventDefault(); if (login(e, p)) nav('/'); else setErr('Invalid credentials'); };
+function LoginPage() { const [e, setE] = useState(''); const [p, setP] = useState(''); const [err, setErr] = useState(''); const { login, adminCreds } = useApp(); const nav = useNavigate();
+  const sub = (ev: React.FormEvent) => { ev.preventDefault(); if (login(e, p)) nav(e.toLowerCase() === adminCreds.email.toLowerCase() ? '/admin' : '/'); else setErr('Invalid credentials'); };
   return <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"><div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8"><div className="text-center mb-6"><Link to="/"><span className="font-serif text-2xl font-bold">LUXEDGE</span></Link></div><h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>{err && <p className="text-red-500 text-sm text-center mb-4">{err}</p>}<form onSubmit={sub} className="space-y-4"><input type="email" placeholder="Email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><input type="password" placeholder="Password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">Sign In</button></form><p className="text-center text-sm text-gray-500 mt-4">No account? <Link to="/signup" className="text-amber-600 font-semibold">Sign Up</Link></p></div></div>;
 }
 
