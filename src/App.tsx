@@ -196,44 +196,76 @@ function loadAIProviders(): AIProvider[] {
   } catch { return DEFAULT_AI_PROVIDERS; }
 }
 
+function looksLikeBotPage(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return raw.length < 15000 && (
+    lower.includes('just a moment') || lower.includes('cf-challenge') || lower.includes('challenge-platform') ||
+    lower.includes('captcha') || lower.includes('unusual traffic') || lower.includes('access denied') ||
+    lower.includes('are you a robot') || lower.includes('verify you are human') || lower.includes('one more step') ||
+    lower.includes('security check') || lower.includes('pardon our interruption') || lower.includes('robot check')
+  );
+}
+
 async function fetchPageContent(url: string, scrapedoKey?: string): Promise<string> {
-  const proxies: { label: string; url: string }[] = [
-    scrapedoKey?.trim() ? { label: 'scrape.do', url: `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true` } : { label: 'scrape.do', url: '' },
-    { label: 'Jina Reader', url: `https://r.jina.ai/${url}` },
-    { label: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
-    { label: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}` },
-    { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(url)}` },
+  const isAli = /aliexpress\.(com|us)/i.test(url);
+  const timeout = isAli ? 35000 : 25000;
+  const proxies: { label: string; url: string; timeout: number }[] = [
+    scrapedoKey?.trim() ? { label: 'scrape.do', url: `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true&countryCode=US`, timeout: 40000 } : { label: 'scrape.do', url: '', timeout: 40000 },
+    { label: 'Jina Reader', url: `https://r.jina.ai/${url}`, timeout },
+    { label: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, timeout },
+    { label: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeout },
+    { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(url)}`, timeout },
+    { label: 'Wayback', url: `https://web.archive.org/web/2024id_/${url}`, timeout },
   ].filter(p => p.url);
   let lastErr = '';
-  for (const { label, url: proxy } of proxies) {
+  for (const { label, url: proxy, timeout: t } of proxies) {
     try {
-      const r = await fetch(proxy, { signal: AbortSignal.timeout(25000), redirect: 'follow' });
+      const r = await fetch(proxy, { signal: AbortSignal.timeout(t), redirect: 'follow' });
       if (r.ok) {
         const raw = await r.text();
-        const lower = raw.toLowerCase();
-        if (raw.length < 200 || (lower.includes('just a moment') && raw.length < 6000)) { lastErr = `${label}: blocked`; continue; }
+        if (raw.length < 200) { lastErr = `${label}: empty response`; continue; }
+        if (looksLikeBotPage(raw)) { lastErr = `${label}: bot check`; continue; }
+        if (label === 'corsproxy' && raw.toLowerCase().includes('fix cors errors')) { lastErr = `${label}: proxy homepage`; continue; }
         const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
         let text = ''; let imgs: string[] = [];
         if (isHtml) {
           const parser = new DOMParser();
           const doc = parser.parseFromString(raw, 'text/html');
+          const ogT = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
+          const ogD = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+          const jsonLd = Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).map(s => s.textContent || '').join('\n');
           doc.querySelectorAll('script,style,nav,footer,aside').forEach(el => el.remove());
           doc.querySelectorAll('img').forEach(img => {
             const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
             if (src.startsWith('http') && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) imgs.push(src);
           });
-          text = (doc.body?.innerText || '').slice(0, 12000);
+          const bodyText = (doc.body?.innerText || '').trim();
+          text = [ogT, ogD, jsonLd ? `JSON-LD:\n${jsonLd}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
         } else {
           text = raw.slice(0, 12000);
           const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g; let m;
           while ((m = re.exec(raw))) { if (m[1].includes('.jpg') || m[1].includes('.jpeg') || m[1].includes('.png') || m[1].includes('.webp')) imgs.push(m[1]); }
         }
-        if (!text.trim()) { lastErr = `${label}: empty page`; continue; }
+        if (isAli && label === 'Jina Reader') {
+          const titleLine = raw.match(/^Title:\s*(.+)$/m);
+          if (!titleLine || !titleLine[1] || !titleLine[1].trim() || titleLine[1].trim().toLowerCase() === 'captcha interception') {
+            lastErr = `${label}: AliExpress shell/captcha (product loads via JS)`;
+            continue;
+          }
+        }
+        if (isAli && text.length < 400 && (text.includes('Download the AliExpress app') || text.includes("I'm shopping for"))) {
+          lastErr = `${label}: AliExpress shell page`;
+          continue;
+        }
+        if (text.trim().length < 100) { lastErr = `${label}: too little content`; continue; }
         return JSON.stringify({ text, images: [...new Set(imgs)].slice(0, 30) });
       } else {
         lastErr = `${label}: HTTP ${r.status}`;
       }
     } catch (e: any) { lastErr = `${label}: ${e.message}`; }
+  }
+  if (isAli) {
+    throw new Error(`Could not load AliExpress product (${lastErr}). AliExpress blocks automated fetching. Add a FREE scrape.do token in AI Hub → Web Scraping Configuration, or paste the product HTML/text instead.`);
   }
   throw new Error(`Could not fetch page (${lastErr}). Try pasting HTML or text instead.`);
 }
