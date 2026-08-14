@@ -853,7 +853,7 @@ function PCard({ product }: { product: Product }) {
           </div>
           {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/95 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-white/95 backdrop-blur rounded-lg text-[10px] font-bold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
@@ -886,6 +886,20 @@ function ScrollToTop() {
     try { if (window.parent !== window) { window.parent.postMessage({ type: 'scrollTop' }, '*'); } } catch(_) {}
   }, [pathname]);
   return null;
+}
+
+// Scroll reveal wrapper — fades/slides children in when they enter the viewport
+function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') { setShown(true); return; }
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShown(true); obs.disconnect(); } }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  return <div ref={ref} style={{ transitionDelay: delay ? `${delay}ms` : undefined }} className={`reveal-base ${shown ? 'reveal-show' : ''} ${className}`}>{children}</div>;
 }
 
 function SLayout({ children }: { children: ReactNode }) {
@@ -1246,50 +1260,34 @@ function HomePage() {
         <div className="max-w-7xl mx-auto px-4 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-8 lg:gap-12 relative z-10">
           {/* LEFT */}
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-5 animate-fade-in-up">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
               </span>
               <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
             </div>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.12] font-bold text-white mb-4 tracking-tight">
+            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[54px] leading-[1.08] font-bold text-white mb-5 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
               Better Products<br className="hidden sm:block" />
-              <span className="text-gradient-amber">for Happier Pets</span>
+              <span className="text-gradient-amber" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
             </h1>
-            <p className="text-gray-400 text-[13px] sm:text-sm mb-6 max-w-md mx-auto lg:mx-0 leading-relaxed">
+            <p className="text-gray-400 text-sm sm:text-[15px] mb-7 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
               Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
             </p>
-            <div className="flex flex-wrap items-center gap-2.5 justify-center lg:justify-start">
+            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '320ms' }}>
               <Link to="/shop"
-                className="group px-6 py-3 rounded-lg font-bold text-[12px] flex items-center gap-2 transition-all hover:scale-[1.03] shadow-lg shadow-amber-500/20"
+                className="group px-5 py-2.5 rounded-full font-semibold text-[12px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/25"
                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
                 Shop Pet Essentials <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/about"
-                className="px-6 py-3 rounded-lg border border-white/15 text-white text-[12px] font-semibold hover:bg-white/5 hover:border-white/30 transition-all">
+                className="px-5 py-2.5 rounded-full border border-white/15 text-white/80 text-[12px] font-medium hover:text-white hover:border-white/30 hover:bg-white/5 transition-all">
                 Our Story
               </Link>
             </div>
-            <div className="flex items-center justify-center lg:justify-start gap-4 mt-6 pt-5 border-t border-white/10">
-              <div>
-                <p className="text-white font-bold text-sm leading-none">2,000+</p>
-                <p className="text-gray-500 text-[10px] mt-0.5">Happy Customers</p>
-              </div>
-              <div className="w-px h-7 bg-white/10" />
-              <div>
-                <div className="flex gap-0.5 mb-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={9} className="text-amber-400 fill-amber-400" />)}</div>
-                <p className="text-gray-500 text-[10px]">4.9/5 Store Rating</p>
-              </div>
-              <div className="w-px h-7 bg-white/10" />
-              <div>
-                <p className="text-white font-bold text-sm leading-none">30-Day</p>
-                <p className="text-gray-500 text-[10px] mt-0.5">Easy Returns</p>
-              </div>
-            </div>
           </div>
           {/* RIGHT — featured product card */}
-          <div className="w-full max-w-md mx-auto lg:mx-0 lg:w-auto lg:justify-self-end">
+          <div className="w-full max-w-md mx-auto lg:mx-0 lg:w-auto lg:justify-self-end animate-fade-in" style={{ animationDelay: '250ms' }}>
             {hp && (
               <Link to={`/product/${hp.id}`} className="block group">
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
@@ -1349,7 +1347,7 @@ function HomePage() {
 
       {/* ════════ CATEGORIES ════════ */}
       <section className="py-10 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
+        <Reveal className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-5">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
@@ -1380,12 +1378,12 @@ function HomePage() {
               );
             })}
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
       <section className="py-10 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
+        <Reveal className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-5">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
@@ -1398,24 +1396,24 @@ function HomePage() {
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* ════════ CTA ════════ */}
       <section className="py-14 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
         <div className="absolute top-0 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-[110px]" />
-        <div className="max-w-3xl mx-auto px-4 text-center relative">
+        <Reveal className="max-w-3xl mx-auto px-4 text-center relative">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-5">
             <Zap size={11} /> Join The Inner Circle
           </span>
           <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
           <p className="text-gray-400 mb-6 text-[13px] sm:text-sm max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
-          <div className="flex flex-wrap gap-2.5 justify-center">
-            <Link to="/signup" className="group px-7 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-lg flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
-            <Link to="/shop" className="px-7 py-3 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-lg font-semibold text-[13px] transition-all">Browse Products</Link>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link to="/signup" className="group px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
+            <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
           </div>
-        </div>
+        </Reveal>
       </section>
     </div>
   );
