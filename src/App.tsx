@@ -627,44 +627,12 @@ function Header() {
 }
 
 function Footer() {
-  const [nlEmail, setNlEmail] = useState('');
-  const [nlDone, setNlDone] = useState(false);
   const { categories } = useApp();
-
-  const handleNl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (nlEmail) { setNlDone(true); setNlEmail(''); setTimeout(() => setNlDone(false), 4000); }
-  };
 
   const FL = 'block text-sm text-gray-400 hover:text-amber-400 transition-colors py-1';
 
   return (
     <footer className="bg-gray-950 text-white">
-      {/* ── Newsletter Banner ── */}
-      <div className="bg-gradient-to-r from-amber-600 to-amber-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="text-center lg:text-left">
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-1">Join the Luxedge Inner Circle</h3>
-              <p className="text-amber-100 text-sm">Get exclusive offers, new arrivals & member‑only deals — straight to your inbox.</p>
-            </div>
-            {nlDone ? (
-              <div className="flex items-center gap-2 bg-white/20 backdrop-blur rounded-xl px-6 py-3 text-white font-semibold">
-                <CheckCircle size={18} /> You're subscribed!
-              </div>
-            ) : (
-              <form onSubmit={handleNl} className="flex w-full max-w-md">
-                <input type="email" required placeholder="Enter your email address" value={nlEmail} onChange={e => setNlEmail(e.target.value)}
-                  className="flex-1 px-5 py-3.5 rounded-l-xl bg-white/15 backdrop-blur border border-white/20 text-white placeholder-amber-100 text-sm focus:outline-none focus:bg-white/20" />
-                <button type="submit" className="px-6 py-3.5 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-r-xl transition-colors flex items-center gap-2 text-sm">
-                  <Send size={16} /> Subscribe
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* ── Main Footer Grid ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-10 lg:gap-8">
@@ -715,7 +683,7 @@ function Footer() {
             <nav className="space-y-0.5">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
-              <Link to="/returns" className={FL}>Returns & Refunds</Link>
+              <Link to="/returns" className={FL}>Return Policy</Link>
               <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
               <Link to="/orders" className={FL}>Track Order</Link>
             </nav>
@@ -754,16 +722,6 @@ function Footer() {
                 <Clock size={16} className="text-amber-500 mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
-            </div>
-
-            {/* Mini Map */}
-            <div className="rounded-xl overflow-hidden border border-gray-800 h-28">
-              <iframe
-                title="Luxedge Location"
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d107176.94372626498!2d-97.03528895!3d32.85707655!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x864e7d124c349327%3A0x5eb3b1b65ad0e508!2sIrving%2C%20TX!5e0!3m2!1sen!2sus!4v1710000000000"
-                width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
             </div>
           </div>
         </div>
@@ -820,10 +778,12 @@ function Footer() {
             <p className="text-xs text-gray-600">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
             </p>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap justify-center">
               <Link to="/privacy" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Privacy Policy</Link>
               <span className="text-gray-800">|</span>
               <Link to="/terms" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Terms of Service</Link>
+              <span className="text-gray-800">|</span>
+              <Link to="/returns" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Return Policy</Link>
               <span className="text-gray-800">|</span>
               <Link to="/shop" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Sitemap</Link>
             </div>
@@ -1942,54 +1902,44 @@ function AboutPage() {
 
 function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="March 15, 2025">
-      <LS t="1. Introduction"><p>At Luxedge ("we," "our," or "us"), we respect your privacy and are committed to protecting your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your data when you visit luxedge.us and make purchases through our platform.</p></LS>
-      <LS t="2. Information We Collect"><p><strong>Personal Information:</strong> When you create an account, place an order, or contact us, we may collect your name, email address, phone number, shipping address, and billing information.</p><p className="mt-2"><strong>Automatically Collected Data:</strong> We collect certain information automatically, including your IP address, browser type, device information, pages visited, time spent on pages, and referring URLs. This data helps us improve our website and your shopping experience.</p></LS>
-      <LS t="3. How We Use Your Information"><p>We use your information to: process and fulfill orders; send order confirmations and shipping updates; respond to customer service requests; personalize your shopping experience; send promotional communications (with your consent); prevent fraud and maintain security; comply with legal obligations.</p></LS>
-      <LS t="4. Third-Party Services"><p>We work with trusted third-party providers to operate our business:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li><strong>Payment Processing:</strong> Stripe and PayPal process payments securely. We never store your full credit card number.</li><li><strong>Analytics:</strong> Google Analytics helps us understand how visitors use our site.</li><li><strong>Advertising:</strong> Google AdSense displays relevant advertisements. Google may use cookies to serve ads based on your browsing history.</li><li><strong>Shipping Partners:</strong> Carrier services receive your shipping address to deliver orders.</li></ul></LS>
-      <LS t="5. Cookies & Tracking"><p>Luxedge uses cookies and similar technologies to remember your preferences, maintain your shopping cart, analyze traffic, and display relevant ads. You can manage cookie preferences through your browser settings. Note that disabling cookies may affect certain features of our website.</p></LS>
-      <LS t="6. Data Security"><p>We implement industry-standard security measures, including 256-bit SSL encryption for all data transmission and PCI-DSS compliant payment processing. While no method of electronic storage is 100% secure, we continuously work to protect your personal information.</p></LS>
-      <LS t="7. Data Retention"><p>We retain your personal information for as long as your account is active or as needed to provide you services, comply with legal obligations, resolve disputes, and enforce our agreements.</p></LS>
-      <LS t="8. Your Rights"><p>Depending on your location, you may have the right to: access the personal data we hold about you; request correction of inaccurate data; request deletion of your data; opt out of marketing communications; withdraw consent where processing is based on consent. To exercise these rights, email us at hello@luxedge.us.</p></LS>
-      <LS t="9. Children's Privacy"><p>Luxedge is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13.</p></LS>
-      <LS t="10. Changes to This Policy"><p>We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated revision date. We encourage you to review this policy periodically.</p></LS>
-      <LS t="11. Contact Us"><p>If you have questions about this Privacy Policy, contact us at:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002<br />Address: Luxedge, Irving, TX 75038, USA</p></LS>
+    <LegalPage title="Privacy Policy" updated="August 14, 2026">
+      <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.</p></LS>
+      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment information (processed securely through our payment providers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
+      <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Save billing and shipping information for faster future purchases.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
+      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
+      <LS t="Payment Security"><p>Payments are processed securely through trusted third-party payment processors. Luxedge does not store your complete credit or debit card information on our servers.</p></LS>
+      <LS t="Cookies"><p>Our website uses cookies to remember your preferences, improve website performance, analyze website traffic, and enhance your shopping experience. You may disable cookies through your browser settings, although some website features may not function properly.</p></LS>
+      <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, and analytics services. These providers receive only the information necessary to perform their services.</li></ul></LS>
+      <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
+      <LS t="Your Rights"><p>Depending on your location, you may request access to, correction of, or deletion of your personal information where permitted by law, and you may opt out of marketing communications.</p></LS>
+      <LS t="Third-Party Links"><p>Our website may contain links to third-party websites. We are not responsible for the privacy practices or content of those websites.</p></LS>
+      <LS t="Changes to This Privacy Policy"><p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date.</p></LS>
+      <LS t="Contact Us"><p>If you have any questions about this Privacy Policy or how we handle your information, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
     </LegalPage>
   );
 }
 
 function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="March 15, 2025">
-      <LS t="1. Agreement to Terms"><p>By accessing or using Luxedge.us (the "Site"), you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you may not access the Site. These terms apply to all visitors, users, and customers.</p></LS>
-      <LS t="2. Eligibility"><p>You must be at least 18 years old to use this Site or make purchases. By using Luxedge, you represent and warrant that you meet this age requirement.</p></LS>
-      <LS t="3. Products & Pricing"><p>All prices on Luxedge are displayed in US Dollars (USD). We make every effort to display accurate pricing and product information, but errors may occur. We reserve the right to correct any errors and to change or update product information at any time without prior notice. Product availability is subject to change without notice.</p></LS>
-      <LS t="4. Orders & Payment"><p>When you place an order, you are making an offer to purchase. We reserve the right to accept or decline your order for any reason, including product availability, pricing errors, or suspected fraud. We accept Visa, MasterCard, American Express, Discover, and PayPal. Payment is processed at the time of order placement.</p></LS>
-      <LS t="5. Shipping & Delivery"><p>Luxedge ships to addresses within the United States. Standard shipping typically takes 7-12 business days, and express shipping takes 2-4 business days. Free standard shipping is available on orders totaling $50 or more. Delivery times are estimates and not guarantees. Luxedge is not responsible for delays caused by carriers, weather, or customs processing.</p></LS>
-      <LS t="6. Returns & Refunds"><p>We offer a 30-day return policy from the date of delivery. Items must be unused, unworn, and in their original packaging with all tags attached. To initiate a return, contact our support team at hello@luxedge.us. Refunds are processed within 5-7 business days after we receive and inspect the returned item. Original shipping costs are non-refundable. For detailed conditions, please see our Returns & Refund Policy page.</p></LS>
-      <LS t="7. Account Responsibilities"><p>You are responsible for maintaining the confidentiality of your account credentials. You agree to accept responsibility for all activities that occur under your account. Luxedge reserves the right to suspend or terminate accounts that violate these terms.</p></LS>
-      <LS t="8. User-Generated Content"><p>By submitting product reviews, blog posts, or any other content to Luxedge, you grant us a non-exclusive, royalty-free, worldwide license to use, display, and distribute your content on our platform and marketing channels. You represent that your content is original and does not infringe on third-party rights.</p></LS>
-      <LS t="9. Intellectual Property"><p>All content on Luxedge, including text, graphics, logos, images, and software, is the property of Luxedge or its content suppliers and is protected by copyright and trademark laws. You may not reproduce, distribute, or create derivative works without our written permission.</p></LS>
-      <LS t="10. Limitation of Liability"><p>Luxedge shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Site or purchase of products. Our total liability shall not exceed the amount you paid for the specific product giving rise to the claim.</p></LS>
-      <LS t="11. Governing Law"><p>These Terms are governed by the laws of the State of Texas, United States, without regard to conflict of law principles. Any disputes shall be resolved in the courts of Dallas County, Texas.</p></LS>
-      <LS t="12. Contact"><p>Questions about these Terms? Contact us at hello@luxedge.us or (440) 941-8002.</p></LS>
+    <LegalPage title="Terms of Service" updated="August 14, 2026">
+      <LS t="Orders and Product Information"><p>Product availability, pricing, and descriptions may change as inventory and supplier information are updated. We work to keep product details accurate and current.</p></LS>
+      <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate account, shipping, and payment details when placing orders or contacting support.</p></LS>
+      <LS t="Returns & Replacements"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Contact us within 30 days of your order date to request a return authorization. We do not offer refunds.</p></LS>
+      <LS t="Support"><p>For questions about an order, product, or account, contact Luxedge support using the contact details provided on the site.</p></LS>
     </LegalPage>
   );
 }
 
 function ReturnsPage() {
   return (
-    <LegalPage title="Returns & Refund Policy" updated="March 15, 2025">
-      <LS t="Our Promise"><p>At Luxedge, your satisfaction is our priority. If you're not completely happy with your purchase, we're here to make it right. We offer a straightforward 30-day return policy — no hoops, no hassle.</p></LS>
-      <LS t="Return Window"><p>You have <strong>30 calendar days</strong> from the date you receive your item to initiate a return. Items received after the 30-day window may not be eligible for a refund.</p></LS>
-      <LS t="Eligible Items"><p>To qualify for a return, your item must be:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Unused and in the same condition you received it</li><li>In its original packaging with all tags and accessories</li><li>Free from signs of wear, damage, or alteration</li></ul></LS>
-      <LS t="Non-Returnable Items"><p>The following items cannot be returned:</p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Items marked as "Final Sale" or "Non-Returnable"</li><li>Pet food, treats, and opened consumables that have been used</li><li>Gift cards and digital products</li><li>Items damaged through customer misuse</li></ul></LS>
-      <LS t="How to Start a Return"><p>1. Email us at <strong>hello@luxedge.us</strong> with your order number and reason for return.<br/>2. Our team will respond within 24 hours with return instructions and a return authorization.<br/>3. Ship the item back using the method outlined in our response.<br/>4. Once received and inspected, we'll process your refund.</p></LS>
-      <LS t="Refund Process"><p>Refunds are processed within <strong>5-7 business days</strong> after we receive and inspect your returned item. The refund will be credited to your original payment method. Please allow an additional 3-5 business days for the refund to appear on your bank statement.</p></LS>
-      <LS t="Exchanges"><p>We don't do direct exchanges. If you need a different size, color, or product, simply return the original item for a refund and place a new order for the item you prefer.</p></LS>
-      <LS t="Damaged or Defective Items"><p>If you received a damaged or defective product, contact us within 48 hours of delivery at hello@luxedge.us with photos of the issue. We will arrange a replacement or full refund at no additional cost to you, including return shipping.</p></LS>
-      <LS t="Shipping Costs"><p>Original shipping charges are non-refundable. Return shipping costs are the responsibility of the customer, unless the return is due to a Luxedge error (wrong item, defective product, etc.).</p></LS>
-      <LS t="Questions?"><p>Our customer support team is available Monday through Friday, 9 AM - 6 PM CT. Email hello@luxedge.us or call (440) 941-8002.</p></LS>
+    <LegalPage title="Returns & Replacement Policy" updated="August 14, 2026">
+      <LS t="Our Promise"><p>At Luxedge, we take pride in the quality of our pet essentials. If you receive a product that is damaged, defective, or incorrect, please contact us within 30 days of your order date. We will work with you to resolve the issue as quickly as possible.</p></LS>
+      <LS t="Return Eligibility"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Return requests must be made within 30 days of the original order date.</li><li>Products must be unused, unopened, and returned in their original packaging.</li><li>Returns require prior approval from Luxedge before being shipped.</li></ul></LS>
+      <LS t="Replacement Policy"><p>Once we receive and inspect your returned product, we will process a replacement if the return meets our policy requirements.</p><p className="mt-2">Replacement items will be shipped after the returned product has been received and approved.</p></LS>
+      <LS t="No Refund Policy"><p>We do not offer refunds.</p><p className="mt-2">Eligible returned products will be replaced with the same product. Refunds, exchanges for different products, or store credits are not available.</p></LS>
+      <LS t="Return Shipping"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers are responsible for purchasing their own return shipping label.</li><li>Customers are responsible for properly packaging the product to prevent damage during transit.</li><li>Customers are responsible for all return shipping costs.</li><li>We recommend using a trackable shipping service, as Luxedge is not responsible for returns that are lost or damaged during shipping.</li></ul></LS>
+      <LS t="Damaged or Incorrect Orders"><p>If your order arrives damaged or you received the wrong product, please contact us within 30 days of delivery. Include your order number and photos of the product and packaging so we can review your request promptly.</p></LS>
+      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
     </LegalPage>
   );
 }
@@ -1997,7 +1947,7 @@ function ReturnsPage() {
 function ShippingPolicyPage() {
   return (
     <LegalPage title="Shipping Policy" updated="March 15, 2025">
-      <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations — sign up for our newsletter to be notified when international shipping becomes available.</p></LS>
+      <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations soon.</p></LS>
       <LS t="Processing Time"><p>Orders are typically processed within <strong>1-3 business days</strong> after payment confirmation. You'll receive an email confirmation when your order has been shipped with tracking information.</p></LS>
       <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">7-12 business days</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">2-4 business days</td><td className="px-4 py-2 border">$9.99</td></tr></tbody></table></div></LS>
       <LS t="Free Shipping"><p>Enjoy <strong>free standard shipping</strong> on all orders of $50 or more. This offer applies automatically at checkout — no coupon code needed.</p></LS>
@@ -2017,14 +1967,14 @@ function FAQPage() {
       { q: 'How long does shipping take?', a: 'Standard shipping takes 7-12 business days. Express shipping delivers in 2-4 business days. Processing takes an additional 1-3 business days before shipment.' },
       { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
-      { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon — join our newsletter to be the first to know.' },
+      { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },
       { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
     ]},
     { c: 'Returns & Refunds', qs: [
-      { q: 'What is your return policy?', a: 'We offer a 30-day return policy. Items must be unused, in original packaging, and with all tags attached. Email hello@luxedge.us to start a return.' },
-      { q: 'How long does a refund take?', a: 'Refunds are processed within 5-7 business days after we receive your return. It may take an additional 3-5 business days for the credit to appear on your statement.' },
-      { q: 'Can I exchange an item?', a: 'We don\'t do direct exchanges. Simply return the original item for a refund and place a new order for the item you want. This ensures fastest processing.' },
-      { q: 'What if I receive a damaged item?', a: 'Contact us within 48 hours of delivery with photos of the damage. We\'ll send a replacement or issue a full refund, including return shipping costs.' },
+      { q: 'What is your return policy?', a: 'We offer a 30-day return & replacement policy. Products must be unused, unopened, and in their original packaging. Email hello@luxedge.us within 30 days for a return authorization.' },
+      { q: 'How does the replacement process work?', a: 'Once we receive and inspect your approved return, we ship a replacement of the same product. We do not offer refunds or exchanges for different products.' },
+      { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping costs and for packaging the product safely. We recommend using a trackable shipping service.' },
+      { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
       { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. All transactions are processed securely through Stripe or PayPal.' },
