@@ -629,13 +629,13 @@ function Header() {
 function Footer() {
   const { categories } = useApp();
 
-  const FL = 'block text-sm text-gray-400 hover:text-amber-400 transition-colors py-1';
+  const FL = 'block text-sm text-gray-400 hover:text-amber-400 transition-colors py-0.5';
 
   return (
     <footer className="bg-gray-950 text-white">
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-10 lg:gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
@@ -645,7 +645,7 @@ function Footer() {
               </div>
               <span className="font-serif text-xl font-bold tracking-tight">LUXEDGE</span>
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xs">
+            <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
             </p>
 
@@ -667,7 +667,7 @@ function Footer() {
 
           {/* Col 2 — Quick Links */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Quick Links</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Quick Links</h4>
             <nav className="space-y-0.5">
               <Link to="/" className={FL}>Home</Link>
               <Link to="/shop" className={FL}>Shop All</Link>
@@ -679,7 +679,7 @@ function Footer() {
 
           {/* Col 3 — Customer Support */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Support</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Support</h4>
             <nav className="space-y-0.5">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
@@ -691,7 +691,7 @@ function Footer() {
 
           {/* Col 4 — Company */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Company</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Company</h4>
             <nav className="space-y-0.5">
               <Link to="/about" className={FL}>About Us</Link>
               <Link to="/about" className={FL}>Our Story</Link>
@@ -704,8 +704,8 @@ function Footer() {
 
           {/* Col 5 — Contact + Map */}
           <div className="col-span-2 md:col-span-1">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-4">Get in Touch</h4>
-            <div className="space-y-3 mb-5">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Get in Touch</h4>
+            <div className="space-y-2 mb-4">
               <a href="mailto:hello@luxedge.us" className="flex items-start gap-3 text-sm text-gray-400 hover:text-amber-400 transition-colors">
                 <Mail size={16} className="text-amber-500 mt-0.5 shrink-0" />
                 hello@luxedge.us
@@ -729,7 +729,7 @@ function Footer() {
 
       {/* ── Categories Bar ── */}
       <div className="border-t border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
@@ -741,7 +741,7 @@ function Footer() {
 
       {/* ── Trust & Payment Bar ── */}
       <div className="border-t border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             {/* Trust Badges */}
             <div className="flex flex-wrap items-center gap-4">
@@ -773,7 +773,7 @@ function Footer() {
 
       {/* ── Bottom Bar ── */}
       <div className="border-t border-gray-800 bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-gray-600">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
@@ -1217,21 +1217,21 @@ function HomePage() {
         <div className="absolute -top-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-[130px]" />
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
 
-        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-8 lg:gap-12 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:py-10 lg:py-12 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-8 lg:gap-10 relative z-10">
           {/* LEFT */}
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-5 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-4 animate-fade-in-up">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
               </span>
               <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
             </div>
-            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[54px] leading-[1.08] font-bold text-white mb-5 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
+            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[54px] leading-[1.08] font-bold text-white mb-4 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
               Better Products<br className="hidden sm:block" />
               <span className="text-gradient-amber" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
             </h1>
-            <p className="text-gray-400 text-sm sm:text-[15px] mb-7 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
+            <p className="text-gray-400 text-sm sm:text-[15px] mb-5 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
               Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
             </p>
             <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '320ms' }}>
@@ -1306,9 +1306,9 @@ function HomePage() {
       </section>
 
       {/* ════════ CATEGORIES ════════ */}
-      <section className="py-10 bg-white">
+      <section className="py-8 bg-white">
         <Reveal className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-5">
+          <div className="flex items-end justify-between mb-4">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
               <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Shop by Category</h2>
@@ -1342,9 +1342,9 @@ function HomePage() {
       </section>
 
       {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-10 bg-gray-50">
+      <section className="py-8 bg-gray-50">
         <Reveal className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-5">
+          <div className="flex items-end justify-between mb-4">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
               <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Trending This Week</h2>
@@ -1360,15 +1360,15 @@ function HomePage() {
       </section>
 
       {/* ════════ CTA ════════ */}
-      <section className="py-14 bg-gray-900 text-white relative overflow-hidden">
+      <section className="py-10 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
         <div className="absolute top-0 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-[110px]" />
         <Reveal className="max-w-3xl mx-auto px-4 text-center relative">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-5">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
             <Zap size={11} /> Join The Inner Circle
           </span>
           <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
-          <p className="text-gray-400 mb-6 text-[13px] sm:text-sm max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
+          <p className="text-gray-400 mb-5 text-[13px] sm:text-sm max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link to="/signup" className="group px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
             <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
