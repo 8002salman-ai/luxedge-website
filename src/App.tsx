@@ -1224,31 +1224,31 @@ function HomePage() {
         <div className="absolute -top-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-[130px]" />
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
 
-        <div className="max-w-7xl mx-auto px-4 py-8 sm:py-10 lg:py-12 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-8 lg:gap-10 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 py-5 sm:py-7 lg:py-9 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-6 lg:gap-8 relative z-10">
           {/* LEFT */}
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-4 animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-3 animate-fade-in-up">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
               </span>
               <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
             </div>
-            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[54px] leading-[1.08] font-bold text-white mb-4 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
+            <h1 className="font-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.1] font-bold text-white mb-3 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
               Better Products<br className="hidden sm:block" />
               <span className="text-gradient-amber" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
             </h1>
-            <p className="text-gray-400 text-sm sm:text-[15px] mb-5 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
+            <p className="text-gray-400 text-[13px] sm:text-sm mb-4 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
               Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
             </p>
             <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '320ms' }}>
               <Link to="/shop"
-                className="group px-5 py-2.5 rounded-full font-semibold text-[12px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/25"
+                className="group px-4 py-2 rounded-full font-semibold text-[11px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/25"
                 style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
                 Shop Pet Essentials <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/about"
-                className="px-5 py-2.5 rounded-full border border-white/15 text-white/80 text-[12px] font-medium hover:text-white hover:border-white/30 hover:bg-white/5 transition-all">
+                className="px-4 py-2 rounded-full border border-white/15 text-white/80 text-[11px] font-medium hover:text-white hover:border-white/30 hover:bg-white/5 transition-all">
                 Our Story
               </Link>
             </div>
@@ -1258,18 +1258,18 @@ function HomePage() {
             {hp && (
               <Link to={`/product/${hp.id}`} className="block group">
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-                  <div className="aspect-[4/4.4] relative">
+                  <div className="aspect-[4/4.1] relative">
                     <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="eager" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
                     <div className="absolute top-3 left-3 flex gap-1.5">
                       <span className="px-2 py-1 bg-white/95 backdrop-blur rounded-md text-[9px] font-bold text-gray-900 uppercase tracking-wider shadow">Featured</span>
                       {disc > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-md text-[9px] font-bold shadow">-{disc}%</span>}
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
                       <p className="text-white text-[10px] uppercase tracking-[0.18em] text-amber-300 font-bold mb-0.5">{hp.category}</p>
                       <p className="text-white font-bold text-sm leading-tight truncate mb-1.5">{hp.name}</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-xl font-bold text-amber-400">${hp.price.toFixed(2)}</span>
+                        <span className="text-lg font-bold text-amber-400">${hp.price.toFixed(2)}</span>
                         {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
                         <span className="ml-auto flex items-center gap-1 px-2 py-1 bg-white/10 backdrop-blur rounded-md text-[10px] font-semibold text-white">
                           <ShoppingBag size={11} /> Quick Shop
@@ -1278,7 +1278,7 @@ function HomePage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-center gap-1.5 mt-3">
+                <div className="flex items-center justify-center gap-1.5 mt-2">
                   {heroProducts.map((_, i) => (
                     <button key={i} onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(i); }} aria-label={`Slide ${i + 1}`}
                       className={`h-1 rounded-full transition-all duration-300 ${cs === i ? 'w-6 bg-amber-400' : 'w-2 bg-white/25 hover:bg-white/50'}`} />
@@ -1290,35 +1290,13 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ TRUST BAR — Compact ════════ */}
-      <section className="bg-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-3 grid grid-cols-2 md:grid-cols-4">
-          {[
-            { i: Truck, l: 'Free Shipping', d: 'Orders $50+' },
-            { i: RotateCcw, l: 'Easy Returns', d: '30-day' },
-            { i: Shield, l: 'Secure Checkout', d: 'SSL Protected' },
-            { i: Award, l: 'Premium Quality', d: 'Handpicked' },
-          ].map((x,i)=>(
-            <div key={i} className="flex items-center gap-2.5 justify-center py-1.5 border-r border-gray-50 last:border-r-0">
-              <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
-                <x.i size={14} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-gray-900 leading-none">{x.l}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{x.d}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ════════ CATEGORIES ════════ */}
       <section className="py-8 bg-white">
         <Reveal className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-4">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Shop by Category</h2>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Shop by Category <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" /></h2>
             </div>
             <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
               View All <ArrowRight size={12} />
@@ -1330,15 +1308,19 @@ function HomePage() {
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300 hover:shadow-[0_12px_28px_-10px_rgba(245,158,11,0.35)] hover:-translate-y-0.5 transition-all duration-300">
-                  <div className="aspect-[4/4.6] relative">
-                    <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/95 via-gray-900/45 to-transparent" />
-                    <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-white/90 backdrop-blur rounded-md text-[9px] font-bold text-gray-900">{count}</div>
-                    <div className="absolute inset-0 flex flex-col items-center justify-end p-2.5 text-center">
-                      <span className="text-xl mb-1 drop-shadow">{meta?.icon}</span>
-                      <h3 className="text-white font-bold text-[11px] sm:text-xs leading-tight">{c}</h3>
-                      <p className="text-gray-300/80 text-[9px] mt-0.5">{count} items</p>
+                  className="group relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 hover:border-amber-300/70 hover:shadow-[0_18px_36px_-14px_rgba(245,158,11,0.4)] hover:-translate-y-1 transition-all duration-300">
+                  <div className="aspect-[4/4.2] relative">
+                    <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-900/25 to-transparent" />
+                    <div className="absolute top-2.5 right-2.5 w-7 h-7 bg-white/95 backdrop-blur rounded-full flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 shadow-md">
+                      <ArrowRight size={13} className="text-gray-900" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+                      <h3 className="text-white font-serif font-bold text-[13px] leading-tight mb-1.5">{c}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        <p className="text-[9px] text-gray-300/90 font-semibold uppercase tracking-[0.16em]">{count} Products</p>
+                      </div>
                     </div>
                   </div>
                 </Link>
