@@ -2070,6 +2070,13 @@ function SignupPage() {
             Have an account?{' '}
             <Link to="/login" className="text-luxe-gold font-semibold hover:text-luxe-gold-light transition-colors">Sign In</Link>
           </p>
+
+          {/* Go to store — browse without an account */}
+          <Link to="/shop"
+            className="mt-4 w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-luxe-gold/50 text-gray-300 hover:text-white text-sm font-medium transition-all flex items-center justify-center gap-2">
+            <ShoppingBag size={15} className="text-luxe-gold" />
+            Go to store
+          </Link>
         </div>
 
         {/* Trust line */}
