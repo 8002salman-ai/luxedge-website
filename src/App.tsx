@@ -638,6 +638,15 @@ function Header() {
   </>);
 }
 
+// WhatsApp brand icon (lucide has no brand icons)
+function WAIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
 function Footer() {
   const { categories } = useApp();
 
@@ -1029,78 +1038,90 @@ function ProductDetailPage() {
   const relatedFallback = related.length === 0 ? products.filter(p => p.isActive && p.id !== product.id).slice(0, 4) : [];
 
   return (
-    <div className="max-w-7xl mx-auto px-3 py-3">
+    <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1 text-[10px] text-gray-500 mb-3">
-        <Link to="/" className="hover:text-blue-600">Home</Link>
-        <ChevronRight size={9} />
-        <Link to="/shop" className="hover:text-blue-600">Shop</Link>
-        <ChevronRight size={9} />
-        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-blue-600">{product.category}</Link>
-        <ChevronRight size={9} />
-        <span className="text-gray-800 truncate min-w-0 max-w-[200px]">{product.name}</span>
+      <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
+        <Link to="/" className="hover:text-amber-600 transition-colors">Home</Link>
+        <ChevronRight size={11} />
+        <Link to="/shop" className="hover:text-amber-600 transition-colors">Shop</Link>
+        <ChevronRight size={11} />
+        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-amber-600 transition-colors">{product.category}</Link>
+        <ChevronRight size={11} />
+        <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
         {/* LEFT: Image Gallery */}
-        <div>
-          <div className="aspect-[4/3] bg-gray-100 rounded overflow-hidden relative">
-            <img src={product.images[selImg] || product.images[0]} alt={product.name} className="w-full h-full object-cover" />
-            {discount > 0 && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-sm">-{discount}%</span>}
+        <div className="lg:sticky lg:top-24 self-start">
+          <div className="relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm">
+            <div className="aspect-[4/3]">
+              <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} className="w-full h-full object-cover" />
+            </div>
+            {discount > 0 && (
+              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                <span className="px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded-lg shadow">-{discount}%</span>
+              </div>
+            )}
+            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-gray-900/80 text-white text-[9px] font-bold rounded-lg">FREE SHIP</span>}
           </div>
-          <div className="flex gap-1.5 mt-1.5 overflow-x-auto">
+          <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1">
             {product.images.map((img, i) => (
               <button key={i} onClick={() => setSelImg(i)}
-                className={`w-12 h-12 rounded overflow-hidden border shrink-0 ${selImg === i ? 'border-gray-900' : 'border-gray-200 hover:border-gray-400'}`}>
+                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-amber-500 shadow-md' : 'border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100'}`}>
                 <img src={img} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
         </div>
 
-        {/* RIGHT: Product Info - eBay style */}
+        {/* RIGHT: Product Info — AliExpress-style premium */}
         <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            {product.brand && <span className="text-[9px] text-blue-600 font-medium">{product.brand}</span>}
-            {product.condition !== 'New' && <span className="text-[9px] text-gray-500">| {product.condition}</span>}
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            {product.brand && <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">{product.brand}</span>}
+            {product.condition !== 'New' && <span className="text-[11px] text-gray-400">| {product.condition}</span>}
+            <span className="text-[11px] text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full font-medium">{product.category}</span>
           </div>
 
-          <h1 className="text-sm sm:text-base font-medium text-gray-900 mb-1.5">{product.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900 tracking-tight mb-3">{product.name}</h1>
 
           {/* Rating */}
-          <div className="flex items-center gap-1 mb-2">
-            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={10} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-            <span className="text-[10px] text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
-            <span className="text-[10px] text-gray-400">|</span>
-            <span className="text-[10px] text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
+            <span className="text-gray-300">|</span>
+            <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
           </div>
 
           {/* Price */}
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-lg font-bold text-gray-900">${activePrice.toFixed(2)}</span>
-            {discount > 0 && <span className="text-xs text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
-            {discount > 0 && <span className="text-[10px] text-red-600 font-medium">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
+          <div className="rounded-2xl bg-amber-50/60 border border-amber-100 p-4 mb-4">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <span className="text-3xl font-bold text-gray-900">${activePrice.toFixed(2)}</span>
+              {discount > 0 && <span className="text-sm text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
+              {discount > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
+            </div>
+            {discount > 0 && <p className="text-[11px] text-amber-700 mt-1.5 font-medium">{discount}% off — limited time deal</p>}
           </div>
 
           {/* Stock + Shipping */}
-          <div className="mb-2 text-[10px]">
-            {activeStock > 10 && <span className="text-green-700"><CheckCircle size={10} className="inline mr-0.5" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-amber-700"><AlertTriangle size={10} className="inline mr-0.5" />Only {activeStock} left</span>}
-            {activeStock === 0 && <span className="text-red-600"><X size={10} className="inline mr-0.5" />Out of Stock</span>}
-            {product.freeShipping && <span className="text-gray-500 ml-2">| <Truck size={10} className="inline mr-0.5" />Free shipping</span>}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
+            {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-amber-600 font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
+            {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
+            <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />30-day easy returns</span>
           </div>
 
           {/* Short Desc */}
-          {product.shortDesc && <p className="text-[10px] text-gray-600 mb-2 leading-relaxed">{product.shortDesc}</p>}
+          {product.shortDesc && <p className="text-sm text-gray-600 mb-4 leading-relaxed">{product.shortDesc}</p>}
 
           {/* Color */}
           {uniqueColors.length > 0 && (
-            <div className="mb-2">
-              <span className="text-[9px] text-gray-500 font-medium">Color: {selColor}</span>
-              <div className="flex gap-1 mt-0.5">
+            <div className="mb-4">
+              <span className="block text-xs font-semibold text-gray-700 mb-2">Color: <span className="text-gray-400 font-normal">{selColor}</span></span>
+              <div className="flex gap-2">
                 {uniqueColors.map(c => (
-                  <button key={c} onClick={() => setSelColor(c)}
-                    className={`w-5 h-5 rounded-full border ${selColor === c ? 'ring-1 ring-gray-900 ring-offset-1' : ''}`}
+                  <button key={c} onClick={() => setSelColor(c)} title={c}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-amber-500 ring-2 ring-amber-100' : 'border-gray-200 hover:border-gray-400'}`}
                     style={{ backgroundColor: ({ Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' })[c] || '#ccc' }} />
                 ))}
               </div>
@@ -1108,53 +1129,57 @@ function ProductDetailPage() {
           )}
           {/* Size */}
           {uniqueSizes.length > 0 && uniqueSizes[0] !== 'One Size' && (
-            <div className="mb-2">
-              <span className="text-[9px] text-gray-500 font-medium">Size: {selSize}</span>
-              <div className="flex gap-1 mt-0.5 flex-wrap">
+            <div className="mb-5">
+              <span className="block text-xs font-semibold text-gray-700 mb-2">Size: <span className="text-gray-400 font-normal">{selSize}</span></span>
+              <div className="flex gap-2 flex-wrap">
                 {uniqueSizes.map(s => (
                   <button key={s} onClick={() => setSelSize(s)}
-                    className={`px-2 py-0.5 text-[9px] border rounded ${selSize === s ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-300 text-gray-700 hover:border-gray-500'}`}>{s}</button>
+                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-amber-500 bg-amber-50 text-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
                 ))}
               </div>
             </div>
           )}
 
           {/* Buttons */}
-          <div className="flex items-center gap-1.5 mb-2">
-            <div className="flex items-center border rounded">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-2 py-1 hover:bg-gray-50 text-[10px]"><Minus size={10} /></button>
-              <span className="px-2 py-1 text-[10px] font-medium border-x min-w-[1.5rem] text-center">{qty}</span>
-              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-2 py-1 hover:bg-gray-50 text-[10px]"><Plus size={10} /></button>
+          <div className="flex items-stretch gap-3 mb-4">
+            <div className="flex items-center border-2 border-gray-200 rounded-xl">
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus size={14} /></button>
+              <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
+              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
-              className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white text-[10px] font-semibold rounded disabled:cursor-not-allowed">
-              {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-[1.02]"
+              style={{ background: activeStock === 0 ? undefined : 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+              <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
-              className="flex-1 py-1.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 text-white text-[10px] font-semibold rounded disabled:cursor-not-allowed">
+              className="flex-1 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors">
               Buy Now
             </button>
           </div>
 
           {/* Trust */}
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { icon: Truck, t: 'Free ship $50+' },
               { icon: RotateCcw, t: '30-day returns' },
-              { icon: Shield, t: 'Guarantee' },
-              { icon: Lock, t: 'Secure' },
+              { icon: Shield, t: 'Quality guarantee' },
+              { icon: Lock, t: 'Secure checkout' },
             ].map((b, i) => (
-              <div key={i} className="flex items-center gap-1 p-1.5 bg-gray-50 rounded"><b.icon size={10} className="text-gray-500 shrink-0" /><span className="text-[8px] text-gray-600">{b.t}</span></div>
+              <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                <b.icon size={14} className="text-amber-500 shrink-0" />
+                <span className="text-[10px] sm:text-[11px] text-gray-600 font-medium leading-tight">{b.t}</span>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-3 border-b mt-4 mb-3">
+      <div className="flex gap-6 mt-8 mb-5 border-b border-gray-100 overflow-x-auto">
         {([['desc', 'Description'], ['specs', 'Specifications'], ['reviews', `Reviews (${reviews.length})`]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`pb-1.5 text-[10px] font-medium border-b-2 transition-colors ${tab === key ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-amber-500 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}
@@ -1162,11 +1187,11 @@ function ProductDetailPage() {
 
       {/* Description */}
       {tab === 'desc' && (
-        <div>
-          <p className="text-[11px] text-gray-700 leading-relaxed whitespace-pre-line">{product.description}</p>
+        <div className="max-w-3xl">
+          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
           {product.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t">
-              {product.tags.map(t => <span key={t} className="text-[9px] text-blue-600 hover:underline cursor-pointer">#{t}</span>)}
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+              {product.tags.map(t => <span key={t} className="text-xs text-amber-600 hover:underline cursor-pointer">#{t}</span>)}
             </div>
           )}
         </div>
@@ -1174,7 +1199,7 @@ function ProductDetailPage() {
 
       {/* Specs */}
       {tab === 'specs' && (
-        <table className="w-full text-[10px]">
+        <table className="w-full text-xs max-w-3xl">
           <tbody>
             {[
               ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
@@ -1182,8 +1207,8 @@ function ProductDetailPage() {
               ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : `$${product.shippingCost}`],
             ].filter(([, v]) => v).map(([k, v], i) => (
               <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
-                <td className="px-2 py-1.5 font-medium text-gray-600 w-1/3">{k}</td>
-                <td className="px-2 py-1.5 text-gray-900">{v}</td>
+                <td className="px-3 py-2.5 font-medium text-gray-600 w-1/3">{k}</td>
+                <td className="px-3 py-2.5 text-gray-900">{v}</td>
               </tr>
             ))}
           </tbody>
@@ -1192,51 +1217,51 @@ function ProductDetailPage() {
 
       {/* Reviews */}
       {tab === 'reviews' && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg font-bold">{avgRating.toFixed(1)}</span>
-            <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={12} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-            <span className="text-[10px] text-gray-500">{reviews.length} reviews</span>
+        <div className="max-w-3xl">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <span className="text-xs text-gray-500">{reviews.length} reviews</span>
           </div>
 
           {user ? (
-            <button onClick={() => setShowRevForm(!showRevForm)} className="text-[10px] text-blue-600 hover:underline mb-2 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
+            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-amber-600 hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
           ) : (
-            <p className="text-[10px] text-gray-500 mb-2"><Link to="/login" className="text-blue-600 hover:underline">Sign in</Link> to review</p>
+            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-amber-600 font-semibold hover:underline">Sign in</Link> to review</p>
           )}
 
           {showRevForm && (
-            <form onSubmit={submitReview} className="bg-gray-50 rounded p-2.5 mb-3 space-y-2">
-              <div className="flex gap-0.5">{[1, 2, 3, 4, 5].map(s => (
+            <form onSubmit={submitReview} className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3 border border-gray-100">
+              <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={14} className={s <= revForm.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} />
+                  <Star size={18} className={s <= revForm.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} />
                 </button>
               ))}</div>
-              <textarea required rows={2} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-2 py-1.5 border rounded text-[10px] focus:outline-none resize-none" placeholder="Write your review..." />
-              <button type="submit" className="px-3 py-1 bg-blue-600 text-white text-[10px] font-medium rounded">Submit</button>
+              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-amber-400 resize-none" placeholder="Write your review..." />
+              <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg">Submit Review</button>
             </form>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {reviews.length > 0 ? reviews.map(r => (
-              <div key={r.id} className="border-b border-gray-100 pb-3 last:border-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <span className="text-[9px] font-bold text-gray-700">{r.userName}</span>
-                  <div className="flex gap-[1px]">{[...Array(5)].map((_, i) => <Star key={i} size={8} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
-                  <span className="text-[9px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
+              <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-gray-800">{r.userName}</span>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+                  <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
-                <p className="text-[10px] text-gray-600">{r.comment}</p>
+                <p className="text-sm text-gray-600">{r.comment}</p>
               </div>
-            )) : <p className="text-[10px] text-gray-400">No reviews yet.</p>}
+            )) : <p className="text-sm text-gray-400">No reviews yet.</p>}
           </div>
         </div>
       )}
 
       {/* Related */}
-      <div className="mt-6 pt-4 border-t">
-        <h2 className="text-xs font-bold text-gray-900 mb-3">Related Products</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {(related.length > 0 ? related : relatedFallback).map(p => <PCard key={p.id} product={p} />)}
+      <div className="mt-10 pt-6 border-t border-gray-100">
+        <h2 className="text-lg font-serif font-bold text-gray-900 mb-4">Related Products</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
         </div>
       </div>
     </div>
@@ -1399,19 +1424,44 @@ function HomePage() {
         </Reveal>
       </section>
 
-      {/* ════════ CTA ════════ */}
+      {/* ════════ CTA — Ready to Spoil Your Pet? + Map/WhatsApp ════════ */}
       <section className="py-10 bg-gray-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
         <div className="absolute top-0 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-[110px]" />
-        <Reveal className="max-w-3xl mx-auto px-4 text-center relative">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
-            <Zap size={11} /> Join The Inner Circle
-          </span>
-          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
-          <p className="text-gray-400 mb-5 text-[13px] sm:text-sm max-w-lg mx-auto">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
-          <div className="flex flex-wrap gap-3 justify-center">
-            <Link to="/signup" className="group px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
-            <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
+        <Reveal className="max-w-7xl mx-auto px-4 relative">
+          <div className="grid lg:grid-cols-2 gap-8 items-center">
+            {/* LEFT — text + buttons */}
+            <div className="text-center lg:text-left">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
+                <Zap size={11} /> Join The Inner Circle
+              </span>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
+              <p className="text-gray-400 mb-5 text-[13px] sm:text-sm max-w-lg mx-auto lg:mx-0">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
+              <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+                <Link to="/signup" className="group px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
+                <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
+              </div>
+            </div>
+            {/* RIGHT — map + WhatsApp */}
+            <div className="space-y-3">
+              <div className="relative rounded-2xl overflow-hidden border border-white/10 min-h-[200px] bg-white/5">
+                <iframe
+                  title="Luxedge — Irving, TX 75038, USA"
+                  src="https://www.google.com/maps?q=Irving%2C%20TX%2075038%2C%20USA&output=embed"
+                  className="absolute inset-0 w-full h-full border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  style={{ filter: 'grayscale(1) invert(0.92) contrast(0.88) brightness(0.9)' }}
+                />
+                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/60 backdrop-blur rounded-lg text-[10px] text-white font-semibold uppercase tracking-wider">
+                  <MapPin size={11} className="text-amber-400" /> Irving, TX 75038
+                </div>
+              </div>
+              <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-3 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold rounded-xl text-sm transition-colors shadow-lg shadow-[#25D366]/20">
+                <WAIcon size={16} /> WhatsApp Us
+              </a>
+            </div>
           </div>
         </Reveal>
       </section>
