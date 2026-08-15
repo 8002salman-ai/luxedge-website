@@ -588,20 +588,21 @@ function Header() {
   const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   return (<>
     <div className="text-white/70 text-center py-1.5 px-4 text-[10px] tracking-[0.18em] font-medium whitespace-nowrap overflow-hidden border-b border-white/10" style={{ background: 'linear-gradient(90deg, #08080c, #14141f 55%, #08080c)' }}>
-      <span className="text-amber-400 font-semibold">Free Shipping Over $50</span>
+      <span className="text-sky-400 font-semibold">Free Shipping Over $50</span>
       <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
       <span className="hidden sm:inline">Premium Pet Essentials</span>
       <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
       <span className="hidden sm:inline">Easy 30-Day Returns</span>
     </div>
-    <header className="sticky top-0 z-50 border-b border-white/10" style={{ background: 'rgba(8, 8, 12, 0.85)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
+    <header className="sticky top-0 z-50 border-b border-white/10" style={{ background: 'rgba(5, 5, 8, 0.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
         <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-white/10 rounded-lg text-white transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/20 transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-            <span className="text-[#1a1a1a] font-serif font-bold text-sm">L</span>
-          </div>
-          <span className="font-serif text-lg font-bold tracking-tight text-white">LUXEDGE</span>
+        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group">
+          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-10 w-auto drop-shadow-[0_4px_14px_rgba(0,136,255,0.4)] transition-transform group-hover:scale-105" />
+          <span className="flex flex-col leading-none">
+            <span className="text-white font-serif text-base sm:text-xl font-bold tracking-wide">LUXEDGE</span>
+            <span className="hidden sm:block text-[8px] tracking-[0.28em] text-sky-300/70 mt-1">PREMIUM PET ESSENTIALS</span>
+          </span>
         </Link>
         <nav className="hidden lg:flex items-center gap-1">
           {nav.map(i => {
@@ -609,24 +610,24 @@ function Header() {
             return (
               <Link key={i.p} to={i.p}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive ? 'text-amber-400 bg-amber-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  isActive ? 'text-sky-400 bg-blue-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}>{i.l}</Link>
             );
           })}
         </nav>
         <div className="flex items-center gap-1">
           <Link to="/shop" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><Search size={18} /></Link>
-          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] shadow-sm shadow-amber-500/20" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{user.name[0]}</div></button>
+          {user ? (<div className="relative">                <button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white shadow-sm shadow-blue-500/30" style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>{user.name[0]}</div></button>
             {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 rounded-lg shadow-2xl border border-white/10 py-1.5 z-50" style={{ background: 'rgba(15, 15, 24, 0.98)' }}>
               <div className="px-3 py-2 border-b border-white/10"><p className="font-semibold text-xs text-white">{user.name}</p><p className="text-[10px] text-gray-400">{user.email}</p></div>
-              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><LayoutDashboard size={14} className="text-amber-400" />Admin Panel</Link>}
+              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><LayoutDashboard size={14} className="text-sky-400" />Admin Panel</Link>}
               <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><Package size={14} className="text-gray-400" />My Orders</Link>
               <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 w-full transition-colors"><LogOut size={14} />Log Out</button>
             </div></>}</div>
           ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
           <Link to="/cart" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors relative">
             <ShoppingBag size={18} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{cc}</span>}
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>{cc}</span>}
           </Link>
         </div>
       </div>
@@ -650,7 +651,7 @@ function WAIcon({ size = 18 }: { size?: number }) {
 function Footer() {
   const { categories } = useApp();
 
-  const FL = 'block text-sm text-gray-400 hover:text-amber-400 transition-colors py-0.5';
+  const FL = 'block text-sm text-gray-400 hover:text-sky-400 transition-colors py-0.5';
 
   return (
     <footer className="relative overflow-hidden text-white" style={{ background: 'linear-gradient(180deg, #0a0a10 0%, #14141f 55%, #1a1a2e 100%)' }}>
@@ -658,9 +659,9 @@ function Footer() {
       <div className="absolute inset-0 opacity-[0.05]">
         <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
       </div>
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-amber-500/10 rounded-full blur-[140px]" />
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-[140px]" />
       <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
 
       {/* ── Main Footer Grid ── */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -668,11 +669,12 @@ function Footer() {
 
           {/* Col 1 — Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4 group">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/20 transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-                <span className="text-[#1a1a1a] font-serif font-bold text-lg">L</span>
-              </div>
-              <span className="font-serif text-xl font-bold tracking-tight text-white">LUXEDGE</span>
+            <Link to="/" className="flex items-center gap-3 mb-4 group w-fit">
+              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-12 h-12 drop-shadow-[0_4px_14px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
+              <span className="flex flex-col leading-none">
+                <span className="text-white font-serif text-2xl font-bold tracking-wide">LUXEDGE</span>
+                <span className="text-[9px] tracking-[0.28em] text-sky-300/70 mt-1">PREMIUM PET ESSENTIALS</span>
+              </span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
@@ -687,7 +689,7 @@ function Footer() {
                 { label: 'YouTube', letter: 'Y', path: 'M2.5 17a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 2.5 7h19A2.5 2.5 0 0 1 24 9.5v5a2.5 2.5 0 0 1-2.5 2.5h-19zM10 15l5-3-5-3v6z' },
               ].map(s => (
                 <a key={s.label} href="#" title={s.label}
-                  className="w-10 h-10 bg-white/5 border border-white/10 hover:bg-amber-500 hover:border-amber-500 rounded-lg flex items-center justify-center transition-all duration-300 group">
+                  className="w-10 h-10 bg-white/5 border border-white/10 hover:bg-blue-500 hover:border-blue-500 rounded-lg flex items-center justify-center transition-all duration-300 group">
                   <span className="text-gray-400 group-hover:text-white text-sm font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
@@ -696,7 +698,7 @@ function Footer() {
 
           {/* Col 2 — Quick Links */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Quick Links</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Quick Links</h4>
             <nav className="space-y-0.5">
               <Link to="/" className={FL}>Home</Link>
               <Link to="/shop" className={FL}>Shop All</Link>
@@ -708,7 +710,7 @@ function Footer() {
 
           {/* Col 3 — Customer Support */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Support</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Support</h4>
             <nav className="space-y-0.5">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
@@ -720,7 +722,7 @@ function Footer() {
 
           {/* Col 4 — Company */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Company</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Company</h4>
             <nav className="space-y-0.5">
               <Link to="/about" className={FL}>About Us</Link>
               <Link to="/about" className={FL}>Our Story</Link>
@@ -733,22 +735,22 @@ function Footer() {
 
           {/* Col 5 — Contact + Map */}
           <div className="col-span-2 md:col-span-1">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Get in Touch</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Get in Touch</h4>
             <div className="space-y-2 mb-4">
-              <a href="mailto:hello@luxedge.us" className="flex items-start gap-3 text-sm text-gray-400 hover:text-amber-400 transition-colors">
-                <Mail size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <a href="mailto:hello@luxedge.us" className="flex items-start gap-3 text-sm text-gray-400 hover:text-sky-400 transition-colors">
+                <Mail size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
-              <a href="tel:4409418002" className="flex items-start gap-3 text-sm text-gray-400 hover:text-amber-400 transition-colors">
-                <Phone size={16} className="text-amber-500 mt-0.5 shrink-0" />
+              <a href="tel:4409418002" className="flex items-start gap-3 text-sm text-gray-400 hover:text-sky-400 transition-colors">
+                <Phone size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
               <div className="flex items-start gap-3 text-sm text-gray-400">
-                <MapPin size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                <MapPin size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 Irving, TX 75038, USA
               </div>
               <div className="flex items-start gap-3 text-sm text-gray-400">
-                <Clock size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                <Clock size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
@@ -762,7 +764,7 @@ function Footer() {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-gray-500 hover:text-amber-400 transition-colors">{c.name}</Link>
+              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-gray-500 hover:text-sky-400 transition-colors">{c.name}</Link>
             ))}
           </div>
         </div>
@@ -781,7 +783,7 @@ function Footer() {
                 { icon: Headphones, text: '24/7 Support' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
-                  <b.icon size={14} className="text-amber-500" />
+                  <b.icon size={14} className="text-blue-500" />
                   <span>{b.text}</span>
                 </div>
               ))}
@@ -808,16 +810,16 @@ function Footer() {
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
             </p>
             <div className="flex items-center gap-4 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Privacy Policy</Link>
+              <Link to="/privacy" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Privacy Policy</Link>
               <span className="text-gray-600">|</span>
-              <Link to="/terms" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Terms of Service</Link>
+              <Link to="/terms" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Terms of Service</Link>
               <span className="text-gray-600">|</span>
-              <Link to="/returns" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Return Policy</Link>
+              <Link to="/returns" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Return Policy</Link>
               <span className="text-gray-600">|</span>
-              <Link to="/shop" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Sitemap</Link>
+              <Link to="/shop" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Sitemap</Link>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Globe size={12} className="text-amber-500" /> USD ($) · English
+              <Globe size={12} className="text-blue-500" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -832,7 +834,7 @@ function PCard({ product }: { product: Product }) {
   const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-200 hover:shadow-[0_14px_34px_-10px_rgba(0,0,0,0.14)] hover:-translate-y-1 transition-all duration-300">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-sky-200 hover:shadow-[0_14px_34px_-10px_rgba(0,0,0,0.14)] hover:-translate-y-1 transition-all duration-300">
         <div className="relative bg-gray-50 overflow-hidden">
           <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4.2] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -840,7 +842,7 @@ function PCard({ product }: { product: Product }) {
             {d > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">-{d}%</span>}
             {product.freeShipping && <span className="px-1.5 py-0.5 bg-gray-900/85 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">FREE SHIP</span>}
           </div>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-amber-500/95 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">Low Stock</span>}
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-blue-500/95 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
             className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
@@ -848,9 +850,9 @@ function PCard({ product }: { product: Product }) {
         </div>
         <div className="px-2.5 py-2.5">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[9px] text-amber-600 uppercase tracking-wider font-bold truncate">{product.category}</p>
+            <p className="text-[9px] text-blue-600 uppercase tracking-wider font-bold truncate">{product.category}</p>
             <div className="flex items-center gap-1 shrink-0">
-              <Star size={9} className="text-amber-400 fill-amber-400" />
+              <Star size={9} className="text-sky-400 fill-sky-400" />
               <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
             </div>
           </div>
@@ -873,11 +875,11 @@ function PCardPremium({ product }: { product: Product }) {
   const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300/70 hover:shadow-[0_16px_34px_-14px_rgba(245,158,11,0.35)] hover:-translate-y-1 transition-all duration-300">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-sky-300/70 hover:shadow-[0_16px_34px_-14px_rgba(245,158,11,0.35)] hover:-translate-y-1 transition-all duration-300">
         <div className="relative bg-gray-50 overflow-hidden">
           <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-gray-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-amber-500 text-gray-900 text-[9px] font-bold rounded-full shadow-sm leading-none">-{d}%</span>}
+          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded-full shadow-sm leading-none">-{d}%</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
             className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
@@ -885,9 +887,9 @@ function PCardPremium({ product }: { product: Product }) {
         </div>
         <div className="px-3 py-2.5">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[9px] text-amber-600 uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
+            <p className="text-[9px] text-blue-600 uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
             <div className="flex items-center gap-1 shrink-0">
-              <Star size={9} className="text-amber-400 fill-amber-400" />
+              <Star size={9} className="text-sky-400 fill-sky-400" />
               <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
             </div>
           </div>
@@ -896,7 +898,7 @@ function PCardPremium({ product }: { product: Product }) {
             <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
             {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
             <span className="ml-auto flex items-center gap-1 text-[9px] text-gray-400">
-              <span className="w-1 h-1 rounded-full bg-amber-400" />
+              <span className="w-1 h-1 rounded-full bg-sky-400" />
               {sold > 0 ? `${sold} sold` : 'New'}
             </span>
           </div>
@@ -996,7 +998,7 @@ function ProductDetailPage() {
           <p className="text-5xl mb-4">😕</p>
           <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
           <p className="text-gray-500 mb-6">This product may have been removed.</p>
-          <Link to="/shop" className="px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg">Back to Shop</Link>
+          <Link to="/shop" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg">Back to Shop</Link>
         </div>
       </div>
     );
@@ -1041,11 +1043,11 @@ function ProductDetailPage() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
-        <Link to="/" className="hover:text-amber-600 transition-colors">Home</Link>
+        <Link to="/" className="hover:text-blue-600 transition-colors">Home</Link>
         <ChevronRight size={11} />
-        <Link to="/shop" className="hover:text-amber-600 transition-colors">Shop</Link>
+        <Link to="/shop" className="hover:text-blue-600 transition-colors">Shop</Link>
         <ChevronRight size={11} />
-        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-amber-600 transition-colors">{product.category}</Link>
+        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-blue-600 transition-colors">{product.category}</Link>
         <ChevronRight size={11} />
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
@@ -1067,7 +1069,7 @@ function ProductDetailPage() {
           <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1">
             {product.images.map((img, i) => (
               <button key={i} onClick={() => setSelImg(i)}
-                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-amber-500 shadow-md' : 'border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100'}`}>
+                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100'}`}>
                 <img src={img} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
@@ -1077,7 +1079,7 @@ function ProductDetailPage() {
         {/* RIGHT: Product Info — AliExpress-style premium */}
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            {product.brand && <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">{product.brand}</span>}
+            {product.brand && <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">{product.brand}</span>}
             {product.condition !== 'New' && <span className="text-[11px] text-gray-400">| {product.condition}</span>}
             <span className="text-[11px] text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full font-medium">{product.category}</span>
           </div>
@@ -1086,26 +1088,26 @@ function ProductDetailPage() {
 
           {/* Rating */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
             <span className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
             <span className="text-gray-300">|</span>
             <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
           </div>
 
           {/* Price */}
-          <div className="rounded-2xl bg-amber-50/60 border border-amber-100 p-4 mb-4">
+          <div className="rounded-2xl bg-sky-50/60 border border-sky-100 p-4 mb-4">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-3xl font-bold text-gray-900">${activePrice.toFixed(2)}</span>
               {discount > 0 && <span className="text-sm text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
               {discount > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
             </div>
-            {discount > 0 && <p className="text-[11px] text-amber-700 mt-1.5 font-medium">{discount}% off — limited time deal</p>}
+            {discount > 0 && <p className="text-[11px] text-blue-700 mt-1.5 font-medium">{discount}% off — limited time deal</p>}
           </div>
 
           {/* Stock + Shipping */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
             {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-amber-600 font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-blue-600 font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
             {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
             {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
             <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />30-day easy returns</span>
@@ -1121,7 +1123,7 @@ function ProductDetailPage() {
               <div className="flex gap-2">
                 {uniqueColors.map(c => (
                   <button key={c} onClick={() => setSelColor(c)} title={c}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-amber-500 ring-2 ring-amber-100' : 'border-gray-200 hover:border-gray-400'}`}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-blue-500 ring-2 ring-sky-100' : 'border-gray-200 hover:border-gray-400'}`}
                     style={{ backgroundColor: ({ Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' })[c] || '#ccc' }} />
                 ))}
               </div>
@@ -1134,7 +1136,7 @@ function ProductDetailPage() {
               <div className="flex gap-2 flex-wrap">
                 {uniqueSizes.map(s => (
                   <button key={s} onClick={() => setSelSize(s)}
-                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-amber-500 bg-amber-50 text-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
+                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-blue-500 bg-sky-50 text-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
                 ))}
               </div>
             </div>
@@ -1148,8 +1150,8 @@ function ProductDetailPage() {
               <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-[1.02]"
-              style={{ background: activeStock === 0 ? undefined : 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02]"
+              style={{ background: activeStock === 0 ? undefined : 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>
               <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
@@ -1167,7 +1169,7 @@ function ProductDetailPage() {
               { icon: Lock, t: 'Secure checkout' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                <b.icon size={14} className="text-amber-500 shrink-0" />
+                <b.icon size={14} className="text-blue-500 shrink-0" />
                 <span className="text-[10px] sm:text-[11px] text-gray-600 font-medium leading-tight">{b.t}</span>
               </div>
             ))}
@@ -1179,7 +1181,7 @@ function ProductDetailPage() {
       <div className="flex gap-6 mt-8 mb-5 border-b border-gray-100 overflow-x-auto">
         {([['desc', 'Description'], ['specs', 'Specifications'], ['reviews', `Reviews (${reviews.length})`]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-amber-500 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'}`}>
+            className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'}`}>
             {label}
           </button>
         ))}
@@ -1191,7 +1193,7 @@ function ProductDetailPage() {
           <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
           {product.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-              {product.tags.map(t => <span key={t} className="text-xs text-amber-600 hover:underline cursor-pointer">#{t}</span>)}
+              {product.tags.map(t => <span key={t} className="text-xs text-blue-600 hover:underline cursor-pointer">#{t}</span>)}
             </div>
           )}
         </div>
@@ -1220,25 +1222,25 @@ function ProductDetailPage() {
         <div className="max-w-3xl">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
             <span className="text-xs text-gray-500">{reviews.length} reviews</span>
           </div>
 
           {user ? (
-            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-amber-600 hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
+            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-blue-600 hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
           ) : (
-            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-amber-600 font-semibold hover:underline">Sign in</Link> to review</p>
+            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-blue-600 font-semibold hover:underline">Sign in</Link> to review</p>
           )}
 
           {showRevForm && (
             <form onSubmit={submitReview} className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3 border border-gray-100">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={18} className={s <= revForm.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'} />
+                  <Star size={18} className={s <= revForm.rating ? 'text-sky-400 fill-sky-400' : 'text-gray-300'} />
                 </button>
               ))}</div>
-              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-amber-400 resize-none" placeholder="Write your review..." />
-              <button type="submit" className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg">Submit Review</button>
+              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-sky-400 resize-none" placeholder="Write your review..." />
+              <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg">Submit Review</button>
             </form>
           )}
 
@@ -1247,7 +1249,7 @@ function ProductDetailPage() {
               <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
                   <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-gray-600">{r.comment}</p>
@@ -1297,7 +1299,7 @@ function HomePage() {
         <div className="absolute inset-0 opacity-[0.06]">
           <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
         </div>
-        <div className="absolute -top-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-[130px]" />
+        <div className="absolute -top-24 -left-24 w-80 h-80 bg-blue-500/10 rounded-full blur-[130px]" />
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
 
         <div className="max-w-7xl mx-auto px-4 py-5 sm:py-7 lg:py-9 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-6 lg:gap-8 relative z-10">
@@ -1305,22 +1307,22 @@ function HomePage() {
           <div className="text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-3 animate-fade-in-up">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-400" />
               </span>
               <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
             </div>
             <h1 className="font-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.1] font-bold text-white mb-3 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
               Better Products<br className="hidden sm:block" />
-              <span className="text-gradient-amber" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
+              <span className="text-gradient-blue" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
             </h1>
             <p className="text-gray-400 text-[13px] sm:text-sm mb-4 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
               Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
             </p>
             <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '320ms' }}>
               <Link to="/shop"
-                className="group px-4 py-2 rounded-full font-semibold text-[11px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-amber-500/25"
-                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#1a1a1a' }}>
+                className="group px-4 py-2 rounded-full font-semibold text-[11px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-blue-500/25"
+                style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)', color: '#fff' }}>
                 Shop Pet Essentials <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/about"
@@ -1342,10 +1344,10 @@ function HomePage() {
                       {disc > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-md text-[9px] font-bold shadow">-{disc}%</span>}
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 p-3">
-                      <p className="text-white text-[10px] uppercase tracking-[0.18em] text-amber-300 font-bold mb-0.5">{hp.category}</p>
+                      <p className="text-white text-[10px] uppercase tracking-[0.18em] text-sky-300 font-bold mb-0.5">{hp.category}</p>
                       <p className="text-white font-bold text-sm leading-tight truncate mb-1.5">{hp.name}</p>
                       <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-amber-400">${hp.price.toFixed(2)}</span>
+                        <span className="text-lg font-bold text-sky-400">${hp.price.toFixed(2)}</span>
                         {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
                         <span className="ml-auto flex items-center gap-1 px-2 py-1 bg-white/10 backdrop-blur rounded-md text-[10px] font-semibold text-white">
                           <ShoppingBag size={11} /> Quick Shop
@@ -1357,7 +1359,7 @@ function HomePage() {
                 <div className="flex items-center justify-center gap-1.5 mt-2">
                   {heroProducts.map((_, i) => (
                     <button key={i} onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(i); }} aria-label={`Slide ${i + 1}`}
-                      className={`h-1 rounded-full transition-all duration-300 ${cs === i ? 'w-6 bg-amber-400' : 'w-2 bg-white/25 hover:bg-white/50'}`} />
+                      className={`h-1 rounded-full transition-all duration-300 ${cs === i ? 'w-6 bg-sky-400' : 'w-2 bg-white/25 hover:bg-white/50'}`} />
                   ))}
                 </div>
               </Link>
@@ -1371,10 +1373,10 @@ function HomePage() {
         <Reveal className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-4">
             <div>
-              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Shop by Category <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" /></h2>
+              <p className="text-blue-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Shop by Category <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-blue-500 to-sky-300 rounded-full" /></h2>
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 transition-colors">
               View All <ArrowRight size={12} />
             </Link>
           </div>
@@ -1384,7 +1386,7 @@ function HomePage() {
               const count = featured.filter(p => p.category === c).length;
               return (
                 <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 hover:border-amber-300/70 hover:shadow-[0_18px_36px_-14px_rgba(245,158,11,0.4)] hover:-translate-y-1 transition-all duration-300">
+                  className="group relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 hover:border-sky-300/70 hover:shadow-[0_18px_36px_-14px_rgba(245,158,11,0.4)] hover:-translate-y-1 transition-all duration-300">
                   <div className="aspect-[4/4.2] relative">
                     <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-900/25 to-transparent" />
@@ -1394,7 +1396,7 @@ function HomePage() {
                     <div className="absolute bottom-0 left-0 right-0 p-3.5">
                       <h3 className="text-white font-serif font-bold text-[13px] leading-tight mb-1.5">{c}</h3>
                       <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                         <p className="text-[9px] text-gray-300/90 font-semibold uppercase tracking-[0.16em]">{count} Products</p>
                       </div>
                     </div>
@@ -1411,10 +1413,10 @@ function HomePage() {
         <Reveal className="max-w-7xl mx-auto px-4">
           <div className="flex items-end justify-between mb-4">
             <div>
-              <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Trending This Week <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" /></h2>
+              <p className="text-blue-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Trending This Week <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-blue-500 to-sky-300 rounded-full" /></h2>
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 transition-colors">
               View All <ArrowRight size={12} />
             </Link>
           </div>
@@ -1426,20 +1428,20 @@ function HomePage() {
 
       {/* ════════ CTA — Ready to Spoil Your Pet? + Map/WhatsApp ════════ */}
       <section className="py-10 bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent" />
-        <div className="absolute top-0 left-1/3 w-72 h-72 bg-amber-500/10 rounded-full blur-[110px]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent" />
+        <div className="absolute top-0 left-1/3 w-72 h-72 bg-blue-500/10 rounded-full blur-[110px]" />
         <Reveal className="max-w-7xl mx-auto px-4 relative">
           <div className="grid lg:grid-cols-2 gap-8 items-center">
             {/* LEFT — text + buttons */}
             <div className="text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-amber-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-sky-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
                 <Zap size={11} /> Join The Inner Circle
               </span>
               <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
               <p className="text-gray-400 mb-5 text-[13px] sm:text-sm max-w-lg mx-auto lg:mx-0">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
               <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
-                <Link to="/signup" className="group px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
-                <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-amber-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
+                <Link to="/signup" className="group px-5 py-2.5 bg-blue-500 hover:bg-sky-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
+                <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-blue-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
               </div>
             </div>
             {/* RIGHT — map + WhatsApp */}
@@ -1454,7 +1456,7 @@ function HomePage() {
                   style={{ filter: 'grayscale(1) invert(0.92) contrast(0.88) brightness(0.9)' }}
                 />
                 <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/60 backdrop-blur rounded-lg text-[10px] text-white font-semibold uppercase tracking-wider">
-                  <MapPin size={11} className="text-amber-400" /> Irving, TX 75038
+                  <MapPin size={11} className="text-sky-400" /> Irving, TX 75038
                 </div>
               </div>
               <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer"
@@ -1508,7 +1510,7 @@ function ShopPage() {
           <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
         </div>
         <div className="max-w-7xl mx-auto px-4 py-10 text-center relative">
-          <p className="text-amber-400 text-[10px] uppercase tracking-[0.25em] font-semibold mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <p className="text-sky-400 text-[10px] uppercase tracking-[0.25em] font-semibold mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
           <h1 className="font-serif text-2xl sm:text-4xl font-bold mb-2">{pageTitle}</h1>
           <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto">{pageDesc}</p>
         </div>
@@ -1520,7 +1522,7 @@ function ShopPage() {
           {CAT_LIST.map(c => (
             <button key={c} onClick={() => handleCatChange(c)}
               className={`whitespace-nowrap text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${
-                cat === c ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                cat === c ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
               }`}>
               {c}
             </button>
@@ -1541,7 +1543,7 @@ function ShopPage() {
         <div className="relative mb-2">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100" />
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" />
         </div>
 
         <p className="text-[11px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
@@ -1553,7 +1555,7 @@ function ShopPage() {
         ) : (
           <div className="text-center py-16">
             <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
-            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[11px] font-medium text-amber-600 hover:underline">Clear all filters</button>
+            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[11px] font-medium text-blue-600 hover:underline">Clear all filters</button>
           </div>
         )}
       </div>
@@ -1564,10 +1566,10 @@ function ShopPage() {
 function CartPage() {
   const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
-  if (cart.length === 0) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">Cart Empty</h2><Link to="/shop" className="px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg inline-block mt-4">Shop Now</Link></div></div>;
+  if (cart.length === 0) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">Cart Empty</h2><Link to="/shop" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg inline-block mt-4">Shop Now</Link></div></div>;
   return (<div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">Shopping Cart</h1>
-    <div className="bg-white rounded-xl border p-6 mb-6">{cart.map(i => <div key={i.product.id} className="flex gap-4 py-4 border-b last:border-0"><img src={i.product.images[0]} alt="" className="w-20 h-20 object-cover rounded-lg" /><div className="flex-1"><h3 className="font-semibold">{i.product.name}</h3><p className="text-amber-600 text-sm">${i.product.price}</p><div className="flex items-center gap-2 mt-2"><button onClick={() => updateQty(i.product.id, i.quantity - 1)} className="p-1 border rounded"><Minus size={14} /></button><span className="w-8 text-center">{i.quantity}</span><button onClick={() => updateQty(i.product.id, i.quantity + 1)} className="p-1 border rounded"><Plus size={14} /></button><button onClick={() => removeFromCart(i.product.id)} className="p-1 text-red-500 ml-4"><Trash2 size={16} /></button></div></div><p className="font-bold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
-    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav(user ? '/checkout' : '/login')} className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">{user ? 'Checkout' : 'Sign In to Checkout'}</button></div>
+    <div className="bg-white rounded-xl border p-6 mb-6">{cart.map(i => <div key={i.product.id} className="flex gap-4 py-4 border-b last:border-0"><img src={i.product.images[0]} alt="" className="w-20 h-20 object-cover rounded-lg" /><div className="flex-1"><h3 className="font-semibold">{i.product.name}</h3><p className="text-blue-600 text-sm">${i.product.price}</p><div className="flex items-center gap-2 mt-2"><button onClick={() => updateQty(i.product.id, i.quantity - 1)} className="p-1 border rounded"><Minus size={14} /></button><span className="w-8 text-center">{i.quantity}</span><button onClick={() => updateQty(i.product.id, i.quantity + 1)} className="p-1 border rounded"><Plus size={14} /></button><button onClick={() => removeFromCart(i.product.id)} className="p-1 text-red-500 ml-4"><Trash2 size={16} /></button></div></div><p className="font-bold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
+    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav(user ? '/checkout' : '/login')} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg">{user ? 'Checkout' : 'Sign In to Checkout'}</button></div>
   </div></div>);
 }
 
@@ -1591,7 +1593,7 @@ function CheckoutPage() {
   const tax = +(sub * 0.0825).toFixed(2); // TX 8.25%
   const total = +(sub + shipCost + tax).toFixed(2);
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all';
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all';
   const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
   const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
 
@@ -1655,7 +1657,7 @@ function CheckoutPage() {
           <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
         </div>
         <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link>
+          <Link to="/orders" className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link>
           <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
         </div>
       </div>
@@ -1666,7 +1668,7 @@ function CheckoutPage() {
   if (step === 3) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
-        <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-amber-500 animate-spin" /></div>
+        <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-blue-500 animate-spin" /></div>
         <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
         <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
       </div>
@@ -1682,8 +1684,8 @@ function CheckoutPage() {
           <div className="flex items-center justify-center gap-3">
             {[{ n: 1, l: 'Information' }, { n: 2, l: 'Payment' }, { n: 3, l: 'Confirm' }].map((s, i) => (
               <div key={s.n} className="flex items-center gap-3">
-                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-amber-600' : 'text-gray-400'}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step > s.n ? 'bg-green-500 text-white' : step === s.n ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-blue-600' : 'text-gray-400'}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step > s.n ? 'bg-green-500 text-white' : step === s.n ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                     {step > s.n ? '✓' : s.n}
                   </div>
                   <span className="text-sm font-medium hidden sm:block">{s.l}</span>
@@ -1705,7 +1707,7 @@ function CheckoutPage() {
               <>
                 {/* Contact */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-amber-500" /> Contact Information</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-blue-500" /> Contact Information</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
                     <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
@@ -1716,7 +1718,7 @@ function CheckoutPage() {
 
                 {/* Shipping Address */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-amber-500" /> Shipping Address</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-blue-500" /> Shipping Address</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
                     <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
@@ -1729,14 +1731,14 @@ function CheckoutPage() {
 
                 {/* Shipping Method */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-amber-500" /> Shipping Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-blue-500" /> Shipping Method</h2>
                   <div className="space-y-3">
                     {[
                       { id: 'standard' as const, label: 'Standard Shipping', time: '7-12 business days', price: sub >= 50 ? 'FREE' : '$4.99', badge: sub >= 50 ? '🎉 Free!' : '' },
                       { id: 'express' as const, label: 'Express Shipping', time: '2-4 business days', price: '$9.99', badge: '' },
                     ].map(o => (
-                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-amber-500 border-gray-300" />
+                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-blue-500 border-gray-300" />
                         <div className="flex-1">
                           <p className="font-semibold text-sm">{o.label}</p>
                           <p className="text-xs text-gray-500">{o.time}</p>
@@ -1750,7 +1752,7 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                <button onClick={handleNext} className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+                <button onClick={handleNext} className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
                   Continue to Payment <ArrowRight size={16} />
                 </button>
               </>
@@ -1759,20 +1761,20 @@ function CheckoutPage() {
             {/* Step 2: Payment */}
             {step === 2 && (
               <>
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-amber-600 flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
+                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
 
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-amber-500" /> Payment Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-blue-500" /> Payment Method</h2>
 
                   {/* Method Toggle */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">STRIPE</span></div>
                         <div><p className="font-semibold text-sm">Credit / Debit</p><p className="text-[10px] text-gray-500">Visa, MC, Amex</p></div>
                       </div>
                     </button>
-                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-7 bg-[#003087] rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">PayPal</span></div>
                         <div><p className="font-semibold text-sm">PayPal</p><p className="text-[10px] text-gray-500">Fast & secure</p></div>
@@ -1806,7 +1808,7 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                <button onClick={handlePay} className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                <button onClick={handlePay} className="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
                   <Lock size={16} />
                   {payMethod === 'paypal' ? `Pay with PayPal · $${total.toFixed(2)}` : `Complete Purchase · $${total.toFixed(2)}`}
                 </button>
@@ -1841,7 +1843,7 @@ function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {shipCost > 0 && sub < 50 && <p className="text-xs text-amber-600">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
+                {shipCost > 0 && sub < 50 && <p className="text-xs text-blue-600">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
@@ -1859,7 +1861,7 @@ function CheckoutPage() {
                   { i: Shield, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
-                    <b.i size={14} className="text-amber-500 shrink-0" />{b.t}
+                    <b.i size={14} className="text-blue-500 shrink-0" />{b.t}
                   </div>
                 ))}
               </div>
@@ -1879,8 +1881,8 @@ function CheckoutPage() {
 }
 
 function OrdersPage() { const { orders, user } = useApp(); const nav = useNavigate(); useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><Package size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">No Orders</h2><Link to="/shop" className="text-amber-600 font-semibold">Shop Now</Link></div></div>;
-  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-amber-600">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
+  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><Package size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">No Orders</h2><Link to="/shop" className="text-blue-600 font-semibold">Shop Now</Link></div></div>;
+  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-blue-600">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
 }
 
 function LoginPage() {
@@ -1906,19 +1908,15 @@ function LoginPage() {
     <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#14141f] to-[#1a1a2e]">
       {/* Ambient glows */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/20 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-amber-500/10 blur-[140px]" />
+      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-blue-500/10 blur-[140px]" />
       <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-3 group">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-luxe-gold to-luxe-gold-dark flex items-center justify-center shadow-lg shadow-luxe-gold/25 group-hover:scale-105 transition-transform">
-              <span className="font-serif text-xl font-bold text-white">L</span>
-            </div>
-            <span className="font-serif text-3xl font-bold tracking-[0.18em] text-white">LUXEDGE</span>
+        {/* Logo — perfectly centered above card */}
+        <div className="flex justify-center mb-7">
+          <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
           </Link>
-          <p className="mt-3 text-[11px] uppercase tracking-[0.35em] text-luxe-silver/70">Premium Pet Essentials</p>
         </div>
 
         {/* Card */}
@@ -1994,8 +1992,88 @@ function LoginPage() {
   );
 }
 
-function SignupPage() { const [n, setN] = useState(''); const [e, setE] = useState(''); const [p, setP] = useState(''); const { signup } = useApp(); const nav = useNavigate();
-  return <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"><div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8"><h1 className="text-2xl font-bold text-center mb-6">Create Account</h1><form onSubmit={ev => { ev.preventDefault(); if (signup(n, e, p)) nav('/'); }} className="space-y-4"><input placeholder="Full Name" value={n} onChange={ev => setN(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><input type="email" placeholder="Email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><input type="password" placeholder="Password (6+)" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required minLength={6} /><button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">Sign Up</button></form><p className="text-center text-sm text-gray-500 mt-4">Have an account? <Link to="/login" className="text-amber-600 font-semibold">Sign In</Link></p></div></div>;
+function SignupPage() {
+  const [n, setN] = useState('');
+  const [e, setE] = useState('');
+  const [p, setP] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { signup } = useApp();
+  const nav = useNavigate();
+
+  const sub = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setErr('');
+    if (!signup(n, e, p)) { setErr('An account with this email already exists'); return; }
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 700));
+    nav('/');
+  };
+
+  return (
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#14141f] to-[#1a1a2e]">
+      {/* Ambient glows */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/20 blur-[120px]" />
+      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-blue-500/10 blur-[140px]" />
+      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+
+      <div className="relative w-full max-w-md animate-fade-in-up">
+        {/* Logo — perfectly centered above card */}
+        <div className="flex justify-center mb-7">
+          <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
+          </Link>
+        </div>
+
+        {/* Card */}
+        <div className="glass-dark rounded-3xl border border-white/10 p-8 shadow-2xl shadow-black/50">
+          <h1 className="text-2xl font-serif font-bold text-white mb-1.5">Join Luxedge</h1>
+          <p className="text-sm text-gray-400 mb-8">Create your account to start shopping</p>
+
+          {err && <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm text-center animate-scale-in">{err}</div>}
+
+          <form onSubmit={sub} className="space-y-5">
+            <div className="relative">
+              <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type="text" required value={n} onChange={ev => setN(ev.target.value)} placeholder="Full Name"
+                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+            </div>
+            <div className="relative">
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
+                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+            </div>
+            <div className="relative">
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
+                className="w-full pl-12 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-luxe-gold transition-colors">
+                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            <button type="submit" disabled={loading}
+              className="btn-shimmer w-full py-3.5 bg-gradient-to-r from-luxe-gold to-luxe-gold-dark hover:from-luxe-gold-dark hover:to-luxe-gold text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
+            </button>
+          </form>
+
+          <p className="mt-5 text-center text-sm text-gray-500">
+            Have an account?{' '}
+            <Link to="/login" className="text-luxe-gold font-semibold hover:text-luxe-gold-light transition-colors">Sign In</Link>
+          </p>
+        </div>
+
+        {/* Trust line */}
+        <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
+          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AdminLoginPage() {
@@ -2075,7 +2153,7 @@ function LS({ t, children }: { t: string; children: ReactNode }) { return <div><
 function AboutPage() {
   return (<div>
     <section className="bg-gray-900 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
-      <p className="text-amber-400 text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
+      <p className="text-sky-400 text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
       <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">About Luxedge</h1>
       <p className="text-gray-400 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
     </div></section>
@@ -2089,7 +2167,7 @@ function AboutPage() {
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
         {[{v:'2,000+',l:'Happy Customers'},{v:'500+',l:'Products Curated'},{v:'99%',l:'Satisfaction Rate'},{v:'24/7',l:'Customer Support'}].map((s,i)=>
-          <div key={i} className="text-center"><p className="text-2xl font-bold text-amber-500">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
+          <div key={i} className="text-center"><p className="text-2xl font-bold text-blue-500">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
         )}
       </div>
     </div></section>
@@ -2195,7 +2273,7 @@ function FAQPage() {
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-amber-500" />{section.c}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-blue-500" />{section.c}</h2>
             <div className="space-y-2">
               {section.qs.map(faq => {
                 const key = faq.q;
@@ -2215,7 +2293,7 @@ function FAQPage() {
         ))}
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2"><Mail size={16} />Contact Support</Link>
+          <Link to="/contact" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2"><Mail size={16} />Contact Support</Link>
         </div>
       </div>
     </div>
@@ -2240,8 +2318,8 @@ function ContactPage() {
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
-              <x.i className="mx-auto mb-2 text-amber-500" size={22} />
-              <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wider">{x.l}</p>
+              <x.i className="mx-auto mb-2 text-blue-500" size={22} />
+              <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wider">{x.l}</p>
               <p className="font-semibold text-sm mt-1">{x.v}</p>
               <p className="text-xs text-gray-500">{x.s}</p>
             </div>
@@ -2257,16 +2335,16 @@ function ContactPage() {
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-amber-500" /> Send Us a Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-blue-500" /> Send Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400" /></div>
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400" /></div>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Subject *</label>
-                <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
+                <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
-              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400 resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"><Send size={16} />Send Message</button>
+              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 resize-none" /></div>
+              <button type="submit" className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"><Send size={16} />Send Message</button>
             </form>
           )}
         </div>
@@ -2315,11 +2393,11 @@ function CareersPage() {
               { title: 'Content Writer', type: 'Remote · Part-Time', desc: 'Create engaging blog posts, product descriptions, and marketing copy.' },
               { title: 'Customer Support Specialist', type: 'Remote · Full-Time', desc: 'Help customers via email and chat with a focus on resolution and delight.' },
             ].map((job, i) => (
-              <div key={i} className="p-5 border border-gray-200 rounded-xl hover:border-amber-300 transition-colors">
+              <div key={i} className="p-5 border border-gray-200 rounded-xl hover:border-sky-300 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-bold text-gray-900">{job.title}</h3>
-                    <p className="text-xs text-amber-600 font-medium mt-0.5">{job.type}</p>
+                    <p className="text-xs text-blue-600 font-medium mt-0.5">{job.type}</p>
                     <p className="text-sm text-gray-600 mt-2">{job.desc}</p>
                   </div>
                 </div>
@@ -2329,7 +2407,7 @@ function CareersPage() {
 
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
           <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
-          <Link to="/contact" className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2">
+          <Link to="/contact" className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2">
             <Mail size={16} /> Get in Touch
           </Link>
         </div>
@@ -2369,7 +2447,7 @@ function BlogListPage() {
     <div>
       <section className="bg-gray-900 py-10">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
+          <p className="text-sky-400 text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Insights & Inspiration</h1>
           <p className="text-gray-400 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
         </div>
@@ -2379,7 +2457,7 @@ function BlogListPage() {
         <div className="max-w-6xl mx-auto px-4">
           {user && (
             <div className="flex justify-end mb-6">
-              <Link to="/blog/write" className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
+              <Link to="/blog/write" className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
                 <PenLine size={16} /> Write a Post
               </Link>
             </div>
@@ -2398,11 +2476,11 @@ function BlogListPage() {
                       <span className="text-gray-200">·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
-                    <h2 className="font-bold text-gray-900 mb-2 group-hover:text-amber-600 transition-colors leading-tight">{post.title}</h2>
+                    <h2 className="font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors leading-tight">{post.title}</h2>
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{post.excerpt}</p>
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">#{t}</span>)}</div>
-                      <span className="text-amber-600 text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
+                      <span className="text-blue-600 text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
                     </div>
                   </div>
                 </Link>
@@ -2434,7 +2512,7 @@ function BlogDetailPage() {
 
   if (!post) return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center"><p className="text-5xl mb-4">📝</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-amber-500 text-white font-semibold rounded-lg">Back to Blog</Link></div>
+      <div className="text-center"><p className="text-5xl mb-4">📝</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg">Back to Blog</Link></div>
     </div>
   );
 
@@ -2462,20 +2540,20 @@ function BlogDetailPage() {
         <div className="bg-white rounded-2xl shadow-xl border p-6 sm:p-10 mb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-            <Link to="/" className="hover:text-amber-600">Home</Link><ChevronRight size={12} />
-            <Link to="/blog" className="hover:text-amber-600">Blog</Link><ChevronRight size={12} />
+            <Link to="/" className="hover:text-blue-600">Home</Link><ChevronRight size={12} />
+            <Link to="/blog" className="hover:text-blue-600">Blog</Link><ChevronRight size={12} />
             <span className="text-gray-600 truncate max-w-[200px]">{post.title}</span>
           </nav>
 
           {/* Tags */}
-          <div className="flex gap-2 mb-4">{post.tags.map(t => <span key={t} className="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">#{t}</span>)}</div>
+          <div className="flex gap-2 mb-4">{post.tags.map(t => <span key={t} className="px-3 py-1 bg-sky-50 text-blue-700 rounded-full text-xs font-medium">#{t}</span>)}</div>
 
           {/* Title */}
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-4">{post.title}</h1>
 
           {/* Meta */}
           <div className="flex items-center gap-4 pb-6 border-b mb-8">
-            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center"><span className="font-bold text-amber-700 text-sm">{post.authorName.charAt(0)}</span></div>
+            <div className="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center"><span className="font-bold text-blue-700 text-sm">{post.authorName.charAt(0)}</span></div>
             <div>
               <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
               <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
@@ -2514,10 +2592,10 @@ function BlogDetailPage() {
               <h3 className="font-bold text-lg text-gray-900 mb-4">You May Also Like</h3>
               <div className="grid sm:grid-cols-3 gap-4">
                 {relatedPosts.map(r => (
-                  <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-amber-50 transition-colors">
+                  <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-sky-50 transition-colors">
                     <img src={r.image} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-gray-900 group-hover:text-amber-600 line-clamp-2 leading-tight">{r.title}</p>
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 line-clamp-2 leading-tight">{r.title}</p>
                       <p className="text-[10px] text-gray-400 mt-1">{new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                     </div>
                   </Link>
@@ -2529,7 +2607,7 @@ function BlogDetailPage() {
 
         {/* Back link */}
         <div className="text-center mb-12">
-          <Link to="/blog" className="text-amber-600 font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
+          <Link to="/blog" className="text-blue-600 font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
         </div>
       </div>
     </div>
@@ -2582,13 +2660,13 @@ function BlogWritePage() {
     nav('/blog');
   };
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100';
 
   return (
     <div className="py-10 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4">
-        <Link to="/blog" className="text-sm text-gray-500 hover:text-amber-600 flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
-        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-amber-500" />Write a Blog Post</h1>
+        <Link to="/blog" className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
+        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-blue-500" />Write a Blog Post</h1>
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
@@ -2600,7 +2678,7 @@ function BlogWritePage() {
                 <button type="button" onClick={() => setCover('')} className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600">✕</button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-amber-400 hover:bg-amber-50/30 transition-all">
+              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-sky-400 hover:bg-sky-50/30 transition-all">
                 <Upload size={28} className="text-gray-400 mb-2" />
                 <span className="text-sm font-medium text-gray-600">Upload cover image</span>
                 <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
@@ -2625,20 +2703,20 @@ function BlogWritePage() {
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
-            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-amber-400 text-sm text-gray-500 hover:text-amber-600 w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
+            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-sky-400 text-sm text-gray-500 hover:text-blue-600 w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-amber-400 hover:text-red-500 ml-1">×</button></span>)}</div>
+            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-sky-50 text-blue-700 rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-sky-400 hover:text-red-500 ml-1">×</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
           </div>
 
           {user?.role !== 'admin' && <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="submit" className="flex-1 py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
             <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
           </div>
         </form>
@@ -2790,7 +2868,7 @@ function ADashboard() {
     { l: 'Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: DollarSign, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
     { l: 'Orders', v: orders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
     { l: 'Customers', v: users.length, i: UsersIcon, c1: '#8b5cf6', c2: '#7c3aed', bg: 'from-violet-500 to-purple-600' },
-    { l: 'Products', v: products.length, i: Package, c1: '#f59e0b', c2: '#d97706', bg: 'from-amber-500 to-orange-600' },
+    { l: 'Products', v: products.length, i: Package, c1: '#0088ff', c2: '#00d2ff', bg: 'from-blue-500 to-cyan-400' },
   ];
 
   return <div className="space-y-3.5">
@@ -2829,7 +2907,7 @@ function ADashboard() {
     <div className="grid lg:grid-cols-3 gap-2.5">
       <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {[
-          { on: lowStock > 0, grad: 'from-amber-50 to-orange-50', b: 'border-amber-100', i: AlertTriangle, ic: 'bg-amber-100', tc: 'text-amber-600', n: lowStock, l: 'Low stock items', t: 'text-amber-800', s: 'text-amber-700', to: '/admin/products' },
+          { on: lowStock > 0, grad: 'from-sky-50 to-orange-50', b: 'border-sky-100', i: AlertTriangle, ic: 'bg-sky-100', tc: 'text-blue-600', n: lowStock, l: 'Low stock items', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/products' },
           { on: pending > 0, grad: 'from-blue-50 to-indigo-50', b: 'border-blue-100', i: ShoppingCart, ic: 'bg-blue-100', tc: 'text-blue-600', n: pending, l: 'Pending orders', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/orders' },
           { on: pendingR > 0, grad: 'from-purple-50 to-pink-50', b: 'border-purple-100', i: Star, ic: 'bg-purple-100', tc: 'text-purple-600', n: pendingR, l: 'Reviews pending', t: 'text-purple-800', s: 'text-purple-700', to: '/admin/reviews' },
         ].map((a, idx) => a.on ? (
@@ -2843,12 +2921,12 @@ function ADashboard() {
 
       {/* Quick AI Tools */}
       <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift">
-        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Zap size={11} className="text-amber-500" />Quick AI Tools</h3>
+        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Zap size={11} className="text-blue-500" />Quick AI Tools</h3>
         <div className="grid grid-cols-2 gap-1.5">
           {[
             { to: '/admin/ai-import', icon: Wand2, label: 'Import Product', color: '#8b5cf6' },
             { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
-            { to: '/admin/variant-gen', icon: Layers, label: 'Create Variants', color: '#f59e0b' },
+            { to: '/admin/variant-gen', icon: Layers, label: 'Create Variants', color: '#0088ff' },
             { to: '/admin/seo-engine', icon: Search, label: 'SEO Optimize', color: '#10b981' },
           ].map(t => (
             <Link key={t.to} to={t.to}
@@ -2887,7 +2965,7 @@ function ADashboard() {
                   <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold ${
                     o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
                     o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                    o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                    o.status === 'Processing' ? 'bg-sky-100 text-blue-700' :
                     'bg-gray-100 text-gray-600'
                   }`}>#{String(orders.indexOf(o)+1).padStart(2,'0')}</div>
                   <span className="font-semibold text-[11px] text-gray-900">{o.id}</span>
@@ -2900,7 +2978,7 @@ function ADashboard() {
                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${
                   o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
                   o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                  o.status === 'Processing' ? 'bg-amber-100 text-amber-700' :
+                  o.status === 'Processing' ? 'bg-sky-100 text-blue-700' :
                   'bg-gray-100 text-gray-600'
                 }`}>{o.status}</span>
               </td>
@@ -3079,7 +3157,7 @@ function AProductEdit() {
                 <div><label className={L}>Compare / Original Price</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span><input type="number" step="0.01" value={p.originalPrice || ''} onChange={e => setP({ ...p, originalPrice: +e.target.value })} className={I + ' pl-7'} placeholder="0.00" /></div></div>
               </div>
               {discount > 0 && <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl"><DollarSign size={20} className="text-green-600" /><div><p className="font-semibold text-green-700">Discount: {discount}% OFF</p><p className="text-sm text-green-600">Customer saves ${(p.originalPrice - p.price).toFixed(2)}</p></div></div>}
-              <div><label className={L}>Global Stock (if no variants) *</label><input type="number" value={p.stock || ''} onChange={e => setP({ ...p, stock: +e.target.value })} className={I} placeholder="0" />{p.stock > 0 && p.stock <= 10 && <p className="text-xs text-amber-600 mt-1 flex items-center gap-1"><AlertTriangle size={12} />Low stock warning will appear</p>}</div>
+              <div><label className={L}>Global Stock (if no variants) *</label><input type="number" value={p.stock || ''} onChange={e => setP({ ...p, stock: +e.target.value })} className={I} placeholder="0" />{p.stock > 0 && p.stock <= 10 && <p className="text-xs text-blue-600 mt-1 flex items-center gap-1"><AlertTriangle size={12} />Low stock warning will appear</p>}</div>
             </div>
           )}
 
@@ -3238,7 +3316,7 @@ function AUsers() {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{users.map(u => <div key={u.id} className={`bg-white rounded-xl border p-5 ${u.isBlocked ? 'border-red-200 bg-red-50/30' : ''}`}>
       <div className="flex items-center gap-3 mb-4"><div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${u.isBlocked ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{u.name[0]}</div><div><p className="font-semibold">{u.name}</p><p className="text-xs text-gray-500">{u.email}</p></div>{u.isBlocked && <span className="ml-auto text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">Blocked</span>}</div>
       {u.joined && <p className="text-xs text-gray-400 mb-4">Joined: {u.joined}</p>}
-      <div className="flex gap-2"><button onClick={() => toggleBlock(u.id)} className={`flex-1 py-2 rounded-lg text-xs font-medium ${u.isBlocked ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>{u.isBlocked ? 'Unblock' : 'Block'}</button><button onClick={() => setDelId(u.id)} className="flex-1 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-medium">Delete</button></div>
+      <div className="flex gap-2"><button onClick={() => toggleBlock(u.id)} className={`flex-1 py-2 rounded-lg text-xs font-medium ${u.isBlocked ? 'bg-green-50 text-green-600' : 'bg-sky-50 text-blue-600'}`}>{u.isBlocked ? 'Unblock' : 'Block'}</button><button onClick={() => setDelId(u.id)} className="flex-1 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-medium">Delete</button></div>
     </div>)}</div>
     <Modal open={!!delId} onClose={() => setDelId(null)} title="Delete User"><p className="text-gray-600 mb-6">Delete this user?</p><div className="flex gap-3"><button onClick={del} className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-medium">Delete</button><button onClick={() => setDelId(null)} className="flex-1 py-2.5 border rounded-lg">Cancel</button></div></Modal>
   </div>;
@@ -3313,7 +3391,7 @@ function AReviews() {
     {reviews.length === 0 ? <div className="bg-white rounded-xl border p-12 text-center text-gray-500">No reviews yet</div> :
     <div className="space-y-4">{reviews.map(r => <div key={r.id} className={`bg-white rounded-xl border p-5 ${r.status === 'pending' ? 'border-yellow-200' : ''}`}>
       <div className="flex items-start justify-between mb-3"><div><p className="font-semibold">{r.userName}</p><p className="text-xs text-gray-500">on <span className="text-blue-600">{r.productName}</span></p></div><span className={`text-xs px-3 py-1 rounded-full font-medium capitalize ${sColor[r.status]}`}>{r.status}</span></div>
-      <div className="flex gap-0.5 mb-2">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'} />)}</div>
+      <div className="flex gap-0.5 mb-2">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < r.rating ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
       <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-4">{r.comment}</p>
       <div className="flex gap-2">{r.status === 'pending' && <><button onClick={() => approve(r.id)} className="px-4 py-2 bg-green-50 text-green-600 rounded-lg text-sm font-medium hover:bg-green-100">✓ Approve</button><button onClick={() => reject(r.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100">✕ Reject</button></>}<button onClick={() => del(r.id)} className="px-4 py-2 bg-gray-50 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-100 ml-auto">Delete</button></div>
     </div>)}</div>}
@@ -3708,7 +3786,7 @@ function AMarketingGen() {
 
   const CharBadge = ({ text, max, warn }: { text: string; max: number; warn?: number }) => {
     const n = text.length; const w = warn ?? Math.floor(max * 0.85);
-    return <span className={`text-xs font-mono ${n > max ? 'text-red-500 font-bold' : n > w ? 'text-amber-500' : 'text-gray-400'}`}>{n}/{max}</span>;
+    return <span className={`text-xs font-mono ${n > max ? 'text-red-500 font-bold' : n > w ? 'text-blue-500' : 'text-gray-400'}`}>{n}/{max}</span>;
   };
 
   return (
@@ -4153,7 +4231,7 @@ function AMarketingGen() {
                     <p className="font-bold text-base">{email.heroHeadline || 'Your Hero Headline'}</p>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{email.body || 'Your email body will appear here.'}</p>
-                  {email.urgency && <p className="text-amber-600 font-semibold">{email.urgency}</p>}
+                  {email.urgency && <p className="text-blue-600 font-semibold">{email.urgency}</p>}
                   <div className="text-center">
                     <button className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-semibold text-sm">{email.ctaText || 'Shop Now →'}</button>
                   </div>
@@ -4285,10 +4363,10 @@ const SEO_SCHEMA_KEYS = ['product','breadcrumb','organization','website','faq'] 
 type SchemaKey = typeof SEO_SCHEMA_KEYS[number];
 
 function _scoreColor(n: number): string {
-  return n >= 70 ? 'text-green-600' : n >= 45 ? 'text-amber-500' : 'text-red-500';
+  return n >= 70 ? 'text-green-600' : n >= 45 ? 'text-blue-500' : 'text-red-500';
 }
 function _scoreBg(n: number): string {
-  return n >= 70 ? 'bg-green-50 border-green-200' : n >= 45 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+  return n >= 70 ? 'bg-green-50 border-green-200' : n >= 45 ? 'bg-sky-50 border-sky-200' : 'bg-red-50 border-red-200';
 }
 function _issueIcon(t: 'good'|'warning'|'error'): string {
   return t === 'good' ? '✅' : t === 'warning' ? '⚠️' : '❌';
@@ -4804,7 +4882,7 @@ Example: {"${fieldHint}": "your content here"}`;
             <FieldRow label="SEO Title (50–60 chars)">
               <div className="relative">
                 <input value={seo.title} onChange={e => setSeo(p => ({...p, title: e.target.value}))} className={inp} placeholder="Enter SEO title…" maxLength={80} />
-                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${seo.title.length >= 50 && seo.title.length <= 60 ? 'text-green-600' : seo.title.length > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{seo.title.length}</span>
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold ${seo.title.length >= 50 && seo.title.length <= 60 ? 'text-green-600' : seo.title.length > 0 ? 'text-blue-500' : 'text-gray-400'}`}>{seo.title.length}</span>
               </div>
             </FieldRow>
             <FieldRow label="URL Slug">
@@ -4813,7 +4891,7 @@ Example: {"${fieldHint}": "your content here"}`;
             <FieldRow label="Meta Description (120–160 chars)">
               <div className="relative">
                 <textarea value={seo.metaDescription} onChange={e => setSeo(p => ({...p, metaDescription: e.target.value}))} rows={3} className={ta} placeholder="Compelling meta description with CTA…" />
-                <span className={`absolute right-3 bottom-3 text-xs font-bold ${seo.metaDescription.length >= 120 && seo.metaDescription.length <= 160 ? 'text-green-600' : seo.metaDescription.length > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{seo.metaDescription.length}/160</span>
+                <span className={`absolute right-3 bottom-3 text-xs font-bold ${seo.metaDescription.length >= 120 && seo.metaDescription.length <= 160 ? 'text-green-600' : seo.metaDescription.length > 0 ? 'text-blue-500' : 'text-gray-400'}`}>{seo.metaDescription.length}/160</span>
               </div>
             </FieldRow>
             <FieldRow label="Canonical URL">
@@ -5095,17 +5173,17 @@ Example: {"${fieldHint}": "your content here"}`;
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-3xl font-bold text-gray-900">{score.titleLength}</p>
               <p className="text-xs text-gray-500">Title length <span className="text-gray-400">(ideal 50–60)</span></p>
-              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.titleLength >= 50 && score.titleLength <= 60 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (score.titleLength/70)*100)}%` }} /></div>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.titleLength >= 50 && score.titleLength <= 60 ? 'bg-green-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(100, (score.titleLength/70)*100)}%` }} /></div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-3xl font-bold text-gray-900">{score.metaLength}</p>
               <p className="text-xs text-gray-500">Meta length <span className="text-gray-400">(ideal 120–160)</span></p>
-              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.metaLength >= 120 && score.metaLength <= 160 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, (score.metaLength/200)*100)}%` }} /></div>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.metaLength >= 120 && score.metaLength <= 160 ? 'bg-green-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(100, (score.metaLength/200)*100)}%` }} /></div>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <p className="text-3xl font-bold text-gray-900">{score.keywordDensity.toFixed(1)}%</p>
               <p className="text-xs text-gray-500">Keyword density <span className="text-gray-400">(ideal 1–3%)</span></p>
-              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.keywordDensity >= 1 && score.keywordDensity <= 3 ? 'bg-green-500' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, score.keywordDensity * 25)}%` }} /></div>
+              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all ${score.keywordDensity >= 1 && score.keywordDensity <= 3 ? 'bg-green-500' : 'bg-sky-400'}`} style={{ width: `${Math.min(100, score.keywordDensity * 25)}%` }} /></div>
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -5115,9 +5193,9 @@ Example: {"${fieldHint}": "your content here"}`;
             ) : (
               <div className="space-y-1.5">
                 {score.issues.map((issue, i) => (
-                  <div key={i} className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${issue.type === 'good' ? 'bg-green-50' : issue.type === 'warning' ? 'bg-amber-50' : 'bg-red-50'}`}>
+                  <div key={i} className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${issue.type === 'good' ? 'bg-green-50' : issue.type === 'warning' ? 'bg-sky-50' : 'bg-red-50'}`}>
                     <span>{_issueIcon(issue.type)}</span>
-                    <span className={issue.type === 'good' ? 'text-green-800' : issue.type === 'warning' ? 'text-amber-800' : 'text-red-800'}>{issue.msg}</span>
+                    <span className={issue.type === 'good' ? 'text-green-800' : issue.type === 'warning' ? 'text-blue-800' : 'text-red-800'}>{issue.msg}</span>
                   </div>
                 ))}
               </div>
@@ -5704,13 +5782,13 @@ Rules:
 
           {/* Matrix preview count */}
           {totalCombos > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-blue-500 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-amber-800">
+                <p className="text-sm font-medium text-blue-800">
                   Will generate <strong>{totalCombos}</strong> variant{totalCombos !== 1 ? 's' : ''}
                 </p>
-                <p className="text-xs text-amber-600 mt-0.5">
+                <p className="text-xs text-blue-600 mt-0.5">
                   {attrs.filter(a => a.values.length).map(a => `${a.name}(${a.values.length})`).join(' × ')}
                 </p>
               </div>
@@ -5738,7 +5816,7 @@ Rules:
               { label: 'Total Variants', value: variants.length, cls: 'text-purple-600' },
               { label: 'Duplicates', value: dupCount, cls: dupCount ? 'text-red-600' : 'text-green-600' },
               { label: 'Active', value: variants.filter(v => v.status === 'active').length, cls: 'text-green-600' },
-              { label: 'Low Stock', value: variants.filter(v => v.inventory <= v.lowStockThreshold).length, cls: 'text-amber-600' },
+              { label: 'Low Stock', value: variants.filter(v => v.inventory <= v.lowStockThreshold).length, cls: 'text-blue-600' },
             ].map(s => (
               <div key={s.label} className={`bg-white rounded-xl border p-3 text-center ${s.label === 'Duplicates' && dupCount ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
                 <p className={`text-2xl font-bold ${s.cls}`}>{s.value}</p>
@@ -5832,7 +5910,7 @@ Rules:
                             <td className="px-4 py-3 text-right text-xs text-gray-500">${v.costPrice.toFixed(2)}</td>
                             <td className="px-4 py-3 text-right font-semibold">${v.sellingPrice.toFixed(2)}</td>
                             <td className="px-4 py-3 text-right text-xs text-gray-400 line-through">${v.comparePrice.toFixed(2)}</td>
-                            <td className={`px-4 py-3 text-right font-medium ${v.inventory <= v.lowStockThreshold ? 'text-amber-600' : ''}`}>{v.inventory}</td>
+                            <td className={`px-4 py-3 text-right font-medium ${v.inventory <= v.lowStockThreshold ? 'text-blue-600' : ''}`}>{v.inventory}</td>
                             <td className="px-4 py-3 text-center">
                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.status === 'active' ? 'bg-green-100 text-green-700' : v.status === 'draft' ? 'bg-gray-100 text-gray-600' : 'bg-red-100 text-red-600'}`}>
                                 {v.status}
@@ -5924,7 +6002,7 @@ Rules:
                 </button>
               ) : (
                 <button onClick={() => { notify('Select a product to save variants', 'error'); setStep('product'); }}
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+                  className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
                   <AlertTriangle size={16} /> Select Product First
                 </button>
               )}
@@ -6064,7 +6142,7 @@ function AAIHub() {
                 <p className="text-xs text-gray-500">Total Limit</p>
               </div>
               <div className="bg-white rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-amber-600">${orCredits.used.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-blue-600">${orCredits.used.toFixed(2)}</p>
                 <p className="text-xs text-gray-500">Used</p>
               </div>
               <div className="bg-white rounded-xl p-3 text-center">
@@ -6190,13 +6268,13 @@ function AAIHub() {
             Open Marketing →
           </button>
         </div>
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
+        <div className="bg-gradient-to-br from-sky-50 to-orange-50 border border-sky-200 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-2">
-            <Search size={18} className="text-amber-600" />
+            <Search size={18} className="text-blue-600" />
             <h3 className="font-bold text-sm">SEO Engine</h3>
           </div>
           <p className="text-xs text-gray-600 mb-3">AI-powered SEO optimization: meta tags, structured data, keyword analysis, content scoring.</p>
-          <button onClick={() => navigate('/admin/seo-engine')} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold transition-colors">
+          <button onClick={() => navigate('/admin/seo-engine')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors">
             Open SEO Engine →
           </button>
         </div>
@@ -6271,7 +6349,7 @@ function detectPlatform(url: string): string | null {
 }
 
 function ConfidenceBadge({ score }: { score: number }) {
-  const color = score >= 80 ? 'text-green-600 bg-green-50' : score >= 50 ? 'text-amber-600 bg-amber-50' : 'text-red-500 bg-red-50';
+  const color = score >= 80 ? 'text-green-600 bg-green-50' : score >= 50 ? 'text-blue-600 bg-sky-50' : 'text-red-500 bg-red-50';
   return <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${color}`}>{score}%</span>;
 }
 
@@ -6610,12 +6688,12 @@ function AAIImport() {
           </div>
         )}
 
-        <div className="border rounded-xl p-4 bg-amber-50 border-amber-200">
-          <p className="text-xs font-semibold text-amber-700 mb-1">⚡ AI Provider</p>
+        <div className="border rounded-xl p-4 bg-sky-50 border-sky-200">
+          <p className="text-xs font-semibold text-blue-700 mb-1">⚡ AI Provider</p>
           {(() => {
             const active = aiProviders.find(p=>p.isDefault&&p.enabled&&p.apiKey) || aiProviders.find(p=>p.enabled&&p.apiKey);
             return active
-              ? <p className="text-xs text-amber-800">{active.name} · {active.defaultModel}</p>
+              ? <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}</p>
               : <p className="text-xs text-red-600">No AI provider configured! <button onClick={()=>navigate('/admin/settings')} className="underline">Go to Settings → AI Providers</button></p>;
           })()}
         </div>
@@ -6746,8 +6824,8 @@ function AAIImport() {
                         onClick={()=>{ setSelectedImgs(prev => isSelected ? prev.filter(x=>x!==img) : [...prev, img]); if(!heroImg) setHeroImg(img); }}>
                         <img src={img} className="w-full h-20 object-cover" onError={e=>(e.currentTarget.style.display='none')} alt=""/>
                         {isSelected && <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center"><CheckCircle size={12} className="text-white"/></div>}
-                        {isHero && <div className="absolute bottom-0 left-0 right-0 bg-amber-500 text-white text-[10px] text-center font-bold py-0.5">HERO</div>}
-                        {!isHero && isSelected && <button type="button" className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 hover:bg-amber-500 transition-colors"
+                        {isHero && <div className="absolute bottom-0 left-0 right-0 bg-blue-500 text-white text-[10px] text-center font-bold py-0.5">HERO</div>}
+                        {!isHero && isSelected && <button type="button" className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5 hover:bg-blue-500 transition-colors"
                           onClick={e=>{e.stopPropagation();setHeroImg(img);}}>Set Hero</button>}
                       </div>
                     );
@@ -6768,7 +6846,7 @@ function AAIImport() {
 
             {/* Features & Tags */}
             <div className="bg-white rounded-2xl border p-5 space-y-3">
-              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><Sparkles size={16} className="text-amber-500"/>Features & Tags</h2>
+              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><Sparkles size={16} className="text-blue-500"/>Features & Tags</h2>
               {extracted.features?.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-500 mb-1">Features</p>
@@ -6812,13 +6890,13 @@ function AAIImport() {
 
             {/* Confidence Overview */}
             <div className="bg-white rounded-2xl border p-5">
-              <h2 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Star size={16} className="text-amber-500"/>AI Confidence Scores</h2>
+              <h2 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Star size={16} className="text-blue-500"/>AI Confidence Scores</h2>
               <div className="space-y-2">
                 {Object.entries(conf).map(([k,v]) => (
                   <div key={k} className="flex items-center gap-3">
                     <span className="text-xs text-gray-500 w-24 capitalize">{k}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full ${Number(v)>=80?'bg-green-500':Number(v)>=50?'bg-amber-400':'bg-red-400'}`} style={{width:`${v}%`}}/>
+                      <div className={`h-1.5 rounded-full ${Number(v)>=80?'bg-green-500':Number(v)>=50?'bg-sky-400':'bg-red-400'}`} style={{width:`${v}%`}}/>
                     </div>
                     <span className="text-xs font-bold text-gray-600 w-8 text-right">{v}%</span>
                   </div>
