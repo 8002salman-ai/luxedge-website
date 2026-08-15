@@ -1,6 +1,14 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import MarketingManager from './components/MarketingManager';
+import AdSenseAd from './components/AdSenseAd';
+import {
+  activeModeLabel, AD_SLOT_RE, clearPreviewConfig, CLIENT_ID_RE, fetchGlobalConfig,
+  getCachedPreview, hasPreviewConfig, PLACEMENT_KEYS, PLACEMENT_LABELS,
+  savePreviewConfig, trackEvent, utmParams, validateConfig, MarketingConfig,
+  PlacementKey, DEFAULT_CONFIG,
+} from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
@@ -12,8 +20,8 @@ import {
   Globe, Clock, Send, Headphones, Sparkles, TrendingUp,
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
   Bot, Clipboard, Link2, RefreshCw, Wand2, History, Layers, Shuffle, Table2, Sliders,
-  Monitor, Smartphone, Share2, Code,
-  Megaphone, Target,
+  Monitor, Smartphone, Share2, Code, Download,
+  Megaphone, Target, Moon, Heart, SlidersHorizontal,
 } from 'lucide-react';
 
 // ============================================================================
@@ -354,6 +362,57 @@ const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
 ];
 
+// ═══════════ 120-Product Catalog — extends the 12 featured products to a full store ═══════════
+const EXTRA_IMGS = [
+  'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600',
+  'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=600',
+  'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=600',
+  'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=600',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG',
+  'https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg/960px-Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg',
+  'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Maltipoo_with_rope_toy_%2895554%29.jpg/960px-Maltipoo_with_rope_toy_%2895554%29.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG',
+  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg',
+];
+
+const EXTRA_PRODUCT_NAMES: Record<string, string[]> = {
+  'Dog Supplies': ['No-Pull Dog Harness', 'Reflective Dog Leash', 'Comfort Dog Collar', 'Dog Training Treat Pouch', 'Dog Raincoat Waterproof', 'Cooling Dog Vest', 'Dog Boots Anti-Slip', 'Dog Car Seat Belt', 'Dog Paw Cleaner Cup', 'Dog Whistle Trainer', 'Dog Poop Bag Holder', 'Elevated Dog Bowl Stand', 'Dog First Aid Kit', 'Dog Dental Chew Set', 'GPS Dog Tracker Collar', 'Dog Agility Tunnel'],
+  'Cat Supplies': ['Cat Tree Tower', 'Cat Window Perch', 'Cat Tunnel Play Tube', 'Cat Litter Mat', 'Cat Collar with Bell', 'Cat Grooming Glove', 'Cat Nail Clipper Kit', 'Cat Carrier Backpack', 'Catnip Toy Variety Pack', 'Cat Scratching Board', 'Cat Food Puzzle Feeder', 'Cat Water Fountain Filter', 'Cat Bed Cave Plush', 'Cat Harness Escape-Proof', 'Cat Grass Growing Kit', 'Cat Laser Pointer Toy'],
+  'Pet Beds': ['Heated Dog Bed', 'Elevated Cot Dog Bed', 'Donut Cuddler Cat Bed', 'Waterproof Outdoor Dog Bed', 'Cave Den Dog Bed', 'Pet Sofa Bed Large', 'Memory Foam Puppy Bed', 'Travel Folding Pet Bed', 'Cooling Gel Dog Bed', 'Bolster Dog Bed', 'Orthopedic Cooling Bed', 'Nest Calming Cat Bed', 'Washable Plush Pet Bed', 'Cozy Fur Lined Dog Bed', 'Fleece Cat Bed Round'],
+  'Pet Toys': ['Squeaky Plush Dog Toys', 'Rubber Chew Bone Toy', 'Tennis Ball Launcher', 'Frisbee Flying Disc', 'Cat Feather Wand Toy', 'Dog Snuffle Mat', 'Cat Laser Pointer', 'Interactive Treat Ball', 'Tug Rope Toy with Handle', 'Dog Puzzle Hide Toy', 'Cat Spring Toy Pack', 'Plush Squeaky Chicken', 'Ball Pit Cat Playpen', 'Dog Bite Ring Toy', 'Cat Toy Mouse Pack', 'Puppy Teething Toys'],
+  'Feeding & Water': ['Ceramic Pet Bowl Set', 'Non-Slip Silicone Bowl Mat', 'Collapsible Travel Pet Bowl', 'Pet Water Bottle Dispenser', 'Elevated Feeding Station', 'Smart Feeder with Camera', 'Double Stainless Bowl', 'Pet Food Storage Bin', 'Gravity Water Dispenser', 'Anti-Skid Puppy Bowl', 'Fountain Replacement Pump', 'Insulated Pet Water Bottle', 'Cascade Cat Water Fountain', 'Slow Feed Puzzle Mat', 'Stainless Pet Food Bowl', 'Portable Pet Feeder Set'],
+  'Grooming': ['Low Noise Pet Hair Dryer', 'Cordless Dog Clipper Kit', 'Pet Nail Grinder', 'Deshedding Undercoat Rake', 'Pet Shampoo Brush', 'Detangling Spray for Pets', 'Dog Toothbrush Kit', 'Pet Fur Remover Roller', 'Cat Shedding Comb', 'Grooming Scissors Set', 'Pet Cologne Freshener', 'Electric Pet Trimmer', 'Pet Bathing Massager Brush', 'Dog Ear Cleaner Kit', 'Pet Hair Catcher Towel'],
+  'Pet Accessories': ['LED Dog Collar Light', 'Custom Pet ID Tag', 'Pet Stroller', 'Pet Backpack Carrier', 'Waterproof Pet Blanket', 'Dog Seat Belt Clip', 'Pet Steps for Bed', 'Pet Car Ramp', 'Pet Safety Vest', 'Pet Fountain Travel Bowl', 'Dog Bandana Set', 'Pet GPS Tracker', 'Pet Hammock Car Seat', 'Pet Window Sill Bed'],
+};
+
+const EXTRA_BRANDS = ['LuxePaws', 'WhiskerWand', 'AquaPure', 'TrailMate', 'FurFresh', 'CatHaven', 'BowlWell', 'TravelPaw', 'PlayBone', 'SnugglePet', 'SmartFeed', 'RoadDog', 'PawPerfect', 'ZenPet', 'HappyTails', 'PetPro'];
+
+let __pid = 1000;
+const EXTRA_PRODUCTS: Product[] = Object.entries(EXTRA_PRODUCT_NAMES).flatMap(([cat, names]) =>
+  names.map((nm, i) => {
+    __pid++;
+    const base = 9.99 + ((i * 7 + cat.length * 3) % 40);
+    const price = +(base + 0.99).toFixed(2);
+    const originalPrice = +(price * (1.35 + ((i * 13) % 40) / 100)).toFixed(2);
+    return {
+      ...DP, id: String(__pid), name: nm,
+      shortDesc: `${cat} essential`, description: `${nm} — handpicked premium pet essentials from Luxedge. Quality you can trust, priced honestly, delivered to your door.`,
+      price, originalPrice, category: cat, stock: 20 + ((i * 17) % 180),
+      images: [EXTRA_IMGS[(i + cat.length) % EXTRA_IMGS.length]],
+      rating: +(4.2 + ((i * 3) % 8) / 10).toFixed(1), reviews: 20 + ((i * 29) % 420),
+      isActive: true, brand: EXTRA_BRANDS[(i + cat.length) % EXTRA_BRANDS.length],
+      weight: `${(0.4 + ((i * 5) % 25) / 10).toFixed(1)} lbs`, tags: [cat.toLowerCase(), 'premium', 'luxedge'],
+    };
+  })
+);
+
+const ALL_PRODUCTS: Product[] = [...INIT_PRODUCTS, ...EXTRA_PRODUCTS];
+
 const INIT_ADMIN: AppUser = { id: 'adm', email: 'admin@luxedge.us', password: 'admin123', name: 'Admin', role: 'admin', joined: '2024-01-01' };
 const INIT_USERS: AppUser[] = [
   { id: 'u1', email: 'john@test.com', password: 'password123', name: 'John Smith', role: 'buyer', joined: '2024-01-15' },
@@ -443,7 +502,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
-  const [products, setProducts] = useState<Product[]>(INIT_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(ALL_PRODUCTS);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
@@ -545,11 +604,11 @@ function AppProvider({ children }: { children: ReactNode }) {
       notify('Profile updated!');
     }
   };
-  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); notify(`Added to cart!`); };
+  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
+  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); clearCart(); return oid; };
 
   return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
 }
@@ -578,179 +637,267 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 // ============================================================================
 // HEADER + FOOTER (STORE)
 // ============================================================================
+// ── Header mega menu data (maps to real category routes) ──
+const MEGA_MENU: { label: string; to: string; icon: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
+  {
+    label: 'Dog', to: '/category/dog-supplies', icon: '🐶',
+    groups: [
+      { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
+      { title: 'Comfort', links: [{ label: 'Beds', to: '/category/pet-beds' }, { label: 'Blankets & Mats', to: '/category/pet-beds' }] },
+      { title: 'Feeding', links: [{ label: 'Bowls & Feeders', to: '/category/feeding-water' }, { label: 'Water Bottles', to: '/category/feeding-water' }] },
+      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Grooming Tools', to: '/category/grooming' }] },
+      { title: 'Play', links: [{ label: 'Chew Toys', to: '/category/pet-toys' }, { label: 'Rope & Tug Toys', to: '/category/pet-toys' }] },
+    ],
+  },
+  {
+    label: 'Cat', to: '/category/cat-supplies', icon: '🐱',
+    groups: [
+      { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }, { label: 'Scratching', to: '/category/cat-supplies' }] },
+      { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches & Towers', to: '/category/cat-supplies' }] },
+      { title: 'Feeding', links: [{ label: 'Bowls & Fountains', to: '/category/feeding-water' }, { label: 'Feeders', to: '/category/feeding-water' }] },
+      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Nail Care', to: '/category/grooming' }] },
+    ],
+  },
+];
+
 function Header() {
   const [mob, setMob] = useState(false);
   const [um, setUm] = useState(false);
+  const [hq, setHq] = useState('');
+  const [mega, setMega] = useState<string | null>(null);
   const loc = useLocation();
+  const goTo = useNavigate();
   const { user, cart, logout } = useApp();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
-  useEffect(() => { setMob(false); setUm(false); }, [loc.pathname]);
+
+  const submitSearch = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    const t = hq.trim();
+    if (t) trackEvent('search', { search_term: t, ...utmParams() });
+    goTo(t ? `/shop?q=${encodeURIComponent(t)}` : '/shop');
+    setHq('');
+    setMob(false);
+  };
+  useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
   const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
+  const catNav = [
+    { l: 'Dog', to: '/category/dog-supplies' },
+    { l: 'Cat', to: '/category/cat-supplies' },
+    { l: 'Food & Feeding', to: '/category/feeding-water' },
+    { l: 'Toys', to: '/category/pet-toys' },
+    { l: 'Beds', to: '/category/pet-beds' },
+    { l: 'Grooming', to: '/category/grooming' },
+    { l: 'Travel & Accessories', to: '/category/pet-accessories' },
+  ];
+
   return (<>
-    <div className="text-white/70 text-center py-1.5 px-4 text-[10px] tracking-[0.18em] font-medium whitespace-nowrap overflow-hidden border-b border-white/10" style={{ background: 'linear-gradient(90deg, #08080c, #14141f 55%, #08080c)' }}>
-      <span className="text-sky-400 font-semibold">Free Shipping Over $50</span>
-      <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
-      <span className="hidden sm:inline">Premium Pet Essentials</span>
-      <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
-      <span className="hidden sm:inline">Easy 30-Day Returns</span>
+    {/* Top utility bar */}
+    <div className="bg-luxe-gold text-white text-center py-1.5 px-4 text-[11px] tracking-wide font-medium">
+      <span className="inline-flex items-center gap-1.5"><Truck size={12} /> Free Shipping $50+</span>
+      <span className="mx-2.5 text-white/60 hidden sm:inline">|</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5"><RotateCcw size={12} /> Easy 30-Day Returns</span>
+      <span className="mx-2.5 text-white/60 hidden md:inline">|</span>
+      <span className="hidden md:inline-flex items-center gap-1.5"><Headphones size={12} /> Customer Support</span>
     </div>
-    <header className="sticky top-0 z-50 border-b border-white/10" style={{ background: 'rgba(5, 5, 8, 0.92)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
-      <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-        <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-white/10 rounded-lg text-white transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group">
-          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-10 w-auto drop-shadow-[0_4px_14px_rgba(0,136,255,0.4)] transition-transform group-hover:scale-105" />
+
+    {/* Main header */}
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+        <button onClick={() => setMob(!mob)} aria-label="Menu" className="lg:hidden p-2 -ml-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-9 sm:h-10 w-auto transition-transform group-hover:scale-105" />
           <span className="flex flex-col leading-none">
-            <span className="text-white font-serif text-base sm:text-xl font-bold tracking-wide">LUXEDGE</span>
-            <span className="hidden sm:block text-[8px] tracking-[0.28em] text-sky-300/70 mt-1">PREMIUM PET ESSENTIALS</span>
+            <span className="text-luxe-black font-serif text-lg sm:text-xl font-bold tracking-wide">LUXEDGE</span>
+            <span className="hidden sm:block text-[8px] tracking-[0.26em] text-gray-400 mt-1">PREMIUM PET ESSENTIALS</span>
           </span>
         </Link>
-        <nav className="hidden lg:flex items-center gap-1">
-          {nav.map(i => {
-            const isActive = loc.pathname === i.p || (i.p === '/shop' && loc.pathname.startsWith('/category'));
-            return (
-              <Link key={i.p} to={i.p}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive ? 'text-sky-400 bg-blue-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}>{i.l}</Link>
-            );
-          })}
-        </nav>
-        <div className="flex items-center gap-1">
-          <Link to="/shop" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><Search size={18} /></Link>
-          {user ? (<div className="relative">                <button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white shadow-sm shadow-blue-500/30" style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>{user.name[0]}</div></button>
-            {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 rounded-lg shadow-2xl border border-white/10 py-1.5 z-50" style={{ background: 'rgba(15, 15, 24, 0.98)' }}>
-              <div className="px-3 py-2 border-b border-white/10"><p className="font-semibold text-xs text-white">{user.name}</p><p className="text-[10px] text-gray-400">{user.email}</p></div>
-              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><LayoutDashboard size={14} className="text-sky-400" />Admin Panel</Link>}
-              <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><Package size={14} className="text-gray-400" />My Orders</Link>
-              <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 w-full transition-colors"><LogOut size={14} />Log Out</button>
-            </div></>}</div>
-          ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
-          <Link to="/cart" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors relative">
-            <ShoppingBag size={18} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>{cc}</span>}
+
+        {/* Search bar — prominent */}
+        <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-2xl mx-2">
+          <div className="flex items-center w-full bg-gray-50 border border-gray-300 rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-2 focus-within:ring-luxe-gold/20 transition-all">
+            <Search size={16} className="ml-3.5 text-gray-400 shrink-0" />
+            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search pet food, toys, beds, grooming & more"
+              className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-gray-400 focus:outline-none bg-transparent" />
+            <button type="submit" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[11px] font-bold uppercase tracking-wider transition-colors">
+              Search
+            </button>
+          </div>
+        </form>
+
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          {user ? (
+            <div className="relative">
+              <button onClick={() => setUm(!um)} aria-label="Account" className="flex items-center gap-1.5 p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">
+                <span className="w-8 h-8 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[12px] font-bold">{user.name[0]}</span>
+                <span className="hidden lg:block text-xs font-medium">{user.name.split(' ')[0]}</span>
+              </button>
+              {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl shadow-xl border border-gray-200 bg-white py-1.5 z-50">
+                <div className="px-3 py-2 border-b border-gray-100"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-gray-500">{user.email}</p></div>
+                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"><LayoutDashboard size={14} className="text-luxe-gold" />Admin Panel</Link>}
+                <Link to="/orders" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"><Package size={14} className="text-gray-400" />My Orders</Link>
+                <button onClick={logout} className="flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 w-full text-left transition-colors"><LogOut size={14} />Log Out</button>
+              </div></>}
+            </div>
+          ) : (
+            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">
+              <UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
+            </Link>
+          )}
+          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors relative" aria-label={`Cart (${cc})`}>
+            <ShoppingBag size={19} />
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
           </Link>
         </div>
       </div>
-      {mob && <div className="lg:hidden border-t border-white/10 px-3 py-2 space-y-0.5 animate-fade-in-up" style={{ background: 'rgba(8, 8, 12, 0.96)' }}>
-        {nav.map(i => <Link key={i.p} to={i.p} className="block px-3 py-2 text-xs font-medium rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" className="block px-3 py-2 text-xs font-medium rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-colors">Sign In</Link>}
+
+      {/* Pet navigation bar */}
+      <nav className="hidden lg:block border-t border-gray-100 bg-white">
+        <div className="max-w-7xl mx-auto px-4 flex items-center">
+          {MEGA_MENU.map(m => (
+            <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
+              <Link to={m.to} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-black hover:text-luxe-gold transition-colors">
+                <span>{m.icon}</span>{m.label}<ChevronDown size={14} className={`text-gray-400 transition-transform ${mega === m.label ? 'rotate-180' : ''}`} />
+              </Link>
+              {mega === m.label && (
+                <div className="absolute left-0 top-full pt-1 z-50 w-[560px]">
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-bold text-luxe-black">{m.icon} Shop {m.label}</p>
+                      <Link to={m.to} className="text-[11px] font-semibold text-luxe-gold hover:underline">View all →</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      {m.groups.map(g => (
+                        <div key={g.title}>
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1.5">{g.title}</p>
+                          {g.links.map(l => <Link key={l.label} to={l.to} className="block py-1 text-[12px] text-gray-700 hover:text-luxe-gold transition-colors">{l.label}</Link>)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
+            <Link key={c.l} to={c.to} className="px-4 py-2.5 text-sm font-semibold text-luxe-black hover:text-luxe-gold transition-colors">{c.l}</Link>
+          ))}
+          <Link to="/shop" className="ml-auto px-4 py-2.5 text-sm font-bold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5"><Zap size={14} /> Deals</Link>
+        </div>
+      </nav>
+
+      {/* Mobile menu */}
+      {mob && <div className="lg:hidden border-t border-gray-100 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
+        <form onSubmit={submitSearch} className="flex items-center bg-gray-50 border border-gray-300 rounded-full overflow-hidden mb-2">
+          <Search size={15} className="ml-3 text-gray-400 shrink-0" />
+          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..."
+            className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-gray-400 focus:outline-none bg-transparent" />
+          <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider">Go</button>
+        </form>
+        <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-gray-100">
+          {catNav.map(c => <Link key={c.l} to={c.to} className="px-3 py-1.5 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-700 hover:bg-luxe-gold hover:text-white transition-colors">{c.l}</Link>)}
+          <Link to="/shop" className="px-3 py-1.5 rounded-full bg-red-50 text-[11px] font-bold text-red-600 hover:bg-red-600 hover:text-white transition-colors">Deals</Link>
+        </div>
+        {nav.map(i => <Link key={i.p} to={i.p} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">{i.l}</Link>)}
+        {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-gray-50 transition-colors">Sign In</Link>}
       </div>}
     </header>
   </>);
 }
 
-// WhatsApp brand icon (lucide has no brand icons)
-function WAIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-  );
-}
-
 function Footer() {
   const { categories } = useApp();
 
-  const FL = 'block text-sm text-gray-400 hover:text-sky-400 transition-colors py-0.5';
+  const FL = 'block text-sm text-gray-600 hover:text-luxe-gold transition-colors py-1';
 
   return (
-    <footer className="relative overflow-hidden text-white" style={{ background: 'linear-gradient(180deg, #0a0a10 0%, #14141f 55%, #1a1a2e 100%)' }}>
-      {/* Decorative — dot grid + ambient glows (match hero) */}
-      <div className="absolute inset-0 opacity-[0.05]">
-        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
-      </div>
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-[140px]" />
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
-
+    <footer className="bg-luxe-light border-t border-gray-200">
       {/* ── Main Footer Grid ── */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
 
           {/* Col 1 — Brand */}
-          <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-3 mb-4 group w-fit">
-              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-12 h-12 drop-shadow-[0_4px_14px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
+          <div className="col-span-2">
+            <Link to="/" className="flex items-center gap-2.5 mb-4 group w-fit">
+              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-10 h-10 transition-transform group-hover:scale-105" />
               <span className="flex flex-col leading-none">
-                <span className="text-white font-serif text-2xl font-bold tracking-wide">LUXEDGE</span>
-                <span className="text-[9px] tracking-[0.28em] text-sky-300/70 mt-1">PREMIUM PET ESSENTIALS</span>
+                <span className="text-luxe-black font-serif text-xl font-bold tracking-wide">LUXEDGE</span>
+                <span className="text-[8px] tracking-[0.26em] text-gray-500 mt-1">PREMIUM PET ESSENTIALS</span>
               </span>
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xs">
+            <p className="text-gray-600 text-sm leading-relaxed mb-4 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
             </p>
-
-            {/* Social Icons */}
-            <div className="flex gap-3">
+            <div className="flex gap-2.5">
               {[
-                { label: 'Facebook', letter: 'f', path: 'M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z' },
-                { label: 'Instagram', letter: 'i', path: 'M16 4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4V8a4 4 0 0 0-4-4zm-4 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm4.5-7.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z' },
-                { label: 'TikTok', letter: 'T', path: 'M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5' },
-                { label: 'YouTube', letter: 'Y', path: 'M2.5 17a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 2.5 7h19A2.5 2.5 0 0 1 24 9.5v5a2.5 2.5 0 0 1-2.5 2.5h-19zM10 15l5-3-5-3v6z' },
+                { label: 'Facebook', letter: 'f' },
+                { label: 'Instagram', letter: 'i' },
+                { label: 'TikTok', letter: 'T' },
+                { label: 'YouTube', letter: 'Y' },
               ].map(s => (
-                <a key={s.label} href="#" title={s.label}
-                  className="w-10 h-10 bg-white/5 border border-white/10 hover:bg-blue-500 hover:border-blue-500 rounded-lg flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-gray-400 group-hover:text-white text-sm font-bold">{s.letter.toUpperCase()}</span>
+                <a key={s.label} href="#" title={s.label} aria-label={s.label}
+                  className="w-9 h-9 bg-white border border-gray-200 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
+                  <span className="text-gray-500 group-hover:text-white text-sm font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Col 2 — Quick Links */}
+          {/* Col 2 — Shop */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Quick Links</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Shop</h4>
             <nav className="space-y-0.5">
-              <Link to="/" className={FL}>Home</Link>
-              <Link to="/shop" className={FL}>Shop All</Link>
-              <Link to="/shop" className={FL}>New Arrivals</Link>
+              <Link to="/category/dog-supplies" className={FL}>Dog</Link>
+              <Link to="/category/cat-supplies" className={FL}>Cat</Link>
+              <Link to="/category/pet-toys" className={FL}>Toys</Link>
+              <Link to="/category/pet-beds" className={FL}>Beds</Link>
+              <Link to="/category/feeding-water" className={FL}>Feeding</Link>
+              <Link to="/category/grooming" className={FL}>Grooming</Link>
               <Link to="/shop" className={FL}>Deals</Link>
-              <Link to="/login" className={FL}>Login / Signup</Link>
             </nav>
           </div>
 
-          {/* Col 3 — Customer Support */}
+          {/* Col 3 — Help */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Support</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Help</h4>
             <nav className="space-y-0.5">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
-              <Link to="/returns" className={FL}>Return Policy</Link>
-              <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
+              <Link to="/shipping-policy" className={FL}>Shipping</Link>
+              <Link to="/returns" className={FL}>Returns</Link>
               <Link to="/orders" className={FL}>Track Order</Link>
             </nav>
           </div>
 
           {/* Col 4 — Company */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Company</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Company</h4>
             <nav className="space-y-0.5">
-              <Link to="/about" className={FL}>About Us</Link>
-              <Link to="/about" className={FL}>Our Story</Link>
+              <Link to="/about" className={FL}>About</Link>
               <Link to="/blog" className={FL}>Blog</Link>
+              <Link to="/privacy" className={FL}>Privacy</Link>
+              <Link to="/terms" className={FL}>Terms</Link>
               <Link to="/careers" className={FL}>Careers</Link>
-              <Link to="/privacy" className={FL}>Privacy Policy</Link>
-              <Link to="/terms" className={FL}>Terms of Service</Link>
             </nav>
           </div>
 
-          {/* Col 5 — Contact + Map */}
+          {/* Col 5 — Contact */}
           <div className="col-span-2 md:col-span-1">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-sky-400" />Get in Touch</h4>
-            <div className="space-y-2 mb-4">
-              <a href="mailto:hello@luxedge.us" className="flex items-start gap-3 text-sm text-gray-400 hover:text-sky-400 transition-colors">
-                <Mail size={16} className="text-blue-500 mt-0.5 shrink-0" />
+            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Contact</h4>
+            <div className="space-y-2">
+              <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-gray-600 hover:text-luxe-gold transition-colors">
+                <Mail size={15} className="text-luxe-gold mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
-              <a href="tel:4409418002" className="flex items-start gap-3 text-sm text-gray-400 hover:text-sky-400 transition-colors">
-                <Phone size={16} className="text-blue-500 mt-0.5 shrink-0" />
+              <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-gray-600 hover:text-luxe-gold transition-colors">
+                <Phone size={15} className="text-luxe-gold mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
-              <div className="flex items-start gap-3 text-sm text-gray-400">
-                <MapPin size={16} className="text-blue-500 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2.5 text-sm text-gray-600">
+                <MapPin size={15} className="text-luxe-gold mt-0.5 shrink-0" />
                 Irving, TX 75038, USA
               </div>
-              <div className="flex items-start gap-3 text-sm text-gray-400">
-                <Clock size={16} className="text-blue-500 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2.5 text-sm text-gray-600">
+                <Clock size={15} className="text-luxe-gold mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
@@ -759,41 +906,38 @@ function Footer() {
       </div>
 
       {/* ── Categories Bar ── */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-gray-500 hover:text-sky-400 transition-colors">{c.name}</Link>
+              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">{c.name}</Link>
             ))}
           </div>
         </div>
       </div>
 
       {/* ── Trust & Payment Bar ── */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* Trust Badges */}
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap items-center gap-5">
               {[
                 { icon: Shield, text: 'Secure Checkout' },
                 { icon: Truck, text: 'Free Shipping $50+' },
                 { icon: RotateCcw, text: '30-Day Returns' },
-                { icon: Headphones, text: '24/7 Support' },
+                { icon: Headphones, text: 'Customer Support' },
               ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
-                  <b.icon size={14} className="text-blue-500" />
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                  <b.icon size={14} className="text-luxe-gold" />
                   <span>{b.text}</span>
                 </div>
               ))}
             </div>
-
-            {/* Payment Methods */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-600 mr-1">We accept:</span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs text-gray-500 mr-1">We accept:</span>
               {['VISA', 'MC', 'AMEX', 'PayPal', 'Apple Pay'].map(c => (
-                <span key={c} className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-md text-[10px] font-bold text-gray-400 tracking-wide">
+                <span key={c} className="px-2.5 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 tracking-wide">
                   {c}
                 </span>
               ))}
@@ -803,23 +947,23 @@ function Footer() {
       </div>
 
       {/* ── Bottom Bar ── */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-gray-500">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
             </p>
-            <div className="flex items-center gap-4 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Privacy Policy</Link>
-              <span className="text-gray-600">|</span>
-              <Link to="/terms" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Terms of Service</Link>
-              <span className="text-gray-600">|</span>
-              <Link to="/returns" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Return Policy</Link>
-              <span className="text-gray-600">|</span>
-              <Link to="/shop" className="text-xs text-gray-500 hover:text-sky-400 transition-colors">Sitemap</Link>
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              <Link to="/privacy" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Privacy Policy</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/terms" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Terms of Service</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/returns" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Return Policy</Link>
+              <span className="text-gray-300">|</span>
+              <Link to="/shop" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Sitemap</Link>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Globe size={12} className="text-blue-500" /> USD ($) · English
+              <Globe size={12} className="text-luxe-gold" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -829,38 +973,38 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const { addToCart, user, notify } = useApp(); const nav = useNavigate();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
   const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-sky-200 hover:shadow-[0_14px_34px_-10px_rgba(0,0,0,0.14)] hover:-translate-y-1 transition-all duration-300">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-luxe-gold/40 hover:shadow-[0_10px_30px_-8px_rgba(37,99,235,0.15)] hover:-translate-y-0.5 transition-all duration-200">
         <div className="relative bg-gray-50 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4.2] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="absolute top-2 left-2 flex flex-col gap-1">
-            {d > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">-{d}%</span>}
-            {product.freeShipping && <span className="px-1.5 py-0.5 bg-gray-900/85 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">FREE SHIP</span>}
-          </div>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-blue-500/95 text-white text-[9px] font-bold rounded-md shadow-sm leading-none">Low Stock</span>}
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-[1.04] transition-transform duration-300" loading="lazy" />
+          {d > 0 && <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-sale text-white text-[10px] font-bold rounded leading-none shadow-sm">-{d}%</span>}
+          <button aria-label="Add to wishlist"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); notify('Saved to wishlist ♥'); }}
+            className="absolute top-2 right-2 w-7 h-7 bg-white/95 rounded-full flex items-center justify-center text-gray-400 hover:text-sale shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            <Heart size={13} />
+          </button>
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-10 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-lg text-[11px] font-semibold shadow-md translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5">
+            <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
-        <div className="px-2.5 py-2.5">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[9px] text-blue-600 uppercase tracking-wider font-bold truncate">{product.category}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              <Star size={9} className="text-sky-400 fill-sky-400" />
-              <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
-            </div>
+        <div className="px-3 py-3">
+          <p className="text-[10px] text-luxe-gold font-bold uppercase tracking-wide mb-0.5 truncate">{product.category}</p>
+          <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem]">{product.name}</h3>
+          <div className="flex items-center gap-1 mt-1">
+            <Star size={11} className="text-star fill-star" />
+            <span className="text-[11px] font-semibold text-luxe-black">{product.rating.toFixed(1)}</span>
+            <span className="text-[10px] text-gray-400">({product.reviews.toLocaleString()})</span>
+            <span className="ml-auto text-[10px] text-gray-400">{sold > 0 ? `${sold.toLocaleString()} sold` : 'New'}</span>
           </div>
-          <h3 className="text-[11px] font-semibold text-gray-900 leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
-            <span className="ml-auto text-[9px] text-gray-400">{sold > 0 ? `${sold} sold` : 'New'}</span>
+          <div className="flex items-baseline gap-1.5 mt-1.5">
+            <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
+            {d > 0 && <span className="text-[11px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
           </div>
         </div>
       </div>
@@ -868,37 +1012,36 @@ function PCard({ product }: { product: Product }) {
   );
 }
 
-// Premium variant of PCard — matches the luxe category-card look (serif titles, gold dots, amber hover glow)
+// Premium variant of PCard — light retail look consistent with the storefront
 function PCardPremium({ product }: { product: Product }) {
   const { addToCart, user } = useApp(); const nav = useNavigate();
   const d = Math.round((1 - product.price / product.originalPrice) * 100);
   const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-sky-300/70 hover:shadow-[0_16px_34px_-14px_rgba(245,158,11,0.35)] hover:-translate-y-1 transition-all duration-300">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-luxe-gold/40 hover:shadow-[0_10px_30px_-8px_rgba(37,99,235,0.15)] hover:-translate-y-0.5 transition-all duration-200">
         <div className="relative bg-gray-50 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
-          <div className="absolute inset-0 bg-gradient-to-t from-gray-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded-full shadow-sm leading-none">-{d}%</span>}
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4] object-cover group-hover:scale-[1.04] transition-transform duration-300" loading="lazy" />
+          {d > 0 && <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-sale text-white text-[10px] font-bold rounded leading-none shadow-sm">-{d}%</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-luxe-gold hover:bg-luxe-gold-hover text-white rounded-lg text-[11px] font-semibold shadow-md translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5">
+            <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
         <div className="px-3 py-2.5">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[9px] text-blue-600 uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
+            <p className="text-[9px] text-luxe-gold uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
             <div className="flex items-center gap-1 shrink-0">
-              <Star size={9} className="text-sky-400 fill-sky-400" />
+              <Star size={9} className="text-star fill-star" />
               <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
             </div>
           </div>
-          <h3 className="font-serif text-[12px] font-bold text-gray-900 leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
+          <h3 className="text-[12px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
           <div className="flex items-baseline gap-1.5 mt-1.5">
-            <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
+            <span className="text-[13px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
             {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
             <span className="ml-auto flex items-center gap-1 text-[9px] text-gray-400">
-              <span className="w-1 h-1 rounded-full bg-sky-400" />
+              <span className="w-1 h-1 rounded-full bg-luxe-gold" />
               {sold > 0 ? `${sold} sold` : 'New'}
             </span>
           </div>
@@ -917,20 +1060,6 @@ function ScrollToTop() {
     try { if (window.parent !== window) { window.parent.postMessage({ type: 'scrollTop' }, '*'); } } catch(_) {}
   }, [pathname]);
   return null;
-}
-
-// Scroll reveal wrapper — fades/slides children in when they enter the viewport
-function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current; if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') { setShown(true); return; }
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShown(true); obs.disconnect(); } }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-  return <div ref={ref} style={{ transitionDelay: delay ? `${delay}ms` : undefined }} className={`reveal-base ${shown ? 'reveal-show' : ''} ${className}`}>{children}</div>;
 }
 
 function SLayout({ children }: { children: ReactNode }) {
@@ -964,7 +1093,7 @@ function ProductDetailPage() {
   const [selSize, setSelSize] = useState('');
 
   // Scroll to top on product change
-  useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); }, [id]);
+  useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); if (product) { trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() }); } }, [id, product?.id]);
 
   // Set initial color/size when product loads
   useEffect(() => {
@@ -1064,7 +1193,7 @@ function ProductDetailPage() {
                 <span className="px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded-lg shadow">-{discount}%</span>
               </div>
             )}
-            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-gray-900/80 text-white text-[9px] font-bold rounded-lg">FREE SHIP</span>}
+            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-gold/90 text-white text-[9px] font-bold rounded-lg">FREE SHIP</span>}
           </div>
           <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1">
             {product.images.map((img, i) => (
@@ -1084,18 +1213,18 @@ function ProductDetailPage() {
             <span className="text-[11px] text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full font-medium">{product.category}</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-serif font-bold text-gray-900 tracking-tight mb-3">{product.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
           {/* Rating */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
             <span className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
             <span className="text-gray-300">|</span>
             <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
           </div>
 
           {/* Price */}
-          <div className="rounded-2xl bg-sky-50/60 border border-sky-100 p-4 mb-4">
+          <div className="rounded-2xl bg-luxe-light border border-luxe-silver p-4 mb-4">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-3xl font-bold text-gray-900">${activePrice.toFixed(2)}</span>
               {discount > 0 && <span className="text-sm text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
@@ -1123,7 +1252,7 @@ function ProductDetailPage() {
               <div className="flex gap-2">
                 {uniqueColors.map(c => (
                   <button key={c} onClick={() => setSelColor(c)} title={c}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-blue-500 ring-2 ring-sky-100' : 'border-gray-200 hover:border-gray-400'}`}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-luxe-gold ring-2 ring-luxe-light' : 'border-gray-200 hover:border-gray-400'}`}
                     style={{ backgroundColor: ({ Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' })[c] || '#ccc' }} />
                 ))}
               </div>
@@ -1136,7 +1265,7 @@ function ProductDetailPage() {
               <div className="flex gap-2 flex-wrap">
                 {uniqueSizes.map(s => (
                   <button key={s} onClick={() => setSelSize(s)}
-                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-blue-500 bg-sky-50 text-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
+                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-luxe-gold bg-luxe-light text-luxe-black' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
                 ))}
               </div>
             </div>
@@ -1150,12 +1279,11 @@ function ProductDetailPage() {
               <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02]"
-              style={{ background: activeStock === 0 ? undefined : 'linear-gradient(135deg, #0088ff, #00d2ff)' }}>
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-luxe-gold/25 hover:shadow-luxe-gold/40 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-hover">
               <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
-              className="flex-1 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors">
+              className="flex-1 py-3 bg-luxe-charcoal hover:bg-luxe-black disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors">
               Buy Now
             </button>
           </div>
@@ -1174,6 +1302,9 @@ function ProductDetailPage() {
               </div>
             ))}
           </div>
+
+          {/* Ad: Below Product Information */}
+          <AdSenseAd placement="product_below_info" />
         </div>
       </div>
 
@@ -1222,7 +1353,7 @@ function ProductDetailPage() {
         <div className="max-w-3xl">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
+            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
             <span className="text-xs text-gray-500">{reviews.length} reviews</span>
           </div>
 
@@ -1236,10 +1367,10 @@ function ProductDetailPage() {
             <form onSubmit={submitReview} className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3 border border-gray-100">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={18} className={s <= revForm.rating ? 'text-sky-400 fill-sky-400' : 'text-gray-300'} />
+                  <Star size={18} className={s <= revForm.rating ? 'text-star fill-star' : 'text-gray-300'} />
                 </button>
               ))}</div>
-              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-sky-400 resize-none" placeholder="Write your review..." />
+              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
               <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg">Submit Review</button>
             </form>
           )}
@@ -1249,7 +1380,7 @@ function ProductDetailPage() {
               <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-sky-400 fill-sky-400' : 'text-gray-200'} />)}</div>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
                   <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-gray-600">{r.comment}</p>
@@ -1261,7 +1392,7 @@ function ProductDetailPage() {
 
       {/* Related */}
       <div className="mt-10 pt-6 border-t border-gray-100">
-        <h2 className="text-lg font-serif font-bold text-gray-900 mb-4">Related Products</h2>
+        <h2 className="text-lg font-bold text-luxe-black mb-4">Related Products</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
         </div>
@@ -1275,197 +1406,217 @@ function ProductDetailPage() {
 // STORE PAGES
 // ============================================================================
 function HomePage() {
-  const { products } = useApp();
+  const { products, notify } = useApp();
   const featured = products.filter(p => p.isActive);
-  const heroProducts = featured.slice(0, 4);
-
-  // Carousel
-  const [cs, setCs] = useState(0);
-  const [locked, setLocked] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval>|null>(null);
-
-  const go = useCallback((i: number) => { if (locked) return; setLocked(true); setCs(i); setTimeout(() => setLocked(false), 500); }, [locked]);
-  const next = useCallback(() => go((cs + 1) % heroProducts.length), [cs, heroProducts.length, go]);
-
-  useEffect(() => { if (heroProducts.length <= 1) return; timer.current = setInterval(next, 4000); return () => { if (timer.current) clearInterval(timer.current); }; }, [next, heroProducts.length]);
-
-  const hp = heroProducts[cs];
-  const disc = hp ? Math.round((1 - hp.price / hp.originalPrice) * 100) : 0;
+  const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
 
   return (
-    <div>
-      {/* ════════ HERO — Premium Compact ════════ */}
-      <section className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #08080c 0%, #14141f 55%, #1a1a2e 100%)' }}>
-        <div className="absolute inset-0 opacity-[0.06]">
-          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
-        </div>
-        <div className="absolute -top-24 -left-24 w-80 h-80 bg-blue-500/10 rounded-full blur-[130px]" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
+    <div className="bg-white">
+      {/* ════════ SECTION 0.5 — Ad: After Hero ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
-        <div className="max-w-7xl mx-auto px-4 py-5 sm:py-7 lg:py-9 grid lg:grid-cols-[1.15fr_0.85fr] items-center gap-6 lg:gap-8 relative z-10">
-          {/* LEFT */}
+      {/* ════════ SECTION 1 — PROMOTIONAL HERO (light) ════════ */}
+      <section className="bg-gradient-to-br from-luxe-light via-white to-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.1fr_0.9fr] items-center gap-8">
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-3 animate-fade-in-up">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-400" />
-              </span>
-              <span className="text-white/60 text-[10px] tracking-[0.18em] font-semibold uppercase">Premium Pet Essentials</span>
-            </div>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.1] font-bold text-white mb-3 tracking-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
-              Better Products<br className="hidden sm:block" />
-              <span className="text-gradient-blue" style={{ backgroundSize: '200% 200%' }}>for Happier Pets</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-luxe-gold/10 text-luxe-gold text-[11px] font-bold uppercase tracking-wider mb-4">
+              <Sparkles size={13} /> Everyday Essentials for Happier Pets
+            </span>
+            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-luxe-black leading-[1.1] mb-3 tracking-tight">
+              Everything Your Pet Loves
             </h1>
-            <p className="text-gray-400 text-[13px] sm:text-sm mb-4 max-w-md mx-auto lg:mx-0 leading-relaxed animate-fade-in-up" style={{ animationDelay: '220ms' }}>
-              Handpicked essentials for dogs and cats — from everyday comfort to smarter feeding, play, grooming, and travel.
+            <p className="text-gray-500 text-sm sm:text-base mb-6 max-w-md mx-auto lg:mx-0">
+              Shop handpicked essentials for feeding, comfort, play, grooming and life on the go.
             </p>
-            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start animate-fade-in-up" style={{ animationDelay: '320ms' }}>
-              <Link to="/shop"
-                className="group px-4 py-2 rounded-full font-semibold text-[11px] flex items-center gap-2 transition-all hover:scale-[1.03] hover:shadow-lg hover:shadow-blue-500/25"
-                style={{ background: 'linear-gradient(135deg, #0088ff, #00d2ff)', color: '#fff' }}>
-                Shop Pet Essentials <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
+            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
+              <Link to="/shop" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl text-sm shadow-md shadow-luxe-gold/20 transition-all hover:-translate-y-0.5">
+                Shop Pet Essentials <ArrowRight size={15} className="inline ml-1 -mt-0.5" />
               </Link>
-              <Link to="/about"
-                className="px-4 py-2 rounded-full border border-white/15 text-white/80 text-[11px] font-medium hover:text-white hover:border-white/30 hover:bg-white/5 transition-all">
-                Our Story
+              <Link to="/shop?q=deal" className="px-6 py-3 border border-gray-300 text-luxe-black font-semibold rounded-xl text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all">
+                Explore Deals
               </Link>
             </div>
           </div>
-          {/* RIGHT — featured product card */}
-          <div className="w-full max-w-md mx-auto lg:mx-0 lg:w-auto lg:justify-self-end animate-fade-in" style={{ animationDelay: '250ms' }}>
-            {hp && (
-              <Link to={`/product/${hp.id}`} className="block group">
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
-                  <div className="aspect-[4/4.1] relative">
-                    <img key={hp.id} src={hp.images[0]} alt={hp.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="eager" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
-                    <div className="absolute top-3 left-3 flex gap-1.5">
-                      <span className="px-2 py-1 bg-white/95 backdrop-blur rounded-md text-[9px] font-bold text-gray-900 uppercase tracking-wider shadow">Featured</span>
-                      {disc > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-md text-[9px] font-bold shadow">-{disc}%</span>}
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-3">
-                      <p className="text-white text-[10px] uppercase tracking-[0.18em] text-sky-300 font-bold mb-0.5">{hp.category}</p>
-                      <p className="text-white font-bold text-sm leading-tight truncate mb-1.5">{hp.name}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-sky-400">${hp.price.toFixed(2)}</span>
-                        {disc > 0 && <span className="text-xs text-gray-400 line-through">${hp.originalPrice.toFixed(2)}</span>}
-                        <span className="ml-auto flex items-center gap-1 px-2 py-1 bg-white/10 backdrop-blur rounded-md text-[10px] font-semibold text-white">
-                          <ShoppingBag size={11} /> Quick Shop
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center gap-1.5 mt-2">
-                  {heroProducts.map((_, i) => (
-                    <button key={i} onClick={(e) => { e.preventDefault(); e.stopPropagation(); go(i); }} aria-label={`Slide ${i + 1}`}
-                      className={`h-1 rounded-full transition-all duration-300 ${cs === i ? 'w-6 bg-sky-400' : 'w-2 bg-white/25 hover:bg-white/50'}`} />
-                  ))}
-                </div>
+          <div className="hidden lg:grid grid-cols-2 gap-3">
+            {featured.slice(0, 4).map(p => (
+              <Link key={p.id} to={`/product/${p.id}`} className="group bg-white rounded-2xl border border-gray-200 p-3 hover:shadow-lg hover:shadow-luxe-gold/10 transition-shadow">
+                <img src={p.images[0]} alt={p.name} className="w-full aspect-square object-cover rounded-xl mb-2 group-hover:scale-[1.02] transition-transform" loading="lazy" />
+                <p className="text-[11px] font-semibold text-luxe-black line-clamp-1">{p.name}</p>
+                <p className="text-[12px] font-bold text-luxe-gold mt-0.5">${p.price.toFixed(2)}</p>
               </Link>
-            )}
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ════════ CATEGORIES ════════ */}
-      <section className="py-8 bg-white">
-        <Reveal className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-4">
-            <div>
-              <p className="text-blue-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Browse</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Shop by Category <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-blue-500 to-sky-300 rounded-full" /></h2>
-            </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 transition-colors">
-              View All <ArrowRight size={12} />
-            </Link>
+      {/* ════════ SECTION 2 — SHOP BY PET ════════ */}
+      <section className="py-10 sm:py-14 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black text-center mb-6">Who are you shopping for?</h2>
+          <div className="grid grid-cols-2 gap-4 max-w-3xl mx-auto">
+            {[
+              { emoji: '🐶', label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more' },
+              { emoji: '🐱', label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more' },
+            ].map(p => (
+              <Link key={p.label} to={p.to} className="group relative rounded-2xl overflow-hidden border border-gray-200 bg-luxe-light hover:border-luxe-gold hover:shadow-lg hover:shadow-luxe-gold/10 transition-all">
+                <div className="aspect-[4/3] flex flex-col items-center justify-center gap-2 p-6">
+                  <span className="text-5xl sm:text-6xl group-hover:scale-110 transition-transform">{p.emoji}</span>
+                  <span className="font-serif text-xl sm:text-2xl font-bold text-luxe-black">{p.label}</span>
+                  <span className="text-xs text-gray-500">{p.desc}</span>
+                  <span className="text-[11px] font-bold text-luxe-gold opacity-0 group-hover:opacity-100 transition-opacity">Shop now →</span>
+                </div>
+              </Link>
+            ))}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        </div>
+      </section>
+
+      {/* ════════ SECTION 3 — POPULAR CATEGORIES ════════ */}
+      <section className="py-10 sm:py-14 bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Browse</p>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Shop Popular Categories</h2>
+            </div>
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:mx-0 sm:px-0 sm:overflow-visible">
             {CAT_LIST.filter(c => c !== 'All').map(c => {
               const meta = CAT_META[c];
               const count = featured.filter(p => p.category === c).length;
               return (
-                <Link key={c} to={`/category/${toSlug(c)}`}
-                  className="group relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 hover:border-sky-300/70 hover:shadow-[0_18px_36px_-14px_rgba(245,158,11,0.4)] hover:-translate-y-1 transition-all duration-300">
-                  <div className="aspect-[4/4.2] relative">
-                    <img src={meta?.img || ''} alt={c} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-gray-900/25 to-transparent" />
-                    <div className="absolute top-2.5 right-2.5 w-7 h-7 bg-white/95 backdrop-blur rounded-full flex items-center justify-center opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 shadow-md">
-                      <ArrowRight size={13} className="text-gray-900" />
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-3.5">
-                      <h3 className="text-white font-serif font-bold text-[13px] leading-tight mb-1.5">{c}</h3>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                        <p className="text-[9px] text-gray-300/90 font-semibold uppercase tracking-[0.16em]">{count} Products</p>
-                      </div>
-                    </div>
+                <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-28 sm:w-auto">
+                  <div className="bg-white rounded-2xl border border-gray-200 hover:border-luxe-gold hover:shadow-md hover:shadow-luxe-gold/10 transition-all p-3">
+                    <div className="w-14 h-14 mx-auto rounded-full bg-luxe-light flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">{meta?.emoji || '🐾'}</div>
+                    <p className="text-center text-[12px] font-semibold text-luxe-black mt-2 leading-tight">{c}</p>
+                    <p className="text-center text-[10px] text-gray-400">{count} items</p>
                   </div>
                 </Link>
               );
             })}
           </div>
-        </Reveal>
+        </div>
       </section>
 
-      {/* ════════ TRENDING PRODUCTS ════════ */}
-      <section className="py-8 bg-gray-50">
-        <Reveal className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-4">
-            <div>
-              <p className="text-blue-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Trending This Week <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-blue-500 to-sky-300 rounded-full" /></h2>
-            </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-blue-600 transition-colors">
-              View All <ArrowRight size={12} />
+      {/* ════════ SECTION 3.5 — Ad: After Categories ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
+
+      {/* ════════ SECTION 4 — DEAL / PROMOTIONAL BANNERS ════════ */}
+      <section className="py-10 sm:py-14 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Link to="/shop" className="group relative rounded-2xl overflow-hidden bg-sale-bg border border-red-100 p-6 hover:shadow-lg hover:shadow-red-100 transition-shadow">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-3"><Zap size={11} /> Deal</span>
+              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Pet Favorites Under $30</h3>
+              <p className="text-xs text-gray-500 mb-3">Everyday essentials your pet will love.</p>
+              <span className="text-[12px] font-bold text-sale group-hover:underline">Shop now →</span>
+            </Link>
+            <Link to="/category/pet-beds" className="group relative rounded-2xl overflow-hidden bg-blue-50 border border-luxe-gold/20 p-6 hover:shadow-lg hover:shadow-luxe-gold/10 transition-shadow">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-3"><Moon size={11} /> Comfort</span>
+              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Better Sleep for Your Pet</h3>
+              <p className="text-xs text-gray-500 mb-3">Orthopedic beds & cozy caves for deep rest.</p>
+              <span className="text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now →</span>
+            </Link>
+            <Link to="/category/pet-toys" className="group relative rounded-2xl overflow-hidden bg-emerald-50 border border-emerald-100 p-6 hover:shadow-lg hover:shadow-emerald-100 transition-shadow">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full mb-3"><Sparkles size={11} /> Play</span>
+              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Playtime Essentials</h3>
+              <p className="text-xs text-gray-500 mb-3">Interactive toys & enrichment for happy pets.</p>
+              <span className="text-[12px] font-bold text-emerald-600 group-hover:underline">Shop now →</span>
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-            {featured.slice(0,8).map(p=><PCardPremium key={p.id} product={p} />)}
-          </div>
-        </Reveal>
+        </div>
       </section>
 
-      {/* ════════ CTA — Ready to Spoil Your Pet? + Map/WhatsApp ════════ */}
-      <section className="py-10 bg-gray-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-transparent" />
-        <div className="absolute top-0 left-1/3 w-72 h-72 bg-blue-500/10 rounded-full blur-[110px]" />
-        <Reveal className="max-w-7xl mx-auto px-4 relative">
-          <div className="grid lg:grid-cols-2 gap-8 items-center">
-            {/* LEFT — text + buttons */}
-            <div className="text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-sky-400 text-[10px] font-semibold uppercase tracking-widest mb-4">
-                <Zap size={11} /> Join The Inner Circle
-              </span>
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3 tracking-tight">Ready to Spoil Your Pet?</h2>
-              <p className="text-gray-400 mb-5 text-[13px] sm:text-sm max-w-lg mx-auto lg:mx-0">Join 2,000+ pet parents who shop smarter with Luxedge. Premium quality, honest prices, delivered to your door.</p>
-              <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
-                <Link to="/signup" className="group px-5 py-2.5 bg-blue-500 hover:bg-sky-400 text-gray-900 font-semibold rounded-full flex items-center gap-2 text-[13px] shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]">Create Account <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></Link>
-                <Link to="/shop" className="px-5 py-2.5 border border-gray-700 hover:border-blue-500/40 hover:bg-white/5 text-white rounded-full font-medium text-[13px] transition-all">Browse Products</Link>
-              </div>
+      {/* ════════ SECTION 5 — PRODUCT CAROUSEL: Popular Right Now ════════ */}
+      <section className="py-10 sm:py-14 bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Best Sellers</p>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Popular Right Now</h2>
             </div>
-            {/* RIGHT — map + WhatsApp */}
-            <div className="space-y-3">
-              <div className="relative rounded-2xl overflow-hidden border border-white/10 min-h-[200px] bg-white/5">
-                <iframe
-                  title="Luxedge — Irving, TX 75038, USA"
-                  src="https://www.google.com/maps?q=Irving%2C%20TX%2075038%2C%20USA&output=embed"
-                  className="absolute inset-0 w-full h-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  style={{ filter: 'grayscale(1) invert(0.92) contrast(0.88) brightness(0.9)' }}
-                />
-                <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/60 backdrop-blur rounded-lg text-[10px] text-white font-semibold uppercase tracking-wider">
-                  <MapPin size={11} className="text-sky-400" /> Irving, TX 75038
-                </div>
-              </div>
-              <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold rounded-xl text-sm transition-colors shadow-lg shadow-[#25D366]/20">
-                <WAIcon size={16} /> WhatsApp Us
-              </a>
-            </div>
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
           </div>
-        </Reveal>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:mx-0 sm:px-0 sm:overflow-visible">
+            {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ════════ SECTION 5.5 — Ad: Between Product Sections ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+
+      {/* ════════ SECTION 6 — SHOP BY NEED ════════ */}
+      <section className="py-10 sm:py-14 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black text-center mb-6">Shop by Need</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {[
+              { emoji: '🍽️', label: 'Feeding Time', to: '/category/feeding-water' },
+              { emoji: '😴', label: 'Better Sleep', to: '/category/pet-beds' },
+              { emoji: '🧸', label: 'Play & Enrichment', to: '/category/pet-toys' },
+              { emoji: '✂️', label: 'Grooming', to: '/category/grooming' },
+              { emoji: '🎒', label: 'Walking & Travel', to: '/category/pet-accessories' },
+            ].map(n => (
+              <Link key={n.label} to={n.to} className="group rounded-2xl border border-gray-200 hover:border-luxe-gold hover:shadow-md hover:shadow-luxe-gold/10 transition-all p-4 text-center">
+                <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">{n.emoji}</span>
+                <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ════════ SECTION 7 — RECOMMENDED: Pet Parent Favorites ════════ */}
+      <section className="py-10 sm:py-14 bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Recommended For You</p>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Pet Parent Favorites</h2>
+            </div>
+            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ════════ SECTION 8 — TRUST / SERVICES ════════ */}
+      <section className="py-10 sm:py-12 bg-white border-y border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
+            { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle refunds' },
+            { icon: Shield, title: 'Secure Checkout', desc: '256-bit SSL encryption' },
+            { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
+          ].map(t => (
+            <div key={t.title} className="flex items-center gap-3">
+              <span className="w-11 h-11 rounded-full bg-luxe-light text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
+              <div>
+                <p className="text-sm font-bold text-luxe-black">{t.title}</p>
+                <p className="text-[11px] text-gray-500">{t.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ════════ SECTION 9 — NEWSLETTER ════════ */}
+      <section className="py-10 sm:py-14 bg-luxe-light">
+        <div className="max-w-3xl mx-auto px-4 text-center">
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black mb-2">Join the Luxedge Pet Family</h2>
+          <p className="text-gray-500 text-sm mb-6">Get new arrivals, pet essentials and member-only offers delivered to your inbox.</p>
+          <form onSubmit={e => { e.preventDefault(); notify('Thanks for subscribing! 🐾'); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <input type="email" required placeholder="Your email address"
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-white" />
+            <button type="submit" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl text-sm transition-colors">
+              Subscribe
+            </button>
+          </form>
+        </div>
       </section>
     </div>
   );
@@ -1475,22 +1626,30 @@ function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
   const { products } = useApp();
   const nav = useNavigate();
+  const [params] = useSearchParams();
 
   const initialCat = slug ? fromSlug(slug) : 'All';
   const [cat, setCat] = useState(initialCat);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(params.get('q') || '');
   const [sort, setSort] = useState('featured');
+  const [maxPrice, setMaxPrice] = useState(0); // 0 = no limit
+  const [minRating, setMinRating] = useState(0); // 0 = any
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Sync when URL slug changes
+  // Sync when URL slug or query changes
   useEffect(() => { setCat(slug ? fromSlug(slug) : 'All'); }, [slug]);
+  useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
 
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
     .filter(p => p.name.toLowerCase().includes(q.toLowerCase()))
+    .filter(p => maxPrice === 0 || p.price <= maxPrice)
+    .filter(p => minRating === 0 || p.rating >= minRating)
     .sort((a, b) => {
       if (sort === 'price-low') return a.price - b.price;
       if (sort === 'price-high') return b.price - a.price;
       if (sort === 'rating') return b.rating - a.rating;
+      if (sort === 'best-sellers') return (b.reviews || 0) - (a.reviews || 0);
       return 0;
     });
 
@@ -1501,63 +1660,138 @@ function ShopPage() {
 
   const pageTitle = cat === 'All' ? 'Shop All Products' : cat;
   const pageDesc = cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`;
+  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0);
 
-  return (
-    <div>
-      {/* Page Header */}
-      <section className="relative bg-gray-950 text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.05]">
-          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '28px 28px' }} />
-        </div>
-        <div className="max-w-7xl mx-auto px-4 py-10 text-center relative">
-          <p className="text-sky-400 text-[10px] uppercase tracking-[0.25em] font-semibold mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
-          <h1 className="font-serif text-2xl sm:text-4xl font-bold mb-2">{pageTitle}</h1>
-          <p className="text-gray-400 text-xs sm:text-sm max-w-xl mx-auto">{pageDesc}</p>
-        </div>
-      </section>
+  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); nav('/shop'); };
 
-      {/* Filter bar */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2 overflow-x-auto">
+  // Reusable sidebar filter block (desktop sidebar + mobile drawer)
+  const FilterBlock = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Category</h3>
+        <div className="space-y-1">
           {CAT_LIST.map(c => (
             <button key={c} onClick={() => handleCatChange(c)}
-              className={`whitespace-nowrap text-[11px] font-semibold px-3 py-1.5 rounded-full transition-all ${
-                cat === c ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
+                cat === c ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               {c}
             </button>
           ))}
-          <span className="text-gray-300 ml-auto">|</span>
+        </div>
+      </div>
+      <div>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Price</h3>
+        <select value={maxPrice} onChange={e => setMaxPrice(+e.target.value)}
+          className="w-full text-[13px] px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+          <option value={0}>Any price</option>
+          <option value={25}>Under $25</option>
+          <option value={50}>Under $50</option>
+          <option value={100}>Under $100</option>
+          <option value={200}>Under $200</option>
+        </select>
+      </div>
+      <div>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Rating</h3>
+        <div className="space-y-1">
+          {[4.5, 4, 0].map(r => (
+            <button key={r} onClick={() => setMinRating(r)}
+              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
+                minRating === r ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+              }`}>
+              {r === 0 ? 'Any rating' : (
+                <span className="flex items-center gap-1"><Star size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+      {activeFilters > 0 && (
+        <button onClick={clearAll} className="w-full text-center text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline">Clear all filters ({activeFilters})</button>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Page Header — light */}
+      <section className="bg-gradient-to-b from-blue-50 to-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-8 sm:py-10">
+          <p className="text-blue-600 text-[10px] uppercase tracking-[0.25em] font-semibold mb-1.5">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-luxe-black">{pageTitle}</h1>
+          <p className="text-gray-500 text-xs sm:text-sm max-w-xl mt-1">{pageDesc}</p>
+        </div>
+      </section>
+
+      {/* Toolbar: mobile Filter button + search + sort */}
+      <div className="bg-white border-b sticky top-0 z-20 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
+          <button onClick={() => setDrawerOpen(true)}
+            className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-gray-200 rounded-lg text-gray-700 hover:border-blue-300 hover:text-blue-600 transition-colors">
+            <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center">{activeFilters}</span>}
+          </button>
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+          </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="text-[11px] bg-transparent border-0 focus:outline-none text-gray-500 font-medium">
+            className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-gray-600 font-medium">
             <option value="featured">Featured</option>
-            <option value="price-low">Low→High</option>
-            <option value="price-high">High→Low</option>
+            <option value="best-sellers">Best Sellers</option>
+            <option value="price-low">Price: Low→High</option>
+            <option value="price-high">Price: High→Low</option>
             <option value="rating">Top Rated</option>
           </select>
         </div>
       </div>
 
-      {/* Search + Results */}
-      <div className="max-w-7xl mx-auto px-3 py-3">
-        <div className="relative mb-2">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-[12px] focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" />
+      {/* Mobile filter drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-[290px] max-w-[85vw] bg-white shadow-2xl overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
+              <h2 className="text-sm font-bold text-luxe-black">Filters</h2>
+              <button onClick={() => setDrawerOpen(false)} aria-label="Close filters"
+                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100"><X size={16} /></button>
+            </div>
+            <div className="p-4">
+              <FilterBlock />
+              <button onClick={() => setDrawerOpen(false)}
+                className="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                Show {f.length} products
+              </button>
+            </div>
+          </div>
         </div>
+      )}
 
-        <p className="text-[11px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+      {/* Main content: sidebar + grid */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="flex gap-6">
+          {/* Desktop sidebar */}
+          <aside className="hidden lg:block w-52 shrink-0 bg-white border border-gray-100 rounded-2xl p-4 h-fit sticky top-14">
+            <FilterBlock />
+          </aside>
 
-        {f.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {f.map(p => <PCard key={p.id} product={p} />)}
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+
+            {f.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                {f.map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
+                <button onClick={clearAll} className="text-[12px] font-medium text-blue-600 hover:underline">Clear all filters</button>
+              </div>
+            )}
+            {/* Ad: After Product Row */}
+            <AdSenseAd placement="shop_after_row" />
           </div>
-        ) : (
-          <div className="text-center py-16">
-            <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
-            <button onClick={() => { setCat('All'); setQ(''); nav('/shop'); }} className="text-[11px] font-medium text-blue-600 hover:underline">Clear all filters</button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -1622,7 +1856,7 @@ function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleNext = () => { if (step === 1 && validateStep1()) setStep(2); };
+  const handleNext = () => { if (step === 1 && validateStep1()) { trackEvent('begin_checkout', { currency: 'USD', value: total, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); setStep(2); } };
   const handlePay = async () => {
     if (step === 2 && validateStep2()) {
       setStep(3);
@@ -1905,79 +2139,79 @@ function LoginPage() {
   const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#14141f] to-[#1a1a2e]">
-      {/* Ambient glows */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/20 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-blue-500/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
+      {/* Ambient glows — soft blue, light theme */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
+      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
-        {/* Card */}
-        <div className="glass-dark rounded-3xl border border-white/10 p-8 shadow-2xl shadow-black/50">
-          <h1 className="text-2xl font-serif font-bold text-white mb-1.5">Welcome Back</h1>
-          <p className="text-sm text-gray-400 mb-8">Sign in to your account to continue</p>
+        {/* Card — light glass */}
+        <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
+          <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Welcome Back</h1>
+          <p className="text-sm text-gray-500 mb-8">Sign in to your account to continue</p>
 
-          {err && <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm text-center animate-scale-in">{err}</div>}
+          {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
-                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
-                className="w-full pl-12 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-luxe-gold transition-colors">
+                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
             <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 cursor-pointer text-gray-400">
-                <input type="checkbox" className="w-4 h-4 rounded border-white/20 bg-white/5 accent-luxe-gold" defaultChecked />
+              <label className="flex items-center gap-2 cursor-pointer text-gray-600">
+                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 accent-luxe-gold" defaultChecked />
                 Remember me
               </label>
-              <a href="#" className="text-luxe-gold hover:text-luxe-gold-light transition-colors">Forgot password?</a>
+              <a href="#" className="text-luxe-gold hover:text-luxe-gold-dark transition-colors">Forgot password?</a>
             </div>
 
             <button type="submit" disabled={loading}
-              className="btn-shimmer w-full py-3.5 bg-gradient-to-r from-luxe-gold to-luxe-gold-dark hover:from-luxe-gold-dark hover:to-luxe-gold text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
             </button>
           </form>
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-[11px] uppercase tracking-widest text-gray-500">or continue as</span>
-            <div className="flex-1 h-px bg-white/10" />
+            <div className="flex-1 h-px bg-luxe-silver" />
+            <span className="text-[11px] uppercase tracking-widest text-gray-400">or continue as</span>
+            <div className="flex-1 h-px bg-luxe-silver" />
           </div>
 
           {/* Guest Login */}
           <button onClick={asGuest}
-            className="w-full py-3.5 border border-white/15 hover:border-luxe-gold/60 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex flex-wrap items-center justify-center gap-2 group">
+            className="w-full py-3.5 border border-luxe-silver hover:border-luxe-gold/60 bg-luxe-cream hover:bg-luxe-light text-luxe-black font-semibold rounded-xl transition-all flex flex-wrap items-center justify-center gap-2 group">
             <UserIcon size={16} className="text-luxe-gold" />
             Continue as Guest
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 group-hover:text-luxe-gold transition-colors">No account needed</span>
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 group-hover:text-luxe-gold transition-colors">No account needed</span>
           </button>
 
           <p className="mt-5 text-center text-sm text-gray-500">
             No account?{' '}
-            <Link to="/signup" className="text-luxe-gold font-semibold hover:text-luxe-gold-light transition-colors">Create one</Link>
+            <Link to="/signup" className="text-luxe-gold font-semibold hover:text-luxe-gold-dark transition-colors">Create one</Link>
           </p>
 
           {/* Go to store — browse without an account */}
           <Link to="/shop"
-            className="mt-4 w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-luxe-gold/50 text-gray-300 hover:text-white text-sm font-medium transition-all flex items-center justify-center gap-2">
+            className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
             <ShoppingBag size={15} className="text-luxe-gold" />
             Go to store
           </Link>
@@ -1991,7 +2225,7 @@ function LoginPage() {
         </div>
 
         {/* Admin link */}
-        <p className="mt-6 text-center text-xs text-gray-600">
+        <p className="mt-6 text-center text-xs text-gray-500">
           Admin? <Link to="/admin/login" className="text-luxe-gold/80 hover:text-luxe-gold transition-colors">Go to Admin Login</Link>
         </p>
       </div>
@@ -2019,61 +2253,61 @@ function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#14141f] to-[#1a1a2e]">
-      {/* Ambient glows */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/20 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-blue-500/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
+      {/* Ambient glows — soft blue, light theme */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
+      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(0,136,255,0.35)] transition-transform group-hover:scale-105" />
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
-        {/* Card */}
-        <div className="glass-dark rounded-3xl border border-white/10 p-8 shadow-2xl shadow-black/50">
-          <h1 className="text-2xl font-serif font-bold text-white mb-1.5">Join Luxedge</h1>
-          <p className="text-sm text-gray-400 mb-8">Create your account to start shopping</p>
+        {/* Card — light glass */}
+        <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
+          <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Join Luxedge</h1>
+          <p className="text-sm text-gray-500 mb-8">Create your account to start shopping</p>
 
-          {err && <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm text-center animate-scale-in">{err}</div>}
+          {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" required value={n} onChange={ev => setN(ev.target.value)} placeholder="Full Name"
-                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
-                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
-                className="w-full pl-12 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-luxe-gold transition-colors">
+                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
                 {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
             <button type="submit" disabled={loading}
-              className="btn-shimmer w-full py-3.5 bg-gradient-to-r from-luxe-gold to-luxe-gold-dark hover:from-luxe-gold-dark hover:to-luxe-gold text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
             </button>
           </form>
 
           <p className="mt-5 text-center text-sm text-gray-500">
             Have an account?{' '}
-            <Link to="/login" className="text-luxe-gold font-semibold hover:text-luxe-gold-light transition-colors">Sign In</Link>
+            <Link to="/login" className="text-luxe-gold font-semibold hover:text-luxe-gold-dark transition-colors">Sign In</Link>
           </p>
 
           {/* Go to store — browse without an account */}
           <Link to="/shop"
-            className="mt-4 w-full py-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-luxe-gold/50 text-gray-300 hover:text-white text-sm font-medium transition-all flex items-center justify-center gap-2">
+            className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
             <ShoppingBag size={15} className="text-luxe-gold" />
             Go to store
           </Link>
@@ -2152,7 +2386,7 @@ function AdminLoginPage() {
 function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gray-900 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-white">{title}</h1></div></section>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-luxe-black">{title}</h1></div></section>
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="bg-white rounded-2xl border p-6 sm:p-10">
           <p className="text-xs text-gray-400 mb-8">Last updated: {updated}</p>
@@ -2166,10 +2400,10 @@ function LS({ t, children }: { t: string; children: ReactNode }) { return <div><
 
 function AboutPage() {
   return (<div>
-    <section className="bg-gray-900 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
-      <p className="text-sky-400 text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
-      <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">About Luxedge</h1>
-      <p className="text-gray-400 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
+    <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
+      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
+      <h1 className="text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
+      <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
       <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
@@ -2283,7 +2517,7 @@ function FAQPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gray-900 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-white mb-2">Frequently Asked Questions</h1><p className="text-gray-400 text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-luxe-black mb-2">Frequently Asked Questions</h1><p className="text-gray-500 text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
@@ -2319,9 +2553,9 @@ function ContactPage() {
   const { notify } = useApp();
   return (
     <div>
-      <section className="bg-gray-900 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="text-3xl font-bold text-white mb-2">Contact Us</h1>
-        <p className="text-gray-400 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
+        <h1 className="text-3xl font-bold text-luxe-black mb-2">Contact Us</h1>
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
       </div></section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
@@ -2372,9 +2606,9 @@ function ContactPage() {
 function CareersPage() {
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gray-900 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="text-3xl font-bold text-white mb-2">Careers at Luxedge</h1>
-        <p className="text-gray-400 text-sm max-w-lg mx-auto">Join our growing team and help shape the future of curated ecommerce.</p>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
+        <h1 className="text-3xl font-bold text-luxe-black mb-2">Careers at Luxedge</h1>
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">Join our growing team and help shape the future of curated ecommerce.</p>
       </div></section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         <div className="bg-white rounded-2xl border p-6 sm:p-10">
@@ -2434,36 +2668,17 @@ function CareersPage() {
 // ============================================================================
 const blogSlug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-// AdSense Ad Unit Component
-function AdUnit({ slot, format = 'auto', className = '' }: { slot?: string; format?: string; className?: string }) {
-  const adRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    try { if (adRef.current && typeof window !== 'undefined' && (window as any).adsbygoogle) { (window as any).adsbygoogle.push({}); } } catch (e) {}
-  }, []);
-
-  return (
-    <div className={`ad-container my-6 ${className}`} ref={adRef}>
-      <div className="text-center">
-        <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Advertisement</p>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl min-h-[100px] flex items-center justify-center overflow-hidden">
-          <ins className="adsbygoogle" style={{ display: 'block' }} data-ad-client="ca-pub-5473713135927706" data-ad-slot={slot || ''} data-ad-format={format} data-full-width-responsive="true" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function BlogListPage() {
   const { blogs, user } = useApp();
   const published = blogs.filter(b => b.status === 'published');
 
   return (
     <div>
-      <section className="bg-gray-900 py-10">
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-sky-400 text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Insights & Inspiration</h1>
-          <p className="text-gray-400 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
+          <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Insights & Inspiration</h1>
+          <p className="text-gray-500 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
         </div>
       </section>
 
@@ -2509,7 +2724,7 @@ function BlogListPage() {
           )}
 
           {/* Ad below blog listing */}
-          {published.length > 0 && <AdUnit slot="blog-listing" />}
+          {published.length > 0 && <AdSenseAd placement="blog_after_article" />}
         </div>
       </section>
     </div>
@@ -2544,9 +2759,9 @@ function BlogDetailPage() {
   return (
     <div>
       {/* Hero Image */}
-      <div className="relative h-64 sm:h-80 lg:h-96 bg-gray-900">
-        <img src={post.image} alt={post.title} className="w-full h-full object-cover opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/90 via-gray-900/40 to-transparent" />
+      <div className="relative h-64 sm:h-80 lg:h-96 bg-luxe-light">
+        <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/70 via-transparent to-transparent" />
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative z-10">
@@ -2575,19 +2790,11 @@ function BlogDetailPage() {
           </div>
 
           {/* Ad: Top of Article */}
-          <AdUnit slot="top-article" className="mt-2 mb-6" />
+          <AdSenseAd placement="blog_in_article" />
 
           {/* Content with mid-article ad */}
           <article className="prose-custom">
-            {(() => {
-              const lines = renderContent(post.content);
-              const mid = Math.floor(lines.length / 2);
-              return <>
-                {lines.slice(0, mid)}
-                <AdUnit slot="mid-article" className="my-6" />
-                {lines.slice(mid)}
-              </>;
-            })()}
+            {renderContent(post.content)}
           </article>
 
           {/* Inline images */}
@@ -2598,7 +2805,7 @@ function BlogDetailPage() {
           )}
 
           {/* Ad: End of Article */}
-          <AdUnit slot="end-article" className="mt-8" />
+          <AdSenseAd placement="blog_after_article" />
 
           {/* Related Posts */}
           {relatedPosts.length > 0 && (
@@ -2807,6 +3014,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/blogs', icon: FileText, label: 'Blog Posts' },
     { to: '/admin/seo-engine', icon: Search, label: 'SEO Engine ⭐' },
     { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
+    { to: '/admin/marketing-traffic', icon: TrendingUp, label: 'Marketing & Traffic' },
     { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
     { to: '/admin/ai', icon: Bot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
@@ -6997,12 +7205,363 @@ function AAIImport() {
 
 
 // ============================================================================
+// ADMIN — MARKETING & TRAFFIC
+// ============================================================================
+function AMarketingTraffic() {
+  const { notify } = useApp();
+  const [globalCfg, setGlobalCfg] = useState<MarketingConfig | null>(null);
+  const [cfg, setCfg] = useState<MarketingConfig>(() => JSON.parse(JSON.stringify(DEFAULT_CONFIG)));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [adsTxtStatus, setAdsTxtStatus] = useState<'checking' | 'configured' | 'missing' | 'invalid'>('checking');
+  const [hasPreview, setHasPreview] = useState(hasPreviewConfig());
+
+  useEffect(() => {
+    fetchGlobalConfig().then(g => {
+      setGlobalCfg(g);
+      const preview = hasPreviewConfig() ? getCachedPreview() : null;
+      setCfg(JSON.parse(JSON.stringify(preview || g)));
+      setHasPreview(hasPreviewConfig());
+    });
+  }, []);
+
+  const set = (patch: Partial<MarketingConfig>) => setCfg(c => ({ ...c, ...patch }));
+  const setEx = (k: keyof MarketingConfig['exclusions'], v: boolean) => setCfg(c => ({ ...c, exclusions: { ...c.exclusions, [k]: v } }));
+  const setPl = (k: PlacementKey, patch: Partial<{ enabled: boolean; slot: string }>) => setCfg(c => ({ ...c, placements: { ...c.placements, [k]: { ...c.placements[k], ...patch } } }));
+
+  const checkAdsTxt = async () => {
+    try {
+      const r = await fetch('/ads.txt');
+      if (!r.ok) { setAdsTxtStatus('missing'); return; }
+      const txt = (await r.text()).trim();
+      const expected = (cfg.adsTxtRecord || DEFAULT_CONFIG.adsTxtRecord).trim();
+      if (txt === expected) setAdsTxtStatus('configured');
+      else if (txt.includes('pub-')) setAdsTxtStatus('invalid');
+      else setAdsTxtStatus('missing');
+    } catch {
+      setAdsTxtStatus('missing');
+    }
+  };
+  useEffect(() => { checkAdsTxt(); }, []);
+
+  const handleSave = () => {
+    const errs = validateConfig(cfg);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) { notify('Please fix the validation errors', 'error'); return; }
+    savePreviewConfig(cfg);
+    setHasPreview(true);
+    setSaved(true);
+    notify('Marketing settings saved (preview for this browser)');
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleTest = async () => {
+    const errs = validateConfig(cfg);
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) { setTestResult({ ok: false, msg: 'Configuration has validation errors — fix them first.' }); return; }
+    await checkAdsTxt();
+    const clientOk = CLIENT_ID_RE.test(cfg.adsenseClientId.trim());
+    const mode = activeModeLabel(cfg);
+    const bits: string[] = [];
+    if (cfg.adsenseEnabled && clientOk) bits.push('AdSense script would load with ' + cfg.adsenseClientId);
+    if (cfg.autoAdsEnabled) bits.push('Auto Ads on');
+    if (adsTxtStatus === 'configured') bits.push('ads.txt present at /ads.txt');
+    if (cfg.gaEnabled && cfg.ga4Id) bits.push('GA4 script would load for ' + cfg.ga4Id);
+    setTestResult({ ok: true, msg: `OK — ${mode}. ${bits.join(' · ') || 'Nothing enabled yet.'} Note: this only confirms code config; it is NOT a Google approval.` });
+  };
+
+  const copyAdsTxt = async () => {
+    try { await navigator.clipboard.writeText(cfg.adsTxtRecord); notify('ads.txt entry copied'); }
+    catch { notify('Copy failed — select the text manually', 'error'); }
+  };
+
+  const exportConfig = () => {
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'site-config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    notify('Downloaded site-config.json — commit it to the repo to make these settings global for all visitors');
+  };
+
+  const resetGlobal = () => {
+    clearPreviewConfig();
+    setHasPreview(false);
+    if (globalCfg) setCfg(JSON.parse(JSON.stringify(globalCfg)));
+    setErrors({});
+    notify('Local preview cleared — now using the deployed global config');
+  };
+
+  const Toggle = ({ on, onChange, disabled, label }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean; label?: string }) => (
+    <button type="button" disabled={disabled} onClick={() => onChange(!on)}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-40 ${on ? 'bg-blue-600' : 'bg-gray-300'}`} role="switch" aria-checked={on} aria-label={label}>
+      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+    </button>
+  );
+
+  const I = 'w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white';
+  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
+  const Card = ({ title, icon, badge, children }: { title: string; icon: React.ReactNode; badge?: React.ReactNode; children: React.ReactNode }) => (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-2">
+        <h2 className="font-semibold text-sm flex items-center gap-2">{icon}{title}</h2>
+        {badge}
+      </div>
+      <div className="p-5 space-y-5">{children}</div>
+    </div>
+  );
+
+  const StatusPill = ({ ok, text }: { ok: boolean; text: string }) => (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-green-500' : 'bg-gray-400'}`} />{text}
+    </span>
+  );
+
+  const enabledPlacements = PLACEMENT_KEYS.filter(k => cfg.placements[k].enabled && AD_SLOT_RE.test(cfg.placements[k].slot.trim()));
+  const adsenseOk = cfg.adsenseEnabled && CLIENT_ID_RE.test(cfg.adsenseClientId.trim());
+
+  return (
+    <div className="space-y-4 max-w-4xl">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-bold">Marketing &amp; Traffic</h1>
+        <div className="flex items-center gap-2">
+          {hasPreview && <StatusPill ok text="Local preview active (this browser)" />}
+          <span className="text-[11px] text-gray-400">Code installed ≠ Google approved</span>
+        </div>
+      </div>
+
+      {/* Traffic Overview */}
+      <Card title="Traffic Overview" icon={<TrendingUp size={18} className="text-blue-600" />}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Google AdSense</p>
+            <p className="font-semibold">{adsenseOk ? 'Configured' : cfg.adsenseEnabled ? 'Invalid config' : 'Disabled'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Auto Ads</p>
+            <p className="font-semibold">{adsenseOk && cfg.autoAdsEnabled ? 'Enabled' : 'Disabled'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">ads.txt</p>
+            <p className="font-semibold">{adsTxtStatus === 'configured' ? 'Configured' : adsTxtStatus === 'checking' ? 'Checking…' : 'Missing / Invalid'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Manual Ad Units</p>
+            <p className="font-semibold">{enabledPlacements.length > 0 ? `${enabledPlacements.length} enabled` : 'None enabled'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Google Analytics</p>
+            <p className="font-semibold">{cfg.gaEnabled && cfg.ga4Id ? `Connected (${cfg.ga4Id})` : 'Not configured'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Publisher</p>
+            <p className="font-semibold text-[13px]">{cfg.publisherId || '—'}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-700 leading-relaxed">
+          <strong>Active mode:</strong> {activeModeLabel(cfg)}.
+          {!adsenseOk && cfg.adsenseEnabled ? ' Fix the Client ID to enable ads.' : ''}
+          These are configuration status cards — no visitor traffic numbers are shown here.
+        </div>
+      </Card>
+
+      {/* Google AdSense */}
+      <Card title="Google AdSense" icon={<Megaphone size={18} className="text-blue-600" />} badge={<StatusPill ok={adsenseOk} text={adsenseOk ? 'Configured' : 'Not configured'} />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Enable Google AdSense</p>
+            <p className="text-xs text-gray-400 mt-0.5">Loads the AdSense script on the public storefront.</p>
+          </div>
+          <Toggle on={cfg.adsenseEnabled} onChange={v => set({ adsenseEnabled: v })} label="Enable Google AdSense" />
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className={L}>AdSense Client ID</label>
+            <input className={I + (errors.adsenseClientId ? ' border-red-300' : '')} value={cfg.adsenseClientId}
+              onChange={e => set({ adsenseClientId: e.target.value, publisherId: e.target.value.trim().startsWith('ca-pub-') ? e.target.value.trim().replace('ca-', '') : cfg.publisherId })} />
+            {errors.adsenseClientId ? <p className="text-red-500 text-xs mt-1">{errors.adsenseClientId}</p>
+              : <p className="text-xs text-gray-400 mt-1">Public Google AdSense publisher/client identifier. This is not a secret API key.</p>}
+          </div>
+          <div>
+            <label className={L}>Publisher ID</label>
+            <input className={I + (errors.publisherId ? ' border-red-300' : '')} value={cfg.publisherId}
+              onChange={e => set({ publisherId: e.target.value })} />
+            {errors.publisherId ? <p className="text-red-500 text-xs mt-1">{errors.publisherId}</p>
+              : <p className="text-xs text-gray-400 mt-1">Kept in sync with the Client ID.</p>}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Enable Auto Ads</p>
+            <p className="text-xs text-gray-400 mt-0.5">Lets Google decide ad placement automatically. Loads the script once.</p>
+          </div>
+          <Toggle on={cfg.autoAdsEnabled} onChange={v => set({ autoAdsEnabled: v })} label="Enable Auto Ads" />
+        </div>
+      </Card>
+
+      {/* ads.txt */}
+      <Card title="ads.txt" icon={<FileText size={18} className="text-blue-600" />} badge={
+        <StatusPill ok={adsTxtStatus === 'configured'} text={adsTxtStatus === 'configured' ? 'Configured' : adsTxtStatus === 'checking' ? 'Checking…' : adsTxtStatus === 'invalid' ? 'Invalid' : 'Missing'} />
+      }>
+        <p className="text-xs text-gray-400">Served at <code className="bg-gray-100 px-1 rounded">https://luxedge.us/ads.txt</code> (committed in <code className="bg-gray-100 px-1 rounded">public/ads.txt</code>).</p>
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <code className="text-xs font-mono break-all">{cfg.adsTxtRecord}</code>
+          <button onClick={copyAdsTxt} className="shrink-0 px-3.5 py-2 bg-white border border-gray-200 hover:border-blue-300 text-xs font-semibold rounded-lg text-gray-700 transition-colors">Copy ads.txt Entry</button>
+        </div>
+        {adsTxtStatus === 'missing' && <p className="text-xs text-amber-600">ads.txt was not found at /ads.txt in this environment.</p>}
+      </Card>
+
+      {/* Ad Placements */}
+      <Card title="Ad Placements" icon={<Layers size={18} className="text-blue-600" />} badge={<StatusPill ok={enabledPlacements.length > 0} text={enabledPlacements.length > 0 ? `${enabledPlacements.length} enabled` : 'None enabled'} />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Enable Manual Ad Units</p>
+            <p className="text-xs text-gray-400 mt-0.5">Places ads at the configured spots below.</p>
+          </div>
+          <Toggle on={cfg.manualAdsEnabled} onChange={v => set({ manualAdsEnabled: v })} label="Enable Manual Ad Units" />
+        </div>
+
+        <div className="space-y-3">
+          {PLACEMENT_KEYS.map(k => (
+            <div key={k} className="rounded-xl border border-gray-100 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{PLACEMENT_LABELS[k]}</p>
+                  {cfg.placements[k].enabled && !cfg.placements[k].slot.trim() && (
+                    <p className="text-[11px] text-amber-600 mt-0.5">Create an ad unit in Google AdSense and paste its data-ad-slot ID here.</p>
+                  )}
+                  {errors[`slot_${k}`] && <p className="text-[11px] text-red-500 mt-0.5">{errors[`slot_${k}`]}</p>}
+                </div>
+                <Toggle on={cfg.placements[k].enabled} onChange={v => setPl(k, { enabled: v })} label={PLACEMENT_LABELS[k]} />
+              </div>
+              {cfg.placements[k].enabled && (
+                <div className="mt-3">
+                  <label className="text-[11px] font-semibold text-gray-500">Google Ad Slot ID</label>
+                  <input className={I + ' mt-1' + (errors[`slot_${k}`] ? ' border-red-300' : '')} placeholder="1234567890"
+                    value={cfg.placements[k].slot} onChange={e => setPl(k, { slot: e.target.value.replace(/\D/g, '') })} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Density, Mobile, Exclusions */}
+      <Card title="Density & Controls" icon={<Sliders size={18} className="text-blue-600" />}>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className={L}>Advertising Density (manual placements)</label>
+            <select className={I} value={cfg.density} onChange={e => set({ density: e.target.value as MarketingConfig['density'] })}>
+              <option value="low">Low</option><option value="balanced">Balanced</option><option value="high">High</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Controls how many Luxedge-managed manual units render per page. Does not override Google Auto Ads.</p>
+          </div>
+          <div>
+            <label className={L}>Mobile Manual Ad Density</label>
+            <select className={I} value={cfg.mobileDensity} onChange={e => set({ mobileDensity: e.target.value as MarketingConfig['mobileDensity'] })} disabled={!cfg.showAdsOnMobile}>
+              <option value="low">Low</option><option value="balanced">Balanced</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">Mobile stays light — fewer, non-overlapping units.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Show Ads on Mobile</p>
+            <p className="text-xs text-gray-400 mt-0.5">Manual ad units on phones &amp; small screens.</p>
+          </div>
+          <Toggle on={cfg.showAdsOnMobile} onChange={v => set({ showAdsOnMobile: v })} label="Show Ads on Mobile" />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Disable Ads On</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {([['cart', 'Cart'], ['checkout', 'Checkout'], ['login', 'Login'], ['signup', 'Signup'], ['admin', 'Admin'], ['account', 'Account pages']] as const).map(([k, label]) => (
+              <label key={k} className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 px-3 py-2.5 text-sm cursor-pointer">
+                <span>{label}</span>
+                <input type="checkbox" className="w-4 h-4 accent-blue-600" checked={cfg.exclusions[k]} onChange={e => setEx(k, e.target.checked)} />
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Ads NEVER render inside the admin panel regardless of this setting.</p>
+        </div>
+      </Card>
+
+      {/* Google Analytics */}
+      <Card title="Google Analytics" icon={<Globe size={18} className="text-blue-600" />} badge={<StatusPill ok={!!cfg.gaEnabled && !!cfg.ga4Id} text={cfg.gaEnabled && cfg.ga4Id ? 'Connected' : 'Not configured'} />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Enable Google Analytics (GA4)</p>
+            <p className="text-xs text-gray-400 mt-0.5">Loads the gtag.js script and sends page_view + ecommerce events.</p>
+          </div>
+          <Toggle on={cfg.gaEnabled} onChange={v => set({ gaEnabled: v })} label="Enable Google Analytics" />
+        </div>
+        <div>
+          <label className={L}>GA4 Measurement ID</label>
+          <input className={I + (errors.ga4Id ? ' border-red-300' : '')} placeholder="G-XXXXXXXXXX"
+            value={cfg.ga4Id} onChange={e => set({ ga4Id: e.target.value })} />
+          {errors.ga4Id ? <p className="text-red-500 text-xs mt-1">{errors.ga4Id}</p>
+            : <p className="text-xs text-gray-400 mt-1">Paste the GA4 Measurement ID from your Google Analytics property. No API key needed for standard browser tracking.</p>}
+        </div>
+        <p className="text-xs text-gray-400 leading-relaxed">Events wired to real user actions: <code className="bg-gray-100 px-1 rounded">page_view</code>, <code className="bg-gray-100 px-1 rounded">view_item</code>, <code className="bg-gray-100 px-1 rounded">add_to_cart</code>, <code className="bg-gray-100 px-1 rounded">begin_checkout</code>, <code className="bg-gray-100 px-1 rounded">purchase</code>, <code className="bg-gray-100 px-1 rounded">search</code>. UTM campaign parameters are captured per session.</p>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={handleSave} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+          <Save size={16} /> Save Settings
+        </button>
+        <button onClick={handleTest} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-blue-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+          <RefreshCw size={16} /> Test Configuration
+        </button>
+        <button onClick={exportConfig} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-blue-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+          <Download size={16} /> Export site-config.json
+        </button>
+        {hasPreview && (
+          <button onClick={resetGlobal} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-red-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+            <RotateCcw size={16} /> Reset to Global
+          </button>
+        )}
+      </div>
+
+      {saved && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+          <CheckCircle size={16} /> Settings saved as a preview for this browser. Download site-config.json and commit it to the repo to make these settings global for all visitors.
+        </div>
+      )}
+      {testResult && (
+        <div className={`flex items-start gap-2 p-3 rounded-xl text-sm ${testResult.ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          {testResult.ok ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+          {testResult.msg}
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 leading-relaxed">
+        <strong className="text-gray-700">Global deployment note:</strong> This project is a static site served by Vercel with no backend. Browser
+        localStorage only previews changes on this device. To make settings apply to <em>all</em> visitors, download
+        <code className="bg-white px-1 rounded"> site-config.json </code>, commit it to the repo at
+        <code className="bg-white px-1 rounded"> public/site-config.json </code>, and deploy. The <code className="bg-white px-1 rounded">ads.txt</code>
+        file at the site root ships with every deploy. A consent/CMP banner is not implemented on this site — depending on your jurisdiction you may
+        need to add one before serving personalized ads/tracking to visitors.
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================================================
 // APP WITH ROUTES
 // ============================================================================
 export default function App() {
   return (
     <AppProvider>
       <HashRouter>
+        <MarketingManager />
         <Routes>
           {/* Store */}
           <Route path="/" element={<SLayout><HomePage /></SLayout>} />
@@ -7044,6 +7603,7 @@ export default function App() {
           <Route path="/admin/ai" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIHub /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/ai-import" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AAIImport /></AdminLayout></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminLayout><ASettings /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/marketing-traffic" element={<ProtectedRoute requireAdmin={true}><AdminLayout><AMarketingTraffic /></AdminLayout></ProtectedRoute>} />
           {/* Fallback */}
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>

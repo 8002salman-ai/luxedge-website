@@ -6,7 +6,7 @@
     </linearGradient>
     <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="b"/>
-      <feFlood flood-color="#0088ff" flood-opacity="0.45" result="c"/>
+      <feFlood flood-color="#0088ff" flood-opacity="0.25" result="c"/>
       <feComposite in="c" in2="b" operator="in" result="glow"/>
       <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
@@ -17,6 +17,6 @@
     <path d="M12.5 29 H21.5"/>
     <path d="M21.5 29.8 C25.8 29.8 27.3 23.3 24.3 20.8 C21.3 18.3 17.9 21.3 19.8 23.5 C21.5 25.4 24.8 24.7 24.8 22.5"/>
   </g>
-  <text x="56" y="27" font-family="'Space Grotesk','Segoe UI',sans-serif" font-size="21" font-weight="700" letter-spacing="4.5" fill="#ffffff">LUXEDGE</text>
-  <text x="56" y="45" font-family="'Space Grotesk','Segoe UI',sans-serif" font-size="9" letter-spacing="3.2" fill="#94a3b8">PREMIUM PET ESSENTIALS</text>
+  <text x="56" y="27" font-family="'Space Grotesk','Segoe UI',sans-serif" font-size="21" font-weight="700" letter-spacing="4.5" fill="#172033">LUXEDGE</text>
+  <text x="56" y="45" font-family="'Space Grotesk','Segoe UI',sans-serif" font-size="9" letter-spacing="3.2" fill="#64748b">PREMIUM PET ESSENTIALS</text>
 </svg>

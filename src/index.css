@@ -6,23 +6,28 @@
  */
 
 :root {
-  /* Colors - Light Mode */
-  --color-luxe-black: #0a0a0a;
-  --color-luxe-charcoal: #1a1a1a;
-  --color-luxe-gray: #2a2a2a;
-  --color-luxe-silver: #cbd5e1;
-  --color-luxe-gold: #0088ff;
-  --color-luxe-gold-hover: #0070e0;
-  --color-luxe-cream: #f9f9f7;
+  /* Colors - Luxedge Light Palette */
+  --color-luxe-black: #172033;
+  --color-luxe-charcoal: #172554;
+  --color-luxe-gray: #64748b;
+  --color-luxe-silver: #e2e8f0;
+  --color-luxe-gold: #2563eb;
+  --color-luxe-gold-hover: #1d4ed8;
+  --color-luxe-cream: #f8fafc;
   --color-luxe-white: #ffffff;
-  --color-luxe-red: #c92a2a;
+  --color-luxe-red: #dc2626;
+  --color-luxe-light: #eff6ff;
   
-  /* Colors - Dark Mode Overrides */
-  --color-bg-primary: var(--color-luxe-cream);
-  --color-bg-secondary: var(--color-luxe-white);
-  --color-text-primary: var(--color-luxe-black);
-  --color-text-secondary: #4a4a4a;
-  --color-border: #e0e0e0;
+  /* Colors - Semantic */
+  --color-bg-primary: var(--color-luxe-white);
+  --color-bg-secondary: var(--color-luxe-cream);
+  --color-text-primary: #172033;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-sale-bg: #fff4f4;
+  --color-sale: #dc2626;
+  --color-success: #15803d;
+  --color-star: #f59e0b;
   
   /* Typography */
   --font-heading: 'Space Grotesk', sans-serif;
@@ -236,20 +241,24 @@ h1, h2, h3, h4, h5, h6 {
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-serif: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+
+  --color-sale: #dc2626;
+  --color-sale-bg: #fff4f4;
+  --color-star: #f59e0b;
   
-  --color-luxe-black: #0a0a0a;
-  --color-luxe-dark: #1a1a1a;
-  --color-luxe-charcoal: #2d2d2d;
-  --color-luxe-gray: #6b6b6b;
-  --color-luxe-silver: #9ca3af;
-  --color-luxe-light: #f5f5f0;
-  --color-luxe-cream: #faf9f6;
+  --color-luxe-black: #172033;
+  --color-luxe-dark: #172554;
+  --color-luxe-charcoal: #334155;
+  --color-luxe-gray: #64748b;
+  --color-luxe-silver: #e2e8f0;
+  --color-luxe-light: #eff6ff;
+  --color-luxe-cream: #f8fafc;
   --color-luxe-white: #ffffff;
-  --color-luxe-gold: #0088ff;
-  --color-luxe-gold-light: #00d2ff;
-  --color-luxe-gold-dark: #0066cc;
-  --color-luxe-accent: #e0f2fe;
-  --color-luxe-success: #059669;
+  --color-luxe-gold: #2563eb;
+  --color-luxe-gold-light: #3b82f6;
+  --color-luxe-gold-dark: #1d4ed8;
+  --color-luxe-accent: #eff6ff;
+  --color-luxe-success: #15803d;
   --color-luxe-warning: #d97706;
   --color-luxe-danger: #dc2626;
   --color-luxe-info: #0891b2;
@@ -524,14 +533,7 @@ input[type="number"] {
 
 /* Gradient text colors */
 .text-gradient-blue {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.text-gradient-blue {
-  background: linear-gradient(135deg, #0088ff, #00d2ff);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

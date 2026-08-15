@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "adsenseEnabled": true,
+  "adsenseClientId": "ca-pub-5473713135927706",
+  "publisherId": "pub-5473713135927706",
+  "autoAdsEnabled": true,
+  "manualAdsEnabled": false,
+  "density": "balanced",
+  "showAdsOnMobile": true,
+  "mobileDensity": "balanced",
+  "exclusions": {
+    "cart": true,
+    "checkout": true,
+    "login": true,
+    "signup": true,
+    "admin": true,
+    "account": true
+  },
+  "placements": {
+    "home_after_hero": { "enabled": false, "slot": "" },
+    "home_after_categories": { "enabled": false, "slot": "" },
+    "home_between_sections": { "enabled": false, "slot": "" },
+    "shop_after_row": { "enabled": false, "slot": "" },
+    "product_below_info": { "enabled": false, "slot": "" },
+    "blog_in_article": { "enabled": false, "slot": "" },
+    "blog_after_article": { "enabled": false, "slot": "" }
+  },
+  "gaEnabled": false,
+  "ga4Id": "",
+  "adsTxtRecord": "google.com, pub-5473713135927706, DIRECT, f08c47fec0942fa0"
+}
