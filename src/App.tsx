@@ -586,17 +586,21 @@ function Header() {
   useEffect(() => { setMob(false); setUm(false); }, [loc.pathname]);
   const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   return (<>
-    <div className="text-white text-center py-1.5 px-4 text-[10px] tracking-wider font-medium" style={{ background: 'linear-gradient(90deg, #1e293b, #334155, #1e293b)' }}>
-      Free Shipping Over $50 | Premium Pet Essentials | Easy 30-Day Returns
+    <div className="text-white/70 text-center py-1.5 px-4 text-[10px] tracking-[0.18em] font-medium whitespace-nowrap overflow-hidden border-b border-white/10" style={{ background: 'linear-gradient(90deg, #08080c, #14141f 55%, #08080c)' }}>
+      <span className="text-amber-400 font-semibold">Free Shipping Over $50</span>
+      <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
+      <span className="hidden sm:inline">Premium Pet Essentials</span>
+      <span className="mx-2.5 text-white/20 hidden sm:inline">•</span>
+      <span className="hidden sm:inline">Easy 30-Day Returns</span>
     </div>
-    <header className="sticky top-0 z-50 glass border-b border-gray-100/50">
+    <header className="sticky top-0 z-50 border-b border-white/10" style={{ background: 'rgba(8, 8, 12, 0.85)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
-        <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg">{mob ? <X size={20} /> : <Menu size={20} />}</button>
+        <button onClick={() => setMob(!mob)} className="lg:hidden p-1.5 hover:bg-white/10 rounded-lg text-white transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1e293b, #334155)' }}>
-            <span className="text-white font-serif font-bold text-sm">L</span>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/20 transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+            <span className="text-[#1a1a1a] font-serif font-bold text-sm">L</span>
           </div>
-          <span className="font-serif text-lg font-bold tracking-tight text-gray-900">LUXEDGE</span>
+          <span className="font-serif text-lg font-bold tracking-tight text-white">LUXEDGE</span>
         </Link>
         <nav className="hidden lg:flex items-center gap-1">
           {nav.map(i => {
@@ -604,30 +608,30 @@ function Header() {
             return (
               <Link key={i.p} to={i.p}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  isActive ? 'text-amber-600 bg-amber-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  isActive ? 'text-amber-400 bg-amber-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}>{i.l}</Link>
             );
           })}
         </nav>
         <div className="flex items-center gap-1">
-          <Link to="/shop" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><Search size={18} /></Link>
-          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{user.name[0]}</div></button>
-            {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-lg shadow-2xl border border-gray-100 py-1.5 z-50 glass">
-              <div className="px-3 py-2 border-b border-gray-100"><p className="font-semibold text-xs">{user.name}</p><p className="text-[10px] text-gray-500">{user.email}</p></div>
-              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><LayoutDashboard size={14} className="text-blue-500" />Admin Panel</Link>}
-              <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs hover:bg-gray-50 transition-colors"><Package size={14} className="text-gray-500" />My Orders</Link>
-              <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-600 hover:bg-red-50 w-full transition-colors"><LogOut size={14} />Log Out</button>
+          <Link to="/shop" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><Search size={18} /></Link>
+          {user ? (<div className="relative"><button onClick={() => setUm(!um)} className="p-1.5"><div className="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold text-[#1a1a1a] shadow-sm shadow-amber-500/20" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{user.name[0]}</div></button>
+            {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-48 rounded-lg shadow-2xl border border-white/10 py-1.5 z-50" style={{ background: 'rgba(15, 15, 24, 0.98)' }}>
+              <div className="px-3 py-2 border-b border-white/10"><p className="font-semibold text-xs text-white">{user.name}</p><p className="text-[10px] text-gray-400">{user.email}</p></div>
+              {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><LayoutDashboard size={14} className="text-amber-400" />Admin Panel</Link>}
+              <Link to="/orders" className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 hover:text-white transition-colors"><Package size={14} className="text-gray-400" />My Orders</Link>
+              <button onClick={logout} className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 w-full transition-colors"><LogOut size={14} />Log Out</button>
             </div></>}</div>
-          ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
-          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-colors relative">
+          ) : <Link to="/login" className="flex items-center gap-1.5 p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"><UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span></Link>}
+          <Link to="/cart" className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors relative">
             <ShoppingBag size={18} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>{cc}</span>}
           </Link>
         </div>
       </div>
-      {mob && <div className="lg:hidden border-t bg-white/95 backdrop-blur-sm px-3 py-2 space-y-0.5 animate-fade-in-up">
-        {nav.map(i => <Link key={i.p} to={i.p} className="block px-3 py-2 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" className="block px-3 py-2 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">Sign In</Link>}
+      {mob && <div className="lg:hidden border-t border-white/10 px-3 py-2 space-y-0.5 animate-fade-in-up" style={{ background: 'rgba(8, 8, 12, 0.96)' }}>
+        {nav.map(i => <Link key={i.p} to={i.p} className="block px-3 py-2 text-xs font-medium rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-colors">{i.l}</Link>)}
+        {!user && <Link to="/login" className="block px-3 py-2 text-xs font-medium rounded-lg text-gray-300 hover:bg-white/5 hover:text-white transition-colors">Sign In</Link>}
       </div>}
     </header>
   </>);
@@ -837,6 +841,46 @@ function PCard({ product }: { product: Product }) {
             <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
             {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
             <span className="ml-auto text-[9px] text-gray-400">{sold > 0 ? `${sold} sold` : 'New'}</span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Premium variant of PCard — matches the luxe category-card look (serif titles, gold dots, amber hover glow)
+function PCardPremium({ product }: { product: Product }) {
+  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const d = Math.round((1 - product.price / product.originalPrice) * 100);
+  const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
+  return (
+    <Link to={`/product/${product.id}`} className="block group">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-100 hover:border-amber-300/70 hover:shadow-[0_16px_34px_-14px_rgba(245,158,11,0.35)] hover:-translate-y-1 transition-all duration-300">
+        <div className="relative bg-gray-50 overflow-hidden">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4] object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-950/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          {d > 0 && <span className="absolute top-2 left-2 px-2 py-0.5 bg-amber-500 text-gray-900 text-[9px] font-bold rounded-full shadow-sm leading-none">-{d}%</span>}
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1 bg-white/95 backdrop-blur rounded-full text-[10px] font-semibold text-gray-900 shadow-lg translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
+            <ShoppingBag size={11} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+          </button>
+        </div>
+        <div className="px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <p className="text-[9px] text-amber-600 uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
+            <div className="flex items-center gap-1 shrink-0">
+              <Star size={9} className="text-amber-400 fill-amber-400" />
+              <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
+            </div>
+          </div>
+          <h3 className="font-serif text-[12px] font-bold text-gray-900 leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
+          <div className="flex items-baseline gap-1.5 mt-1.5">
+            <span className="text-[13px] font-bold text-gray-900">${product.price.toFixed(2)}</span>
+            {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
+            <span className="ml-auto flex items-center gap-1 text-[9px] text-gray-400">
+              <span className="w-1 h-1 rounded-full bg-amber-400" />
+              {sold > 0 ? `${sold} sold` : 'New'}
+            </span>
           </div>
         </div>
       </div>
@@ -1336,14 +1380,14 @@ function HomePage() {
           <div className="flex items-end justify-between mb-4">
             <div>
               <p className="text-amber-600 text-[9px] font-bold uppercase tracking-[0.22em] mb-1">Handpicked For You</p>
-              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight">Trending This Week</h2>
+              <h2 className="text-xl sm:text-2xl font-serif font-bold text-gray-900 tracking-tight flex items-center gap-2.5">Trending This Week <span className="hidden sm:inline-block w-9 h-[3px] bg-gradient-to-r from-amber-500 to-amber-300 rounded-full" /></h2>
             </div>
             <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-amber-600 transition-colors">
               View All <ArrowRight size={12} />
             </Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-            {featured.slice(0,8).map(p=><PCard key={p.id} product={p} />)}
+            {featured.slice(0,8).map(p=><PCardPremium key={p.id} product={p} />)}
           </div>
         </Reveal>
       </section>
