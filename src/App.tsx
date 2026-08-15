@@ -4,16 +4,16 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
-  Shield, Star, Truck, RotateCcw, Award, Zap, ArrowRight, Mail, Phone,
+  Shield, Star, Truck, RotateCcw, Zap, ArrowRight, Mail, Phone,
   MapPin, Plus, Minus, Trash2, Lock, Loader2, CheckCircle, CreditCard,
   FolderTree, Edit2, Users as UsersIcon, Settings, LayoutDashboard,
   ShoppingCart, AlertTriangle, ToggleLeft, ToggleRight, Eye,
   ChevronDown, ChevronRight, Save, ArrowLeft, DollarSign, Upload, ImageIcon,
-  Globe, Clock, Send, Headphones, ChevronLeft, Sparkles, TrendingUp,
+  Globe, Clock, Send, Headphones, Sparkles, TrendingUp,
   FileText, PenLine, Calendar, Tag, BookOpen, EyeOff, ChevronUp,
   Bot, Clipboard, Link2, RefreshCw, Wand2, History, Layers, Shuffle, Table2, Sliders,
   Monitor, Smartphone, Share2, Code,
-  Megaphone, Target, PlayCircle,
+  Megaphone, Target,
 } from 'lucide-react';
 
 // ============================================================================
@@ -104,6 +104,7 @@ interface ContentData {
   bulletFeatures: string[]; specifications: Record<string,string>;
   benefits: string[]; useCases: string[]; careInstructions: string;
   packageContents: string[]; warrantyText: string; shippingInfo: string;
+  focusKeyword: string;
   faqs: { q: string; a: string }[];
 }
 interface SEOScore {
@@ -433,7 +434,7 @@ interface Ctx {
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
-  notif: string | null; notify: (m: string) => void;
+  notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
 }
 const AC = createContext<Ctx | null>(null);
 function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
@@ -449,7 +450,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
   const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
   const [notif, setNotif] = useState<string | null>(null);
-  const notify = (m: string) => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
+  const notify = (m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
 
   const login = (e: string, p: string, admin = false) => {
     // Admin login — checks against live adminCreds state
@@ -643,18 +644,26 @@ function Footer() {
   const FL = 'block text-sm text-gray-400 hover:text-amber-400 transition-colors py-0.5';
 
   return (
-    <footer className="bg-gray-950 text-white">
+    <footer className="relative overflow-hidden text-white" style={{ background: 'linear-gradient(180deg, #0a0a10 0%, #14141f 55%, #1a1a2e 100%)' }}>
+      {/* Decorative — dot grid + ambient glows (match hero) */}
+      <div className="absolute inset-0 opacity-[0.05]">
+        <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+      </div>
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-amber-500/10 rounded-full blur-[140px]" />
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-[150px]" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center">
-                <span className="text-white font-serif font-bold text-lg">L</span>
+            <Link to="/" className="flex items-center gap-2 mb-4 group">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-md shadow-amber-500/20 transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                <span className="text-[#1a1a1a] font-serif font-bold text-lg">L</span>
               </div>
-              <span className="font-serif text-xl font-bold tracking-tight">LUXEDGE</span>
+              <span className="font-serif text-xl font-bold tracking-tight text-white">LUXEDGE</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed mb-4 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
@@ -669,7 +678,7 @@ function Footer() {
                 { label: 'YouTube', letter: 'Y', path: 'M2.5 17a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 2.5 7h19A2.5 2.5 0 0 1 24 9.5v5a2.5 2.5 0 0 1-2.5 2.5h-19zM10 15l5-3-5-3v6z' },
               ].map(s => (
                 <a key={s.label} href="#" title={s.label}
-                  className="w-10 h-10 bg-gray-800 hover:bg-amber-500 rounded-lg flex items-center justify-center transition-all duration-300 group">
+                  className="w-10 h-10 bg-white/5 border border-white/10 hover:bg-amber-500 hover:border-amber-500 rounded-lg flex items-center justify-center transition-all duration-300 group">
                   <span className="text-gray-400 group-hover:text-white text-sm font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
@@ -678,7 +687,7 @@ function Footer() {
 
           {/* Col 2 — Quick Links */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Quick Links</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Quick Links</h4>
             <nav className="space-y-0.5">
               <Link to="/" className={FL}>Home</Link>
               <Link to="/shop" className={FL}>Shop All</Link>
@@ -690,7 +699,7 @@ function Footer() {
 
           {/* Col 3 — Customer Support */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Support</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Support</h4>
             <nav className="space-y-0.5">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
@@ -702,7 +711,7 @@ function Footer() {
 
           {/* Col 4 — Company */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Company</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Company</h4>
             <nav className="space-y-0.5">
               <Link to="/about" className={FL}>About Us</Link>
               <Link to="/about" className={FL}>Our Story</Link>
@@ -715,7 +724,7 @@ function Footer() {
 
           {/* Col 5 — Contact + Map */}
           <div className="col-span-2 md:col-span-1">
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3">Get in Touch</h4>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white mb-3 flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-amber-400" />Get in Touch</h4>
             <div className="space-y-2 mb-4">
               <a href="mailto:hello@luxedge.us" className="flex items-start gap-3 text-sm text-gray-400 hover:text-amber-400 transition-colors">
                 <Mail size={16} className="text-amber-500 mt-0.5 shrink-0" />
@@ -739,7 +748,7 @@ function Footer() {
       </div>
 
       {/* ── Categories Bar ── */}
-      <div className="border-t border-gray-800">
+      <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Shop by Category:</span>
@@ -751,7 +760,7 @@ function Footer() {
       </div>
 
       {/* ── Trust & Payment Bar ── */}
-      <div className="border-t border-gray-800">
+      <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             {/* Trust Badges */}
@@ -762,7 +771,7 @@ function Footer() {
                 { icon: RotateCcw, text: '30-Day Returns' },
                 { icon: Headphones, text: '24/7 Support' },
               ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
+                <div key={i} className="flex items-center gap-2 text-xs text-gray-400">
                   <b.icon size={14} className="text-amber-500" />
                   <span>{b.text}</span>
                 </div>
@@ -773,7 +782,7 @@ function Footer() {
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-600 mr-1">We accept:</span>
               {['VISA', 'MC', 'AMEX', 'PayPal', 'Apple Pay'].map(c => (
-                <span key={c} className="px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-md text-[10px] font-bold text-gray-400 tracking-wide">
+                <span key={c} className="px-2.5 py-1.5 bg-white/5 border border-white/10 rounded-md text-[10px] font-bold text-gray-400 tracking-wide">
                   {c}
                 </span>
               ))}
@@ -783,22 +792,22 @@ function Footer() {
       </div>
 
       {/* ── Bottom Bar ── */}
-      <div className="border-t border-gray-800 bg-gray-950">
+      <div className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-500">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
             </p>
             <div className="flex items-center gap-4 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Privacy Policy</Link>
-              <span className="text-gray-800">|</span>
-              <Link to="/terms" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Terms of Service</Link>
-              <span className="text-gray-800">|</span>
-              <Link to="/returns" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Return Policy</Link>
-              <span className="text-gray-800">|</span>
-              <Link to="/shop" className="text-xs text-gray-600 hover:text-amber-400 transition-colors">Sitemap</Link>
+              <Link to="/privacy" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Privacy Policy</Link>
+              <span className="text-gray-600">|</span>
+              <Link to="/terms" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Terms of Service</Link>
+              <span className="text-gray-600">|</span>
+              <Link to="/returns" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Return Policy</Link>
+              <span className="text-gray-600">|</span>
+              <Link to="/shop" className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Sitemap</Link>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Globe size={12} className="text-amber-500" /> USD ($) · English
             </div>
           </div>
@@ -1022,14 +1031,14 @@ function ProductDetailPage() {
   return (
     <div className="max-w-7xl mx-auto px-3 py-3">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-[10px] text-gray-500 mb-3">
+      <nav className="flex flex-wrap items-center gap-1 text-[10px] text-gray-500 mb-3">
         <Link to="/" className="hover:text-blue-600">Home</Link>
         <ChevronRight size={9} />
         <Link to="/shop" className="hover:text-blue-600">Shop</Link>
         <ChevronRight size={9} />
         <Link to={`/category/${toSlug(product.category)}`} className="hover:text-blue-600">{product.category}</Link>
         <ChevronRight size={9} />
-        <span className="text-gray-800 truncate max-w-[200px]">{product.name}</span>
+        <span className="text-gray-800 truncate min-w-0 max-w-[200px]">{product.name}</span>
       </nav>
 
       <div className="grid lg:grid-cols-2 gap-4">
@@ -1250,10 +1259,8 @@ function HomePage() {
 
   const go = useCallback((i: number) => { if (locked) return; setLocked(true); setCs(i); setTimeout(() => setLocked(false), 500); }, [locked]);
   const next = useCallback(() => go((cs + 1) % heroProducts.length), [cs, heroProducts.length, go]);
-  const prev = useCallback(() => go((cs - 1 + heroProducts.length) % heroProducts.length), [cs, heroProducts.length, go]);
 
   useEffect(() => { if (heroProducts.length <= 1) return; timer.current = setInterval(next, 4000); return () => { if (timer.current) clearInterval(timer.current); }; }, [next, heroProducts.length]);
-  const rst = () => { if (timer.current) clearInterval(timer.current); timer.current = setInterval(next, 4000); };
 
   const hp = heroProducts[cs];
   const disc = hp ? Math.round((1 - hp.price / hp.originalPrice) * 100) : 0;
@@ -1708,7 +1715,7 @@ function CheckoutPage() {
                   <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-amber-500" /> Payment Method</h2>
 
                   {/* Method Toggle */}
-                  <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                     <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">STRIPE</span></div>
@@ -1909,7 +1916,7 @@ function LoginPage() {
 
           {/* Guest Login */}
           <button onClick={asGuest}
-            className="w-full py-3.5 border border-white/15 hover:border-luxe-gold/60 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 group">
+            className="w-full py-3.5 border border-white/15 hover:border-luxe-gold/60 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex flex-wrap items-center justify-center gap-2 group">
             <UserIcon size={16} className="text-luxe-gold" />
             Continue as Guest
             <span className="text-[10px] uppercase tracking-wider text-gray-500 group-hover:text-luxe-gold transition-colors">No account needed</span>
@@ -3516,7 +3523,7 @@ const EMPTY_VIDEO: VideoScript = { youtubeTitle: '', youtubeDesc: '', youtubeTag
 const META_CTA_OPTIONS = ['Shop Now','Learn More','Get Offer','Order Now','Sign Up','Book Now','Contact Us','Download'];
 
 function AMarketingGen() {
-  const { products } = useAppContext();
+  const { products } = useApp();
   const [tab, setTab] = useState<MktTab>('google');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [aiProvider, setAiProvider] = useState('');
@@ -4430,7 +4437,7 @@ function ASEOEngine() {
     premiumTitle: '', luxuryDescription: '', shortDescription: '',
     bulletFeatures: [], specifications: {}, benefits: [],
     useCases: [], careInstructions: '', packageContents: [],
-    warrantyText: '', shippingInfo: '', faqs: [],
+    warrantyText: '', shippingInfo: '', focusKeyword: '', faqs: [],
   });
   const [schemas, setSchemas] = useState<StructuredSchemas>({
     product: '', breadcrumb: '', organization: _genOrgSchema(), website: _genWebsiteSchema(), faq: '',
@@ -4559,7 +4566,7 @@ Rules:
         specifications: obj('specifications'), benefits: arr('benefits'),
         useCases: arr('useCases'), careInstructions: str('careInstructions'),
         packageContents: arr('packageContents'), warrantyText: str('warrantyText'),
-        shippingInfo: str('shippingInfo'), faqs: faqArr,
+        shippingInfo: str('shippingInfo'), focusKeyword: str('focusKeyword'), faqs: faqArr,
       });
       setSeo(prev => ({
         ...prev,
