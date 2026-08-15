@@ -421,6 +421,7 @@ interface Ctx {
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
   adminCreds: AppUser;
   login: (e: string, p: string, admin?: boolean) => boolean;
+  guestLogin: () => void;
   logout: () => void; signup: (n: string, e: string, p: string) => boolean;
   changePassword: (current: string, newPass: string) => { ok: boolean; msg: string };
   updateAdminProfile: (name: string, email: string) => void;
@@ -492,6 +493,12 @@ function AppProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const guestLogin = () => {
+    const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', password: '', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
+    setUser(guest);
+    notify('Shopping as guest — no account needed!');
+  };
+
   const logout = () => { setUser(null); useAuthStore.getState().logout(); notify('Logged out'); };
 
   const signup = (n: string, e: string, p: string) => {
@@ -543,7 +550,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const clearCart = () => setCart([]);
   const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); clearCart(); return oid; };
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -1793,9 +1800,115 @@ function OrdersPage() { const { orders, user } = useApp(); const nav = useNaviga
   return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-amber-600">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
 }
 
-function LoginPage() { const [e, setE] = useState(''); const [p, setP] = useState(''); const [err, setErr] = useState(''); const { login, adminCreds } = useApp(); const nav = useNavigate();
-  const sub = (ev: React.FormEvent) => { ev.preventDefault(); if (login(e, p)) nav(e.toLowerCase() === adminCreds.email.toLowerCase() ? '/admin' : '/'); else setErr('Invalid credentials'); };
-  return <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"><div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8"><div className="text-center mb-6"><Link to="/"><span className="font-serif text-2xl font-bold">LUXEDGE</span></Link></div><h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>{err && <p className="text-red-500 text-sm text-center mb-4">{err}</p>}<form onSubmit={sub} className="space-y-4"><input type="email" placeholder="Email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><input type="password" placeholder="Password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border rounded-lg" required /><button type="submit" className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg">Sign In</button></form><p className="text-center text-sm text-gray-500 mt-4">No account? <Link to="/signup" className="text-amber-600 font-semibold">Sign Up</Link></p></div></div>;
+function LoginPage() {
+  const [e, setE] = useState('');
+  const [p, setP] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login, adminCreds, guestLogin, cart } = useApp();
+  const nav = useNavigate();
+
+  const sub = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 700));
+    if (login(e, p)) nav(e.toLowerCase() === adminCreds.email.toLowerCase() ? '/admin' : '/');
+    else { setErr('Invalid email or password'); setLoading(false); }
+  };
+
+  const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };
+
+  return (
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#14141f] to-[#1a1a2e]">
+      {/* Ambient glows */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/20 blur-[120px]" />
+      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-amber-500/10 blur-[140px]" />
+      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+
+      <div className="relative w-full max-w-md animate-fade-in-up">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center gap-3 group">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-luxe-gold to-luxe-gold-dark flex items-center justify-center shadow-lg shadow-luxe-gold/25 group-hover:scale-105 transition-transform">
+              <span className="font-serif text-xl font-bold text-white">L</span>
+            </div>
+            <span className="font-serif text-3xl font-bold tracking-[0.18em] text-white">LUXEDGE</span>
+          </Link>
+          <p className="mt-3 text-[11px] uppercase tracking-[0.35em] text-luxe-silver/70">Premium Pet Essentials</p>
+        </div>
+
+        {/* Card */}
+        <div className="glass-dark rounded-3xl border border-white/10 p-8 shadow-2xl shadow-black/50">
+          <h1 className="text-2xl font-serif font-bold text-white mb-1.5">Welcome Back</h1>
+          <p className="text-sm text-gray-400 mb-8">Sign in to your account to continue</p>
+
+          {err && <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm text-center animate-scale-in">{err}</div>}
+
+          <form onSubmit={sub} className="space-y-5">
+            <div className="relative">
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
+                className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+            </div>
+            <div className="relative">
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
+                className="w-full pl-12 pr-12 py-3.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-luxe-gold transition-colors">
+                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 cursor-pointer text-gray-400">
+                <input type="checkbox" className="w-4 h-4 rounded border-white/20 bg-white/5 accent-luxe-gold" defaultChecked />
+                Remember me
+              </label>
+              <a href="#" className="text-luxe-gold hover:text-luxe-gold-light transition-colors">Forgot password?</a>
+            </div>
+
+            <button type="submit" disabled={loading}
+              className="btn-shimmer w-full py-3.5 bg-gradient-to-r from-luxe-gold to-luxe-gold-dark hover:from-luxe-gold-dark hover:to-luxe-gold text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-6">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[11px] uppercase tracking-widest text-gray-500">or continue as</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* Guest Login */}
+          <button onClick={asGuest}
+            className="w-full py-3.5 border border-white/15 hover:border-luxe-gold/60 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 group">
+            <UserIcon size={16} className="text-luxe-gold" />
+            Continue as Guest
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 group-hover:text-luxe-gold transition-colors">No account needed</span>
+          </button>
+
+          <p className="mt-5 text-center text-sm text-gray-500">
+            No account?{' '}
+            <Link to="/signup" className="text-luxe-gold font-semibold hover:text-luxe-gold-light transition-colors">Create one</Link>
+          </p>
+        </div>
+
+        {/* Trust line */}
+        <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
+          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+        </div>
+
+        {/* Admin link */}
+        <p className="mt-6 text-center text-xs text-gray-600">
+          Admin? <Link to="/admin/login" className="text-luxe-gold/80 hover:text-luxe-gold transition-colors">Go to Admin Login</Link>
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function SignupPage() { const [n, setN] = useState(''); const [e, setE] = useState(''); const [p, setP] = useState(''); const { signup } = useApp(); const nav = useNavigate();
