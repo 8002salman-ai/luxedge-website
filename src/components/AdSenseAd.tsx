@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { getConsent } from '../lib/consent';
 import {
   getEffectiveConfig,
   isExcludedPath,
@@ -57,6 +58,7 @@ export default function AdSenseAd({ placement, className = '' }: AdSenseAdProps)
   }, [cfg?.adsenseClientId, cfg?.placements?.[placement]?.slot]);
 
   if (!cfg) return null;
+  if (getConsent() !== 'accepted') return null;
   if (isExcludedPath(loc.pathname, cfg)) return null;
   if (!shouldRenderPlacement(cfg, placement, loc.pathname, countedRef)) return null;
   shouldPush.current = true;

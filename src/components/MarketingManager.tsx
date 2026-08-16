@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { getConsent } from '../lib/consent';
 import {
   captureUtm,
   getEffectiveConfig,
@@ -21,25 +22,34 @@ import {
 export default function MarketingManager() {
   const loc = useLocation();
 
-  // Apply script load state from the effective config. Runs on mount and on
-  // every route change so toggling a setting in the admin applies on the next
-  // storefront navigation (loaders are idempotent — script is never duplicated).
+  // Apply script load state from the effective config and the visitor's
+  // cookie-consent choice. Runs on mount, on every route change, and whenever
+  // the consent banner records a decision. Loaders are idempotent — scripts
+  // are never duplicated. No ads/analytics load until the visitor accepts.
   useEffect(() => {
     let alive = true;
-    getEffectiveConfig().then((c: MarketingConfig) => {
-      if (!alive) return;
-      if (c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
-        loadAdSenseScript(c.adsenseClientId);
-      } else {
-        removeAdSenseScript();
-      }
-      if (c.gaEnabled && c.ga4Id.trim()) {
-        loadGtag(c.ga4Id.trim());
-      } else {
-        removeGtag();
-      }
-    });
-    return () => { alive = false; };
+    const apply = () => {
+      getEffectiveConfig().then((c: MarketingConfig) => {
+        if (!alive) return;
+        const okToLoad = getConsent() === 'accepted';
+        if (okToLoad && c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
+          loadAdSenseScript(c.adsenseClientId);
+        } else {
+          removeAdSenseScript();
+        }
+        if (okToLoad && c.gaEnabled && c.ga4Id.trim()) {
+          loadGtag(c.ga4Id.trim());
+        } else {
+          removeGtag();
+        }
+      });
+    };
+    apply();
+    window.addEventListener('luxedge-consent', apply);
+    return () => {
+      alive = false;
+      window.removeEventListener('luxedge-consent', apply);
+    };
   }, [loc.pathname]);
 
   useEffect(() => {
