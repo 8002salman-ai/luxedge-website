@@ -360,6 +360,18 @@ const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'10', name:'Cozy Calming Cat Bed', shortDesc:'Cuddler donut cat bed', description:'Cozy donut-shaped cat bed with a raised rim for security and warmth. Machine-washable plush design gives cats a calm, snug place to curl up.', price:32.99, originalPrice:54.99, category:'Pet Beds', stock:84, images:['https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg'], rating:4.9, reviews:734, isActive:true, brand:'SnugglePet', weight:'1.8 lbs', tags:['cat bed','calming','cuddler'] },
   { ...DP, id:'11', name:'Automatic Pet Food Dispenser', shortDesc:'Programmable meal feeder', description:'Automatic pet food dispenser with programmable portions and a built-in voice recorder. Keeps your pet on a consistent feeding schedule even when you are away.', price:54.99, originalPrice:89.99, category:'Feeding & Water', stock:46, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG'], rating:4.7, reviews:318, isActive:true, brand:'SmartFeed', weight:'3.6 lbs', tags:['food dispenser','automatic','programmable'] },
   { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
+  { ...DP, id:'13', name:'SonicGlow Electric Toothbrush', shortDesc:'Sonic toothbrush, 5 modes', description:'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A hygiene bestseller across AliExpress and Amazon.', price:26.99, originalPrice:54.99, category:'Wellness', stock:88, images:['https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2456, isActive:true, brand:'SonicGlow', weight:'0.3 lbs', tags:['toothbrush','electric','oral care'], variants:[{id:'v13a',color:'White',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-WHT'},{id:'v13b',color:'Black',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-BLK'}] },
+  { ...DP, id:'14', name:'FlexCore Adjustable Dumbbell', shortDesc:'5-in-1 adjustable dumbbell', description:'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.', price:64.99, originalPrice:119.99, category:'Wellness', stock:42, images:['https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:1367, isActive:true, brand:'FlexCore', weight:'25 lbs', tags:['dumbbell','home gym','fitness'] },
+  { ...DP, id:'15', name:'AuroraCharge 3-in-1 Wireless Station', shortDesc:'3-in-1 wireless charger', description:'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.', price:33.99, originalPrice:59.99, category:'Tech & Gadgets', stock:130, images:['https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2078, isActive:true, brand:'AuroraCharge', weight:'0.5 lbs', tags:['wireless charger','magsafe','desk'] },
+  { ...DP, id:'16', name:'ZenMist Ultrasonic Aroma Diffuser', shortDesc:'300ml essential-oil diffuser', description:'300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.', price:21.99, originalPrice:39.99, category:'Home & Living', stock:156, images:['https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:3945, isActive:true, brand:'ZenMist', weight:'0.8 lbs', tags:['diffuser','aromatherapy','home'] },
+  { ...DP, id:'17', name:'CoreFlex Non-Slip Yoga Mat', shortDesc:'6mm TPE yoga mat', description:'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.', price:19.99, originalPrice:36.99, category:'Wellness', stock:187, images:['https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2611, isActive:true, brand:'CoreFlex', weight:'2.2 lbs', tags:['yoga mat','fitness','non-slip'], variants:[{id:'v17a',color:'Blue',size:'6mm',price:19.99,salePrice:19.99,stock:94,sku:'CF-BLU'},{id:'v17b',color:'Pink',size:'6mm',price:19.99,salePrice:19.99,stock:93,sku:'CF-PNK'}] },
+  { ...DP, id:'18', name:'ClarityPro Blue-Light Glasses', shortDesc:'Anti-blue-light computer glasses', description:'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.', price:17.99, originalPrice:34.99, category:'Accessories', stock:164, images:['https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:1743, isActive:true, brand:'ClarityPro', weight:'0.05 lbs', tags:['glasses','blue light','eye care'] },
+  { ...DP, id:'19', name:'ChillBreeze Portable Neck Fan', shortDesc:'Bladeless hands-free neck fan', description:'Hands-free bladeless neck fan with 3 speed settings, 360° airflow, and a rechargeable 4000mAh battery lasting up to 16 hours. Lightweight, whisper-quiet, and hair-safe — perfect for commutes, travel, and outdoor work. A viral summer bestseller on TikTok and Amazon.', price:23.99, originalPrice:42.99, category:'Tech & Gadgets', stock:140, images:['https://images.pexels.com/photos/4491881/pexels-photo-4491881.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2734, isActive:true, brand:'ChillBreeze', weight:'0.4 lbs', tags:['neck fan','portable','bladeless','summer'], variants:[{id:'v19a',color:'White',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-WHT'},{id:'v19b',color:'Black',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-BLK'}] },
+  { ...DP, id:'20', name:'RelaxEye Heated Eye Massager', shortDesc:'Bluetooth heated eye massager', description:'Rechargeable heated eye massager with air-compression, gentle vibration, and soothing warmth to relieve eye strain, puffiness, and headaches. Built-in Bluetooth music, 5 modes, and a foldable travel design. A top self-care gadget trending on Amazon and AliExpress.', price:38.99, originalPrice:74.99, category:'Wellness', stock:82, images:['https://images.pexels.com/photos/3865711/pexels-photo-3865711.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:1988, isActive:true, brand:'RelaxEye', weight:'0.7 lbs', tags:['eye massager','relaxation','self care','bluetooth'] },
+  { ...DP, id:'21', name:'PostureFix Smart Posture Corrector', shortDesc:'Vibrating smart posture trainer', description:'Discreet smart posture corrector that gently vibrates when you slouch, retraining your back and shoulders for a healthier posture. Adjustable, breathable, and unisex — pairs with a free app to track progress. A viral wellness bestseller for desk workers.', price:27.99, originalPrice:49.99, category:'Wellness', stock:110, images:['https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1524, isActive:true, brand:'PostureFix', weight:'0.3 lbs', tags:['posture corrector','back support','wellness','smart'] },
+  { ...DP, id:'22', name:'AquaTrack Smart Water Bottle', shortDesc:'LED reminder insulated bottle', description:'Smart insulated stainless-steel water bottle with an LED hydration reminder and temperature display in the cap. Keeps drinks cold 24h / hot 12h, 500ml, BPA-free, and leak-proof. A trending health-and-fitness gadget across Amazon and TikTok.', price:25.99, originalPrice:46.99, category:'Wellness', stock:125, images:['https://images.pexels.com/photos/1000084/pexels-photo-1000084.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2103, isActive:true, brand:'AquaTrack', weight:'0.6 lbs', tags:['water bottle','smart','hydration','insulated'], variants:[{id:'v22a',color:'Silver',size:'500ml',price:25.99,salePrice:25.99,stock:63,sku:'AT-SLV'},{id:'v22b',color:'Black',size:'500ml',price:25.99,salePrice:25.99,stock:62,sku:'AT-BLK'}] },
+  { ...DP, id:'23', name:'LumaStrip RGB LED Light Strip', shortDesc:'App & music-sync LED strip 16ft', description:'16ft app-controlled RGB LED light strip with 16 million colors, music sync, and voice control (Alexa & Google). Easy peel-and-stick install, remote included, and dimmable scenes for gaming setups and bedrooms. One of the top-selling home-decor items on Amazon.', price:18.99, originalPrice:35.99, category:'Home & Living', stock:198, images:['https://images.pexels.com/photos/1616403/pexels-photo-1616403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:4562, isActive:true, brand:'LumaStrip', weight:'0.5 lbs', tags:['led strip','rgb','home decor','gaming'] },
+  { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:true, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
 ];
 
 // ═══════════ 120-Product Catalog — extends the 12 featured products to a full store ═══════════
@@ -493,14 +505,64 @@ interface Ctx {
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
+  cartOpen: boolean; openCart: () => void; closeCart: () => void;
   notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
 }
 const AC = createContext<Ctx | null>(null);
 function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
+const CART_STORAGE_KEY = 'luxedge_cart';
+
+function loadCart(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const items: CartItem[] = [];
+    for (const entry of parsed) {
+      const e = entry as Partial<CartItem>;
+      if (
+        e && typeof e === 'object' &&
+        e.product && typeof e.product.id === 'string' &&
+        typeof e.quantity === 'number' && e.quantity > 0
+      ) {
+        items.push({ product: e.product, quantity: Math.floor(e.quantity) });
+      }
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+const SESSION_STORAGE_KEY = 'luxedge_session';
+
+function loadSession(): AppUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const u = parsed as Partial<AppUser>;
+    if (
+      typeof u.id === 'string' &&
+      typeof u.email === 'string' &&
+      typeof u.password === 'string' &&
+      typeof u.name === 'string' &&
+      (u.role === 'admin' || u.role === 'buyer')
+    ) {
+      return { id: u.id, email: u.email, password: u.password, name: u.name, role: u.role, isBlocked: u.isBlocked, joined: u.joined };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [user, setUser] = useState<AppUser | null>(loadSession);
+  const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
   const [products, setProducts] = useState<Product[]>(ALL_PRODUCTS);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
@@ -510,6 +572,22 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
   const [notif, setNotif] = useState<string | null>(null);
   const notify = (m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
+  const [cartOpen, setCartOpen] = useState(false);
+  const openCart = useCallback(() => setCartOpen(true), []);
+  const closeCart = useCallback(() => setCartOpen(false), []);
+
+  // Persist the cart so items survive a page refresh.
+  useEffect(() => {
+    try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { /* storage full or unavailable */ }
+  }, [cart]);
+
+  // Persist the signed-in user so the session survives a page refresh.
+  useEffect(() => {
+    try {
+      if (user) localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+      else localStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch { /* storage full or unavailable */ }
+  }, [user]);
 
   const login = (e: string, p: string, admin = false) => {
     // Admin login — checks against live adminCreds state
@@ -546,7 +624,6 @@ function AppProvider({ children }: { children: ReactNode }) {
       const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: e.split('@')[0], role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
       setUsers(prev => [...prev, newUser]);
       setUser(newUser);
-      useAuthStore.getState().signup(newUser.name, e, p);
       notify('Account created & logged in!');
       return true;
     }
@@ -559,7 +636,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     notify('Shopping as guest — no account needed!');
   };
 
-  const logout = () => { setUser(null); useAuthStore.getState().logout(); notify('Logged out'); };
+  const logout = () => { setUser(null); notify('Logged out'); };
 
   const signup = (n: string, e: string, p: string) => {
     if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
@@ -604,13 +681,13 @@ function AppProvider({ children }: { children: ReactNode }) {
       notify('Profile updated!');
     }
   };
-  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
+  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
   const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); clearCart(); return oid; };
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, notif, notify }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -665,10 +742,19 @@ function Header() {
   const [um, setUm] = useState(false);
   const [hq, setHq] = useState('');
   const [mega, setMega] = useState<string | null>(null);
+  const [scrolled, setScrolled] = useState(false);
   const loc = useLocation();
   const goTo = useNavigate();
-  const { user, cart, logout } = useApp();
+  const { user, cart, logout, openCart } = useApp();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
+
+  // Elevate the header with a soft shadow once the page is scrolled
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const submitSearch = (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -689,36 +775,37 @@ function Header() {
     { l: 'Grooming', to: '/category/grooming' },
     { l: 'Travel & Accessories', to: '/category/pet-accessories' },
   ];
+  const isActive = (p: string) => (p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p));
 
   return (<>
-    {/* Top utility bar */}
-    <div className="bg-luxe-gold text-white text-center py-1.5 px-4 text-[11px] tracking-wide font-medium">
-      <span className="inline-flex items-center gap-1.5"><Truck size={12} /> Free Shipping $50+</span>
-      <span className="mx-2.5 text-white/60 hidden sm:inline">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5"><RotateCcw size={12} /> Easy 30-Day Returns</span>
-      <span className="mx-2.5 text-white/60 hidden md:inline">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5"><Headphones size={12} /> Customer Support</span>
+    {/* ── Top utility bar ── */}
+    <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
+      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Free Shipping $50+</span>
+      <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RotateCcw size={12} /> Easy 30-Day Returns</span>
+      <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
+      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer Support</span>
     </div>
 
-    {/* Main header */}
-    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
-        <button onClick={() => setMob(!mob)} aria-label="Menu" className="lg:hidden p-2 -ml-1.5 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 shrink-0 group">
-          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-9 sm:h-10 w-auto transition-transform group-hover:scale-105" />
+    {/* ── Main header ── */}
+    <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_10px_34px_-14px_rgba(16,26,46,0.22)]' : 'bg-white/95 backdrop-blur-md'} border-b border-luxe-silver/70`}>
+      <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
+        <button onClick={() => setMob(!mob)} aria-label="Menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
+        <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
+          <img src="/luxedge-mark.svg" alt="" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
-            <span className="text-luxe-black font-serif text-lg sm:text-xl font-bold tracking-wide">LUXEDGE</span>
-            <span className="hidden sm:block text-[8px] tracking-[0.26em] text-gray-400 mt-1">PREMIUM PET ESSENTIALS</span>
+            <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.18em] text-luxe-black">LUXEDGE</span>
+            <span className="hidden sm:block text-[7.5px] tracking-[0.3em] text-luxe-gold mt-1.5">PREMIUM PET ESSENTIALS</span>
           </span>
         </Link>
 
-        {/* Search bar — prominent */}
-        <form onSubmit={submitSearch} className="hidden md:flex flex-1 max-w-2xl mx-2">
-          <div className="flex items-center w-full bg-gray-50 border border-gray-300 rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-2 focus-within:ring-luxe-gold/20 transition-all">
-            <Search size={16} className="ml-3.5 text-gray-400 shrink-0" />
-            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search pet food, toys, beds, grooming & more"
-              className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-gray-400 focus:outline-none bg-transparent" />
-            <button type="submit" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[11px] font-bold uppercase tracking-wider transition-colors">
+        {/* Search — refined pill */}
+        <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
+          <div className="flex items-center w-full bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-4 focus-within:ring-luxe-gold/10 transition-all">
+            <Search size={15} className="ml-4 text-luxe-gray shrink-0" />
+            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
+              className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
+            <button type="submit" className="m-1 px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors">
               Search
             </button>
           </div>
@@ -727,49 +814,49 @@ function Header() {
         <div className="flex items-center gap-0.5 sm:gap-1">
           {user ? (
             <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account" className="flex items-center gap-1.5 p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">
-                <span className="w-8 h-8 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[12px] font-bold">{user.name[0]}</span>
+              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+                <span className="w-8 h-8 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[12px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
                 <span className="hidden lg:block text-xs font-medium">{user.name.split(' ')[0]}</span>
               </button>
-              {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl shadow-xl border border-gray-200 bg-white py-1.5 z-50">
-                <div className="px-3 py-2 border-b border-gray-100"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-gray-500">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"><LayoutDashboard size={14} className="text-luxe-gold" />Admin Panel</Link>}
-                <Link to="/orders" className="flex items-center gap-2 px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors"><Package size={14} className="text-gray-400" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 w-full text-left transition-colors"><LogOut size={14} />Log Out</button>
+              {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
+                <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
+                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutDashboard size={14} className="text-luxe-gold" />Admin Panel</Link>}
+                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package size={14} className="text-luxe-gray" />My Orders</Link>
+                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut size={14} />Log Out</button>
               </div></>}
             </div>
           ) : (
-            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors">
+            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
               <UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
             </Link>
           )}
-          <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-lg text-gray-700 transition-colors relative" aria-label={`Cart (${cc})`}>
+          <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
             <ShoppingBag size={19} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
-          </Link>
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
+          </button>
         </div>
       </div>
 
-      {/* Pet navigation bar */}
-      <nav className="hidden lg:block border-t border-gray-100 bg-white">
+      {/* ── Pet navigation bar ── */}
+      <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
         <div className="max-w-7xl mx-auto px-4 flex items-center">
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-black hover:text-luxe-gold transition-colors">
-                <span>{m.icon}</span>{m.label}<ChevronDown size={14} className={`text-gray-400 transition-transform ${mega === m.label ? 'rotate-180' : ''}`} />
+              <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
+                <span aria-hidden="true">{m.icon}</span>{m.label}<ChevronDown size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
-                <div className="absolute left-0 top-full pt-1 z-50 w-[560px]">
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-sm font-bold text-luxe-black">{m.icon} Shop {m.label}</p>
-                      <Link to={m.to} className="text-[11px] font-semibold text-luxe-gold hover:underline">View all →</Link>
+                <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
+                  <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
+                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
+                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">{m.icon} Shop {m.label}</p>
+                      <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                       {m.groups.map(g => (
                         <div key={g.title}>
-                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1.5">{g.title}</p>
-                          {g.links.map(l => <Link key={l.label} to={l.to} className="block py-1 text-[12px] text-gray-700 hover:text-luxe-gold transition-colors">{l.label}</Link>)}
+                          <p className="eyebrow mb-2">{g.title}</p>
+                          {g.links.map(l => <Link key={l.label} to={l.to} className="block py-1 text-[13px] text-luxe-gray hover:text-luxe-gold hover:translate-x-0.5 transition-all">{l.label}</Link>)}
                         </div>
                       ))}
                     </div>
@@ -779,26 +866,26 @@ function Header() {
             </div>
           ))}
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="px-4 py-2.5 text-sm font-semibold text-luxe-black hover:text-luxe-gold transition-colors">{c.l}</Link>
+            <Link key={c.l} to={c.to} className="nav-underline px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop" className="ml-auto px-4 py-2.5 text-sm font-bold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1.5"><Zap size={14} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap size={13} /> Deals</Link>
         </div>
       </nav>
 
-      {/* Mobile menu */}
-      {mob && <div className="lg:hidden border-t border-gray-100 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={submitSearch} className="flex items-center bg-gray-50 border border-gray-300 rounded-full overflow-hidden mb-2">
-          <Search size={15} className="ml-3 text-gray-400 shrink-0" />
-          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..."
-            className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-gray-400 focus:outline-none bg-transparent" />
-          <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider">Go</button>
+      {/* ── Mobile menu ── */}
+      {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
+        <form onSubmit={submitSearch} role="search" className="flex items-center bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden mb-2">
+          <Search size={15} className="ml-3 text-luxe-gray shrink-0" />
+          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
+            className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
+          <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
-        <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-gray-100">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-3 py-1.5 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-700 hover:bg-luxe-gold hover:text-white transition-colors">{c.l}</Link>)}
-          <Link to="/shop" className="px-3 py-1.5 rounded-full bg-red-50 text-[11px] font-bold text-red-600 hover:bg-red-600 hover:text-white transition-colors">Deals</Link>
+        <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-luxe-silver/70">
+          {catNav.map(c => <Link key={c.l} to={c.to} className="px-3 py-1.5 rounded-full bg-luxe-cream text-[11px] font-semibold text-luxe-charcoal hover:bg-luxe-gold hover:text-white transition-colors">{c.l}</Link>)}
+          <Link to="/shop?q=deal" className="px-3 py-1.5 rounded-full bg-luxe-gold-soft text-[11px] font-bold text-luxe-gold-dark hover:bg-luxe-gold hover:text-white transition-colors">Deals</Link>
         </div>
-        {nav.map(i => <Link key={i.p} to={i.p} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-gray-50 transition-colors">Sign In</Link>}
+        {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
+        {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
       </div>}
     </header>
   </>);
@@ -807,24 +894,28 @@ function Header() {
 function Footer() {
   const { categories } = useApp();
 
-  const FL = 'block text-sm text-gray-600 hover:text-luxe-gold transition-colors py-1';
+  const FL = 'block text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors py-1';
+  const COLT = 'font-brand text-xs font-bold uppercase tracking-[0.22em] text-luxe-gold-light mb-4';
 
   return (
-    <footer className="bg-luxe-light border-t border-gray-200">
+    <footer className="bg-luxe-black text-luxe-white">
+      {/* Gold hairline divider */}
+      <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
+
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-10">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-4 group w-fit">
-              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-10 h-10 transition-transform group-hover:scale-105" />
+            <Link to="/" className="flex items-center gap-3 mb-5 group w-fit" aria-label="Luxedge home">
+              <img src="/luxedge-mark.svg" alt="" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
-                <span className="text-luxe-black font-serif text-xl font-bold tracking-wide">LUXEDGE</span>
-                <span className="text-[8px] tracking-[0.26em] text-gray-500 mt-1">PREMIUM PET ESSENTIALS</span>
+                <span className="font-brand text-xl font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
+                <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1.5">PREMIUM PET ESSENTIALS</span>
               </span>
             </Link>
-            <p className="text-gray-600 text-sm leading-relaxed mb-4 max-w-xs">
+            <p className="text-luxe-white/60 text-sm leading-relaxed mb-6 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
             </p>
             <div className="flex gap-2.5">
@@ -835,8 +926,8 @@ function Footer() {
                 { label: 'YouTube', letter: 'Y' },
               ].map(s => (
                 <a key={s.label} href="#" title={s.label} aria-label={s.label}
-                  className="w-9 h-9 bg-white border border-gray-200 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-gray-500 group-hover:text-white text-sm font-bold">{s.letter.toUpperCase()}</span>
+                  className="w-9 h-9 bg-luxe-white/5 border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
+                  <span className="text-luxe-white/70 group-hover:text-luxe-black text-sm font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
             </div>
@@ -844,8 +935,8 @@ function Footer() {
 
           {/* Col 2 — Shop */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Shop</h4>
-            <nav className="space-y-0.5">
+            <h4 className={COLT}>Shop</h4>
+            <nav className="space-y-0.5" aria-label="Shop">
               <Link to="/category/dog-supplies" className={FL}>Dog</Link>
               <Link to="/category/cat-supplies" className={FL}>Cat</Link>
               <Link to="/category/pet-toys" className={FL}>Toys</Link>
@@ -858,8 +949,8 @@ function Footer() {
 
           {/* Col 3 — Help */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Help</h4>
-            <nav className="space-y-0.5">
+            <h4 className={COLT}>Help</h4>
+            <nav className="space-y-0.5" aria-label="Help">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
               <Link to="/shipping-policy" className={FL}>Shipping</Link>
@@ -870,8 +961,8 @@ function Footer() {
 
           {/* Col 4 — Company */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Company</h4>
-            <nav className="space-y-0.5">
+            <h4 className={COLT}>Company</h4>
+            <nav className="space-y-0.5" aria-label="Company">
               <Link to="/about" className={FL}>About</Link>
               <Link to="/blog" className={FL}>Blog</Link>
               <Link to="/privacy" className={FL}>Privacy</Link>
@@ -882,22 +973,22 @@ function Footer() {
 
           {/* Col 5 — Contact */}
           <div className="col-span-2 md:col-span-1">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-luxe-black mb-3">Contact</h4>
-            <div className="space-y-2">
-              <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-gray-600 hover:text-luxe-gold transition-colors">
-                <Mail size={15} className="text-luxe-gold mt-0.5 shrink-0" />
+            <h4 className={COLT}>Contact</h4>
+            <div className="space-y-2.5">
+              <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
+                <Mail size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
-              <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-gray-600 hover:text-luxe-gold transition-colors">
-                <Phone size={15} className="text-luxe-gold mt-0.5 shrink-0" />
+              <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
+                <Phone size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
-              <div className="flex items-start gap-2.5 text-sm text-gray-600">
-                <MapPin size={15} className="text-luxe-gold mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
+                <MapPin size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Irving, TX 75038, USA
               </div>
-              <div className="flex items-start gap-2.5 text-sm text-gray-600">
-                <Clock size={15} className="text-luxe-gold mt-0.5 shrink-0" />
+              <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
+                <Clock size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
@@ -906,19 +997,19 @@ function Footer() {
       </div>
 
       {/* ── Categories Bar ── */}
-      <div className="border-t border-gray-200 bg-white">
+      <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Shop by Category:</span>
+            <span className="font-brand text-xs font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">{c.name}</Link>
+              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
             ))}
           </div>
         </div>
       </div>
 
       {/* ── Trust & Payment Bar ── */}
-      <div className="border-t border-gray-200">
+      <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-5">
@@ -928,16 +1019,16 @@ function Footer() {
                 { icon: RotateCcw, text: '30-Day Returns' },
                 { icon: Headphones, text: 'Customer Support' },
               ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                  <b.icon size={14} className="text-luxe-gold" />
+                <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
+                  <b.icon size={14} className="text-luxe-gold-light" />
                   <span>{b.text}</span>
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="text-xs text-gray-500 mr-1">We accept:</span>
+              <span className="text-xs text-luxe-white/50 mr-1">We accept:</span>
               {['VISA', 'MC', 'AMEX', 'PayPal', 'Apple Pay'].map(c => (
-                <span key={c} className="px-2.5 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 tracking-wide">
+                <span key={c} className="px-2.5 py-1 bg-luxe-white/5 border border-luxe-white/15 rounded-md text-[10px] font-bold text-luxe-white/80 tracking-wide">
                   {c}
                 </span>
               ))}
@@ -947,23 +1038,23 @@ function Footer() {
       </div>
 
       {/* ── Bottom Bar ── */}
-      <div className="border-t border-gray-200 bg-white">
+      <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-luxe-white/50">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
             </p>
             <div className="flex items-center gap-3 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Privacy Policy</Link>
-              <span className="text-gray-300">|</span>
-              <Link to="/terms" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Terms of Service</Link>
-              <span className="text-gray-300">|</span>
-              <Link to="/returns" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Return Policy</Link>
-              <span className="text-gray-300">|</span>
-              <Link to="/shop" className="text-xs text-gray-600 hover:text-luxe-gold transition-colors">Sitemap</Link>
+              <Link to="/privacy" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Privacy Policy</Link>
+              <span className="text-luxe-white/20" aria-hidden="true">|</span>
+              <Link to="/terms" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Terms of Service</Link>
+              <span className="text-luxe-white/20" aria-hidden="true">|</span>
+              <Link to="/returns" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Return Policy</Link>
+              <span className="text-luxe-white/20" aria-hidden="true">|</span>
+              <Link to="/shop" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Globe size={12} className="text-luxe-gold" /> USD ($) · English
+            <div className="flex items-center gap-1.5 text-xs text-luxe-white/50">
+              <Globe size={12} className="text-luxe-gold-light" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -978,69 +1069,34 @@ function PCard({ product }: { product: Product }) {
   const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-luxe-gold/40 hover:shadow-[0_10px_30px_-8px_rgba(37,99,235,0.15)] hover:-translate-y-0.5 transition-all duration-200">
-        <div className="relative bg-gray-50 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-[1.04] transition-transform duration-300" loading="lazy" />
-          {d > 0 && <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-sale text-white text-[10px] font-bold rounded leading-none shadow-sm">-{d}%</span>}
-          <button aria-label="Add to wishlist"
+      <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
+        <div className="relative bg-luxe-cream overflow-hidden">
+          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" loading="lazy" />
+          {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
+          <button aria-label="Save to wishlist"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); notify('Saved to wishlist ♥'); }}
-            className="absolute top-2 right-2 w-7 h-7 bg-white/95 rounded-full flex items-center justify-center text-gray-400 hover:text-sale shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-luxe-gray hover:text-sale shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110">
             <Heart size={13} />
           </button>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-10 right-2 px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-bold rounded leading-none">Low Stock</span>}
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 right-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-lg text-[11px] font-semibold shadow-md translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5">
+            className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
-        <div className="px-3 py-3">
-          <p className="text-[10px] text-luxe-gold font-bold uppercase tracking-wide mb-0.5 truncate">{product.category}</p>
-          <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem]">{product.name}</h3>
-          <div className="flex items-center gap-1 mt-1">
-            <Star size={11} className="text-star fill-star" />
-            <span className="text-[11px] font-semibold text-luxe-black">{product.rating.toFixed(1)}</span>
-            <span className="text-[10px] text-gray-400">({product.reviews.toLocaleString()})</span>
-            <span className="ml-auto text-[10px] text-gray-400">{sold > 0 ? `${sold.toLocaleString()} sold` : 'New'}</span>
-          </div>
-          <div className="flex items-baseline gap-1.5 mt-1.5">
-            <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[11px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
-          </div>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// Premium variant of PCard — light retail look consistent with the storefront
-function PCardPremium({ product }: { product: Product }) {
-  const { addToCart, user } = useApp(); const nav = useNavigate();
-  const d = Math.round((1 - product.price / product.originalPrice) * 100);
-  const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
-  return (
-    <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-200 hover:border-luxe-gold/40 hover:shadow-[0_10px_30px_-8px_rgba(37,99,235,0.15)] hover:-translate-y-0.5 transition-all duration-200">
-        <div className="relative bg-gray-50 overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-[4/4] object-cover group-hover:scale-[1.04] transition-transform duration-300" loading="lazy" />
-          {d > 0 && <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-sale text-white text-[10px] font-bold rounded leading-none shadow-sm">-{d}%</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] py-1.5 bg-luxe-gold hover:bg-luxe-gold-hover text-white rounded-lg text-[11px] font-semibold shadow-md translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-1.5">
-            <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
-          </button>
-        </div>
-        <div className="px-3 py-2.5">
+        <div className="px-3.5 py-3">
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[9px] text-luxe-gold uppercase tracking-[0.16em] font-bold truncate">{product.category}</p>
+            <p className="eyebrow truncate">{product.category}</p>
             <div className="flex items-center gap-1 shrink-0">
-              <Star size={9} className="text-star fill-star" />
-              <span className="text-[10px] font-semibold text-gray-700">{product.rating.toFixed(1)}</span>
+              <Star size={10} className="text-star fill-star" />
+              <span className="text-[10px] font-semibold text-luxe-charcoal">{product.rating.toFixed(1)}</span>
             </div>
           </div>
-          <h3 className="text-[12px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2rem]">{product.name}</h3>
+          <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem] group-hover:text-luxe-gold-dark transition-colors">{product.name}</h3>
           <div className="flex items-baseline gap-1.5 mt-1.5">
-            <span className="text-[13px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[10px] text-gray-400 line-through">${product.originalPrice.toFixed(2)}</span>}
-            <span className="ml-auto flex items-center gap-1 text-[9px] text-gray-400">
+            <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
+            {d > 0 && <span className="text-[11px] text-luxe-gray line-through">${product.originalPrice.toFixed(2)}</span>}
+            <span className="ml-auto flex items-center gap-1 text-[9px] text-luxe-gray">
               <span className="w-1 h-1 rounded-full bg-luxe-gold" />
               {sold > 0 ? `${sold} sold` : 'New'}
             </span>
@@ -1049,6 +1105,11 @@ function PCardPremium({ product }: { product: Product }) {
       </div>
     </Link>
   );
+}
+
+// Premium alias — one card component across the whole storefront
+function PCardPremium({ product }: { product: Product }) {
+  return <PCard product={product} />;
 }
 
 // Scroll to top on every route change
@@ -1065,10 +1126,12 @@ function ScrollToTop() {
 function SLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-4 focus:py-2 focus:bg-luxe-black focus:text-white focus:rounded-lg focus:text-sm">Skip to content</a>
       <ScrollToTop />
       <Header />
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">{children}</main>
       <Footer />
+      <CartDrawer />
     </div>
   );
 }
@@ -1127,7 +1190,7 @@ function ProductDetailPage() {
           <p className="text-5xl mb-4">😕</p>
           <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
           <p className="text-gray-500 mb-6">This product may have been removed.</p>
-          <Link to="/shop" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg">Back to Shop</Link>
+          <Link to="/shop" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full transition-colors">Back to Shop</Link>
         </div>
       </div>
     );
@@ -1153,7 +1216,7 @@ function ProductDetailPage() {
     if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
-    nav('/cart');
+    nav('/checkout');
   };
 
   const submitReview = (e: React.FormEvent) => {
@@ -1172,11 +1235,11 @@ function ProductDetailPage() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
-        <Link to="/" className="hover:text-blue-600 transition-colors">Home</Link>
+        <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
         <ChevronRight size={11} />
-        <Link to="/shop" className="hover:text-blue-600 transition-colors">Shop</Link>
+        <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
         <ChevronRight size={11} />
-        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-blue-600 transition-colors">{product.category}</Link>
+        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
         <ChevronRight size={11} />
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
@@ -1184,21 +1247,21 @@ function ProductDetailPage() {
       <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
         {/* LEFT: Image Gallery */}
         <div className="lg:sticky lg:top-24 self-start">
-          <div className="relative rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 shadow-sm">
+          <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
             <div className="aspect-[4/3]">
               <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} className="w-full h-full object-cover" />
             </div>
             {discount > 0 && (
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                <span className="px-2 py-1 bg-red-500 text-white text-[10px] font-bold rounded-lg shadow">-{discount}%</span>
+                <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
               </div>
             )}
-            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-gold/90 text-white text-[9px] font-bold rounded-lg">FREE SHIP</span>}
+            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
           </div>
-          <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1">
+          <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
             {product.images.map((img, i) => (
-              <button key={i} onClick={() => setSelImg(i)}
-                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100'}`}>
+              <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`}
+                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
                 <img src={img} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
@@ -1208,35 +1271,35 @@ function ProductDetailPage() {
         {/* RIGHT: Product Info — AliExpress-style premium */}
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            {product.brand && <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">{product.brand}</span>}
+            {product.brand && <span className="text-[11px] font-bold text-luxe-gold uppercase tracking-wider">{product.brand}</span>}
             {product.condition !== 'New' && <span className="text-[11px] text-gray-400">| {product.condition}</span>}
             <span className="text-[11px] text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full font-medium">{product.category}</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
           {/* Rating */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
+            <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
             <span className="text-gray-300">|</span>
             <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
           </div>
 
           {/* Price */}
-          <div className="rounded-2xl bg-luxe-light border border-luxe-silver p-4 mb-4">
+          <div className="rounded-2xl bg-luxe-gold-soft/70 border border-luxe-gold/25 p-5 mb-4">
             <div className="flex flex-wrap items-baseline gap-3">
-              <span className="text-3xl font-bold text-gray-900">${activePrice.toFixed(2)}</span>
-              {discount > 0 && <span className="text-sm text-gray-400 line-through">${activeOriginal.toFixed(2)}</span>}
-              {discount > 0 && <span className="px-2 py-0.5 bg-red-500 text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
+              <span className="font-serif text-3xl font-bold text-luxe-black">${activePrice.toFixed(2)}</span>
+              {discount > 0 && <span className="text-sm text-luxe-gray line-through">${activeOriginal.toFixed(2)}</span>}
+              {discount > 0 && <span className="px-2 py-0.5 bg-sale text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
             </div>
-            {discount > 0 && <p className="text-[11px] text-blue-700 mt-1.5 font-medium">{discount}% off — limited time deal</p>}
+            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
           </div>
 
           {/* Stock + Shipping */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
             {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-blue-600 font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
             {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
             {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
             <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />30-day easy returns</span>
@@ -1279,11 +1342,11 @@ function ProductDetailPage() {
               <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-gray-200 disabled:cursor-not-allowed shadow-lg shadow-luxe-gold/25 hover:shadow-luxe-gold/40 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-hover">
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
               <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
-              className="flex-1 py-3 bg-luxe-charcoal hover:bg-luxe-black disabled:bg-gray-200 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors">
+              className="flex-1 py-3 bg-luxe-black hover:bg-luxe-charcoal disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray text-white text-sm font-bold rounded-xl transition-colors">
               Buy Now
             </button>
           </div>
@@ -1296,9 +1359,9 @@ function ProductDetailPage() {
               { icon: Shield, t: 'Quality guarantee' },
               { icon: Lock, t: 'Secure checkout' },
             ].map((b, i) => (
-              <div key={i} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                <b.icon size={14} className="text-blue-500 shrink-0" />
-                <span className="text-[10px] sm:text-[11px] text-gray-600 font-medium leading-tight">{b.t}</span>
+              <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
+                <b.icon size={14} className="text-luxe-gold shrink-0" />
+                <span className="text-[10px] sm:text-[11px] text-luxe-gray font-medium leading-tight">{b.t}</span>
               </div>
             ))}
           </div>
@@ -1312,7 +1375,7 @@ function ProductDetailPage() {
       <div className="flex gap-6 mt-8 mb-5 border-b border-gray-100 overflow-x-auto">
         {([['desc', 'Description'], ['specs', 'Specifications'], ['reviews', `Reviews (${reviews.length})`]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`pb-2.5 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-blue-500 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-700'}`}>
+            className={`pb-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-luxe-gold text-luxe-black' : 'border-transparent text-luxe-gray hover:text-luxe-black'}`}>
             {label}
           </button>
         ))}
@@ -1321,10 +1384,10 @@ function ProductDetailPage() {
       {/* Description */}
       {tab === 'desc' && (
         <div className="max-w-3xl">
-          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
+          <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description}</p>
           {product.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-              {product.tags.map(t => <span key={t} className="text-xs text-blue-600 hover:underline cursor-pointer">#{t}</span>)}
+              {product.tags.map(t => <span key={t} className="text-xs text-luxe-gold hover:underline cursor-pointer">#{t}</span>)}
             </div>
           )}
         </div>
@@ -1358,20 +1421,20 @@ function ProductDetailPage() {
           </div>
 
           {user ? (
-            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-blue-600 hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
+            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-luxe-gold hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
           ) : (
-            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-blue-600 font-semibold hover:underline">Sign in</Link> to review</p>
+            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-luxe-gold font-semibold hover:underline">Sign in</Link> to review</p>
           )}
 
           {showRevForm && (
-            <form onSubmit={submitReview} className="bg-gray-50 rounded-xl p-4 mb-5 space-y-3 border border-gray-100">
+            <form onSubmit={submitReview} className="bg-luxe-cream rounded-xl p-4 mb-5 space-y-3 border border-luxe-silver/70">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
                   <Star size={18} className={s <= revForm.rating ? 'text-star fill-star' : 'text-gray-300'} />
                 </button>
               ))}</div>
               <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
-              <button type="submit" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg">Submit Review</button>
+              <button type="submit" className="px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold rounded-lg transition-colors">Submit Review</button>
             </form>
           )}
 
@@ -1392,7 +1455,7 @@ function ProductDetailPage() {
 
       {/* Related */}
       <div className="mt-10 pt-6 border-t border-gray-100">
-        <h2 className="text-lg font-bold text-luxe-black mb-4">Related Products</h2>
+        <h2 className="font-serif text-lg font-bold text-luxe-black mb-4">Related Products</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
         </div>
@@ -1405,214 +1468,294 @@ function ProductDetailPage() {
 // ============================================================================
 // STORE PAGES
 // ============================================================================
+// Scroll-reveal wrapper — fades content in as it enters the viewport
+function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) { setShown(true); io.disconnect(); }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className={`reveal-base ${shown ? 'reveal-show' : ''} ${className}`} style={delay ? { transitionDelay: `${delay}ms` } : undefined}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
+  return (
+    <div className="flex items-end justify-between gap-4 mb-7">
+      <div>
+        <p className="eyebrow mb-2">{eyebrow}</p>
+        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
+      </div>
+      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1.5 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
+        {linkLabel} <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+      </Link>}
+    </div>
+  );
+}
+
 function HomePage() {
   const { products, notify } = useApp();
   const featured = products.filter(p => p.isActive);
   const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  const hero = featured.slice(0, 4);
 
   return (
     <div className="bg-white">
-      {/* ════════ SECTION 0.5 — Ad: After Hero ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
+      {/* ════════ HERO — light, premium blue ════════ */}
+      <section className="relative bg-gradient-to-br from-luxe-light via-white to-white text-luxe-black overflow-hidden">
+        {/* Ambient glow + texture */}
+        <div aria-hidden="true" className="absolute inset-0">
+          <div className="absolute -top-40 -right-32 w-[36rem] h-[36rem] rounded-full bg-luxe-gold/12 blur-[130px]" />
+          <div className="absolute -bottom-48 -left-32 w-[30rem] h-[30rem] rounded-full bg-luxe-gold/8 blur-[120px]" />
+          <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '34px 34px' }} />
+        </div>
 
-      {/* ════════ SECTION 1 — PROMOTIONAL HERO (light) ════════ */}
-      <section className="bg-gradient-to-br from-luxe-light via-white to-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-14 lg:py-16 grid lg:grid-cols-[1.1fr_0.9fr] items-center gap-8">
-          <div className="text-center lg:text-left">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-luxe-gold/10 text-luxe-gold text-[11px] font-bold uppercase tracking-wider mb-4">
-              <Sparkles size={13} /> Everyday Essentials for Happier Pets
+        <div className="relative max-w-7xl mx-auto px-4 pt-14 pb-16 sm:pt-18 sm:pb-20 lg:pt-24 lg:pb-24 grid lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-14">
+          {/* Copy */}
+          <div className="hero-stagger text-center lg:text-left">
+            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-luxe-gold/10 border border-luxe-gold/25 text-luxe-gold-dark text-[11px] font-bold uppercase tracking-[0.16em]">
+              <Sparkles size={12} /> Curated for Quality, Priced for Value
             </span>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-luxe-black leading-[1.1] mb-3 tracking-tight">
-              Everything Your Pet Loves
+            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mt-6 mb-5 text-luxe-black">
+              Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
             </h1>
-            <p className="text-gray-500 text-sm sm:text-base mb-6 max-w-md mx-auto lg:mx-0">
-              Shop handpicked essentials for feeding, comfort, play, grooming and life on the go.
+            <p className="text-luxe-gray text-sm sm:text-base max-w-lg mx-auto lg:mx-0 mb-8 leading-relaxed">
+              Handpicked essentials for feeding, comfort, play, and grooming — tested by our team, loved by pets, delivered to your door.
             </p>
-            <div className="flex flex-wrap items-center gap-3 justify-center lg:justify-start">
-              <Link to="/shop" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl text-sm shadow-md shadow-luxe-gold/20 transition-all hover:-translate-y-0.5">
-                Shop Pet Essentials <ArrowRight size={15} className="inline ml-1 -mt-0.5" />
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
+              <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">
+                Shop Pet Essentials <ArrowRight size={16} />
               </Link>
-              <Link to="/shop?q=deal" className="px-6 py-3 border border-gray-300 text-luxe-black font-semibold rounded-xl text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all">
+              <Link to="/shop?q=deal" className="inline-flex items-center gap-2 px-7 py-3.5 border border-luxe-silver text-luxe-charcoal font-semibold rounded-full text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all bg-white/70">
                 Explore Deals
               </Link>
             </div>
-          </div>
-          <div className="hidden lg:grid grid-cols-2 gap-3">
-            {featured.slice(0, 4).map(p => (
-              <Link key={p.id} to={`/product/${p.id}`} className="group bg-white rounded-2xl border border-gray-200 p-3 hover:shadow-lg hover:shadow-luxe-gold/10 transition-shadow">
-                <img src={p.images[0]} alt={p.name} className="w-full aspect-square object-cover rounded-xl mb-2 group-hover:scale-[1.02] transition-transform" loading="lazy" />
-                <p className="text-[11px] font-semibold text-luxe-black line-clamp-1">{p.name}</p>
-                <p className="text-[12px] font-bold text-luxe-gold mt-0.5">${p.price.toFixed(2)}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SECTION 2 — SHOP BY PET ════════ */}
-      <section className="py-10 sm:py-14 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black text-center mb-6">Who are you shopping for?</h2>
-          <div className="grid grid-cols-2 gap-4 max-w-3xl mx-auto">
-            {[
-              { emoji: '🐶', label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more' },
-              { emoji: '🐱', label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more' },
-            ].map(p => (
-              <Link key={p.label} to={p.to} className="group relative rounded-2xl overflow-hidden border border-gray-200 bg-luxe-light hover:border-luxe-gold hover:shadow-lg hover:shadow-luxe-gold/10 transition-all">
-                <div className="aspect-[4/3] flex flex-col items-center justify-center gap-2 p-6">
-                  <span className="text-5xl sm:text-6xl group-hover:scale-110 transition-transform">{p.emoji}</span>
-                  <span className="font-serif text-xl sm:text-2xl font-bold text-luxe-black">{p.label}</span>
-                  <span className="text-xs text-gray-500">{p.desc}</span>
-                  <span className="text-[11px] font-bold text-luxe-gold opacity-0 group-hover:opacity-100 transition-opacity">Shop now →</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SECTION 3 — POPULAR CATEGORIES ════════ */}
-      <section className="py-10 sm:py-14 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Browse</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Shop Popular Categories</h2>
+            {/* Social proof */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={13} className="text-star fill-star" />)}</div>
+                <span className="text-[12px] text-luxe-gray"><strong className="text-luxe-black font-bold">4.9/5</strong> · 2,000+ happy pet parents</span>
+              </div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:mx-0 sm:px-0 sm:overflow-visible">
-            {CAT_LIST.filter(c => c !== 'All').map(c => {
-              const meta = CAT_META[c];
-              const count = featured.filter(p => p.category === c).length;
-              return (
-                <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-28 sm:w-auto">
-                  <div className="bg-white rounded-2xl border border-gray-200 hover:border-luxe-gold hover:shadow-md hover:shadow-luxe-gold/10 transition-all p-3">
-                    <div className="w-14 h-14 mx-auto rounded-full bg-luxe-light flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">{meta?.emoji || '🐾'}</div>
-                    <p className="text-center text-[12px] font-semibold text-luxe-black mt-2 leading-tight">{c}</p>
-                    <p className="text-center text-[10px] text-gray-400">{count} items</p>
+
+          {/* Photo collage */}
+          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              {hero[0] && (
+                <Link to={`/product/${hero[0].id}`} className="relative row-span-2 group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-lg shadow-luxe-gold/10">
+                  <img src={hero[0].images[0]} alt={hero[0].name} loading="eager" className="w-full h-full min-h-[22rem] object-cover group-hover:scale-[1.04] transition-transform duration-700" />
+                  <span className="absolute bottom-3 left-3 right-3 px-3 py-2 glass rounded-lg text-[11px] font-semibold text-luxe-black">{hero[0].name}</span>
+                </Link>
+              )}
+              {hero.slice(1, 3).map(p => (
+                <Link key={p.id} to={`/product/${p.id}`} className="group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-md shadow-luxe-gold/5">
+                  <img src={p.images[0]} alt={p.name} loading="lazy" className="w-full aspect-square object-cover group-hover:scale-[1.04] transition-transform duration-700" />
+                </Link>
+              ))}
+            </div>
+            {/* Floating trust chips */}
+            <div className="absolute -left-3 sm:-left-6 top-6 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl animate-float">
+              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck size={16} /></span>
+              <div>
+                <p className="text-[11px] font-bold text-luxe-black">Free Shipping</p>
+                <p className="text-[10px] text-luxe-gray">On orders $50+</p>
+              </div>
+            </div>
+            <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
+              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Shield size={16} /></span>
+              <div>
+                <p className="text-[11px] font-bold text-luxe-black">Quality Guarantee</p>
+                <p className="text-[10px] text-luxe-gray">Handpicked & tested</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Blue baseline */}
+        <div aria-hidden="true" className="h-px bg-gradient-to-r from-transparent via-luxe-gold/50 to-transparent" />
+      </section>
+
+      {/* ════════ Ad: After Hero ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
+
+      {/* ════════ SHOP BY PET ════════ */}
+      <section className="py-14 sm:py-18 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <Reveal className="text-center mb-9">
+            <p className="eyebrow mb-2">Start Here</p>
+            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Who are you shopping for?</h2>
+          </Reveal>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+            {[
+              { emoji: '🐶', label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more', img: CAT_META['Dog Supplies'].img },
+              { emoji: '🐱', label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more', img: CAT_META['Cat Supplies'].img },
+            ].map(p => (
+              <Reveal key={p.label} delay={80}>
+                <Link to={p.to} className="group relative block rounded-3xl overflow-hidden ring-1 ring-luxe-silver/80 hover:ring-luxe-gold/60 shadow-sm hover:shadow-xl transition-all duration-300">
+                  <img src={p.img} alt={p.label} loading="lazy" className="w-full aspect-[4/3] object-cover group-hover:scale-[1.05] transition-transform duration-700" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/80 via-luxe-black/20 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-6 text-center">
+                    <span className="text-3xl block mb-1.5">{p.emoji}</span>
+                    <span className="font-serif text-2xl font-bold text-luxe-white block">{p.label}</span>
+                    <span className="text-xs text-luxe-white/75">{p.desc}</span>
+                    <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight size={12} /></span>
                   </div>
                 </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SECTION 3.5 — Ad: After Categories ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
-
-      {/* ════════ SECTION 4 — DEAL / PROMOTIONAL BANNERS ════════ */}
-      <section className="py-10 sm:py-14 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Link to="/shop" className="group relative rounded-2xl overflow-hidden bg-sale-bg border border-red-100 p-6 hover:shadow-lg hover:shadow-red-100 transition-shadow">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-3"><Zap size={11} /> Deal</span>
-              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Pet Favorites Under $30</h3>
-              <p className="text-xs text-gray-500 mb-3">Everyday essentials your pet will love.</p>
-              <span className="text-[12px] font-bold text-sale group-hover:underline">Shop now →</span>
-            </Link>
-            <Link to="/category/pet-beds" className="group relative rounded-2xl overflow-hidden bg-blue-50 border border-luxe-gold/20 p-6 hover:shadow-lg hover:shadow-luxe-gold/10 transition-shadow">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-3"><Moon size={11} /> Comfort</span>
-              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Better Sleep for Your Pet</h3>
-              <p className="text-xs text-gray-500 mb-3">Orthopedic beds & cozy caves for deep rest.</p>
-              <span className="text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now →</span>
-            </Link>
-            <Link to="/category/pet-toys" className="group relative rounded-2xl overflow-hidden bg-emerald-50 border border-emerald-100 p-6 hover:shadow-lg hover:shadow-emerald-100 transition-shadow">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-full mb-3"><Sparkles size={11} /> Play</span>
-              <h3 className="font-serif text-lg font-bold text-luxe-black mb-1">Playtime Essentials</h3>
-              <p className="text-xs text-gray-500 mb-3">Interactive toys & enrichment for happy pets.</p>
-              <span className="text-[12px] font-bold text-emerald-600 group-hover:underline">Shop now →</span>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SECTION 5 — PRODUCT CAROUSEL: Popular Right Now ════════ */}
-      <section className="py-10 sm:py-14 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Best Sellers</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Popular Right Now</h2>
-            </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:mx-0 sm:px-0 sm:overflow-visible">
-            {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SECTION 5.5 — Ad: Between Product Sections ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
-
-      {/* ════════ SECTION 6 — SHOP BY NEED ════════ */}
-      <section className="py-10 sm:py-14 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black text-center mb-6">Shop by Need</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              { emoji: '🍽️', label: 'Feeding Time', to: '/category/feeding-water' },
-              { emoji: '😴', label: 'Better Sleep', to: '/category/pet-beds' },
-              { emoji: '🧸', label: 'Play & Enrichment', to: '/category/pet-toys' },
-              { emoji: '✂️', label: 'Grooming', to: '/category/grooming' },
-              { emoji: '🎒', label: 'Walking & Travel', to: '/category/pet-accessories' },
-            ].map(n => (
-              <Link key={n.label} to={n.to} className="group rounded-2xl border border-gray-200 hover:border-luxe-gold hover:shadow-md hover:shadow-luxe-gold/10 transition-all p-4 text-center">
-                <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">{n.emoji}</span>
-                <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
-              </Link>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ════════ SECTION 7 — RECOMMENDED: Pet Parent Favorites ════════ */}
-      <section className="py-10 sm:py-14 bg-luxe-cream">
+      {/* ════════ POPULAR CATEGORIES ════════ */}
+      <section className="py-14 sm:py-18 bg-luxe-cream">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <p className="text-luxe-gold text-[11px] font-bold uppercase tracking-[0.18em] mb-1">Recommended For You</p>
-              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black">Pet Parent Favorites</h2>
+          <Reveal><SectionHeader eyebrow="Browse" title="Shop Popular Categories" to="/shop" /></Reveal>
+          <Reveal delay={60}>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:mx-0 sm:px-0 sm:overflow-visible">
+              {CAT_LIST.filter(c => c !== 'All').map(c => {
+                const meta = CAT_META[c];
+                const count = featured.filter(p => p.category === c).length;
+                return (
+                  <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-32 sm:w-auto">
+                    <div className="bg-white rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-4 text-center">
+                      <div className="w-14 h-14 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center text-2xl group-hover:scale-110 group-hover:bg-luxe-gold/15 transition-transform duration-300">{meta?.emoji || '🐾'}</div>
+                      <p className="text-center text-[12px] font-semibold text-luxe-black mt-3 leading-tight">{c}</p>
+                      <p className="text-center text-[10px] text-luxe-gray mt-0.5">{count} items</p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
-            <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-luxe-gold hover:underline">View All <ArrowRight size={14} /></Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ════════ SECTION 8 — TRUST / SERVICES ════════ */}
-      <section className="py-10 sm:py-12 bg-white border-y border-gray-100">
+      {/* ════════ Ad: After Categories ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
+
+      {/* ════════ PROMO BANNERS ════════ */}
+      <section className="py-14 sm:py-18 bg-white">
+        <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
+          <Reveal><Link to="/shop" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap size={11} /> Deal</span>
+            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
+            <p className="text-xs text-luxe-gray mb-4">Everyday essentials your pet will love.</p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight size={12} /></span>
+          </Link></Reveal>
+          <Reveal delay={70}><Link to="/category/pet-beds" className="group relative block rounded-3xl overflow-hidden bg-luxe-gold-soft border border-luxe-gold/25 p-7 hover:shadow-xl hover:shadow-luxe-gold/15 hover:-translate-y-1 transition-all duration-300">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-4"><Moon size={11} /> Comfort</span>
+            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Better Sleep for Your Pet</h3>
+            <p className="text-xs text-luxe-gray mb-4">Orthopedic beds & cozy caves for deep rest.</p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
+          </Link></Reveal>
+          <Reveal delay={140}><Link to="/category/pet-toys" className="group relative block rounded-3xl overflow-hidden bg-luxe-cream border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Sparkles size={11} /> Play</span>
+            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Playtime Essentials</h3>
+            <p className="text-xs text-luxe-gray mb-4">Interactive toys & enrichment for happy pets.</p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
+          </Link></Reveal>
+        </div>
+      </section>
+
+      {/* ════════ BEST SELLERS ════════ */}
+      <section className="py-14 sm:py-18 bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4">
+          <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
+          <Reveal delay={60}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ════════ Ad: Between Product Sections ════════ */}
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+
+      {/* ════════ SHOP BY NEED ════════ */}
+      <section className="py-14 sm:py-18 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <Reveal className="text-center mb-9">
+            <p className="eyebrow mb-2">Solutions</p>
+            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Shop by Need</h2>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { emoji: '🍽️', label: 'Feeding Time', to: '/category/feeding-water' },
+                { emoji: '😴', label: 'Better Sleep', to: '/category/pet-beds' },
+                { emoji: '🧸', label: 'Play & Enrichment', to: '/category/pet-toys' },
+                { emoji: '✂️', label: 'Grooming', to: '/category/grooming' },
+                { emoji: '🎒', label: 'Walking & Travel', to: '/category/pet-accessories' },
+              ].map(n => (
+                <Link key={n.label} to={n.to} className="group rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-5 text-center bg-white">
+                  <span className="text-3xl block mb-2.5 group-hover:scale-110 transition-transform duration-300">{n.emoji}</span>
+                  <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
+                </Link>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ════════ PET PARENT FAVORITES ════════ */}
+      <section className="py-14 sm:py-18 bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4">
+          <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
+          <Reveal delay={60}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+              {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ════════ TRUST BAR ════════ */}
+      <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
-            { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle refunds' },
+            { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
             { icon: Shield, title: 'Secure Checkout', desc: '256-bit SSL encryption' },
             { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
           ].map(t => (
-            <div key={t.title} className="flex items-center gap-3">
-              <span className="w-11 h-11 rounded-full bg-luxe-light text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
+            <div key={t.title} className="flex items-center gap-3.5">
+              <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
               <div>
                 <p className="text-sm font-bold text-luxe-black">{t.title}</p>
-                <p className="text-[11px] text-gray-500">{t.desc}</p>
+                <p className="text-[11px] text-luxe-gray">{t.desc}</p>
               </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ════════ SECTION 9 — NEWSLETTER ════════ */}
-      <section className="py-10 sm:py-14 bg-luxe-light">
-        <div className="max-w-3xl mx-auto px-4 text-center">
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black mb-2">Join the Luxedge Pet Family</h2>
-          <p className="text-gray-500 text-sm mb-6">Get new arrivals, pet essentials and member-only offers delivered to your inbox.</p>
+      {/* ════════ NEWSLETTER — dark bookend ════════ */}
+      <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
+        <div aria-hidden="true" className="absolute -top-32 right-0 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/12 blur-[120px]" />
+        <div className="relative max-w-3xl mx-auto px-4 py-16 sm:py-20 text-center">
+          <p className="eyebrow mb-3 text-luxe-gold-light">Stay in the Loop</p>
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-white tracking-tight mb-3">Join the Luxedge Pet Family</h2>
+          <p className="text-luxe-white/65 text-sm mb-8 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
           <form onSubmit={e => { e.preventDefault(); notify('Thanks for subscribing! 🐾'); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input type="email" required placeholder="Your email address"
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-white" />
-            <button type="submit" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl text-sm transition-colors">
+            <input type="email" required placeholder="Your email address" aria-label="Email address"
+              className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
+            <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
               Subscribe
             </button>
           </form>
@@ -1673,7 +1816,7 @@ function ShopPage() {
           {CAT_LIST.map(c => (
             <button key={c} onClick={() => handleCatChange(c)}
               className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                cat === c ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                cat === c ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               {c}
             </button>
@@ -1683,7 +1826,7 @@ function ShopPage() {
       <div>
         <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Price</h3>
         <select value={maxPrice} onChange={e => setMaxPrice(+e.target.value)}
-          className="w-full text-[13px] px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+          className="w-full text-[13px] px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20">
           <option value={0}>Any price</option>
           <option value={25}>Under $25</option>
           <option value={50}>Under $50</option>
@@ -1697,7 +1840,7 @@ function ShopPage() {
           {[4.5, 4, 0].map(r => (
             <button key={r} onClick={() => setMinRating(r)}
               className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                minRating === r ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
+                minRating === r ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               {r === 0 ? 'Any rating' : (
                 <span className="flex items-center gap-1"><Star size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
@@ -1707,36 +1850,36 @@ function ShopPage() {
         </div>
       </div>
       {activeFilters > 0 && (
-        <button onClick={clearAll} className="w-full text-center text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline">Clear all filters ({activeFilters})</button>
+        <button onClick={clearAll} className="w-full text-center text-[12px] font-semibold text-luxe-gold hover:text-luxe-gold-dark hover:underline">Clear all filters ({activeFilters})</button>
       )}
     </div>
   );
 
   return (
     <div>
-      {/* Page Header — light */}
-      <section className="bg-gradient-to-b from-blue-50 to-white border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-8 sm:py-10">
-          <p className="text-blue-600 text-[10px] uppercase tracking-[0.25em] font-semibold mb-1.5">{cat === 'All' ? 'Our Collection' : cat}</p>
-          <h1 className="text-2xl sm:text-3xl font-bold text-luxe-black">{pageTitle}</h1>
-          <p className="text-gray-500 text-xs sm:text-sm max-w-xl mt-1">{pageDesc}</p>
+      {/* Page Header */}
+      <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
+        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12">
+          <p className="eyebrow mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
+          <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
         </div>
       </section>
 
       {/* Toolbar: mobile Filter button + search + sort */}
-      <div className="bg-white border-b sticky top-0 z-20 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-0 z-20 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
-            className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-gray-200 rounded-lg text-gray-700 hover:border-blue-300 hover:text-blue-600 transition-colors">
-            <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center">{activeFilters}</span>}
+            className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
+            <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
           </button>
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
+            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
+              className="w-full pl-9 pr-3 py-2 border border-luxe-silver rounded-lg text-[13px] focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-luxe-cream/60" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
-            className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-gray-600 font-medium">
+            className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
             <option value="featured">Featured</option>
             <option value="best-sellers">Best Sellers</option>
             <option value="price-low">Price: Low→High</option>
@@ -1749,17 +1892,17 @@ function ShopPage() {
       {/* Mobile filter drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
+          <div className="absolute inset-0 bg-luxe-black/50" onClick={() => setDrawerOpen(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-[290px] max-w-[85vw] bg-white shadow-2xl overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
-              <h2 className="text-sm font-bold text-luxe-black">Filters</h2>
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-luxe-silver/70">
+              <h2 className="font-serif text-base font-bold text-luxe-black">Filters</h2>
               <button onClick={() => setDrawerOpen(false)} aria-label="Close filters"
-                className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100"><X size={16} /></button>
+                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X size={16} /></button>
             </div>
             <div className="p-4">
               <FilterBlock />
               <button onClick={() => setDrawerOpen(false)}
-                className="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                className="mt-6 w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm font-bold rounded-xl transition-colors">
                 Show {f.length} products
               </button>
             </div>
@@ -1771,21 +1914,23 @@ function ShopPage() {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <div className="flex gap-6">
           {/* Desktop sidebar */}
-          <aside className="hidden lg:block w-52 shrink-0 bg-white border border-gray-100 rounded-2xl p-4 h-fit sticky top-14">
+          <aside className="hidden lg:block w-56 shrink-0 bg-white border border-luxe-silver/70 rounded-2xl p-5 h-fit sticky top-16 shadow-sm">
             <FilterBlock />
           </aside>
 
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] text-gray-500 mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
+            <p className="text-[12px] text-luxe-gray mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
 
             {f.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {f.map(p => <PCard key={p.id} product={p} />)}
               </div>
             ) : (
-              <div className="text-center py-16">
-                <p className="text-sm text-gray-500 mb-2">No products found for your search</p>
-                <button onClick={clearAll} className="text-[12px] font-medium text-blue-600 hover:underline">Clear all filters</button>
+              <div className="text-center py-20">
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Search size={22} className="text-luxe-gold" /></div>
+                <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products found</p>
+                <p className="text-sm text-luxe-gray mb-5">Try adjusting your search or filters.</p>
+                <button onClick={clearAll} className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
               </div>
             )}
             {/* Ad: After Product Row */}
@@ -1797,14 +1942,198 @@ function ShopPage() {
   );
 }
 
+function CartDrawer() {
+  const { cart, cartOpen, closeCart, updateQty, removeFromCart, user } = useApp();
+  const nav = useNavigate();
+  const loc = useLocation();
+
+  // Close the drawer whenever the route changes (e.g. Proceed to Checkout).
+  useEffect(() => { closeCart(); }, [loc.pathname, closeCart]);
+
+  const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const sh = sub >= 50 ? 0 : 4.99;
+  const tot = sub + sh;
+  const remaining = 50 - sub;
+
+  const checkout = () => {
+    closeCart();
+    nav(user ? '/checkout' : '/login');
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        aria-hidden="true"
+        onClick={closeCart}
+        className={`fixed inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${cartOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      />
+
+      {/* Drawer */}
+      <aside
+        role="dialog"
+        aria-label="Shopping cart"
+        aria-hidden={!cartOpen}
+        inert={!cartOpen}
+        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-[95] shadow-2xl transform transition-transform duration-300 ease-out ${cartOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <ShoppingBag size={20} className="text-luxe-gold" />
+              <h2 className="text-lg font-semibold text-luxe-black">Your Cart ({cart.length})</h2>
+            </div>
+            <button onClick={closeCart} aria-label="Close cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          {cart.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+              <p className="text-luxe-black text-sm font-semibold">Your cart is empty</p>
+              <p className="text-luxe-gray text-xs">Add some handpicked essentials to get started.</p>
+              <button onClick={() => { closeCart(); nav('/shop'); }} className="mt-2 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">
+                Shop Now
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Items */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {sub < 50 ? (
+                  <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
+                    <p className="text-[11px] text-gray-600">You're <span className="font-bold text-luxe-gold">${remaining.toFixed(2)}</span> away from free shipping</p>
+                    <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 flex items-center gap-2">
+                    <CheckCircle size={14} className="text-green-600 shrink-0" />
+                    <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
+                  </div>
+                )}
+
+                {cart.map(item => (
+                  <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
+                    <img src={item.product.images[0]} alt={item.product.name} className="w-20 h-20 object-cover rounded-lg shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-luxe-black truncate">{item.product.name}</h4>
+                      <p className="text-[11px] text-gray-400 truncate">{item.product.category}</p>
+                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${item.product.price.toFixed(2)}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
+                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={12} /></button>
+                          <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
+                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={12} /></button>
+                        </div>
+                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <p className="text-sm font-bold text-luxe-black shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-semibold ${sh === 0 ? 'text-green-600' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
+                  <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
+                </div>
+                <button onClick={checkout} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-gold">
+                  <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+                </button>
+                <button onClick={() => { closeCart(); nav('/cart'); }} className="w-full py-2.5 text-xs text-gray-500 hover:text-luxe-black transition-colors">
+                  View Full Cart
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
 function CartPage() {
   const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
-  if (cart.length === 0) return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><ShoppingBag size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">Cart Empty</h2><Link to="/shop" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg inline-block mt-4">Shop Now</Link></div></div>;
-  return (<div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">Shopping Cart</h1>
-    <div className="bg-white rounded-xl border p-6 mb-6">{cart.map(i => <div key={i.product.id} className="flex gap-4 py-4 border-b last:border-0"><img src={i.product.images[0]} alt="" className="w-20 h-20 object-cover rounded-lg" /><div className="flex-1"><h3 className="font-semibold">{i.product.name}</h3><p className="text-blue-600 text-sm">${i.product.price}</p><div className="flex items-center gap-2 mt-2"><button onClick={() => updateQty(i.product.id, i.quantity - 1)} className="p-1 border rounded"><Minus size={14} /></button><span className="w-8 text-center">{i.quantity}</span><button onClick={() => updateQty(i.product.id, i.quantity + 1)} className="p-1 border rounded"><Plus size={14} /></button><button onClick={() => removeFromCart(i.product.id)} className="p-1 text-red-500 ml-4"><Trash2 size={16} /></button></div></div><p className="font-bold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
-    <div className="bg-white rounded-xl border p-6"><div className="space-y-2 text-sm mb-4"><div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${sub.toFixed(2)}</span></div><div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={sh === 0 ? 'text-green-600' : ''}>{sh === 0 ? 'FREE' : `$${sh}`}</span></div><div className="flex justify-between text-lg font-bold pt-2 border-t"><span>Total</span><span>${tot.toFixed(2)}</span></div></div><button onClick={() => nav(user ? '/checkout' : '/login')} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg">{user ? 'Checkout' : 'Sign In to Checkout'}</button></div>
-  </div></div>);
+  const remaining = 50 - sub;
+
+  if (cart.length === 0) return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+        <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
+        <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
+        <Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="py-12 bg-luxe-cream min-h-screen">
+      <div className="max-w-5xl mx-auto px-4">
+        <p className="eyebrow mb-2">Your Selection</p>
+        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Shopping Cart</h1>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Items */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm divide-y divide-luxe-silver/60">
+            {cart.map(i => (
+              <div key={i.product.id} className="flex gap-4 p-5">
+                <img src={i.product.images[0]} alt={i.product.name} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
+                <div className="flex-1 min-w-0">
+                  <Link to={`/product/${i.product.id}`} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
+                  <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">
+                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={13} /></button>
+                      <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
+                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={13} /></button>
+                    </div>
+                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-luxe-black">${(i.product.price * i.quantity).toFixed(2)}</p>
+                  <p className="text-xs text-luxe-gray">${i.product.price.toFixed(2)} each</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Summary */}
+          <div className="h-fit lg:sticky lg:top-20 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm p-6">
+            <h2 className="font-serif text-lg font-bold text-luxe-black mb-5">Order Summary</h2>
+            {sub < 50 && (
+              <div className="rounded-xl bg-luxe-gold-soft/70 border border-luxe-gold/20 px-4 py-3 mb-5">
+                <p className="text-[11px] text-luxe-gray">Add <span className="font-bold text-luxe-gold-dark">${remaining.toFixed(2)}</span> more for free shipping</p>
+                <div className="mt-2 h-1.5 bg-white rounded-full overflow-hidden">
+                  <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between"><span className="text-luxe-gray">Subtotal</span><span className="font-medium text-luxe-black">${sub.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`font-medium ${sh === 0 ? 'text-luxe-success' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
+              <div className="flex justify-between text-lg font-bold pt-3 border-t border-luxe-silver/70"><span className="text-luxe-black">Total</span><span className="text-luxe-black">${tot.toFixed(2)}</span></div>
+            </div>
+            <button onClick={() => nav(user ? '/checkout' : '/login')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
+              <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+            </button>
+            <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
+            <div className="mt-5 pt-4 border-t border-luxe-silver/60 flex items-center justify-center gap-2">
+              {['VISA', 'MC', 'AMEX', 'PayPal'].map(c => <span key={c} className="px-2 py-1 bg-luxe-cream border border-luxe-silver rounded text-[9px] font-bold text-luxe-gray">{c}</span>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function CheckoutPage() {
@@ -1827,7 +2156,7 @@ function CheckoutPage() {
   const tax = +(sub * 0.0825).toFixed(2); // TX 8.25%
   const total = +(sub + shipCost + tax).toFixed(2);
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 transition-all';
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
   const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
   const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
 
@@ -1891,7 +2220,7 @@ function CheckoutPage() {
           <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
         </div>
         <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl text-center text-sm">View Orders</Link>
+          <Link to="/orders" className="flex-1 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-center text-sm transition-colors">View Orders</Link>
           <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
         </div>
       </div>
@@ -1902,7 +2231,7 @@ function CheckoutPage() {
   if (step === 3) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
-        <div className="w-20 h-20 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-blue-500 animate-spin" /></div>
+        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-luxe-gold animate-spin" /></div>
         <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
         <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
       </div>
@@ -1918,8 +2247,8 @@ function CheckoutPage() {
           <div className="flex items-center justify-center gap-3">
             {[{ n: 1, l: 'Information' }, { n: 2, l: 'Payment' }, { n: 3, l: 'Confirm' }].map((s, i) => (
               <div key={s.n} className="flex items-center gap-3">
-                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-blue-600' : 'text-gray-400'}`}>
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${step > s.n ? 'bg-green-500 text-white' : step === s.n ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-luxe-gold' : 'text-gray-400'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ring-2 ${step > s.n ? 'bg-luxe-success text-white ring-luxe-success/30' : step === s.n ? 'bg-luxe-gold text-white ring-luxe-gold/30' : 'bg-luxe-silver/60 text-luxe-gray ring-transparent'}`}>
                     {step > s.n ? '✓' : s.n}
                   </div>
                   <span className="text-sm font-medium hidden sm:block">{s.l}</span>
@@ -1941,7 +2270,7 @@ function CheckoutPage() {
               <>
                 {/* Contact */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-blue-500" /> Contact Information</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-luxe-gold" /> Contact Information</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
                     <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
@@ -1952,7 +2281,7 @@ function CheckoutPage() {
 
                 {/* Shipping Address */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-blue-500" /> Shipping Address</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-luxe-gold" /> Shipping Address</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
                     <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
@@ -1965,14 +2294,14 @@ function CheckoutPage() {
 
                 {/* Shipping Method */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-blue-500" /> Shipping Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-luxe-gold" /> Shipping Method</h2>
                   <div className="space-y-3">
                     {[
                       { id: 'standard' as const, label: 'Standard Shipping', time: '7-12 business days', price: sub >= 50 ? 'FREE' : '$4.99', badge: sub >= 50 ? '🎉 Free!' : '' },
                       { id: 'express' as const, label: 'Express Shipping', time: '2-4 business days', price: '$9.99', badge: '' },
                     ].map(o => (
-                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-blue-500 border-gray-300" />
+                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-luxe-gold border-gray-300" />
                         <div className="flex-1">
                           <p className="font-semibold text-sm">{o.label}</p>
                           <p className="text-xs text-gray-500">{o.time}</p>
@@ -1986,7 +2315,7 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                <button onClick={handleNext} className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+                <button onClick={handleNext} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-gold">
                   Continue to Payment <ArrowRight size={16} />
                 </button>
               </>
@@ -1995,20 +2324,20 @@ function CheckoutPage() {
             {/* Step 2: Payment */}
             {step === 2 && (
               <>
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
+                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
 
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-blue-500" /> Payment Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-luxe-gold" /> Payment Method</h2>
 
                   {/* Method Toggle */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">STRIPE</span></div>
                         <div><p className="font-semibold text-sm">Credit / Debit</p><p className="text-[10px] text-gray-500">Visa, MC, Amex</p></div>
                       </div>
                     </button>
-                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-blue-500 bg-sky-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-7 bg-[#003087] rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">PayPal</span></div>
                         <div><p className="font-semibold text-sm">PayPal</p><p className="text-[10px] text-gray-500">Fast & secure</p></div>
@@ -2042,7 +2371,7 @@ function CheckoutPage() {
                   </div>
                 </div>
 
-                <button onClick={handlePay} className="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                <button onClick={handlePay} className="w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
                   <Lock size={16} />
                   {payMethod === 'paypal' ? `Pay with PayPal · $${total.toFixed(2)}` : `Complete Purchase · $${total.toFixed(2)}`}
                 </button>
@@ -2077,7 +2406,7 @@ function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {shipCost > 0 && sub < 50 && <p className="text-xs text-blue-600">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
+                {shipCost > 0 && sub < 50 && <p className="text-xs text-luxe-gold">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
@@ -2095,7 +2424,7 @@ function CheckoutPage() {
                   { i: Shield, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
-                    <b.i size={14} className="text-blue-500 shrink-0" />{b.t}
+                    <b.i size={14} className="text-luxe-gold shrink-0" />{b.t}
                   </div>
                 ))}
               </div>
@@ -2115,8 +2444,8 @@ function CheckoutPage() {
 }
 
 function OrdersPage() { const { orders, user } = useApp(); const nav = useNavigate(); useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center"><div className="text-center"><Package size={64} className="mx-auto text-gray-200 mb-4" /><h2 className="text-2xl font-bold mb-2">No Orders</h2><Link to="/shop" className="text-blue-600 font-semibold">Shop Now</Link></div></div>;
-  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-blue-600">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
+  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
+  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-luxe-gold">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
 }
 
 function LoginPage() {
@@ -2184,7 +2513,7 @@ function LoginPage() {
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
             </button>
           </form>
@@ -2295,7 +2624,7 @@ function SignupPage() {
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-lg shadow-luxe-gold/25">
+              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
             </button>
           </form>
@@ -2345,7 +2674,7 @@ function AdminLoginPage() {
     <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Shield className="text-blue-500" size={28} />
+          <Shield className="text-luxe-gold" size={28} />
           <span className="text-xl font-bold">Admin Login</span>
         </div>
         <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
@@ -2359,13 +2688,13 @@ function AdminLoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email</label>
-            <input type="email" placeholder="Enter admin email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" required />
+            <input type="email" placeholder="Enter admin email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Password</label>
-            <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" required />
+            <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
-          <button type="submit" className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
+          <button type="submit" className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
             <Lock size={16} /> Access Dashboard
           </button>
         </form>
@@ -2386,7 +2715,7 @@ function AdminLoginPage() {
 function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-luxe-black">{title}</h1></div></section>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black">{title}</h1></div></section>
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="bg-white rounded-2xl border p-6 sm:p-10">
           <p className="text-xs text-gray-400 mb-8">Last updated: {updated}</p>
@@ -2402,7 +2731,7 @@ function AboutPage() {
   return (<div>
     <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
       <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
-      <h1 className="text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
+      <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
       <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
@@ -2415,7 +2744,7 @@ function AboutPage() {
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
         {[{v:'2,000+',l:'Happy Customers'},{v:'500+',l:'Products Curated'},{v:'99%',l:'Satisfaction Rate'},{v:'24/7',l:'Customer Support'}].map((s,i)=>
-          <div key={i} className="text-center"><p className="text-2xl font-bold text-blue-500">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
+          <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
         )}
       </div>
     </div></section>
@@ -2517,11 +2846,11 @@ function FAQPage() {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="text-3xl font-bold text-luxe-black mb-2">Frequently Asked Questions</h1><p className="text-gray-500 text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Frequently Asked Questions</h1><p className="text-luxe-gray text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-blue-500" />{section.c}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-luxe-gold" />{section.c}</h2>
             <div className="space-y-2">
               {section.qs.map(faq => {
                 const key = faq.q;
@@ -2541,7 +2870,7 @@ function FAQPage() {
         ))}
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2"><Mail size={16} />Contact Support</Link>
+          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail size={16} />Contact Support</Link>
         </div>
       </div>
     </div>
@@ -2554,7 +2883,7 @@ function ContactPage() {
   return (
     <div>
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="text-3xl font-bold text-luxe-black mb-2">Contact Us</h1>
+        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Contact Us</h1>
         <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
       </div></section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
@@ -2566,8 +2895,8 @@ function ContactPage() {
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
-              <x.i className="mx-auto mb-2 text-blue-500" size={22} />
-              <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wider">{x.l}</p>
+              <x.i className="mx-auto mb-2 text-luxe-gold" size={22} />
+              <p className="text-[10px] text-luxe-gold font-semibold uppercase tracking-wider">{x.l}</p>
               <p className="font-semibold text-sm mt-1">{x.v}</p>
               <p className="text-xs text-gray-500">{x.s}</p>
             </div>
@@ -2583,16 +2912,16 @@ function ContactPage() {
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-blue-500" /> Send Us a Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-luxe-gold" /> Send Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400" /></div>
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Subject *</label>
-                <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
+                <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
-              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"><Send size={16} />Send Message</button>
+              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
+              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send size={16} />Send Message</button>
             </form>
           )}
         </div>
@@ -2607,7 +2936,7 @@ function CareersPage() {
   return (
     <div className="bg-gray-50 min-h-screen">
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="text-3xl font-bold text-luxe-black mb-2">Careers at Luxedge</h1>
+        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Careers at Luxedge</h1>
         <p className="text-gray-500 text-sm max-w-lg mx-auto">Join our growing team and help shape the future of curated ecommerce.</p>
       </div></section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
@@ -2641,11 +2970,11 @@ function CareersPage() {
               { title: 'Content Writer', type: 'Remote · Part-Time', desc: 'Create engaging blog posts, product descriptions, and marketing copy.' },
               { title: 'Customer Support Specialist', type: 'Remote · Full-Time', desc: 'Help customers via email and chat with a focus on resolution and delight.' },
             ].map((job, i) => (
-              <div key={i} className="p-5 border border-gray-200 rounded-xl hover:border-sky-300 transition-colors">
+              <div key={i} className="p-5 border border-gray-200 rounded-xl hover:border-luxe-gold/50 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-bold text-gray-900">{job.title}</h3>
-                    <p className="text-xs text-blue-600 font-medium mt-0.5">{job.type}</p>
+                    <p className="text-xs text-luxe-gold font-medium mt-0.5">{job.type}</p>
                     <p className="text-sm text-gray-600 mt-2">{job.desc}</p>
                   </div>
                 </div>
@@ -2655,7 +2984,7 @@ function CareersPage() {
 
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
           <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
-          <Link to="/contact" className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2">
+          <Link to="/contact" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors">
             <Mail size={16} /> Get in Touch
           </Link>
         </div>
@@ -2677,7 +3006,7 @@ function BlogListPage() {
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
-          <h1 className="text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Insights & Inspiration</h1>
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Insights & Inspiration</h1>
           <p className="text-gray-500 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
         </div>
       </section>
@@ -2686,7 +3015,7 @@ function BlogListPage() {
         <div className="max-w-6xl mx-auto px-4">
           {user && (
             <div className="flex justify-end mb-6">
-              <Link to="/blog/write" className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
+              <Link to="/blog/write" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
                 <PenLine size={16} /> Write a Post
               </Link>
             </div>
@@ -2705,11 +3034,11 @@ function BlogListPage() {
                       <span className="text-gray-200">·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
-                    <h2 className="font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors leading-tight">{post.title}</h2>
+                    <h2 className="font-bold text-gray-900 mb-2 group-hover:text-luxe-gold transition-colors leading-tight">{post.title}</h2>
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{post.excerpt}</p>
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">#{t}</span>)}</div>
-                      <span className="text-blue-600 text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
+                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
                     </div>
                   </div>
                 </Link>
@@ -2741,7 +3070,7 @@ function BlogDetailPage() {
 
   if (!post) return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center"><p className="text-5xl mb-4">📝</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg">Back to Blog</Link></div>
+      <div className="text-center"><p className="text-5xl mb-4">📝</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-luxe-gold text-white font-semibold rounded-lg">Back to Blog</Link></div>
     </div>
   );
 
@@ -2769,20 +3098,20 @@ function BlogDetailPage() {
         <div className="bg-white rounded-2xl shadow-xl border p-6 sm:p-10 mb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-            <Link to="/" className="hover:text-blue-600">Home</Link><ChevronRight size={12} />
-            <Link to="/blog" className="hover:text-blue-600">Blog</Link><ChevronRight size={12} />
+            <Link to="/" className="hover:text-luxe-gold">Home</Link><ChevronRight size={12} />
+            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><ChevronRight size={12} />
             <span className="text-gray-600 truncate max-w-[200px]">{post.title}</span>
           </nav>
 
           {/* Tags */}
-          <div className="flex gap-2 mb-4">{post.tags.map(t => <span key={t} className="px-3 py-1 bg-sky-50 text-blue-700 rounded-full text-xs font-medium">#{t}</span>)}</div>
+          <div className="flex gap-2 mb-4">{post.tags.map(t => <span key={t} className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-xs font-medium">#{t}</span>)}</div>
 
           {/* Title */}
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-4">{post.title}</h1>
+          <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-luxe-black leading-tight mb-4">{post.title}</h1>
 
           {/* Meta */}
           <div className="flex items-center gap-4 pb-6 border-b mb-8">
-            <div className="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center"><span className="font-bold text-blue-700 text-sm">{post.authorName.charAt(0)}</span></div>
+            <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{post.authorName.charAt(0)}</span></div>
             <div>
               <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
               <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
@@ -2813,10 +3142,10 @@ function BlogDetailPage() {
               <h3 className="font-bold text-lg text-gray-900 mb-4">You May Also Like</h3>
               <div className="grid sm:grid-cols-3 gap-4">
                 {relatedPosts.map(r => (
-                  <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-sky-50 transition-colors">
+                  <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-luxe-gold-soft transition-colors">
                     <img src={r.image} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 line-clamp-2 leading-tight">{r.title}</p>
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-luxe-gold line-clamp-2 leading-tight">{r.title}</p>
                       <p className="text-[10px] text-gray-400 mt-1">{new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                     </div>
                   </Link>
@@ -2828,7 +3157,7 @@ function BlogDetailPage() {
 
         {/* Back link */}
         <div className="text-center mb-12">
-          <Link to="/blog" className="text-blue-600 font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
+          <Link to="/blog" className="text-luxe-gold font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
         </div>
       </div>
     </div>
@@ -2881,13 +3210,13 @@ function BlogWritePage() {
     nav('/blog');
   };
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100';
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20';
 
   return (
     <div className="py-10 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4">
-        <Link to="/blog" className="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
-        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-blue-500" />Write a Blog Post</h1>
+        <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
+        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-luxe-gold" />Write a Blog Post</h1>
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
@@ -2899,7 +3228,7 @@ function BlogWritePage() {
                 <button type="button" onClick={() => setCover('')} className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600">✕</button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-sky-400 hover:bg-sky-50/30 transition-all">
+              <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold hover:bg-luxe-gold-soft/30 transition-all">
                 <Upload size={28} className="text-gray-400 mb-2" />
                 <span className="text-sm font-medium text-gray-600">Upload cover image</span>
                 <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
@@ -2924,20 +3253,20 @@ function BlogWritePage() {
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
-            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-sky-400 text-sm text-gray-500 hover:text-blue-600 w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
+            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-sky-50 text-blue-700 rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-sky-400 hover:text-red-500 ml-1">×</button></span>)}</div>
+            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
           </div>
 
-          {user?.role !== 'admin' && <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
+          {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
             <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
           </div>
         </form>
@@ -2959,7 +3288,7 @@ function ABlogs() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Blog Posts</h1>
-        <Link to="/blog/write" className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2"><Plus size={16} />New Post</Link>
+        <Link to="/blog/write" className="px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm rounded-lg flex items-center gap-2"><Plus size={16} />New Post</Link>
       </div>
 
       {blogs.length > 0 ? (
@@ -2973,7 +3302,7 @@ function ABlogs() {
                 <td className="px-6 py-4 text-sm text-gray-500">{new Date(b.date).toLocaleDateString()}</td>
                 <td className="px-6 py-4"><select value={b.status} onChange={e => updateStatus(b.id, e.target.value as BlogPost['status'])} className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 cursor-pointer ${statusColor[b.status]}`}><option value="published">Published</option><option value="pending">Pending</option><option value="draft">Draft</option></select></td>
                 <td className="px-6 py-4 flex gap-1">
-                  <Link to={`/blog/${b.slug}`} className="p-2 hover:bg-blue-50 rounded text-blue-600"><Eye size={16} /></Link>
+                  <Link to={`/blog/${b.slug}`} className="p-2 hover:bg-luxe-gold-soft rounded text-luxe-gold"><Eye size={16} /></Link>
                   <button onClick={() => setDelId(b.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={16} /></button>
                 </td>
               </tr>
@@ -3620,9 +3949,60 @@ function AReviews() {
   </div>;
 }
 
+// Defined at MODULE scope (not inside ASettings). Previously these lived inside
+// the component, so every keystroke recreated them as brand-new component types —
+// React then unmounted/remounted each input and stole focus after every character,
+// which made it feel like the API keys "wouldn't save".
+const SETTINGS_INPUT = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
+const SETTINGS_LABEL = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
+
+function SecField({ label, k, placeholder, hint, isUrl, apiKeys, setApiKeys, showKeys, toggleShow }: {
+  label: string; k: string; placeholder: string; hint?: string; isUrl?: boolean;
+  apiKeys: Record<string, string>; setApiKeys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  showKeys: Record<string, boolean>; toggleShow: (k: string) => void;
+}) {
+  return (
+    <div>
+      <label className={SETTINGS_LABEL}>{label}</label>
+      <div className="relative">
+        <input
+          type={isUrl ? 'url' : (showKeys[k] ? 'text' : 'password')}
+          value={apiKeys[k] || ''}
+          onChange={e => setApiKeys(s => ({ ...s, [k]: e.target.value }))}
+          className={SETTINGS_INPUT + (isUrl ? '' : ' pr-10')}
+          placeholder={placeholder}
+        />
+        {!isUrl && (
+          <button type="button" onClick={() => toggleShow(k)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            {showKeys[k] ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        )}
+      </div>
+      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function Accordion({ id, title, icon, borderClass, children, open, toggle }: {
+  id: string; title: string; icon: React.ReactNode; borderClass?: string; children: React.ReactNode;
+  open: Record<string, boolean>; toggle: (k: string) => void;
+}) {
+  return (
+    <div className={`bg-white rounded-xl border ${borderClass || ''}`}>
+      <button type="button" onClick={() => toggle(id)} className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 rounded-xl transition-colors">
+        <span className="font-semibold flex items-center gap-2">{icon}{title}</span>
+        {open[id] ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+      </button>
+      {open[id] && <div className="px-5 pb-6 border-t border-gray-100">{children}</div>}
+    </div>
+  );
+}
+
 function ASettings() {
   const { user, changePassword, updateAdminProfile, notify } = useApp();
   const navigate = useNavigate();
+  const L = SETTINGS_LABEL;
+  const I = SETTINGS_INPUT;
 
   const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}'); } catch { return {}; }
@@ -3672,46 +4052,12 @@ function ASettings() {
     } else { setPassError(result.msg); }
   };
 
-  const I = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
-  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
-
-  const SecField = ({ label, k, placeholder, hint, isUrl }: { label: string; k: string; placeholder: string; hint?: string; isUrl?: boolean }) => (
-    <div>
-      <label className={L}>{label}</label>
-      <div className="relative">
-        <input
-          type={isUrl ? 'url' : (showKeys[k] ? 'text' : 'password')}
-          value={apiKeys[k] || ''}
-          onChange={e => setApiKeys(s => ({ ...s, [k]: e.target.value }))}
-          className={I + (isUrl ? '' : ' pr-10')}
-          placeholder={placeholder}
-        />
-        {!isUrl && (
-          <button type="button" onClick={() => toggleShow(k)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            {showKeys[k] ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        )}
-      </div>
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  );
-
-  const Accordion = ({ id, title, icon, borderClass, children }: { id: string; title: string; icon: React.ReactNode; borderClass?: string; children: React.ReactNode }) => (
-    <div className={`bg-white rounded-xl border ${borderClass || ''}`}>
-      <button type="button" onClick={() => toggle(id)} className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 rounded-xl transition-colors">
-        <span className="font-semibold flex items-center gap-2">{icon}{title}</span>
-        {open[id] ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-      </button>
-      {open[id] && <div className="px-5 pb-6 border-t border-gray-100">{children}</div>}
-    </div>
-  );
-
   return (
     <div className="space-y-4 max-w-3xl">
       <h1 className="text-2xl font-bold">Settings</h1>
 
       {/* ── AI Providers ── */}
-      <Accordion id="ai" title="AI Providers" icon={<Bot size={18} className="text-purple-600" />} borderClass="border-purple-300">
+      <Accordion id="ai" title="AI Providers" icon={<Bot size={18} className="text-purple-600" />} borderClass="border-purple-300" open={open} toggle={toggle}>
         <div className="pt-5 space-y-4">
           <p className="text-sm text-gray-500">For full AI provider management including API keys, model selection, credit tracking, and connection testing, visit the dedicated AI Hub.</p>
           <button type="button" onClick={() => navigate('/admin/ai')}
@@ -3722,7 +4068,7 @@ function ASettings() {
       </Accordion>
 
       {/* ── API Keys ── */}
-      <Accordion id="api" title="API Keys" icon={<Globe size={18} className="text-green-600" />} borderClass="border-green-300">
+      <Accordion id="api" title="API Keys" icon={<Globe size={18} className="text-green-600" />} borderClass="border-green-300" open={open} toggle={toggle}>
         <div className="pt-5 space-y-5">
           <p className="text-sm text-gray-500">Keys are saved locally in your browser. Add them to enable AliExpress import, AI features, payments, and more.</p>
 
@@ -3737,18 +4083,18 @@ function ASettings() {
               <li>Copy your token from the dashboard</li>
               <li>Paste it below and save</li>
             </ol>
-            <SecField label="scrape.do Token" k="scrapedoKey" placeholder="paste your scrape.do token here" hint="Required for AliExpress product import" />
+            <SecField label="scrape.do Token" k="scrapedoKey" placeholder="paste your scrape.do token here" hint="Required for AliExpress product import" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
           </div>
 
-          <SecField label="OpenAI API Key" k="openAiKey" placeholder="sk-proj-..." hint="For AI product descriptions · platform.openai.com" />
+          <SecField label="OpenAI API Key" k="openAiKey" placeholder="sk-proj-..." hint="For AI product descriptions · platform.openai.com" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
 
           <div className="grid sm:grid-cols-2 gap-4">
-            <SecField label="Supabase Project URL" k="supabaseUrl" placeholder="https://xxx.supabase.co" hint="From supabase.com dashboard" isUrl />
-            <SecField label="Supabase Anon Key" k="supabaseAnonKey" placeholder="eyJhbGci..." hint="anon/public key from API settings" />
+            <SecField label="Supabase Project URL" k="supabaseUrl" placeholder="https://xxx.supabase.co" hint="From supabase.com dashboard" isUrl apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
+            <SecField label="Supabase Anon Key" k="supabaseAnonKey" placeholder="eyJhbGci..." hint="anon/public key from API settings" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
           </div>
 
-          <SecField label="Stripe Publishable Key" k="stripePublishableKey" placeholder="pk_live_..." hint="stripe.com → Developers → API Keys" />
-          <SecField label="Google OAuth Client ID" k="googleClientId" placeholder="123456789.apps.googleusercontent.com" hint="console.cloud.google.com → Credentials" />
+          <SecField label="Stripe Publishable Key" k="stripePublishableKey" placeholder="pk_live_..." hint="stripe.com → Developers → API Keys" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
+          <SecField label="Google OAuth Client ID" k="googleClientId" placeholder="123456789.apps.googleusercontent.com" hint="console.cloud.google.com → Credentials" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
 
           {apiSaved && (
             <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
@@ -3764,7 +4110,7 @@ function ASettings() {
       </Accordion>
 
       {/* ── Store Information ── */}
-      <Accordion id="store" title="Store Information" icon={<Settings size={18} className="text-blue-500" />}>
+      <Accordion id="store" title="Store Information" icon={<Settings size={18} className="text-blue-500" />} open={open} toggle={toggle}>
         <div className="pt-5">
           <form onSubmit={e => { e.preventDefault(); notify('Store settings saved!'); }} className="grid sm:grid-cols-2 gap-4">
             <div><label className={L}>Store Name</label><input defaultValue="Luxedge" className={I} /></div>
@@ -3781,7 +4127,7 @@ function ASettings() {
       </Accordion>
 
       {/* ── Admin Profile ── */}
-      <Accordion id="profile" title="Admin Profile" icon={<UserIcon size={18} className="text-blue-500" />}>
+      <Accordion id="profile" title="Admin Profile" icon={<UserIcon size={18} className="text-blue-500" />} open={open} toggle={toggle}>
         <div className="pt-5">
           <form onSubmit={handleProfile} className="space-y-4">
             <div><label className={L}>Name</label><input value={profName} onChange={e => setProfName(e.target.value)} className={I} placeholder="Admin name" /></div>
@@ -3792,7 +4138,7 @@ function ASettings() {
       </Accordion>
 
       {/* ── Change Password ── */}
-      <Accordion id="password" title="Change Password" icon={<Lock size={18} className="text-blue-500" />}>
+      <Accordion id="password" title="Change Password" icon={<Lock size={18} className="text-blue-500" />} open={open} toggle={toggle}>
         <div className="pt-5">
           {passOk && <div className="flex items-center gap-2 p-3 mb-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm"><CheckCircle size={16} /> Password updated! Use your new password next login.</div>}
           {passError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"><AlertTriangle size={16} /> {passError}</div>}
