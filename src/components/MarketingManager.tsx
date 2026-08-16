@@ -22,21 +22,23 @@ import {
 export default function MarketingManager() {
   const loc = useLocation();
 
-  // Apply script load state from the effective config and the visitor's
-  // cookie-consent choice. Runs on mount, on every route change, and whenever
-  // the consent banner records a decision. Loaders are idempotent — scripts
-  // are never duplicated. No ads/analytics load until the visitor accepts.
+  // Apply script load state from the effective config. The AdSense script is
+  // shipped statically in index.html (so Google's review bot always sees it)
+  // and only removed here if the ads are turned off in the admin — it is NOT
+  // consent-gated. GA4 analytics respects the visitor's cookie-consent choice.
+  // Runs on mount, on every route change, and whenever the consent banner
+  // records a decision. Loaders are idempotent — scripts are never duplicated.
   useEffect(() => {
     let alive = true;
     const apply = () => {
       getEffectiveConfig().then((c: MarketingConfig) => {
         if (!alive) return;
-        const okToLoad = getConsent() === 'accepted';
-        if (okToLoad && c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
+        if (c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
           loadAdSenseScript(c.adsenseClientId);
         } else {
           removeAdSenseScript();
         }
+        const okToLoad = getConsent() === 'accepted';
         if (okToLoad && c.gaEnabled && c.ga4Id.trim()) {
           loadGtag(c.ga4Id.trim());
         } else {
