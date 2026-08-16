@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Source restriction: only scan files that are actually bundled */
+@source not "../src/pages/**";
+@source not "../src/components/store/**";
+@source not "../src/components/ProductCard.tsx";
+@source not "../src/components/CartDrawer.tsx";
+@source not "../src/components/Footer.tsx";
+@source not "../src/components/Header.tsx";
+@source not "../src/components/QuickView.tsx";
+@source not "../src/components/ThemeSwitcher.tsx";
+
+
 /*
  * LUXEDGE DESIGN SYSTEM
  * Premium polish on the classic Luxedge blue identity.

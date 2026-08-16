@@ -1071,7 +1071,7 @@ function PCard({ product }: { product: Product }) {
     <Link to={`/product/${product.id}`} className="block group">
       <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
         <div className="relative bg-luxe-cream overflow-hidden">
-          <img src={product.images[0]} alt={product.name} className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" loading="lazy" />
+          <img src={product.images[0]} alt={product.name} aria-hidden="true" className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" loading="lazy" />
           {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
           <button aria-label="Save to wishlist"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); notify('Saved to wishlist ♥'); }}
@@ -1110,6 +1110,42 @@ function PCard({ product }: { product: Product }) {
 // Premium alias — one card component across the whole storefront
 function PCardPremium({ product }: { product: Product }) {
   return <PCard product={product} />;
+}
+
+
+// Per-route document title for SEO
+function RouteTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const brand = "Luxedge";
+    const segs = pathname.split("/").filter(Boolean);
+    const set = (t: string) => { document.title = t + " | " + brand; };
+    const full = (t: string) => { document.title = t; };
+    if (segs.length === 0) full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets");
+    else if (segs[0] === "shop") set("Shop All Products");
+    else if (segs[0] === "category") set("Shop " + fromSlug(decodeURIComponent(segs[1] || "")));
+    else if (segs[0] === "product") {
+      const p = ALL_PRODUCTS.find((x) => x.id === decodeURIComponent(segs[1] || ""));
+      set(p ? p.name : "Product");
+    }
+    else if (segs[0] === "cart") set("Shopping Cart");
+    else if (segs[0] === "checkout") set("Secure Checkout");
+    else if (segs[0] === "orders") set("My Orders");
+    else if (segs[0] === "about") set("About Us");
+    else if (segs[0] === "contact") set("Contact Us");
+    else if (segs[0] === "privacy") set("Privacy Policy");
+    else if (segs[0] === "terms") set("Terms of Service");
+    else if (segs[0] === "returns") set("Return Policy");
+    else if (segs[0] === "shipping-policy") set("Shipping Policy");
+    else if (segs[0] === "faq") set("Frequently Asked Questions");
+    else if (segs[0] === "careers") set("Careers");
+    else if (segs[0] === "blog") set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights");
+    else if (segs[0] === "login") set("Sign In");
+    else if (segs[0] === "signup") set("Create Account");
+    else if (segs[0] === "admin") set("Admin Dashboard");
+    else set("Luxedge");
+  }, [pathname]);
+  return null;
 }
 
 // Scroll to top on every route change
@@ -1558,7 +1594,7 @@ function HomePage() {
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {hero[0] && (
                 <Link to={`/product/${hero[0].id}`} className="relative row-span-2 group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-lg shadow-luxe-gold/10">
-                  <img src={hero[0].images[0]} alt={hero[0].name} loading="eager" className="w-full h-full min-h-[22rem] object-cover group-hover:scale-[1.04] transition-transform duration-700" />
+                  <img src={hero[0].images[0]} alt={hero[0].name} aria-hidden="true" loading="eager" className="w-full h-full min-h-[22rem] object-cover group-hover:scale-[1.04] transition-transform duration-700" />
                   <span className="absolute bottom-3 left-3 right-3 px-3 py-2 glass rounded-lg text-[11px] font-semibold text-luxe-black">{hero[0].name}</span>
                 </Link>
               )}
@@ -7908,6 +7944,7 @@ export default function App() {
     <AppProvider>
       <HashRouter>
         <MarketingManager />
+        <RouteTitle />
         <Routes>
           {/* Store */}
           <Route path="/" element={<SLayout><HomePage /></SLayout>} />
