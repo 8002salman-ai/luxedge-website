@@ -68,3 +68,50 @@ export function resolveActiveProvider(providers: AIProvider[]): AIProvider | nul
 export function isKnownProviderId(id: string): boolean {
   return PROVIDER_IDS.has(id);
 }
+
+/**
+ * Proactively remove legacy secrets from localStorage (runs once at startup).
+ * Older Luxedge builds persisted provider keys + scraping tokens in
+ * `luxedge_ai_providers`, `luxedge_api_keys` and the `luxedge-settings` store.
+ * This scrubs them so no credential lingers in the browser.
+ */
+export function scrubLegacySecrets(storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>): void {
+  const s = storage || (typeof window !== 'undefined' ? window.localStorage : null);
+  if (!s) return;
+
+  // 1) Standalone legacy key vault (scrapedoKey + provider keys).
+  try {
+    if (s.getItem('luxedge_api_keys')) s.removeItem('luxedge_api_keys');
+  } catch { /* ignore */ }
+
+  // 2) Provider config may carry a legacy `apiKey` field.
+  try {
+    const raw = s.getItem('luxedge_ai_providers');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const clean = parsed.map((p) => sanitizeProvider(p || {}));
+        s.setItem('luxedge_ai_providers', JSON.stringify(clean));
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3) The old settings store held secrets inside apiKeys (scrapedoKey,
+  //    scraperApiKey, openAiKey, openRouterKey, geminiApiKey). Strip them and
+  //    rewrite the stored JSON so they cannot be re-merged on next load.
+  const LEGACY_SETTING_KEYS = ['scrapedoKey', 'scraperApiKey', 'openAiKey', 'openRouterKey', 'geminiApiKey'] as const;
+  try {
+    const raw = s.getItem('luxedge-settings');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const apiKeys = parsed?.state?.apiKeys;
+      if (apiKeys && typeof apiKeys === 'object') {
+        let changed = false;
+        for (const k of LEGACY_SETTING_KEYS) {
+          if (k in apiKeys) { delete apiKeys[k]; changed = true; }
+        }
+        if (changed) s.setItem('luxedge-settings', JSON.stringify(parsed));
+      }
+    }
+  } catch { /* ignore */ }
+}

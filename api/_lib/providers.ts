@@ -12,6 +12,41 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+/** Hard cap on outbound provider calls — prevents hung serverless functions. */
+export const FETCH_TIMEOUT_MS = 45_000;
+
+/**
+ * In-memory, per-instance rate limiter. Honest limitation: serverless
+ * instances are ephemeral, so this throttles per warm instance only. Global
+ * rate limiting across instances requires Vercel KV/Upstash — Phase 3.
+ */
+const WINDOW_MS = 60_000;
+const MAX_PER_WINDOW = 30;
+const hits = new Map<string, number[]>();
+
+export function clientIp(req: IncomingMessage): string {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd) return fwd.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+export function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const arr = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
+  if (arr.length >= MAX_PER_WINDOW) {
+    hits.set(ip, arr);
+    return true;
+  }
+  arr.push(now);
+  hits.set(ip, arr);
+  return false;
+}
+
+/** Allow only sane model identifiers — prevents URL/query injection. */
+export function isValidModel(model: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._:/\-]{0,127}$/.test(model);
+}
+
 export const PROVIDER_ENV: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
@@ -43,7 +78,7 @@ export function providerKey(providerId: string): string {
   return envName ? (process.env[envName] || '') : '';
 }
 
-function sanitizeError(providerId: string, status: number, message: string): string {
+function sanitizeError(providerId: string, status: number): string {
   // Never include raw provider error bodies — they may echo request headers/keys.
   return `${PROVIDER_NAMES[providerId] || providerId} error (HTTP ${status}). Check server logs for details.`;
 }
@@ -59,6 +94,8 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
   const key = providerKey(providerId);
   if (!key) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var)`);
   const { prompt, model, system } = opts;
+  if (!isValidModel(model)) throw new Error('Invalid model identifier');
+  const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   switch (providerId) {
     case 'openai':
     case 'deepseek': {
@@ -70,9 +107,10 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
           ...(system ? [{ role: 'system', content: system }] : []),
           { role: 'user', content: prompt },
         ], temperature: 0.2, max_tokens: 4096 }),
+        signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error(`${PROVIDER_NAMES[providerId]} returned no text`);
       return text;
@@ -82,9 +120,10 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 4096 } }),
+        signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
       const text = d?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Gemini returned no text');
       return text;
@@ -97,9 +136,10 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
           ...(system ? [{ role: 'system', content: system }] : []),
           { role: 'user', content: prompt },
         ], temperature: 0.2 }),
+        signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error('OpenRouter returned no text');
       return text;
@@ -109,9 +149,10 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model, max_tokens: 4096, system: system || undefined, messages: [{ role: 'user', content: prompt }] }),
+        signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
       const text = d?.content?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Anthropic returned no text');
       return text;

@@ -23,9 +23,41 @@ interface FetchedPage {
   images: string[];
 }
 
-/** Fetch a product page through public proxies. No credentials involved. */
+/**
+ * Try the server-side proxy (/api/fetch-page) first: it is SSRF-guarded and
+ * uses SCRAPE_DO_TOKEN when configured (token never ships to the browser).
+ * Returns null when the endpoint is unreachable (e.g. Vite dev server).
+ */
+async function fetchViaServerProxy(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(45_000),
+      headers: { Accept: 'text/plain' },
+    });
+    if (!r.ok) return null;
+    const ct = r.headers.get('content-type') || '';
+    const text = await r.text();
+    // The Vite dev server answers unknown /api routes with the SPA index.html;
+    // a real proxy success is plain text, never HTML.
+    if (ct.includes('text/html') || /<!doctype html/i.test(text)) return null;
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch a product page through the server proxy first, then public proxies. */
 export async function fetchPageContent(url: string): Promise<string> {
   const isAli = /aliexpress\.(com|us)/i.test(url);
+
+  const serverText = await fetchViaServerProxy(url);
+  if (serverText !== null) {
+    const parsed = parseHtmlPage(serverText);
+    if (parsed.text.trim().length >= 100 && !looksLikeBotPage(serverText)) {
+      return JSON.stringify(parsed);
+    }
+  }
+
   const timeout = isAli ? 35000 : 25000;
   const proxies: { label: string; url: string; timeout: number }[] = [
     { label: 'Jina Reader', url: `https://r.jina.ai/${url}`, timeout },

@@ -2,12 +2,21 @@
 //
 // Browser → { provider, model, prompt, system? } → this function → provider API.
 // Provider keys live in env vars only. Nothing secret is returned.
+//
+// SECURITY: no real authentication yet (static SPA admin). Defense in depth:
+// body size cap, prompt length cap, model allowlist regex, per-instance rate
+// limit. Real auth (Supabase + service role) is Phase 3 — see LUXEDGE_STATE.md.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generate, isConfigured, readJsonBody, sendJson } from '../_lib/providers';
+import { generate, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const ip = clientIp(req);
+  if (rateLimited(ip)) {
+    sendJson(res, 429, { error: 'Too many requests — slow down.' });
     return;
   }
   let body: Record<string, unknown>;
@@ -28,6 +37,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if (!prompt || prompt.length > 12000) {
     sendJson(res, 400, { error: 'prompt is required (max 12000 chars)' });
+    return;
+  }
+  if (model && !isValidModel(model)) {
+    sendJson(res, 400, { error: 'Invalid model identifier' });
     return;
   }
   try {
