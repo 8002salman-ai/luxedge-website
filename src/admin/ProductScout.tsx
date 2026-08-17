@@ -19,6 +19,7 @@ import {
   RefreshCw, Search, Shield, Siren, Target, Zap,
 } from 'lucide-react';
 import { useApp, Modal, fetchPageContent } from '../App';
+import { useNavigate } from 'react-router-dom';
 import { getDb } from '../services/db';
 import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
@@ -30,6 +31,7 @@ import type { CandidateEvidence, ScoutCandidate, AutonomyConfig, OwnerAttentionI
 import type { FetchedSourcePage } from '../features/scout/types';
 import { loadAutonomyConfig, saveAutonomyConfig, setEmergencyPause, AUTONOMY_MODES, evaluateAutonomy, attentionForCandidate, loadAttentionItems, pushAttentionItem, resolveAttentionItem } from '../features/scout/autonomy';
 import { qaListing, generateListingDraft, buildDeterministicListing } from '../features/scout/listing';
+import { loadAiControlConfig } from '../features/scout/aiControl';
 
 // Real seed sources for the first controlled research run (pet products,
 // USA-focused). Each URL was verified fetchable (manufacturer + retailer
@@ -99,6 +101,9 @@ export async function scoutFetchPage(url: string): Promise<FetchedSourcePage> {
 }
 
 export default function ProductScout() {
+  const nav = useNavigate();
+  const aiControl = loadAiControlConfig();
+  const aiActive = aiControl.aiServicesOn && !aiControl.emergencyPause;
   const { notify } = useApp();
   const [db, setDb] = useState<DbAdapter | null>(null);
   const [candidates, setCandidates] = useState<ViewCandidate[]>([]);
@@ -598,6 +603,17 @@ export default function ProductScout() {
 
   return (
     <div className="space-y-6">
+      <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-xs ${aiActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+        <span className={`font-bold ${aiActive ? 'text-green-700' : 'text-amber-700'}`}>AI Services: {aiActive ? 'ON' : 'OFF'}</span>
+        <span className="text-gray-500">·</span>
+        <span className="font-semibold text-gray-700">Control Mode: {aiControl.controlMode}</span>
+        <span className="text-gray-500">·</span>
+        <span className={`font-semibold ${aiControl.emergencyPause ? 'text-red-600' : 'text-gray-600'}`}>{aiControl.emergencyPause ? 'EMERGENCY PAUSE ACTIVE' : 'Pause inactive'}</span>
+        <button onClick={() => nav('/admin/ai-control')} className="ml-auto flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800">
+          AI Control Center →
+        </button>
+      </div>
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
           <Target size={20} className="text-white" />

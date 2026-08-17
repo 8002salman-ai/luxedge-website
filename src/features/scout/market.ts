@@ -16,7 +16,7 @@
 // ever reaches this module or the browser bundle.
 // ============================================================================
 
-import { serverGenerate } from '../ai/client';
+import { routerGenerate } from './aiRouter';
 import type { DiscoverResult } from './discover';
 import type { MarketSignal, MarketAnalysis, FinalOpportunityScore, PageExtract } from './types';
 import { newId } from './persist';
@@ -281,7 +281,16 @@ export function parseMarketAnalysis(raw: string): Omit<MarketAnalysis, 'aiUsed' 
 export async function runMarketIntelligence(
   input: DeepSeekAnalysisInput,
   deterministic: { score: number; explanation: string; breakdown: Record<string, { points: number; max: number; note: string }> },
-  aiCall: (prompt: string, model?: string) => Promise<string> = async (prompt, model) => serverGenerate(prompt, 'deepseek', model || 'deepseek-chat', MARKET_INTEL_SYSTEM)
+  aiCall: (prompt: string, model?: string) => Promise<string> = async (prompt, model) => {
+    const r = await routerGenerate(prompt, {
+      task: 'MARKET_INTELLIGENCE',
+      important: true,
+      explicit: true,
+      model,
+      system: MARKET_INTEL_SYSTEM,
+    });
+    return r.text;
+  }
 ): Promise<MarketAnalysis> {
   const at = new Date().toISOString();
   const unsupported: string[] = [];

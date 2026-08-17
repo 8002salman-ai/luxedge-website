@@ -8,6 +8,7 @@ import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } fr
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
 import ProductScout from './ProductScout';
+import AiControlCenter from './AiControlCenter';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
@@ -21,7 +22,7 @@ import {
 } from '../lib/marketing';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Bot, CheckCircle, ChevronDown, ChevronRight, ChevronUp,
-  Clipboard, Code, DollarSign, Download, Edit2, Eye, FileText, FolderTree, Globe,
+  Clipboard, Code, Cpu, DollarSign, Download, Edit2, Eye, FileText, FolderTree, Globe,
   History, ImageIcon, Layers, LayoutDashboard, Link2, Loader2, Lock, LogOut, Megaphone, Menu,
   Monitor, Package, PenLine, Plus, RefreshCw, RotateCcw, Save, Search, Send, Settings,
   Share2, Shield, ShoppingCart, Shuffle, Sliders, Smartphone, Sparkles, Star, Table2, Tag,
@@ -104,6 +105,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/ai', icon: Bot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
     { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
+    { to: '/admin/ai-control', icon: Cpu, label: 'AI Control ⭐' },
     { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
@@ -4632,6 +4634,7 @@ export default function AdminSection() {
       <Route path="ai" element={<AdminLayout><AAIHub /></AdminLayout>} />
       <Route path="ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
       <Route path="scout" element={<AdminLayout><ProductScout /></AdminLayout>} />
+      <Route path="ai-control" element={<AdminLayout><AiControlCenter /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin" replace />} />

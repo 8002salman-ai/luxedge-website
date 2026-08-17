@@ -12,7 +12,7 @@
 // claim fails QA and the listing must be corrected.
 // ============================================================================
 
-import { serverGenerate } from '../ai/client';
+import { routerGenerate } from './aiRouter';
 import type { ListingDraft, ListingQAResult, ListingClaim, ClaimStatus, ScoutCandidate } from './types';
 
 // ---------------------------------------------------------------------------
@@ -221,7 +221,16 @@ function statusReason(status: ClaimStatus): string {
  */
 export async function generateListingDraft(
   candidate: ScoutCandidate,
-  aiCall: (prompt: string, model?: string) => Promise<string> = async (prompt, model) => serverGenerate(prompt, 'deepseek', model || 'deepseek-chat', LISTING_SYSTEM)
+  aiCall: (prompt: string, model?: string) => Promise<string> = async (prompt, model) => {
+    const r = await routerGenerate(prompt, {
+      task: 'LISTING_GENERATE',
+      important: true,
+      explicit: true,
+      model,
+      system: LISTING_SYSTEM,
+    });
+    return r.text;
+  }
 ): Promise<{ listing: ListingDraft; raw: string } | null> {
   const verifiedFacts: string[] = [];
   const ev = candidate.evidence;
