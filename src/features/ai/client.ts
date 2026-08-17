@@ -1,0 +1,123 @@
+// ============================================================================
+// LUXEDGE V2 — AI CLIENT (secure server proxy)
+//
+// The browser NEVER holds an AI provider API key and NEVER calls a provider
+// endpoint directly. All generation, connection tests and credit checks go
+// through the serverless /api/ai/* endpoints, which read keys from
+// environment variables and keep them out of browser bundles, localStorage,
+// console output and error messages.
+// ============================================================================
+
+import type { AIProvider } from './types';
+import { resolveActiveProvider } from './providers';
+
+const API_BASE = '/api';
+
+export interface ProviderStatus {
+  id: string;
+  name: string;
+  configured: boolean;
+  model: string;
+}
+
+export interface ProviderStatusMap {
+  providers: ProviderStatus[];
+  backend: 'configured' | 'missing';
+}
+
+async function parseJson(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    throw new Error('AI backend returned a non-JSON response. Are the /api serverless functions deployed (see .env.example)?');
+  }
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error('AI backend not reachable. Deploy the /api serverless functions (see .env.example) to enable server-side AI.');
+  }
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `AI backend error (HTTP ${res.status})`);
+  }
+  return data as T;
+}
+
+async function get<T>(path: string): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`);
+  } catch {
+    throw new Error('AI backend not reachable. Deploy the /api serverless functions (see .env.example) to enable server-side AI.');
+  }
+  const data = await parseJson(res);
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `AI backend error (HTTP ${res.status})`);
+  }
+  return data as T;
+}
+
+export interface GenerateResponse {
+  text: string;
+  provider: string;
+  model: string;
+}
+
+/** Generate text via the secure server proxy. Provider id/model are not secrets. */
+export async function serverGenerate(
+  prompt: string,
+  providerId: string,
+  model: string,
+  system?: string
+): Promise<string> {
+  const data = await post<GenerateResponse>('/ai/generate', { provider: providerId, model, prompt, system });
+  return data.text;
+}
+
+/** Connection test executed server-side so no key ever touches the browser. */
+export async function serverTestProvider(providerId: string, model?: string): Promise<string> {
+  const data = await post<{ ok: boolean; message: string }>('/ai/test', { provider: providerId, model });
+  return data.ok ? 'Connected successfully!' : data.message;
+}
+
+/** OpenRouter credit balance, checked server-side. */
+export async function serverOpenRouterCredits(): Promise<{ total: number; used: number }> {
+  const data = await get<{ total: number; used: number }>('/ai/openrouter-credits');
+  return { total: data.total || 0, used: data.used || 0 };
+}
+
+/** Which providers have keys configured on the server (booleans only). */
+export async function serverProviderStatus(): Promise<ProviderStatusMap> {
+  const data = await get<Partial<ProviderStatusMap>>('/ai/status');
+  return {
+    backend: data.backend || 'missing',
+    providers: Array.isArray(data.providers) ? data.providers : [],
+  };
+}
+
+/**
+ * Call the active AI provider through the server proxy.
+ * Kept signature-compatible with the legacy in-browser callAIProvider so
+ * existing call sites (AI import, marketing copy) keep working unchanged.
+ */
+export async function callAIProvider(
+  prompt: string,
+  providers: AIProvider[],
+  onProgress?: (m: string) => void,
+  system?: string
+): Promise<string> {
+  const provider = resolveActiveProvider(providers);
+  if (!provider) {
+    throw new Error('No AI provider enabled. Enable one in AI Hub → AI Provider Configuration.');
+  }
+  onProgress?.(`Using ${provider.name} (${provider.defaultModel}) via secure server proxy…`);
+  return serverGenerate(prompt, provider.id, provider.defaultModel, system);
+}

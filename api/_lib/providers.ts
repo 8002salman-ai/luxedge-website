@@ -1,0 +1,186 @@
+// ============================================================================
+// LUXEDGE V2 — SERVER-SIDE AI PROVIDER LAYER
+//
+// This code runs ONLY inside /api serverless functions (never in the browser).
+// Provider API keys are read exclusively from environment variables.
+//
+// SECURITY RULES (enforced here):
+//  - Keys are never logged, never echoed in errors, never returned to clients.
+//  - Only provider id + model + prompt travel between browser and server.
+//  - Response payloads never include the key.
+// ============================================================================
+
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
+export const PROVIDER_ENV: Record<string, string> = {
+  openai: 'OPENAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+};
+
+export const PROVIDER_NAMES: Record<string, string> = {
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  anthropic: 'Anthropic Claude',
+  openrouter: 'OpenRouter',
+  gemini: 'Google Gemini',
+};
+
+export function isConfigured(providerId: string): boolean {
+  const envName = PROVIDER_ENV[providerId];
+  if (!envName) return false;
+  return Boolean(process.env[envName] && process.env[envName]!.trim());
+}
+
+export function configuredProviders(): string[] {
+  return Object.keys(PROVIDER_ENV).filter(isConfigured);
+}
+
+export function providerKey(providerId: string): string {
+  const envName = PROVIDER_ENV[providerId];
+  return envName ? (process.env[envName] || '') : '';
+}
+
+function sanitizeError(providerId: string, status: number, message: string): string {
+  // Never include raw provider error bodies — they may echo request headers/keys.
+  return `${PROVIDER_NAMES[providerId] || providerId} error (HTTP ${status}). Check server logs for details.`;
+}
+
+export interface GenerateOptions {
+  prompt: string;
+  model: string;
+  system?: string;
+}
+
+/** Call the requested provider from the server. Throws on failure. */
+export async function generate(providerId: string, opts: GenerateOptions): Promise<string> {
+  const key = providerKey(providerId);
+  if (!key) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var)`);
+  const { prompt, model, system } = opts;
+  switch (providerId) {
+    case 'openai':
+    case 'deepseek': {
+      const base = providerId === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.deepseek.com/chat/completions';
+      const r = await fetch(base, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model, messages: [
+          ...(system ? [{ role: 'system', content: system }] : []),
+          { role: 'user', content: prompt },
+        ], temperature: 0.2, max_tokens: 4096 }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      const text = d?.choices?.[0]?.message?.content;
+      if (typeof text !== 'string') throw new Error(`${PROVIDER_NAMES[providerId]} returned no text`);
+      return text;
+    }
+    case 'gemini': {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 4096 } }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      const text = d?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text !== 'string') throw new Error('Gemini returned no text');
+      return text;
+    }
+    case 'openrouter': {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, 'HTTP-Referer': 'https://luxedge.us', 'X-Title': 'Luxedge' },
+        body: JSON.stringify({ model, messages: [
+          ...(system ? [{ role: 'system', content: system }] : []),
+          { role: 'user', content: prompt },
+        ], temperature: 0.2 }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      const text = d?.choices?.[0]?.message?.content;
+      if (typeof text !== 'string') throw new Error('OpenRouter returned no text');
+      return text;
+    }
+    case 'anthropic': {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: 4096, system: system || undefined, messages: [{ role: 'user', content: prompt }] }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, d?.error?.message || ''));
+      const text = d?.content?.[0]?.text;
+      if (typeof text !== 'string') throw new Error('Anthropic returned no text');
+      return text;
+    }
+    default:
+      throw new Error(`Unknown provider: ${providerId}`);
+  }
+}
+
+/** Test connectivity server-side. Never leaks the key. */
+export async function testProvider(providerId: string, model?: string): Promise<{ ok: boolean; message: string }> {
+  if (!isConfigured(providerId)) {
+    return { ok: false, message: `Not configured — add ${PROVIDER_ENV[providerId]} env var on the server` };
+  }
+  try {
+    const text = await generate(providerId, {
+      prompt: 'Reply with only: OK',
+      model: model || defaultModelFor(providerId),
+    });
+    return { ok: true, message: text.trim().includes('OK') ? 'Connected successfully!' : 'Connected (unexpected reply)' };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
+  }
+}
+
+export function defaultModelFor(providerId: string): string {
+  switch (providerId) {
+    case 'openai': return 'gpt-4o-mini';
+    case 'deepseek': return 'deepseek-chat';
+    case 'anthropic': return 'claude-haiku-4-5-20251001';
+    case 'gemini': return 'gemini-2.0-flash-exp';
+    case 'openrouter': return 'google/gemini-2.0-flash-exp:free';
+    default: return '';
+  }
+}
+
+/** Read a JSON request body (bounded to prevent abuse). */
+export function readJsonBody(req: IncomingMessage, maxBytes = 200_000): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      body += chunk.toString('utf8');
+    });
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error('Invalid JSON body'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+export function sendJson(res: ServerResponse, status: number, payload: unknown): void {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(payload));
+}
+
+export function sendText(res: ServerResponse, status: number, text: string): void {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.end(text);
+}

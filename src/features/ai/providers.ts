@@ -1,0 +1,70 @@
+// ============================================================================
+// LUXEDGE V2 — AI PROVIDER REGISTRY
+//
+// Client-side provider *configuration* (id, name, models, enabled, default).
+// API keys are intentionally NOT part of this model — they are read from
+// server-side environment variables by /api/ai/* serverless functions.
+//
+// sanitizeProvider scrubs any legacy apiKey that older versions may have
+// persisted in localStorage, so secrets are actively removed from the client.
+// ============================================================================
+
+import type { AIProvider } from './types';
+
+export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
+  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'gpt-4o-mini'], defaultModel: 'google/gemini-2.0-flash-exp:free', enabled: true, isDefault: false },
+  { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', enabled: true, isDefault: false },
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: true },
+  { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
+];
+
+const PROVIDER_IDS = new Set(DEFAULT_AI_PROVIDERS.map((p) => p.id));
+
+/** Strip any secret fields (e.g. legacy apiKey) from a provider object. */
+export function sanitizeProvider(p: Partial<AIProvider> & Record<string, unknown>): AIProvider {
+  const { apiKey: _legacy, ...rest } = p as AIProvider & { apiKey?: string };
+  const def = DEFAULT_AI_PROVIDERS.find((d) => d.id === rest.id) || DEFAULT_AI_PROVIDERS[0];
+  return {
+    id: rest.id || def.id,
+    name: rest.name || def.name,
+    models: Array.isArray(rest.models) && rest.models.length ? rest.models : def.models,
+    defaultModel: rest.defaultModel || def.defaultModel,
+    enabled: rest.enabled !== false,
+    isDefault: !!rest.isDefault,
+  };
+}
+
+/** Load provider configuration from localStorage, scrubbing any legacy keys. */
+export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[] {
+  try {
+    const raw = (storage || window.localStorage).getItem('luxedge_ai_providers');
+    if (!raw) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    const stored = JSON.parse(raw);
+    if (!Array.isArray(stored)) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    const merged: AIProvider[] = stored.map((p) => sanitizeProvider(p || {}));
+    for (const def of DEFAULT_AI_PROVIDERS) {
+      if (!merged.some((p) => p.id === def.id)) merged.push({ ...def });
+    }
+    return merged;
+  } catch {
+    return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+  }
+}
+
+/** Persist provider configuration (never contains keys). */
+export function saveAIProviders(providers: AIProvider[], storage?: Pick<Storage, 'setItem'>): void {
+  const clean = providers.map((p) => sanitizeProvider(p as AIProvider & Record<string, unknown>));
+  (storage || window.localStorage).setItem('luxedge_ai_providers', JSON.stringify(clean));
+}
+
+/** Resolve the active provider from a list, preferring the default. */
+export function resolveActiveProvider(providers: AIProvider[]): AIProvider | null {
+  const active = providers.filter((p) => p.enabled);
+  if (!active.length) return null;
+  return active.find((p) => p.isDefault) || active[0];
+}
+
+export function isKnownProviderId(id: string): boolean {
+  return PROVIDER_IDS.has(id);
+}

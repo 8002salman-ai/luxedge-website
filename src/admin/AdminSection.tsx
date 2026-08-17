@@ -5,11 +5,12 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
   SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas, ImportHistoryEntry,
+  ProviderStatus, ProviderStatusMap,
 } from '../App';
 import {
   activeModeLabel, AD_SLOT_RE, clearPreviewConfig, CLIENT_ID_RE, fetchGlobalConfig,
@@ -18,7 +19,7 @@ import {
 } from '../lib/marketing';
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Bot, CheckCircle, ChevronDown, ChevronRight, ChevronUp,
-  Clipboard, Code, DollarSign, Download, Edit2, Eye, EyeOff, FileText, FolderTree, Globe,
+  Clipboard, Code, DollarSign, Download, Edit2, Eye, FileText, FolderTree, Globe,
   History, ImageIcon, Layers, LayoutDashboard, Link2, Loader2, Lock, LogOut, Megaphone, Menu,
   Monitor, Package, PenLine, Plus, RefreshCw, RotateCcw, Save, Search, Send, Settings,
   Share2, Shield, ShoppingCart, Shuffle, Sliders, Smartphone, Sparkles, Star, Table2, Tag,
@@ -707,32 +708,10 @@ function AReviews() {
 const SETTINGS_INPUT = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
 const SETTINGS_LABEL = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
 
-function SecField({ label, k, placeholder, hint, isUrl, apiKeys, setApiKeys, showKeys, toggleShow }: {
-  label: string; k: string; placeholder: string; hint?: string; isUrl?: boolean;
-  apiKeys: Record<string, string>; setApiKeys: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  showKeys: Record<string, boolean>; toggleShow: (k: string) => void;
-}) {
-  return (
-    <div>
-      <label className={SETTINGS_LABEL}>{label}</label>
-      <div className="relative">
-        <input
-          type={isUrl ? 'url' : (showKeys[k] ? 'text' : 'password')}
-          value={apiKeys[k] || ''}
-          onChange={e => setApiKeys(s => ({ ...s, [k]: e.target.value }))}
-          className={SETTINGS_INPUT + (isUrl ? '' : ' pr-10')}
-          placeholder={placeholder}
-        />
-        {!isUrl && (
-          <button type="button" onClick={() => toggleShow(k)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            {showKeys[k] ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        )}
-      </div>
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-    </div>
-  );
-}
+// NOTE: Secret-field inputs (scrape.do, OpenAI, Supabase, Stripe, Google keys)
+// were removed in Luxedge V2. Keys now live server-side only (see .env.example
+// and /api/ai/*). Public config (Supabase URL/anon key, Stripe publishable key,
+// Google OAuth client id) belongs in src/store/settingsStore.ts.
 
 function Accordion({ id, title, icon, borderClass, children, open, toggle }: {
   id: string; title: string; icon: React.ReactNode; borderClass?: string; children: React.ReactNode;
@@ -755,14 +734,12 @@ function ASettings() {
   const L = SETTINGS_LABEL;
   const I = SETTINGS_INPUT;
 
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}'); } catch { return {}; }
-  });
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
-  const [apiSaved, setApiSaved] = useState(false);
-  const toggleShow = (k: string) => setShowKeys(s => ({ ...s, [k]: !s[k] }));
+    const [envStatus, setEnvStatus] = useState<ProviderStatusMap | null>(null);
+  useEffect(() => {
+    serverProviderStatus().then(setEnvStatus).catch(() => setEnvStatus({ backend: 'missing', providers: [] }));
+  }, []);
 
-  const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false });
+const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false });
   const toggle = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }));
 
   const [profName, setProfName] = useState(user?.name || '');
@@ -773,14 +750,6 @@ function ASettings() {
   const [confPass, setConfPass] = useState('');
   const [passError, setPassError] = useState('');
   const [passOk, setPassOk] = useState(false);
-
-  const handleSaveApiKeys = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('luxedge_api_keys', JSON.stringify(apiKeys));
-    setApiSaved(true);
-    notify('API Keys saved!');
-    setTimeout(() => setApiSaved(false), 3000);
-  };
 
   const handleProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -819,44 +788,29 @@ function ASettings() {
       </Accordion>
 
       {/* ── API Keys ── */}
-      <Accordion id="api" title="API Keys" icon={<Globe size={18} className="text-green-600" />} borderClass="border-green-300" open={open} toggle={toggle}>
-        <div className="pt-5 space-y-5">
-          <p className="text-sm text-gray-500">Keys are saved locally in your browser. Add them to enable AliExpress import, AI features, payments, and more.</p>
-
-          {/* scrape.do */}
-          <div className="rounded-xl border border-dashed border-green-300 bg-green-50 p-4 space-y-3">
-            <div>
-              <p className="text-sm font-bold text-green-700">scrape.do — Free AliExpress Importer</p>
-              <p className="text-xs text-green-600 mt-0.5">1,000 free requests/month · No credit card · Permanent free tier</p>
-            </div>
-            <ol className="text-xs text-green-700 space-y-1 list-decimal list-inside">
-              <li>Go to <span className="font-mono bg-white px-1 rounded">scrape.do</span> and create a free account</li>
-              <li>Copy your token from the dashboard</li>
-              <li>Paste it below and save</li>
-            </ol>
-            <SecField label="scrape.do Token" k="scrapedoKey" placeholder="paste your scrape.do token here" hint="Required for AliExpress product import" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
+      <Accordion id="api" title="API Keys — Server-Side" icon={<Globe size={18} className="text-green-600" />} borderClass="border-green-300" open={open} toggle={toggle}>
+        <div className="pt-5 space-y-4">
+          <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
+            <p className="font-semibold mb-1">🔒 Luxedge V2: keys live on the server, never in the browser</p>
+            <p>AI provider keys and scraping tokens are read from environment variables by the /api serverless functions. They are never stored in localStorage, never shipped in the bundle, and never logged.</p>
           </div>
-
-          <SecField label="OpenAI API Key" k="openAiKey" placeholder="sk-proj-..." hint="For AI product descriptions · platform.openai.com" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            <SecField label="Supabase Project URL" k="supabaseUrl" placeholder="https://xxx.supabase.co" hint="From supabase.com dashboard" isUrl apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
-            <SecField label="Supabase Anon Key" k="supabaseAnonKey" placeholder="eyJhbGci..." hint="anon/public key from API settings" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
-          </div>
-
-          <SecField label="Stripe Publishable Key" k="stripePublishableKey" placeholder="pk_live_..." hint="stripe.com → Developers → API Keys" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
-          <SecField label="Google OAuth Client ID" k="googleClientId" placeholder="123456789.apps.googleusercontent.com" hint="console.cloud.google.com → Credentials" apiKeys={apiKeys} setApiKeys={setApiKeys} showKeys={showKeys} toggleShow={toggleShow} />
-
-          {apiSaved && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
-              <CheckCircle size={16} /> API Keys saved successfully!
+          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → Settings → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.</p>
+          {envStatus ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Server status</p>
+              {envStatus.providers.map(p => (
+                <div key={p.id} className={"flex items-center justify-between p-3 rounded-xl border " + (p.configured ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50')}>
+                  <span className="text-sm font-medium text-gray-700">{p.name}</span>
+                  <span className={"text-xs font-semibold " + (p.configured ? 'text-green-700' : 'text-amber-700')}>
+                    {p.configured ? '✓ Configured on server' : 'Not configured'}
+                  </span>
+                </div>
+              ))}
+              {!envStatus.providers.length && <p className="text-xs text-gray-400">No providers reported by server.</p>}
             </div>
+          ) : (
+            <p className="text-xs text-gray-400">Checking server configuration… (requires the /api functions deployed)</p>
           )}
-          <form onSubmit={handleSaveApiKeys}>
-            <button type="submit" className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-              <Save size={16} /> Save API Keys
-            </button>
-          </form>
         </div>
       </Accordion>
 
@@ -989,7 +943,7 @@ function AMarketingGen() {
   const [newCallout, setNewCallout] = useState('');
 
   const allProviders: AIProvider[] = loadAIProviders();
-  const activeProviders = allProviders.filter(p => p.enabled && p.apiKey);
+  const activeProviders = allProviders.filter(p => p.enabled);
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
   useEffect(() => {
@@ -1017,23 +971,13 @@ function AMarketingGen() {
     localStorage.setItem('luxedge_mkt_vault', JSON.stringify(updated));
   }
 
-  async function callAI(prompt: string): Promise<string> {
+    async function callAI(prompt: string): Promise<string> {
     const prov = activeProviders.find(p => p.id === aiProvider) || activeProviders[0];
-    if (!prov) throw new Error('No AI provider with API key. Go to Settings → AI Providers.');
-    const model = aiModel || prov.defaultModel;
-    if (prov.id === 'openai') {
-      const r = await fetch('https://api.openai.com/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${prov.apiKey}`}, body: JSON.stringify({ model, messages:[{role:'system',content:'You are an expert luxury e-commerce marketing copywriter. Return only valid JSON.'},{role:'user',content:prompt}], temperature:0.85 }) });
-      const d = await r.json(); if (d.error) throw new Error(d.error.message); return d.choices[0].message.content;
-    } else if (prov.id === 'gemini') {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${prov.apiKey}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.85} }) });
-      const d = await r.json(); if (d.error) throw new Error(d.error.message); return d.candidates[0].content.parts[0].text;
-    } else {
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${prov.apiKey}`,'HTTP-Referer':'https://luxedge.com'}, body: JSON.stringify({ model, messages:[{role:'user',content:prompt}] }) });
-      const d = await r.json(); if (d.error) throw new Error(d.error.message || JSON.stringify(d.error)); return d.choices[0].message.content;
-    }
+    if (!prov) throw new Error('No AI provider enabled. Enable one in AI Hub → AI Provider Configuration.');
+    return callAIProvider(prompt, [{ ...prov, defaultModel: aiModel || prov.defaultModel }], undefined, 'You are an expert luxury e-commerce marketing copywriter. Return only valid JSON.');
   }
 
-  function parseJ<T>(raw: string, fb: T): T {
+function parseJ<T>(raw: string, fb: T): T {
     try { const m = raw.match(/```json\s*([\s\S]*?)\s*```/) || raw.match(/(\{[\s\S]*\})/); return JSON.parse(m ? m[1] : raw); }
     catch { return fb; }
   }
@@ -3374,7 +3318,7 @@ function AAIHub() {
   const [aiProviders, setAiProviders] = useState<AIProvider[]>(() => {
     return loadAIProviders();
   });
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [serverStatus, setServerStatus] = useState<Record<string, ProviderStatus> | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
@@ -3383,41 +3327,40 @@ function AAIHub() {
 
   const I = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all';
 
-  const save = (updated: AIProvider[]) => {
+    const save = (updated: AIProvider[]) => {
     setAiProviders(updated);
-    localStorage.setItem('luxedge_ai_providers', JSON.stringify(updated));
+    saveAIProviders(updated);
     setSaving(true); notify('AI Providers saved!'); setTimeout(() => setSaving(false), 3000);
   };
 
-  const toggleShow = (k: string) => setShowKeys(s => ({ ...s, [k]: !s[k] }));
+  useEffect(() => {
+    serverProviderStatus().then((s) => {
+      const map: Record<string, ProviderStatus> = {};
+      s.providers.forEach(p => { map[p.id] = p; });
+      setServerStatus(map);
+    }).catch(() => setServerStatus({}));
+  }, []);
 
   const testProvider = async (provider: AIProvider) => {
-    if (!provider.apiKey.trim()) { setTestResult({ ...testResult, [provider.id]: 'No API key provided' }); return; }
     setTesting(provider.id);
     try {
-      const p = await callAIProvider('Reply with only: OK', [provider]);
-      setTestResult({ ...testResult, [provider.id]: p.includes('OK') ? 'Connected successfully!' : 'Response: OK' });
+      const msg = await serverTestProvider(provider.id, provider.defaultModel);
+      setTestResult({ ...testResult, [provider.id]: msg });
     } catch (e: any) {
       setTestResult({ ...testResult, [provider.id]: `Error: ${e.message?.slice(0, 80)}` });
     } finally { setTesting(null); }
   };
 
   const checkOpenRouterCredits = async () => {
-    const or = aiProviders.find(p => p.id === 'openrouter');
-    if (!or?.apiKey) { notify('Add OpenRouter API key first'); return; }
     setCheckingCredits(true);
     try {
-      const r = await fetch('https://openrouter.ai/api/v1/auth/key', {
-        headers: { 'Authorization': `Bearer ${or.apiKey}` }
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      setOrCredits({ total: d.data?.limit || 0, used: d.data?.usage || 0 });
+      const c = await serverOpenRouterCredits();
+      setOrCredits({ total: c.total, used: c.used });
     } catch (e: any) { notify(`Credit check failed: ${e.message}`); }
     finally { setCheckingCredits(false); }
   };
 
-  const providerIcons: Record<string, string> = {
+const providerIcons: Record<string, string> = {
     openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
   };
 
@@ -3442,7 +3385,7 @@ function AAIHub() {
       </div>
 
       {/* OpenRouter Credits Card */}
-      {aiProviders.find(p => p.id === 'openrouter' && p.apiKey) && (
+      {aiProviders.find(p => p.id === 'openrouter' && p.enabled) && (
         <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-sm text-purple-800 flex items-center gap-2">
@@ -3498,12 +3441,12 @@ function AAIHub() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => testProvider(provider)} disabled={testing === provider.id || !provider.apiKey}
+                  <button type="button" onClick={() => testProvider(provider)} disabled={testing === provider.id}
                     className="px-3 py-1.5 text-xs border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
                     {testing === provider.id ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
                     Test
                   </button>
-                  {!provider.isDefault && provider.apiKey && (
+                  {!provider.isDefault && (
                     <button type="button" onClick={() => save(aiProviders.map(p => ({ ...p, isDefault: p.id === provider.id })))}
                       className="text-xs text-purple-600 hover:text-purple-800 font-medium">Make Default</button>
                   )}
@@ -3515,17 +3458,15 @@ function AAIHub() {
                 </div>
               )}
               <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">API Key</label>
-                  <div className="relative">
-                    <input type={showKeys[`ai_${provider.id}`] ? 'text' : 'password'}
-                      value={provider.apiKey}
-                      onChange={e => setAiProviders(prev => prev.map((p, i) => i === idx ? { ...p, apiKey: e.target.value } : p))}
-                      className={I + ' pr-10 text-xs'} placeholder={`Enter ${provider.name} API key...`} />
-                    <button type="button" onClick={() => toggleShow(`ai_${provider.id}`)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showKeys[`ai_${provider.id}`] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Server Key</label>
+                  <div className={"flex items-center gap-2 text-xs px-3 py-2.5 rounded-xl border " + (serverStatus?.[provider.id]?.configured ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700')}>
+                    {serverStatus?.[provider.id]?.configured ? <CheckCircle size={14} className="shrink-0" /> : <AlertTriangle size={14} className="shrink-0" />}
+                    {serverStatus?.[provider.id]?.configured
+                      ? 'Configured on server — key is safe (env var only)'
+                      : 'Not configured — add the provider key env var on the server (see .env.example)'}
                   </div>
+                  <p className="text-[10px] text-gray-400 mt-1">Keys never live in the browser. All AI calls proxy through /api/ai/*.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Model</label>
@@ -3621,24 +3562,12 @@ function AAIHub() {
           </div>
           <ol className="text-xs text-green-700 space-y-1 list-decimal list-inside">
             <li>Go to scrape.do and create a free account</li>
-            <li>Copy your token from the dashboard</li>
-            <li>Paste below — enables AliExpress, Amazon, and any URL import</li>
+            <li>Add your token as the <span className="font-mono">SCRAPE_DO_TOKEN</span> environment variable on the server (see .env.example)</li>
+            <li>Credential-backed scraping then runs through /api/fetch-page — the token never ships to the browser</li>
           </ol>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">scrape.do Token</label>
-            <input type="password" value={(() => { try { return JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}').scrapedoKey || ''; } catch { return ''; } })()}
-              onChange={e => {
-                try {
-                  const keys = JSON.parse(localStorage.getItem('luxedge_api_keys') || '{}');
-                  keys.scrapedoKey = e.target.value;
-                  localStorage.setItem('luxedge_api_keys', JSON.stringify(keys));
-                } catch {}
-              }}
-              className={I} placeholder="Paste your scrape.do token here" />
+          <div className="p-3 bg-white/60 border border-green-200 rounded-xl text-xs text-green-800">
+            🔒 Luxedge V2: scraping tokens are server-side only. Without a server token, URL import falls back to public proxies.
           </div>
-          <p className="text-xs text-green-500 flex items-center gap-1">
-            <CheckCircle size={12} /> Token is saved automatically
-          </p>
         </div>
       </div>
     </div>
@@ -3759,8 +3688,7 @@ function AAIImport() {
       if (source === 'url') {
         if (!urlInput.trim()) throw new Error('Please enter a URL');
         addLog(`Fetching: ${urlInput}`);
-        const apiKeys = JSON.parse(localStorage.getItem('luxedge_api_keys')||'{}');
-        const pageData = await fetchPageContent(urlInput.trim(), apiKeys.scrapedoKey);
+        const pageData = await fetchPageContent(urlInput.trim());
         const parsed = JSON.parse(pageData);
         rawContent = parsed.text;
         pageImages = parsed.images || [];
@@ -3806,7 +3734,7 @@ function AAIImport() {
       setHeroImg(allImages[0] || '');
 
       // Save history
-      const activeProvider = aiProviders.find(p => p.isDefault && p.enabled) || aiProviders.find(p => p.enabled && p.apiKey);
+      const activeProvider = aiProviders.find(p => p.isDefault && p.enabled) || aiProviders.find(p => p.enabled);
       const entry: ImportHistoryEntry = {
         id: `imp-${Date.now()}`, source: source === 'url' ? urlInput : source, sourceType: source,
         date: new Date().toISOString(), provider: activeProvider?.name||'Unknown',
@@ -4010,7 +3938,7 @@ function AAIImport() {
         <div className="border rounded-xl p-4 bg-sky-50 border-sky-200">
           <p className="text-xs font-semibold text-blue-700 mb-1">⚡ AI Provider</p>
           {(() => {
-            const active = aiProviders.find(p=>p.isDefault&&p.enabled&&p.apiKey) || aiProviders.find(p=>p.enabled&&p.apiKey);
+            const active = aiProviders.find(p=>p.isDefault&&p.enabled) || aiProviders.find(p=>p.enabled);
             return active
               ? <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}</p>
               : <p className="text-xs text-red-600">No AI provider configured! <button onClick={()=>navigate('/admin/settings')} className="underline">Go to Settings → AI Providers</button></p>;

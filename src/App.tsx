@@ -55,285 +55,38 @@ export interface BlogPost {
 
 
 // ============================================================================
-// AI IMPORT ENGINE — TYPES & CONSTANTS
+// AI IMPORT ENGINE — extracted to src/features/ai/* (SECURITY: provider keys
+// are server-side only; the browser proxies through /api/ai/*)
 // ============================================================================
-export interface AIProvider {
-  id: string; name: string; models: string[]; defaultModel: string;
-  apiKey: string; enabled: boolean; isDefault: boolean;
-}
-export interface ImportHistoryEntry {
-  id: string; source: string; sourceType: 'url'|'html'|'text'|'clipboard'|'image';
-  date: string; provider: string; model: string; productTitle: string;
-  status: 'success'|'failed'|'partial'; importTime: number;
-}
-export interface AIExtractedProduct {
-  title: string; luxuryTitle: string; seoTitle: string; slug: string;
-  brand: string; manufacturer: string; category: string; subcategory: string;
-  collection: string; shortDescription: string; longDescription: string;
-  features: string[]; benefits: string[]; specifications: Record<string,string>;
-  packageIncludes: string[]; weight: string; dimensions: string; origin: string;
-  materials: string[]; colors: string[]; sizes: string[];
-  sku: string; barcode: string; hsCode: string;
-  stock: number; costPrice: number; sellingPrice: number; comparePrice: number;
-  shippingWeight: string; tags: string[]; seoKeywords: string[];
-  metaTitle: string; metaDescription: string; focusKeyword: string;
-  images: string[]; faqs: {q:string;a:string}[];
-  warranty: string; careInstructions: string; safetyNotes: string;
-  confidence: Record<string,number>;
-}
-export interface EnterpriseVariant {
-  id: string; combo: Record<string,string>;
-  sku: string; barcode: string; costPrice: number; sellingPrice: number;
-  comparePrice: number; inventory: number; weight: string; dimensions: string;
-  image: string; status: 'active'|'inactive'|'draft'; lowStockThreshold: number;
-}
-export interface VariantAttribute {
-  id: string; name: string; values: string[]; autoDetected: boolean;
-}
-export interface SEOData {
-  title: string; metaDescription: string; keywords: string[];
-  slug: string; canonicalUrl: string; focusKeyword: string;
-  secondaryKeywords: string[]; imageAlt: string; imageTitle: string; imageCaption: string;
-}
-export interface SocialSEO {
-  ogTitle: string; ogDescription: string; ogImage: string;
-  twitterCard: string; twitterTitle: string; twitterDescription: string;
-  pinterestDescription: string; pinterestImage: string;
-}
-export interface ContentData {
-  premiumTitle: string; luxuryDescription: string; shortDescription: string;
-  bulletFeatures: string[]; specifications: Record<string,string>;
-  benefits: string[]; useCases: string[]; careInstructions: string;
-  packageContents: string[]; warrantyText: string; shippingInfo: string;
-  focusKeyword: string;
-  faqs: { q: string; a: string }[];
-}
-export interface SEOScore {
-  overall: number; readability: number; keywordDensity: number;
-  metaLength: number; titleLength: number; missingAlt: number;
-  issues: { type: 'error'|'warning'|'good'; msg: string }[];
-}
-export interface StructuredSchemas {
-  product: string; breadcrumb: string; organization: string; website: string; faq: string;
-}
+import type {
+  AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
+  VariantAttribute, SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
+} from "./features/ai/types";
+import {
+  DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
+} from "./features/ai/providers";
+import {
+  callAIProvider, serverGenerate, serverTestProvider,
+  serverOpenRouterCredits, serverProviderStatus,
+} from "./features/ai/client";
+import type { ProviderStatus, ProviderStatusMap } from "./features/ai/client";
+import {
+  fetchPageContent, buildExtractionPrompt, extractProductJson, parseHtmlPage,
+} from "./features/ai/importer";
 
-const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id:'openrouter', name:'OpenRouter', models:['google/gemini-2.0-flash-exp:free','meta-llama/llama-3.1-8b-instruct:free','mistralai/mistral-7b-instruct:free','gpt-4o-mini'], defaultModel:'google/gemini-2.0-flash-exp:free', apiKey:'', enabled:true, isDefault:false },
-  { id:'gemini', name:'Google Gemini', models:['gemini-2.0-flash-exp','gemini-1.5-flash','gemini-1.5-pro'], defaultModel:'gemini-2.0-flash-exp', apiKey:'', enabled:true, isDefault:false },
-  { id:'deepseek', name:'DeepSeek', models:['deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-chat', apiKey:'', enabled:true, isDefault:false },
-  { id:'openai', name:'OpenAI', models:['gpt-4o-mini','gpt-4o','gpt-3.5-turbo'], defaultModel:'gpt-4o-mini', apiKey:'', enabled:true, isDefault:true },
-  { id:'anthropic', name:'Anthropic Claude', models:['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-8'], defaultModel:'claude-haiku-4-5-20251001', apiKey:'', enabled:true, isDefault:false },
-];
-
-// ── AI provider API calls (provider-independent) ──────────────────────────
-async function _callOpenAI(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:4096})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`OpenAI error ${r.status}`);
-  return d.choices[0].message.content;
-}
-async function _callGemini(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${p.defaultModel}:generateContent?key=${p.apiKey}`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:4096}})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`Gemini error ${r.status}`);
-  return d.candidates[0].content.parts[0].text;
-}
-async function _callOpenRouter(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`,'HTTP-Referer':'https://luxedge.us','X-Title':'Luxedge Admin'},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`OpenRouter error ${r.status}`);
-  return d.choices[0].message.content;
-}
-async function _callAnthropic(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':p.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:p.defaultModel,max_tokens:4096,messages:[{role:'user',content:prompt}]})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`Anthropic error ${r.status}`);
-  return d.content[0].text;
-}
-async function _callDeepSeek(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.deepseek.com/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:4096})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`DeepSeek error ${r.status}`);
-  return d.choices[0].message.content;
-}
-
-export async function callAIProvider(prompt: string, providers: AIProvider[], onProgress?: (m:string)=>void): Promise<string> {
-  const active = providers.filter(p => p.enabled && p.apiKey.trim());
-  if (!active.length) throw new Error('No AI provider configured. Go to Settings → AI Providers and add an API key.');
-  const provider = active.find(p => p.isDefault) || active[0];
-  onProgress?.(`Using ${provider.name} (${provider.defaultModel})…`);
-  if (provider.id === 'openai') return _callOpenAI(prompt, provider);
-  if (provider.id === 'gemini') return _callGemini(prompt, provider);
-  if (provider.id === 'openrouter') return _callOpenRouter(prompt, provider);
-  if (provider.id === 'anthropic') return _callAnthropic(prompt, provider);
-  if (provider.id === 'deepseek') return _callDeepSeek(prompt, provider);
-  throw new Error('Unknown AI provider');
-}
-
-export function loadAIProviders(): AIProvider[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null');
-    if (!Array.isArray(stored) || !stored.length) return DEFAULT_AI_PROVIDERS;
-    const merged = [...stored];
-    for (const def of DEFAULT_AI_PROVIDERS) {
-      if (!merged.some((p: AIProvider) => p.id === def.id)) merged.push(def);
-    }
-    return merged;
-  } catch { return DEFAULT_AI_PROVIDERS; }
-}
-
-function looksLikeBotPage(raw: string): boolean {
-  const lower = raw.toLowerCase();
-  return raw.length < 15000 && (
-    lower.includes('just a moment') || lower.includes('cf-challenge') || lower.includes('challenge-platform') ||
-    lower.includes('captcha') || lower.includes('unusual traffic') || lower.includes('access denied') ||
-    lower.includes('are you a robot') || lower.includes('verify you are human') || lower.includes('one more step') ||
-    lower.includes('security check') || lower.includes('pardon our interruption') || lower.includes('robot check')
-  );
-}
-
-export async function fetchPageContent(url: string, scrapedoKey?: string): Promise<string> {
-  const isAli = /aliexpress\.(com|us)/i.test(url);
-  const timeout = isAli ? 35000 : 25000;
-  const proxies: { label: string; url: string; timeout: number }[] = [
-    scrapedoKey?.trim() ? { label: 'scrape.do', url: `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true&countryCode=US`, timeout: 40000 } : { label: 'scrape.do', url: '', timeout: 40000 },
-    { label: 'Jina Reader', url: `https://r.jina.ai/${url}`, timeout },
-    { label: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, timeout },
-    { label: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeout },
-    { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(url)}`, timeout },
-    { label: 'Wayback', url: `https://web.archive.org/web/2024id_/${url}`, timeout },
-  ].filter(p => p.url);
-  let lastErr = '';
-  for (const { label, url: proxy, timeout: t } of proxies) {
-    try {
-      const r = await fetch(proxy, { signal: AbortSignal.timeout(t), redirect: 'follow' });
-      if (r.ok) {
-        const raw = await r.text();
-        if (raw.length < 200) { lastErr = `${label}: empty response`; continue; }
-        if (looksLikeBotPage(raw)) { lastErr = `${label}: bot check`; continue; }
-        if (label === 'corsproxy' && raw.toLowerCase().includes('fix cors errors')) { lastErr = `${label}: proxy homepage`; continue; }
-        const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
-        let text = ''; let imgs: string[] = [];
-        if (isHtml) {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(raw, 'text/html');
-          const ogT = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
-          const ogD = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-          const jsonLd = Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).map(s => s.textContent || '').join('\n');
-          doc.querySelectorAll('script,style,nav,footer,aside').forEach(el => el.remove());
-          doc.querySelectorAll('img').forEach(img => {
-            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-            if (src.startsWith('http') && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) imgs.push(src);
-          });
-          const bodyText = (doc.body?.innerText || '').trim();
-          text = [ogT, ogD, jsonLd ? `JSON-LD:\n${jsonLd}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
-        } else {
-          text = raw.slice(0, 12000);
-          const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g; let m;
-          while ((m = re.exec(raw))) { if (m[1].includes('.jpg') || m[1].includes('.jpeg') || m[1].includes('.png') || m[1].includes('.webp')) imgs.push(m[1]); }
-        }
-        if (isAli && label === 'Jina Reader') {
-          const titleLine = raw.match(/^Title:\s*(.+)$/m);
-          if (!titleLine || !titleLine[1] || !titleLine[1].trim() || titleLine[1].trim().toLowerCase() === 'captcha interception') {
-            lastErr = `${label}: AliExpress shell/captcha (product loads via JS)`;
-            continue;
-          }
-        }
-        if (isAli && text.length < 400 && (text.includes('Download the AliExpress app') || text.includes("I'm shopping for"))) {
-          lastErr = `${label}: AliExpress shell page`;
-          continue;
-        }
-        if (text.trim().length < 100) { lastErr = `${label}: too little content`; continue; }
-        return JSON.stringify({ text, images: [...new Set(imgs)].slice(0, 30) });
-      } else {
-        lastErr = `${label}: HTTP ${r.status}`;
-      }
-    } catch (e: any) { lastErr = `${label}: ${e.message}`; }
-  }
-  if (isAli) {
-    throw new Error(`Could not load AliExpress product (${lastErr}). AliExpress blocks automated fetching. Add a FREE scrape.do token in AI Hub → Web Scraping Configuration, or paste the product HTML/text instead.`);
-  }
-  throw new Error(`Could not fetch page (${lastErr}). Try pasting HTML or text instead.`);
-}
-
-export function buildExtractionPrompt(rawContent: string, sourceType: string): string {
-  return `You are an expert e-commerce product data analyst for Luxedge, a premium US dropshipping store.
-
-Extract ALL product information from this ${sourceType} content and return ONLY a valid JSON object.
-
-CONTENT:
-${rawContent.slice(0, 10000)}
-
-Return this EXACT JSON structure (use empty string/array/0 if not found):
-{
-  "title": "exact product title",
-  "luxuryTitle": "premium rewritten title for luxury brand",
-  "seoTitle": "SEO optimized title with main keyword (60 chars max)",
-  "slug": "url-friendly-slug",
-  "brand": "brand name",
-  "manufacturer": "manufacturer",
-  "category": "best matching: Dog Supplies | Cat Supplies | Pet Beds | Pet Toys | Feeding & Water | Grooming | Pet Accessories",
-  "subcategory": "specific subcategory",
-  "collection": "product collection name",
-  "shortDescription": "2-3 sentence product summary",
-  "longDescription": "detailed 3-4 paragraph product description",
-  "features": ["feature 1", "feature 2", "feature 3"],
-  "benefits": ["benefit 1", "benefit 2"],
-  "specifications": {"spec name": "value"},
-  "packageIncludes": ["item 1", "item 2"],
-  "weight": "e.g. 0.5 lbs",
-  "dimensions": "e.g. 10 x 5 x 2 inches",
-  "origin": "country of origin",
-  "materials": ["material 1"],
-  "colors": ["color 1", "color 2"],
-  "sizes": ["S", "M", "L"],
-  "sku": "suggested SKU",
-  "barcode": "",
-  "hsCode": "",
-  "stock": 100,
-  "costPrice": 0,
-  "sellingPrice": 0,
-  "comparePrice": 0,
-  "shippingWeight": "",
-  "tags": ["tag1", "tag2", "tag3"],
-  "seoKeywords": ["keyword1", "keyword2"],
-  "metaTitle": "SEO meta title (60 chars)",
-  "metaDescription": "SEO meta description (160 chars)",
-  "focusKeyword": "primary SEO keyword",
-  "images": [],
-  "faqs": [{"q": "question?", "a": "answer"}],
-  "warranty": "warranty info",
-  "careInstructions": "care instructions",
-  "safetyNotes": "safety notes",
-  "confidence": {
-    "title": 95, "price": 80, "description": 85, "specifications": 70, "images": 60, "brand": 75, "category": 90, "tags": 80
-  }
-}
-
-Rules:
-- luxuryTitle: make it sound premium, e.g. "Orthopedic Memory Foam Dog Bed" → "Luxe Joint-Support Memory Foam Bed | LuxePaws"
-- sellingPrice: use actual price from content; if not found estimate market price
-- comparePrice: 20-30% higher than sellingPrice (to show "was" price)
-- costPrice: 40-50% of sellingPrice  
-- confidence: 0-100 how certain you are about each field
-- Return ONLY the JSON, absolutely no other text`;
-}
+// Re-exported so existing consumers (e.g. the admin section importing from
+// "../App") keep working without change.
+export type {
+  AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
+  VariantAttribute, SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
+  ProviderStatus, ProviderStatusMap,
+};
+export {
+  DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
+  callAIProvider, serverGenerate, serverTestProvider, serverOpenRouterCredits,
+  serverProviderStatus, fetchPageContent, buildExtractionPrompt,
+  extractProductJson, parseHtmlPage,
+};
 
 
 // ============================================================================

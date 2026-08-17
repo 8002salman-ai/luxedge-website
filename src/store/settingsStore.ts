@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// LUXEDGE V2 SECURITY: Secret credentials (OpenAI/OpenRouter/Gemini API keys,
+// scrape.do / ScraperAPI tokens) were removed from this store. Secrets are now
+// read server-side only from environment variables by the /api/* serverless
+// functions — see .env.example. This store keeps PUBLIC configuration only:
+// Supabase URL + anon key, Stripe publishable key and Google OAuth client id
+// are client-safe by design (that is their purpose).
+
 export interface ApiKeys {
-  scrapedoKey: string;       // scrape.do — 1000 free/month, permanent, no credit card
-  scraperApiKey: string;     // ScraperAPI — fallback
-  openAiKey: string;         // OpenAI — AI descriptions
-  openRouterKey: string;     // OpenRouter — Multi-model AI access
-  geminiApiKey: string;      // Google Gemini Studio API
   supabaseUrl: string;
   supabaseAnonKey: string;
   stripePublishableKey: string;
@@ -42,11 +44,6 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       apiKeys: {
-        scrapedoKey: '',
-        scraperApiKey: '',
-        openAiKey: '',
-        openRouterKey: '',
-        geminiApiKey: '',
         supabaseUrl: '',
         supabaseAnonKey: '',
         stripePublishableKey: '',
