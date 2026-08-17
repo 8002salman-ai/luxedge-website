@@ -3,11 +3,13 @@
 // Browser → { provider, model, prompt, system? } → this function → provider API.
 // Provider keys live in env vars only. Nothing secret is returned.
 //
-// SECURITY: no real authentication yet (static SPA admin). Defense in depth:
-// body size cap, prompt length cap, model allowlist regex, per-instance rate
-// limit. Real auth (Supabase + service role) is Phase 3 — see LUXEDGE_STATE.md.
+// SECURITY (Phase 3A): admin-only. The request must carry a valid Supabase
+// access token with the admin claim (app_metadata.role = 'admin'); otherwise
+// 401/403. Defense in depth on top: body size cap, prompt length cap, model
+// allowlist regex, per-instance rate limit.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { generate, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers';
+import { requireAdmin } from '../_lib/auth';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
@@ -19,6 +21,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 429, { error: 'Too many requests — slow down.' });
     return;
   }
+  // Admin session required — this endpoint spends real provider credits.
+  const auth = await requireAdmin(req, res);
+  if (!auth) return;
+
   let body: Record<string, unknown>;
   try {
     body = await readJsonBody(req);

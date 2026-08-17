@@ -4,13 +4,17 @@
 // server, scraping goes through scrape.do from the server (token never ships
 // to the browser). Falls back to the public Jina Reader when no token is set.
 //
-// SECURITY: SSRF-guarded — the target hostname is DNS-resolved and blocked if
-// it resolves to any private/reserved range; redirects are re-validated per
-// hop; non-http(s) URLs, embedded credentials and non-standard ports rejected.
-// Rate-limited per instance (no real auth yet — Phase 3, see LUXEDGE_STATE.md).
+// SECURITY:
+//  - Admin-only (Phase 3A): valid Supabase admin JWT required. Arbitrary URL
+//    fetching is an abuse/SSRF vector, so unauthenticated access is denied.
+//  - SSRF-guarded: the target hostname is DNS-resolved and blocked if it
+//    resolves to any private/reserved range; redirects are re-validated per
+//    hop; non-http(s) URLs, embedded credentials and non-standard ports rejected.
+//  - Rate-limited per instance.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, sendText, rateLimited, clientIp } from './_lib/providers';
 import { validateFetchTarget } from './_lib/ssrf';
+import { requireAdmin } from './_lib/auth';
 
 const MAX_REDIRECTS = 3;
 
@@ -23,6 +27,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 429, { error: 'Too many requests — slow down.' });
     return;
   }
+  // Admin session required — arbitrary page fetching must not be open.
+  if (!(await requireAdmin(req, res))) return;
+
   const url = new URL(req.url || '/', 'http://localhost').searchParams.get('url') || '';
   if (!/^https?:\/\//i.test(url) || url.length > 2048) {
     sendJson(res, 400, { error: 'A valid http(s) url parameter is required' });

@@ -16,13 +16,38 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 export const FETCH_TIMEOUT_MS = 45_000;
 
 /**
- * In-memory, per-instance rate limiter. Honest limitation: serverless
- * instances are ephemeral, so this throttles per warm instance only. Global
- * rate limiting across instances requires Vercel KV/Upstash — Phase 3.
+ * Rate limiter boundary. Today an in-memory per-instance limiter is used.
+ * Honest limitation: serverless instances are ephemeral, so this throttles
+ * per warm instance only and is NOT a global rate limit. A future shared
+ * limiter (Upstash / Vercel KV) can implement the same interface without
+ * touching any endpoint — Phase 3B+.
  */
+export interface RateLimiter {
+  isLimited(key: string): boolean;
+}
+
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 30;
-const hits = new Map<string, number[]>();
+
+/** In-memory per-instance limiter (current implementation). */
+export class InMemoryRateLimiter implements RateLimiter {
+  private hits = new Map<string, number[]>();
+
+  isLimited(key: string): boolean {
+    const now = Date.now();
+    const arr = (this.hits.get(key) || []).filter((t) => now - t < WINDOW_MS);
+    if (arr.length >= MAX_PER_WINDOW) {
+      this.hits.set(key, arr);
+      return true;
+    }
+    arr.push(now);
+    this.hits.set(key, arr);
+    return false;
+  }
+}
+
+/** Active limiter — swap this for a shared implementation later. */
+export const limiter: RateLimiter = new InMemoryRateLimiter();
 
 export function clientIp(req: IncomingMessage): string {
   const fwd = req.headers['x-forwarded-for'];
@@ -31,15 +56,7 @@ export function clientIp(req: IncomingMessage): string {
 }
 
 export function rateLimited(ip: string): boolean {
-  const now = Date.now();
-  const arr = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
-  if (arr.length >= MAX_PER_WINDOW) {
-    hits.set(ip, arr);
-    return true;
-  }
-  arr.push(now);
-  hits.set(ip, arr);
-  return false;
+  return limiter.isLimited(ip);
 }
 
 /** Allow only sane model identifiers — prevents URL/query injection. */
