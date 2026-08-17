@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, ReactNode, Component } from '
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
+import ProductScout from './ProductScout';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
@@ -102,7 +103,8 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
     { to: '/admin/ai', icon: Bot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
+    { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
+    { to: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
@@ -4629,6 +4631,7 @@ export default function AdminSection() {
       <Route path="variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />
       <Route path="ai" element={<AdminLayout><AAIHub /></AdminLayout>} />
       <Route path="ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
+      <Route path="scout" element={<AdminLayout><ProductScout /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
