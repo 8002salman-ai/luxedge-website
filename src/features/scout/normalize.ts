@@ -24,6 +24,16 @@ export function hostOf(url: string): string {
   }
 }
 
+/**
+ * Canonical supplier identity key: www-stripped, lowercased hostname.
+ * "https://www.kongcompany.com/..." and "https://kongcompany.com/..." both
+ * resolve to "kongcompany.com", so the same real supplier is never split
+ * into two rows by a www prefix.
+ */
+export function canonicalDomain(url: string): string {
+  return hostOf(url);
+}
+
 /** Supplier identity derived from the source URL's domain. */
 export function supplierFromUrl(url: string): { name: string; slug: string; baseUrl: string } {
   const host = hostOf(url);

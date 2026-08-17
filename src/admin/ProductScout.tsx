@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Ban, CheckCircle, Eye, FilePlus2, Loader2, Package, Play,
+  AlertTriangle, Ban, CheckCircle, Compass, Eye, FilePlus2, Loader2, Package, Play,
   RefreshCw, Search, Shield, Target, Zap,
 } from 'lucide-react';
 import { useApp, Modal, fetchPageContent } from '../App';
@@ -24,6 +24,7 @@ import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
 import { runScoutResearch } from '../features/scout/engine';
 import { createProductDraft, findCategoryId } from '../features/scout/persist';
+import { discoverUrls } from '../features/scout/discover';
 import type { CandidateEvidence } from '../features/scout/types';
 import type { FetchedSourcePage } from '../features/scout/types';
 
@@ -57,6 +58,22 @@ interface ViewCandidate {
   supplierProduct?: SupplierProductRow;
 }
 
+interface JobRow {
+  id: string;
+  type: string;
+  status: string;
+  input: unknown;
+  output: unknown;
+  error: string | null;
+  provider: string | null;
+  model: string | null;
+  retries: number;
+  max_retries: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   researching: 'bg-blue-50 text-blue-700 border-blue-200',
   qualified: 'bg-green-50 text-green-700 border-green-200',
@@ -82,6 +99,7 @@ export default function ProductScout() {
   const { notify } = useApp();
   const [db, setDb] = useState<DbAdapter | null>(null);
   const [candidates, setCandidates] = useState<ViewCandidate[]>([]);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [evidenceFor, setEvidenceFor] = useState<ViewCandidate | null>(null);
@@ -95,6 +113,13 @@ export default function ProductScout() {
   const [runUrls, setRunUrls] = useState(SCOUT_SEED_URLS.join('\n'));
   const [running, setRunning] = useState(false);
   const [runLog, setRunLog] = useState<string[]>([]);
+
+  // Discovery state (autonomous mode)
+  const [discoverQuery, setDiscoverQuery] = useState('pet accessories');
+  const [discoverMarket, setDiscoverMarket] = useState('USA');
+  const [discoverMax, setDiscoverMax] = useState('20');
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverNote, setDiscoverNote] = useState('');
 
   // Filters
   const [fStatus, setFStatus] = useState('all');
@@ -115,12 +140,14 @@ export default function ProductScout() {
     setLoading(true);
     setError('');
     try {
-      const [candRows, scoreRows, supRows, spRows] = await Promise.all([
+      const [candRows, scoreRows, supRows, spRows, jobRows] = await Promise.all([
         d.list<CandidateRow>('product_candidates', { orderBy: 'created_at.desc' }),
         d.list<ScoreRow>('product_scores'),
         d.list<SupplierRow>('suppliers'),
         d.list<SupplierProductRow>('supplier_products'),
+        d.list<JobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 12 }),
       ]);
+      setJobs(Array.isArray(jobRows) ? jobRows : []);
       const byId = <T extends { id: string }>(rows: T[] | null) => new Map((Array.isArray(rows) ? rows : []).map((r) => [r.id, r]));
       // product_scores reference their candidate via candidate_id (not id).
       const scores = new Map((Array.isArray(scoreRows) ? scoreRows : []).map((r) => [r.candidate_id, r] as const));
@@ -182,6 +209,37 @@ export default function ProductScout() {
     return [...set].sort();
   }, [candidates]);
 
+  const runDiscover = async () => {
+    if (!db) { notify('Database not ready'); return; }
+    const q = discoverQuery.trim();
+    if (!q) { notify('Enter a discovery query (e.g. “dog toys”)'); return; }
+    setDiscovering(true);
+    setDiscoverNote('');
+    try {
+      const max = Math.max(1, Math.min(40, parseInt(discoverMax || '20', 10) || 20));
+      const result = await discoverUrls({
+        query: q,
+        market: discoverMarket.trim() || undefined,
+        maxResults: max,
+      });
+      if (result.warning) setDiscoverNote(result.warning);
+      if (result.urls.length) {
+        const merged = [...new Set([...runUrls.split('\n').map((s) => s.trim()).filter(Boolean), ...result.urls])];
+        setRunUrls(merged.join('\n'));
+        setDiscoverNote(`${result.urls.length} product URLs discovered${result.duplicates ? ` (${result.duplicates} duplicates dropped)` : ''} — ${result.urls.length} added to the list.`);
+        notify(`Discovered ${result.urls.length} product URLs`);
+      } else {
+        setDiscoverNote(`No product pages discovered for “${q}”. ${result.warning || 'Try a different query or use manual URL mode below.'}`);
+        notify('Discovery found no product pages');
+      }
+    } catch (e) {
+      setDiscoverNote(`Discovery failed: ${(e as Error).message}`);
+      notify(`Discovery failed: ${(e as Error).message}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const runScout = async () => {
     const urls = runUrls.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!urls.length) { notify('Add at least one source URL'); return; }
@@ -197,7 +255,9 @@ export default function ProductScout() {
         fetchPage: scoutFetchPage,
         onProgress,
       });
-      log.push(`✔ Run ${result.jobId}: ${result.researched} researched, ${result.shortlisted} shortlisted, ${result.rejected} rejected, ${result.failed} failed.`);
+      log.push(`✔ RESEARCH ${result.jobId}: ${result.researched} researched, ${result.failed} failed.`);
+      if (result.scoreJobId) log.push(`✔ SCORE ${result.scoreJobId}: ${result.shortlisted} shortlisted, ${result.rejected} rejected.`);
+      if (result.qaJobId) log.push(`✔ QA ${result.qaJobId} complete.`);
       setRunLog([...log]);
       notify(`Scout run complete — ${result.shortlisted} shortlisted`);
       setRunOpen(false);
@@ -373,6 +433,49 @@ export default function ProductScout() {
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Job audit trail — real agent_jobs rows (RESEARCH → SCORE → QA) */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+        <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <Zap size={14} /> Job Audit Trail <span className="font-normal normal-case text-gray-400">· PRODUCT_RESEARCH → PRODUCT_SCORE → PRODUCT_QA</span>
+        </div>
+        {jobs.length === 0 ? (
+          <p className="text-sm text-gray-400">No scout jobs recorded yet. Run a Scout Run to create one.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left text-gray-500 uppercase">
+                <tr>
+                  <th className="px-2 py-2">Type</th>
+                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Started</th>
+                  <th className="px-2 py-2">Finished</th>
+                  <th className="px-2 py-2">Output</th>
+                  <th className="px-2 py-2">Retries</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((j) => {
+                  const out = j.output as Record<string, unknown> | null;
+                  const summary = out ? Object.entries(out).filter(([k]) => k !== 'candidateIds' && k !== 'urls').map(([k, v]) => `${k}: ${String(v)}`).join(' · ') : '';
+                  return (
+                    <tr key={j.id} className="border-t border-gray-50">
+                      <td className="px-2 py-2 font-mono font-semibold text-gray-700">{j.type}</td>
+                      <td className="px-2 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${j.status === 'completed' ? 'bg-green-100 text-green-700' : j.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{j.status}</span>
+                      </td>
+                      <td className="px-2 py-2 text-gray-500">{j.started_at ? new Date(j.started_at).toLocaleTimeString() : '—'}</td>
+                      <td className="px-2 py-2 text-gray-500">{j.finished_at ? new Date(j.finished_at).toLocaleTimeString() : '—'}</td>
+                      <td className="px-2 py-2 text-gray-600 max-w-[280px] truncate" title={summary}>{summary || (j.error ? `✗ ${j.error}` : '—')}</td>
+                      <td className="px-2 py-2 text-gray-500">{j.retries}/{j.max_retries}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -552,8 +655,48 @@ export default function ProductScout() {
       {/* Run modal */}
       <Modal open={runOpen} onClose={() => { if (!running) setRunOpen(false); }} title="Run Scout Research">
         <div className="space-y-4">
+          {/* Autonomous discovery mode */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-blue-700 uppercase tracking-wide">
+              <Compass size={14} /> Autonomous Discovery
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={discoverQuery}
+                onChange={(e) => setDiscoverQuery(e.target.value)}
+                placeholder="Query, e.g. dog toys / cat accessories / pet grooming"
+                disabled={discovering}
+                className="flex-1 min-w-[220px] px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-blue-50"
+              />
+              <input
+                value={discoverMarket}
+                onChange={(e) => setDiscoverMarket(e.target.value)}
+                placeholder="Market (USA)"
+                disabled={discovering}
+                className="w-28 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
+              />
+              <input
+                value={discoverMax}
+                onChange={(e) => setDiscoverMax(e.target.value)}
+                placeholder="Max URLs"
+                disabled={discovering}
+                className="w-24 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
+              />
+              <button
+                onClick={() => void runDiscover()}
+                disabled={discovering}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {discovering ? <Loader2 size={15} className="animate-spin" /> : <Compass size={15} />} {discovering ? 'Searching…' : 'Discover URLs'}
+              </button>
+            </div>
+            {discoverNote && <p className="text-xs text-blue-700">{discoverNote}</p>}
+            <p className="text-[11px] text-blue-500">Searches public sources (DuckDuckGo) for real pet-product pages, decodes redirects, filters out category/search/blog pages, dedupes, then adds the URLs to the list below.</p>
+          </div>
+
+          {/* Manual URL mode (advanced) */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Source URLs (one per line — pet products, USA focus)</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Source URLs (one per line — pet products, USA focus) <span className="font-normal normal-case text-gray-400">· advanced manual mode</span></p>
             <textarea
               value={runUrls}
               onChange={(e) => setRunUrls(e.target.value)}

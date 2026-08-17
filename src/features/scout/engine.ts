@@ -1,14 +1,19 @@
 // ============================================================================
-// LUXEDGE V2 — PRODUCT SCOUT ENGINE (Phase 4A)
+// LUXEDGE V2 — PRODUCT SCOUT ENGINE (Phase 4A + closure)
 //
 // Pipeline: DISCOVER → VERIFY SOURCE → NORMALIZE → SCORE → REJECT/SHORTLIST
 //          → OWNER APPROVAL (UI) → PRODUCT DRAFT (explicit owner action)
 //
-// The engine never publishes. Candidates reach 'qualified' (shortlist) when
-// they pass the hard-rejection filters AND score >= 75. Auto-approval is only
-// allowed when margin confidence is high; otherwise the candidate stays
-// 'researching' and the owner decides. No AI provider call is required — all
-// extraction/scoring is deterministic and evidence-based.
+// The engine never publishes, never approves, never drafts. Candidates reach
+// 'qualified' (shortlist) when they pass the hard-rejection filters AND score
+// >= 75; margin confidence LOW is recorded as a risk flag, never auto-approved.
+//
+// DURABLE JOB AUDIT TRAIL (Phase 4A closure): every run records THREE distinct
+// agent_jobs — PRODUCT_RESEARCH (fetch+extract+persist) → PRODUCT_SCORE
+// (margin+reject+score) → PRODUCT_QA (evidence QA on shortlisted). Each job
+// carries status, start/end, input, output summary, error, retry count. No AI
+// provider is required — all extraction/scoring/QA is deterministic. No
+// secrets are ever stored in job records.
 //
 // SECURITY: persistence goes through the injected db adapter, which must be
 // configured with the ADMIN JWT (setAccessToken) so RLS governs every write.
@@ -81,9 +86,14 @@ function buildEvidence(url: string, extract: PageExtract, category: string | nul
   };
 }
 
+// ---------------------------------------------------------------------------
+// PHASE 1 — PRODUCT_RESEARCH: fetch, verify source, normalize, persist
+// ---------------------------------------------------------------------------
+
 /**
- * Research a single URL through the full pipeline. Returns null when the
- * source cannot be verified (no fabricated candidates are ever created).
+ * Research a single URL: fetch + extract + persist the candidate as
+ * 'researching' (scoring happens in the separate PRODUCT_SCORE job). Returns
+ * null when the source cannot be verified (no fabricated candidates).
  */
 export async function researchUrl(
   opts: ScoutRunOptions & { url: string },
@@ -122,36 +132,10 @@ export async function researchUrl(
     return null;
   }
 
-  // 3) MARGIN (separate from score). Verified "Free Shipping" counts as
-  //    $0 shipping evidence (inferred) — otherwise shipping stays UNKNOWN.
+  // 3) MARGIN (computed here so the SCORE job has the numbers ready; status
+  //    decisions still happen only in the SCORE job).
   const margin = calculateMargin({ supplierPrice: extract.price, shippingCost: extract.freeShipping ? 0 : null, markup });
-
-  // 4) HARD REJECTION FILTERS
-  const rejection = applyRejectFilters({ title, extract, margin, images: extract.images });
-  const riskFlags = collectRiskFlags({ title, extract, margin });
   const category = petCategorySignal(title);
-
-  // 5) SCORE
-  const score = scoreCandidate({
-    title,
-    extract,
-    margin,
-    supplierVerified: true,
-    sourceIsManufacturer: /manufacturer|official|brand|co\.|inc\.|llc/i.test(supplier.name) || extract.title !== null,
-    images: extract.images,
-    riskFlags,
-  });
-
-  // 6) STATUS — reject / shortlist / researching. Shortlisting is a pure
-  //    score gate (≥75, no rejection). Margin confidence LOW only prevents
-  //    AUTO-approval; approval is always an explicit owner action, so the
-  //    candidate stays 'qualified' and the risk flag is recorded instead.
-  let status: ScoutCandidate['status'] = score.overall >= SHORTLIST_THRESHOLD ? 'qualified' : 'researching';
-  let rejectionReason: string | undefined;
-  if (rejection) {
-    status = 'rejected';
-    rejectionReason = `${rejection.reason}: ${rejection.detail}`;
-  }
 
   const candidate: ScoutCandidate = {
     id: '',
@@ -162,13 +146,12 @@ export async function researchUrl(
     images: extract.images,
     evidence: buildEvidence(url, extract, category),
     margin,
-    score,
-    status,
-    rejectionReason,
+    score: null,
+    status: 'researching',
     createdAt: new Date().toISOString(),
   };
 
-  // 7) PERSIST (admin JWT — RLS enforces admin-only writes)
+  // 4) PERSIST (admin JWT — RLS enforces admin-only writes)
   try {
     const sup = await ensureSupplier(db, supplier);
     const sp = await persistSupplierProduct(db, {
@@ -185,31 +168,158 @@ export async function researchUrl(
       sourceUrl: url,
       images: extract.images,
       evidence: candidate.evidence,
-      status,
-      rejectionReason,
+      status: 'researching',
     });
     candidate.id = cand.id;
-    await persistScore(db, cand.id, score);
   } catch (e) {
     progress(`[error] ${title} — persistence failed: ${(e as Error).message}`);
     return null;
   }
 
-  progress(`[ok] ${title} — score ${score.overall}/100 (${status})${rejection ? ' — REJECTED: ' + rejection.reason : ''}`);
+  progress(`[ok] ${title} — researched (scoring in next job)`);
   return candidate;
 }
 
+// ---------------------------------------------------------------------------
+// PHASE 2 — PRODUCT_SCORE: margin checks, hard rejection, 100-pt score
+// ---------------------------------------------------------------------------
+
+/** Score one researched candidate: reject filters → score → status. */
+export function scorePhaseCandidate(
+  candidate: ScoutCandidate,
+  markup?: number
+): ScoutCandidate {
+  const { title, evidence: ev } = candidate;
+  const extract: PageExtract = {
+    title: (ev.title.value as string) ?? null,
+    price: (ev.supplierPrice.value as number | null) ?? null,
+    images: (ev.images.value as string[]) ?? [],
+    availability: (ev.availability.value as 'available' | 'unavailable' | 'unknown') ?? 'unknown',
+    shippingDays: (ev.shippingDays.value as { min: number; max: number } | null) ?? null,
+    freeShipping: ev.shippingCost?.value === 0,
+    rating: (ev.rating.value as number | null) ?? null,
+    reviewCount: (ev as { reviewCount?: unknown }).reviewCount as number | null ?? null,
+    origin: (ev.origin.value as string | null) ?? null,
+    sizes: (ev.sizes.value as string[] | null) ?? null,
+  };
+
+  const margin = candidate.margin && candidate.margin.confidence !== 'low'
+    ? candidate.margin
+    : calculateMargin({ supplierPrice: extract.price, shippingCost: extract.freeShipping ? 0 : null, markup });
+
+  const rejection = applyRejectFilters({ title, extract, margin, images: extract.images });
+  const riskFlags = collectRiskFlags({ title, extract, margin });
+  const category = petCategorySignal(title);
+
+  const score = scoreCandidate({
+    title,
+    extract,
+    margin,
+    supplierVerified: true,
+    sourceIsManufacturer: extract.title !== null,
+    images: extract.images,
+    riskFlags,
+  });
+
+  let status: ScoutCandidate['status'] = score.overall >= SHORTLIST_THRESHOLD ? 'qualified' : 'researching';
+  let rejectionReason: string | undefined;
+  if (rejection) {
+    status = 'rejected';
+    rejectionReason = `${rejection.reason}: ${rejection.detail}`;
+  }
+
+  const riskNotes = [...(ev.riskNotes || [])];
+  if (margin.confidence === 'low' && status !== 'rejected') {
+    riskNotes.push('Margin confidence LOW — shipping cost not verified; requires owner review before any draft.');
+  }
+
+  return {
+    ...candidate,
+    margin,
+    score,
+    status,
+    rejectionReason,
+    evidence: {
+      ...ev,
+      category: { status: category ? 'inferred' : 'unknown', value: category, note: 'Inferred from title keywords' },
+      riskNotes,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 3 — PRODUCT_QA: evidence checks on shortlisted candidates
+// ---------------------------------------------------------------------------
+
+export interface QAOutcome {
+  candidateId: string;
+  title: string;
+  passed: boolean;
+  issues: string[];
+}
+
 /**
- * Run one controlled research pass over the given URLs. Creates an
- * agent_job (PRODUCT_RESEARCH), runs, logs, and returns the summary.
+ * Deterministic QA pass over a candidate's evidence. Checks exactly what is
+ * verifiable: images, price, availability, shipping-days, unknown fields,
+ * margin confidence. Never invents facts; failures are recorded with reasons.
+ */
+export function qaCandidate(candidate: ScoutCandidate): QAOutcome {
+  const issues: string[] = [];
+  const ev = candidate.evidence;
+
+  const images = (ev.images?.value as string[] | null) ?? null;
+  if (!images || images.length === 0) issues.push('No usable product images verified');
+  else if (images.some((i) => !/^https?:\/\//i.test(i))) issues.push('Some image URLs are not http(s)');
+
+  const price = (ev.supplierPrice?.value as number | null) ?? null;
+  if (price === null || price <= 0) issues.push('No verified supplier price (unclear landed cost)');
+  else if (price < 1) issues.push('Suspiciously low price (< $1) — verify source');
+
+  if (ev.availability?.value === 'unavailable') issues.push('Source marks product unavailable');
+  else if (ev.availability?.status === 'unknown') issues.push('Availability not verified on source page');
+
+  if (ev.shippingDays?.status === 'unknown') issues.push('Delivery window not stated on source');
+  if (ev.shippingCost?.status === 'unknown') issues.push('Shipping cost not stated on source (margin confidence LOW)');
+
+  if (candidate.margin?.confidence === 'low') issues.push('Margin confidence LOW — no silent cost estimates');
+
+  if (candidate.score && candidate.score.overall < SHORTLIST_THRESHOLD) {
+    issues.push(`Score ${candidate.score.overall} below the ${SHORTLIST_THRESHOLD} shortlist threshold`);
+  }
+
+  // Unknown critical fields.
+  const critical = ['title', 'price', 'availability', 'images'];
+  for (const f of critical) {
+    if ((ev.unknownFields || []).includes(f)) issues.push(`Critical field unknown: ${f}`);
+  }
+
+  return { candidateId: candidate.id, title: candidate.title, passed: issues.length === 0, issues };
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator — three durable jobs: RESEARCH → SCORE → QA
+// ---------------------------------------------------------------------------
+
+/**
+ * Run one controlled research pass. Records three distinct agent_jobs
+ * (PRODUCT_RESEARCH → PRODUCT_SCORE → PRODUCT_QA), each with its own runs,
+ * logs, status, input/output summary, errors and retry count.
+ *
+ * NEVER approves or drafts anything — statuses reach at most 'qualified'
+ * (shortlist). Owner actions are explicit UI-only operations.
  */
 export async function runScoutResearch(opts: ScoutRunOptions): Promise<ScoutRunResult> {
-  const { urls, db, onProgress } = opts;
+  const { urls, db, onProgress, markup } = opts;
   const progress = (m: string) => onProgress?.(m);
 
-  const jobId = await createJob(db, 'PRODUCT_RESEARCH', { urls, at: new Date().toISOString() });
-  await addRun(db, jobId, 'product-scout', 'running', `Researching ${urls.length} source URLs`);
-  await addLog(db, jobId, 'info', `Research run started with ${urls.length} URLs`);
+  // ------------------------------------------------------------------ JOB 1
+  const researchJobId = await createJob(db, 'PRODUCT_RESEARCH', {
+    urls,
+    at: new Date().toISOString(),
+    note: 'Fetch + extract + persist candidates as researching',
+  });
+  await addRun(db, researchJobId, 'product-scout', 'running', `Researching ${urls.length} source URLs`);
+  await addLog(db, researchJobId, 'info', `PRODUCT_RESEARCH started with ${urls.length} URLs (retries=0)`);
 
   const existing = await db
     .list<{ id: string; title: string; source_url?: string | null }>('product_candidates', { limit: 500 })
@@ -223,28 +333,93 @@ export async function runScoutResearch(opts: ScoutRunOptions): Promise<ScoutRunR
   }
 
   const candidates: ScoutCandidate[] = [];
-  let rejected = 0;
   let failed = 0;
+  let researchRetries = 0;
   for (const url of urls) {
     const c = await researchUrl({ ...opts, url }, seen);
-    if (!c) { failed++; continue; }
+    if (!c) {
+      failed++;
+      researchRetries++;
+      continue;
+    }
     candidates.push(c);
     seen.push({ dedupeKey: dedupeKey(c.sourceUrl, c.title), title: c.title });
-    if (c.status === 'rejected') rejected++;
   }
-
-  const shortlisted = candidates.filter((c) => c.status === 'qualified').length;
-
-  await addLog(db, jobId, 'info', `Run finished: ${candidates.length} candidates, ${rejected} rejected, ${shortlisted} shortlisted, ${failed} failed`);
-  await addRun(db, jobId, 'product-scout', 'completed', `${candidates.length} candidates, ${shortlisted} shortlisted`);
-  await completeJob(db, jobId, 'completed', {
+  await addLog(db, researchJobId, 'info',
+    `PRODUCT_RESEARCH finished: ${candidates.length} researched, ${failed} failed/unverifiable (retries=${researchRetries})`);
+  await addRun(db, researchJobId, 'product-scout', 'completed', `${candidates.length} candidates researched`);
+  await completeJob(db, researchJobId, 'completed', {
     researched: candidates.length,
-    rejected,
-    shortlisted,
     failed,
-    at: new Date().toISOString(),
+    retries: researchRetries,
+    candidateIds: candidates.map((c) => c.id),
   });
 
-  progress(`Done — ${candidates.length} researched, ${rejected} rejected, ${shortlisted} shortlisted, ${failed} failed.`);
-  return { jobId, researched: candidates.length, rejected, shortlisted, failed, candidates };
+  // ------------------------------------------------------------------ JOB 2
+  const scoreJobId = await createJob(db, 'PRODUCT_SCORE', {
+    candidateIds: candidates.map((c) => c.id),
+    at: new Date().toISOString(),
+    note: 'Margin + hard-rejection filters + 100-pt weighted score',
+  });
+  await addRun(db, scoreJobId, 'product-scout', 'running', `Scoring ${candidates.length} candidates`);
+  await addLog(db, scoreJobId, 'info', `PRODUCT_SCORE started for ${candidates.length} candidates (retries=0)`);
+
+  let rejected = 0;
+  const scored: ScoutCandidate[] = [];
+  for (const c of candidates) {
+    const out = scorePhaseCandidate(c, markup);
+    scored.push(out);
+    if (out.status === 'rejected') rejected++;
+    try {
+      await persistScore(db, c.id, out.score!);
+      await db.update<{ id: string; status: string; rejection_reason: string | null }>(
+        'product_candidates', c.id,
+        { status: out.status, rejection_reason: out.rejectionReason ?? null }
+      );
+    } catch (e) {
+      progress(`[error] ${out.title} — score persist failed: ${(e as Error).message}`);
+    }
+    progress(`[score] ${out.title} — ${out.score?.overall ?? '?'}/100 (${out.status})${out.rejectionReason ? ' — REJECTED: ' + out.rejectionReason : ''}`);
+  }
+  const shortlisted = scored.filter((c) => c.status === 'qualified').length;
+  await addLog(db, scoreJobId, 'info',
+    `PRODUCT_SCORE finished: ${scored.length} scored, ${rejected} rejected, ${shortlisted} shortlisted (retries=0)`);
+  await addRun(db, scoreJobId, 'product-scout', 'completed', `${scored.length} scored, ${shortlisted} shortlisted`);
+  await completeJob(db, scoreJobId, 'completed', {
+    scored: scored.length,
+    rejected,
+    shortlisted,
+    retries: 0,
+  });
+
+  // ------------------------------------------------------------------ JOB 3
+  const qaTargets = scored.filter((c) => c.status === 'qualified');
+  const qaJobId = await createJob(db, 'PRODUCT_QA', {
+    candidateIds: qaTargets.map((c) => c.id),
+    at: new Date().toISOString(),
+    note: 'Evidence QA on shortlisted candidates (images/price/availability/shipping)',
+  });
+  await addRun(db, qaJobId, 'product-scout', 'running', `QA on ${qaTargets.length} shortlisted candidates`);
+  await addLog(db, qaJobId, 'info', `PRODUCT_QA started for ${qaTargets.length} shortlisted candidates (retries=0)`);
+
+  const qaOutcomes: QAOutcome[] = [];
+  for (const c of qaTargets) {
+    const out = qaCandidate(c);
+    qaOutcomes.push(out);
+    for (const issue of out.issues) await addLog(db, qaJobId, out.passed ? 'info' : 'warn', `[${out.title}] ${issue}`);
+    progress(out.passed
+      ? `[qa] ${out.title} — PASS`
+      : `[qa] ${out.title} — FLAGGED: ${out.issues.join('; ')}`);
+  }
+  const qaPassed = qaOutcomes.filter((o) => o.passed).length;
+  await addLog(db, qaJobId, 'info', `PRODUCT_QA finished: ${qaPassed} passed, ${qaOutcomes.length - qaPassed} flagged (retries=0)`);
+  await addRun(db, qaJobId, 'product-scout', 'completed', `${qaPassed} passed, ${qaOutcomes.length - qaPassed} flagged`);
+  await completeJob(db, qaJobId, 'completed', {
+    passed: qaPassed,
+    flagged: qaOutcomes.length - qaPassed,
+    retries: 0,
+  });
+
+  progress(`Done — ${scored.length} researched, ${rejected} rejected, ${shortlisted} shortlisted, ${failed} failed. QA: ${qaPassed} passed / ${qaOutcomes.length - qaPassed} flagged.`);
+  return { jobId: researchJobId, scoreJobId, qaJobId, researched: scored.length, rejected, shortlisted, failed, candidates: scored };
 }

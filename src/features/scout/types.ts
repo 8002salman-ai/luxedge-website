@@ -86,7 +86,12 @@ export interface ScoutCandidate {
 }
 
 export interface ScoutRunResult {
+  /** PRODUCT_RESEARCH job id. */
   jobId: string;
+  /** PRODUCT_SCORE job id. */
+  scoreJobId?: string;
+  /** PRODUCT_QA job id. */
+  qaJobId?: string;
   researched: number;
   rejected: number;
   shortlisted: number;

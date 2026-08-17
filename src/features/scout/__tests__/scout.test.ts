@@ -9,14 +9,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
-import { slugify, hostOf, supplierFromUrl, dedupeKey, findDuplicate, parsePrice, parseReviewCount, parseRating } from '../normalize';
+import { slugify, hostOf, canonicalDomain, supplierFromUrl, dedupeKey, findDuplicate, parsePrice, parseReviewCount, parseRating } from '../normalize';
 import { calculateMargin, marginAllowsAutoApprove } from '../margin';
 import { applyRejectFilters, collectRiskFlags } from '../reject';
 import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
 import { extractPageFacts } from '../extract';
-import { runScoutResearch } from '../engine';
+import { runScoutResearch, qaCandidate } from '../engine';
 import { persistCandidate, persistScore, ensureSupplier, createProductDraft } from '../persist';
-import type { FetchedSourcePage } from '../types';
+import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, discoverUrls } from '../discover';
+import type { FetchedSourcePage, ScoutCandidate } from '../types';
 
 // ---------------------------------------------------------------------------
 // Fake admin-JWT db adapter (mirrors RLS: only admin-token writes succeed)
@@ -109,6 +110,12 @@ describe('normalize', () => {
     const s = supplierFromUrl('https://www.chewy.com/dp/123');
     expect(s.name).toBe('Chewy');
     expect(s.baseUrl).toBe('https://chewy.com');
+  });
+
+  it('canonical domain merges www and non-www variants of the same supplier', () => {
+    expect(canonicalDomain('https://www.kongcompany.com/kong-classic/')).toBe('kongcompany.com');
+    expect(canonicalDomain('https://kongcompany.com/kong-extreme/')).toBe('kongcompany.com');
+    expect(canonicalDomain('https://www.chewy.com/dp/1')).toBe('chewy.com');
   });
 
   it('builds stable dedupe keys and finds duplicates', () => {
@@ -258,6 +265,85 @@ describe('scoring (100 points)', () => {
   });
 });
 
+describe('discovery (autonomous mode)', () => {
+  it('decodes DuckDuckGo /l/ redirects into the real target', () => {
+    expect(decodeRedirectUrl('https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-classic%2F&rut=x')).toBe('https://www.kongcompany.com/kong-classic/');
+    expect(decodeRedirectUrl('https://www.kongcompany.com/kong-classic/')).toBe('https://www.kongcompany.com/kong-classic/');
+  });
+
+  it('extracts links from markdown and HTML search results', () => {
+    const links = extractLinks('[KONG Classic](https://www.kongcompany.com/kong-classic/) <a href="https://www.petco.com/shop/en/petcostore/product/kong">x</a>');
+    expect(links).toContain('https://www.kongcompany.com/kong-classic/');
+    expect(links).toContain('https://www.petco.com/shop/en/petcostore/product/kong');
+  });
+
+  it('classifies product pages vs category/search/blog pages', () => {
+    expect(isLikelyProductPage('https://www.kongcompany.com/kong-classic/')).toBe(true);
+    expect(isLikelyProductPage('https://www.chewy.com/dp/193158')).toBe(true);
+    expect(isLikelyProductPage('https://www.kongcompany.com/dog-toys/')).toBe(false); // category
+    expect(isLikelyProductPage('https://html.duckduckgo.com/html/?q=dog+toys')).toBe(false); // search
+    expect(isLikelyProductPage('https://www.chewy.com/blog/posts/10-best-toys')).toBe(false); // blog
+    expect(isLikelyProductPage('https://www.kongcompany.com/')).toBe(false); // domain root
+  });
+
+  it('cleans tracking params and dedupes URLs by host+path', () => {
+    const a = cleanUrl('https://www.kongcompany.com/kong-classic/?utm_source=x&utm_medium=y');
+    expect(a).toBe('https://www.kongcompany.com/kong-classic');
+    const { urls, duplicates } = dedupeUrls([
+      'https://www.kongcompany.com/kong-classic/',
+      'https://kongcompany.com/kong-classic/',
+      'https://www.kongcompany.com/kong-extreme/',
+    ]);
+    expect(duplicates).toBe(1);
+    expect(urls.length).toBe(2);
+  });
+
+  it('builds a search URL with market/category/cost bias', () => {
+    const u = buildSearchUrl({ query: 'dog toys', market: 'USA', category: 'dog', maxSupplierCost: 20 });
+    expect(u).toContain(encodeURIComponent('dog toys'));
+    expect(u).toContain('duckduckgo.com');
+  });
+
+  it('discovers product URLs from a fake search response, filtering and deduping', async () => {
+    const fakeFetch = async () => [
+      '[KONG Classic](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-classic%2F&rut=1)',
+      '[KONG Classic dup](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-classic%2F&rut=2)',
+      '[KONG Extreme](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-extreme%2F&rut=3)',
+      '[Dog Toys Category](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fdog-toys%2F&rut=4)',
+    ].join('\n');
+    const r = await discoverUrls({ query: 'KONG Classic dog toy', maxResults: 10 }, fakeFetch);
+    expect(r.urls).toContain('https://www.kongcompany.com/kong-classic');
+    expect(r.urls).toContain('https://www.kongcompany.com/kong-extreme');
+    expect(r.urls.some((u) => u.includes('dog-toys'))).toBe(false); // category filtered
+    expect(r.duplicates).toBe(1); // the dup classic link
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('expands a generic category query into concrete product-type searches', async () => {
+    const fakeFetch = async (url: string) => {
+      const q = decodeURIComponent(url.split('q=')[1] || '');
+      if (q.includes('dog toy')) {
+        return '[KONG Classic](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-classic%2F&rut=1)';
+      }
+      if (q.includes('cat toy')) {
+        return '[Frisco Cat Toy](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.chewy.com%2Ffrisco-bird-cat-toy%2Fdp%2F193158&rut=2)';
+      }
+      return '[Homepage](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.chewy.com%2F&rut=3)'; // filtered as root
+    };
+    const r = await discoverUrls({ query: 'pet accessories', market: 'USA', maxResults: 25 }, fakeFetch);
+    expect(r.urls).toContain('https://www.kongcompany.com/kong-classic');
+    expect(r.urls).toContain('https://www.chewy.com/frisco-bird-cat-toy/dp/193158');
+    expect(r.urls.some((u) => u === 'https://www.chewy.com')).toBe(false); // root filtered
+    expect(r.duplicates).toBe(0);
+  });
+
+  it('reports a warning when the search endpoint is unreachable', async () => {
+    const r = await discoverUrls({ query: 'dog toys' }, async () => { throw new Error('no proxy'); });
+    expect(r.warning).toContain('no proxy');
+    expect(r.urls.length).toBe(0);
+  });
+});
+
 describe('extractPageFacts', () => {
   it('extracts only facts present in the page', () => {
     const e = extractPageFacts(page('og:title KONG Classic\nPrice: $11.96\nin stock\nFree Shipping\nships within 3-5 days\n4.8 out of 5\n1,200 reviews\nMade in USA'));
@@ -294,7 +380,7 @@ describe('researchUrl + runScoutResearch pipeline', () => {
     return page('og:title Generic Pet Toy\nPrice: $9.99\nin stock', IMGS);
   });
 
-  it('creates a candidate + score + job through the admin JWT adapter', async () => {
+  it('creates a candidate + score + three durable jobs (RESEARCH → SCORE → QA)', async () => {
     db.token = adminToken();
     const result = await runScoutResearch({
       urls: ['https://www.chewy.com/dp/1'],
@@ -304,8 +390,11 @@ describe('researchUrl + runScoutResearch pipeline', () => {
     expect(result.researched).toBe(1);
     expect(db.rows.get('product_candidates')?.length).toBe(1);
     expect(db.rows.get('product_scores')?.length).toBe(1);
-    expect(db.rows.get('agent_jobs')?.length).toBe(1);
-    expect(db.rows.get('agent_runs')?.length).toBeGreaterThan(0);
+    const jobs = db.rows.get('agent_jobs') as { type: string; status: string }[];
+    expect(jobs.length).toBe(3);
+    expect(jobs.map((j) => j.type)).toEqual(['PRODUCT_RESEARCH', 'PRODUCT_SCORE', 'PRODUCT_QA']);
+    expect(jobs.every((j) => j.status === 'completed')).toBe(true);
+    expect(db.rows.get('agent_runs')?.length).toBeGreaterThanOrEqual(3);
     const cand = db.rows.get('product_candidates')?.[0] as { status: string; evidence: { unknownFields: string[] } };
     expect(cand.status).toBe('qualified');
     expect(cand.evidence.unknownFields).not.toContain('price');
@@ -335,7 +424,7 @@ describe('researchUrl + runScoutResearch pipeline', () => {
     expect(db.rows.get('product_candidates')?.length).toBe(0);
   });
 
-  it('rejects risky titles during research', async () => {
+  it('rejects risky titles during the SCORE phase', async () => {
     db.token = adminToken();
     const risky = vi.fn(async () => page('og:title Replica Gucci Dog Collar\nPrice: $5.99\nin stock', IMGS));
     const result = await runScoutResearch({
@@ -347,6 +436,51 @@ describe('researchUrl + runScoutResearch pipeline', () => {
     const cand = db.rows.get('product_candidates')?.[0] as { status: string; rejection_reason: string };
     expect(cand.status).toBe('rejected');
     expect(cand.rejection_reason).toContain('counterfeit');
+  });
+
+  it('QA flags shortlisted candidates with incomplete evidence and passes complete ones', () => {
+    const complete: ScoutCandidate = {
+      id: 'a', title: 'KONG Classic', source: 'KONG', sourceUrl: 'https://x', supplierSlug: 'kong',
+      images: ['https://img/1.jpg', 'https://img/2.jpg'],
+      evidence: {
+        sourceUrl: 'https://x', observedAt: 't',
+        title: { status: 'verified', value: 'KONG Classic' },
+        supplierPrice: { status: 'verified', value: 11.96 },
+        shippingCost: { status: 'inferred', value: 0, note: 'Free shipping' },
+        shippingDays: { status: 'verified', value: { min: 3, max: 5 } },
+        availability: { status: 'verified', value: 'available' },
+        images: { status: 'verified', value: ['https://img/1.jpg', 'https://img/2.jpg'] },
+        rating: { status: 'unknown', value: null },
+        origin: { status: 'verified', value: 'USA' },
+        category: { status: 'inferred', value: 'Dog' },
+        sizes: { status: 'unknown', value: null },
+        unknownFields: [], riskNotes: [],
+      },
+      margin: { supplierPrice: 11.96, shippingCost: 0, landedCost: 11.96, proposedLuxedgePrice: 29.99, grossMarginDollars: 18.03, grossMarginPct: 0.6, confidence: 'high', notes: [] },
+      score: { overall: 80, weights: {}, breakdown: {}, explanation: 'ok' },
+      status: 'qualified', createdAt: 't',
+    };
+    const ok = qaCandidate(complete);
+    expect(ok.passed).toBe(true);
+    expect(ok.issues.length).toBe(0);
+
+    const incomplete: ScoutCandidate = {
+      ...complete,
+      id: 'b', title: 'Unknown Toy',
+      evidence: {
+        ...complete.evidence,
+        supplierPrice: { status: 'unknown', value: null },
+        shippingCost: { status: 'unknown', value: null },
+        shippingDays: { status: 'unknown', value: null },
+        images: { status: 'unknown', value: [] },
+        unknownFields: ['price', 'shippingDays', 'images'],
+      },
+      margin: { supplierPrice: null, shippingCost: null, landedCost: null, proposedLuxedgePrice: null, grossMarginDollars: null, grossMarginPct: null, confidence: 'low', notes: [] },
+    };
+    const bad = qaCandidate(incomplete);
+    expect(bad.passed).toBe(false);
+    expect(bad.issues.some((i) => i.includes('price'))).toBe(true);
+    expect(bad.issues.some((i) => i.includes('LOW'))).toBe(true);
   });
 });
 
@@ -363,6 +497,15 @@ describe('persistence + admin-only mutations', () => {
     await expect(db.insert('product_candidates', { id: '1' })).rejects.toThrow('row-level security');
     db.token = adminToken(); // admin
     await expect(db.insert('product_candidates', { id: '1', title: 'T', source: 'S', source_url: 'u', images: [], status: 'researching', created_at: 't', updated_at: 't' })).resolves.toBeTruthy();
+  });
+
+  it('does not duplicate suppliers across www / non-www base URLs', async () => {
+    db.token = adminToken();
+    const first = await ensureSupplier(db as unknown as DbAdapter, { name: 'KONG Company', slug: 'kong-company', baseUrl: 'https://www.kongcompany.com' });
+    // Same real supplier discovered via the non-www domain (engine's supplierFromUrl strips www):
+    const second = await ensureSupplier(db as unknown as DbAdapter, { name: 'Kongcompany', slug: 'kongcompany-com', baseUrl: 'https://kongcompany.com' });
+    expect(second.id).toBe(first.id);
+    expect((db.rows.get('suppliers') as unknown[]).length).toBe(1);
   });
 
   it('persists a candidate, score and supplier with admin token', async () => {

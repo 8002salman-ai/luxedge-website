@@ -13,6 +13,7 @@
 
 import type { DbAdapter } from '../../services/db';
 import type { ScoutCandidate, ScoutSupplier, ScoreBreakdown, CandidateEvidence } from './types';
+import { canonicalDomain } from './normalize';
 
 export function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -39,12 +40,34 @@ export interface SupplierRow {
   updated_at: string;
 }
 
-/** Find a supplier by slug, else create it. Returns the durable supplier. */
+/** Find a supplier by canonical domain, then slug, then name — else create it. */
 export async function ensureSupplier(db: DbAdapter, s: { name: string; slug: string; baseUrl: string }): Promise<ScoutSupplier> {
+  // 1) Canonical-domain match (preferred): www.kongcompany.com and
+  //    kongcompany.com are the SAME supplier — never split them.
+  const wantDomain = canonicalDomain(s.baseUrl);
+  if (wantDomain) {
+    const byDomain = await db.findFirst<SupplierRow>('suppliers', 'base_url', s.baseUrl);
+    if (!byDomain) {
+      // base_url may store the www form or not; match on the canonical domain.
+      const all = await db.list<SupplierRow>('suppliers');
+      const hit = (Array.isArray(all) ? all : []).find((r) => canonicalDomain(r.base_url || '') === wantDomain);
+      if (hit) return { id: hit.id, name: hit.name, slug: hit.slug, baseUrl: hit.base_url };
+    } else {
+      return { id: byDomain.id, name: byDomain.name, slug: byDomain.slug, baseUrl: byDomain.base_url };
+    }
+  }
+  // 2) Slug match (legacy behavior)
   const existing = await db.findFirst<SupplierRow>('suppliers', 'slug', s.slug);
   if (existing) {
     return { id: existing.id, name: existing.name, slug: existing.slug, baseUrl: existing.base_url };
   }
+  // 3) Name match (case-insensitive) — same real supplier under a different slug
+  const all = await db.list<SupplierRow>('suppliers');
+  const byName = (Array.isArray(all) ? all : []).find(
+    (r) => r.name.trim().toLowerCase() === s.name.trim().toLowerCase()
+  );
+  if (byName) return { id: byName.id, name: byName.name, slug: byName.slug, baseUrl: byName.base_url };
+
   const t = now();
   const row: SupplierRow = {
     id: newId(),
