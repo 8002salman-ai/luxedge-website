@@ -2,6 +2,22 @@
 
 Updated after Phase 3A **live wiring** (real Supabase project connected, admin auth verified end-to-end). Phase 1 security work and Phase 2 storefront work remain intact.
 
+## Phase 3A Final Closure
+
+- **Date:** 2026-08-17
+- **Branch:** `luxedge-v2`
+- **Commit:** see `git log` — HEAD is the closure commit on `luxedge-v2`; `main` untouched (`4d0086d`)
+- **Supabase connection status:** connected — Auth API reachable, PostgREST reachable, anon reads on `categories`/`products` return 200; `SupabaseAdapter.testConnection()` honestly reports `ok:true (anon read OK)` against the live project
+- **Admin auth status:** live — real admin (`admin@luxedge.us`, `app_metadata.role='admin'`) signs in, dashboard loads, session survives refresh, logout clears session + redirects + blocks protected routes (all re-verified this closure)
+- **API auth status:** live — real admin token passes the guard; garbage token → 401 (Supabase `bad_jwt` mapped to 401); valid non-admin (buyer) token → 403 (re-verified live this closure)
+- **Credential storage status:** real keys live only in gitignored `.env` (URL ✅ / publishable ✅ / secret ✅ / JWT secret optional). No secrets committed (see security note below).
+- **Tests:** 75/75 pass · **Typecheck:** 0 errors · **Build:** pass (storefront ~403.5 KB / gzip ~114.8 KB)
+- **Known Phase 3B blocker:** live DB schema is partial/older (only 7 tables; `customers` missing; most 0001 tables 404) and the provided postgres connection string's password is rejected — apply `0001`+`0002`+`0003` via the Dashboard SQL editor (or a corrected connection string) and reconcile the 7 pre-existing tables.
+
+### Closure security note (read before Phase 3B)
+
+A real postgres DB password was previously written into this file (commit `1e21290`) and has been **redacted from the working tree** this closure. It remains in git history and the credential was **not rotated** — the owner will decide rotation after the project completes. Verify with `git log -S <old-password>` if needed; do not re-print real secret values in this file going forward.
+
 ## Current state
 
 - **Current branch:** `luxedge-v2` (development). `main` = production (`luxedge.us`), untouched, NOT deployed from this branch.
@@ -50,7 +66,7 @@ Updated after Phase 3A **live wiring** (real Supabase project connected, admin a
 
 - **The live project has a PARTIAL, OLDER schema:** only 7 tables exist (`categories`, `products`, `product_variants`, `product_images`, `addresses`, `orders`, `order_items`). `customers` is MISSING (PostgREST: `could not find table 'public.customers'`), and most 0001 tables (suppliers, reviews, ai_providers, agent_jobs, candidates, campaigns, …) return 404. The 7 existing tables do not match `0001_initial_schema.sql` exactly.
 - **Grants are inconsistent:** anon reads work (200 on categories/products); the secret key gets 42501/403 on some tables (missing `service_role` grants — `0003_role_grants.sql` fixes this) and RLS blocks some inserts.
-- **Direct DB access fails:** the provided connection string `postgresql://postgres:Supabase123Supabase@db.<ref>.supabase.co:5432/postgres` returns `password authentication failed for user "postgres"`. Pooler hostname variants were not resolvable. **Owner action needed:** verify the postgres password (Dashboard → Project Settings → Database → Connection string) or apply migrations via the Dashboard SQL editor.
+- **Direct DB access fails:** the provided connection string `postgresql://postgres:<REDACTED>@db.<ref>.supabase.co:5432/postgres` returns `password authentication failed for user "postgres"`. Pooler hostname variants were not resolvable. **Owner action needed:** verify the postgres password (Dashboard → Project Settings → Database → Connection string) or apply migrations via the Dashboard SQL editor. *(Phase 3A closure: a real DB password was previously written to this file — redacted from the working tree; it remains in git history commit `1e21290`. The credential itself was NOT rotated and still works in `.env`.)*
 - **Safe next step (SQL editor or psql):** run `0001` (creates the 23 missing tables via `create table if not exists`), `0002` (customer RLS), `0003` (grants + default privileges). Then reconcile the 7 pre-existing tables if column shapes differ.
 
 ## Known issues (documented)
@@ -71,7 +87,7 @@ Updated after Phase 3A **live wiring** (real Supabase project connected, admin a
 
 ## Build / test status
 
-- `npm test` ✅ **77/77** · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅ (storefront ~403.5 KB / gzip ~114.8 KB, admin lazy ~242 KB).
+- `npm test` ✅ **75/75** · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅ (storefront ~403.5 KB / gzip ~114.8 KB, admin lazy ~242 KB).
 - Verified live in the browser: admin sign-in → dashboard, session survival across refresh, logout → redirect, AI Hub renders, storefront routes (home/shop/product/cart/checkout/blog) + AdSense/consent stack with zero console errors.
 
 ## Credentials genuinely required (owner)
