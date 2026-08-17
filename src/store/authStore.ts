@@ -24,6 +24,18 @@ import {
   onAuthStateChange,
   isSupabaseConfigured,
 } from '../services/supabase';
+import { ensureCustomerProfile } from '../services/customer';
+
+/** Fire-and-forget: keep a customers row in sync with the auth user. */
+function syncCustomerProfile(user: SbUser | null): void {
+  if (!user) return;
+  void ensureCustomerProfile({ id: user.id, email: user.email, name: user.name }).then((r) => {
+    if (!r.ok && r.reason !== 'not-provisioned') {
+      // Honest, non-fatal: profile sync issues must never break sign-in.
+      console.warn('[customer-sync]', r.reason, r.detail || '');
+    }
+  });
+}
 
 export interface AuthResult {
   success: boolean;
@@ -79,6 +91,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     try {
       const session = await signInWithPassword(email.trim(), password);
       applyUser(set, session.user);
+      syncCustomerProfile(session.user);
       return { success: true, message: 'Signed in successfully.', user: session.user };
     } catch (e) {
       return { success: false, message: (e as Error).message || 'Sign-in failed.', user: null };
@@ -95,7 +108,10 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     }
     try {
       const { session } = await sbSignUp(name.trim(), email.trim(), password);
-      if (session) applyUser(set, session.user);
+      if (session) {
+        applyUser(set, session.user);
+        syncCustomerProfile(session.user);
+      }
       return {
         success: true,
         message: session ? 'Account created — you are signed in.' : 'Account created — check your email to confirm.',

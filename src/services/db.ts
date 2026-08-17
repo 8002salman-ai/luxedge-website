@@ -25,6 +25,8 @@ export interface DbAdapter {
   mode: DbMode;
   list<T>(table: string, opts?: { orderBy?: string; limit?: number }): Promise<T[]>;
   get<T>(table: string, id: string): Promise<T | null>;
+  /** First row matching `column = value`, or null. Used for identity lookups. */
+  findFirst<T>(table: string, column: string, value: string): Promise<T | null>;
   insert<T extends { id: string }>(table: string, row: T): Promise<T>;
   update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null>;
   remove(table: string, id: string): Promise<void>;
@@ -71,6 +73,12 @@ export class LocalStorageAdapter implements DbAdapter {
   async get<T>(table: string, id: string): Promise<T | null> {
     const rows = this.readTable<{ id: string } & T>(table);
     return rows.find((r) => r.id === id) || null;
+  }
+
+  async findFirst<T>(table: string, column: string, value: string): Promise<T | null> {
+    const rows = this.readTable<Record<string, unknown> & T>(table);
+    const hit = rows.find((r) => r[column] === value);
+    return hit || null;
   }
 
   async insert<T extends { id: string }>(table: string, row: T): Promise<T> {
@@ -169,6 +177,14 @@ export class SupabaseAdapter implements DbAdapter {
 
   async get<T>(table: string, id: string): Promise<T | null> {
     const res = await fetch(this.endpoint(table, id), { headers: this.headers('GET') });
+    const rows = await this.handle<T[]>(res);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  async findFirst<T>(table: string, column: string, value: string): Promise<T | null> {
+    const url = new URL(this.endpoint(table));
+    url.searchParams.append(column, `eq.${value}`);
+    const res = await fetch(url.toString(), { headers: this.headers('GET') });
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }

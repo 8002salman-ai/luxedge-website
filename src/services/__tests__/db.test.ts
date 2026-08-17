@@ -46,6 +46,14 @@ describe('LocalStorageAdapter', () => {
     expect((await adapter.list('products')).length).toBe(1);
     expect((await adapter.list('reviews')).length).toBe(1);
   });
+
+  it('finds the first row matching a column value (findFirst)', async () => {
+    await adapter.insert('customers', { id: 'c1', auth_user_id: 'u1', email: 'a@luxedge.us' });
+    await adapter.insert('customers', { id: 'c2', auth_user_id: 'u2', email: 'b@luxedge.us' });
+    const hit = await adapter.findFirst<{ id: string }>('customers', 'auth_user_id', 'u2');
+    expect(hit?.id).toBe('c2');
+    expect(await adapter.findFirst('customers', 'auth_user_id', 'nope')).toBeNull();
+  });
 });
 
 describe('getDbMode', () => {

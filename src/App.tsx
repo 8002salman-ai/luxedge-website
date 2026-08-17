@@ -7,6 +7,7 @@ import CookieConsent from './components/CookieConsent';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
+import { loadStorefrontCatalog, type CatalogProduct, type CatalogCategory } from './services/catalog';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
   Shield, Star, Truck, RotateCcw, Zap, ArrowRight, Mail, Phone,
@@ -173,6 +174,39 @@ const EXTRA_PRODUCTS: Product[] = Object.entries(EXTRA_PRODUCT_NAMES).flatMap(([
 const ALL_PRODUCTS: Product[] = [...INIT_PRODUCTS, ...EXTRA_PRODUCTS];
 
 // (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
+
+// Map a Supabase catalog row to the storefront Product shape WITHOUT
+// fabricating anything: ratings stay 0 (the UI shows stars only for verified
+// user reviews), dimensions/origin stay empty, no shipping promises.
+function mapCatalogProduct(p: CatalogProduct): Product {
+  return {
+    id: p.id,
+    name: p.name,
+    shortDesc: p.shortDesc,
+    description: p.description,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    category: p.category || 'Pet Supplies',
+    stock: p.stock,
+    images: p.images.length ? p.images : ['https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600'],
+    rating: 0,
+    reviews: 0,
+    isActive: p.isActive,
+    brand: p.brand || 'Luxedge',
+    condition: 'New',
+    tags: p.tags,
+    weight: '',
+    dimensions: '',
+    origin: '',
+    freeShipping: false,
+    shippingCost: '',
+    variants: [],
+  };
+}
+
+function mapCatalogCategory(c: CatalogCategory): AdminCategory {
+  return { id: c.id, name: c.name, isActive: c.isActive, subs: [] };
+}
 // Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
 // users come from Supabase Auth and are never represented with passwords).
 const INIT_USERS: AppUser[] = [
@@ -321,6 +355,19 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [cartOpen, setCartOpen] = useState(false);
   const openCart = useCallback(() => setCartOpen(true), []);
   const closeCart = useCallback(() => setCartOpen(false), []);
+
+  // Phase 3B: load the real storefront catalog from Supabase when it is
+  // configured and populated. On any failure (unconfigured, unreachable,
+  // empty DB) the demo catalog stays — the storefront never renders empty.
+  useEffect(() => {
+    let cancelled = false;
+    void loadStorefrontCatalog().then((cat) => {
+      if (cancelled || !cat) return;
+      if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
+      if (cat.categories.length) setCategories(cat.categories.map(mapCatalogCategory));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Persist the cart so items survive a page refresh.
   useEffect(() => {
