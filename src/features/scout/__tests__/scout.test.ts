@@ -14,10 +14,14 @@ import { calculateMargin, marginAllowsAutoApprove } from '../margin';
 import { applyRejectFilters, collectRiskFlags } from '../reject';
 import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
 import { extractPageFacts } from '../extract';
-import { runScoutResearch, qaCandidate } from '../engine';
+import { runScoutResearch, qaCandidate, runMarketIntelligenceJob } from '../engine';
 import { persistCandidate, persistScore, ensureSupplier, createProductDraft } from '../persist';
 import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, discoverUrls } from '../discover';
-import type { FetchedSourcePage, ScoutCandidate } from '../types';
+import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
+import { DEFAULT_AUTONOMY_CONFIG, evaluateAutonomy, pushAttentionItem, loadAttentionItems, resolveAttentionItem, attentionForCandidate } from '../autonomy';
+import { evidenceFingerprint, cacheGet, cachePut, clearAiCache, candidateEvidenceKey, aiPrefilter, makeAiBudget } from '../aiCost';
+import { qaListing, buildDeterministicListing, generateListingDraft, parseListingJson } from '../listing';
+import type { FetchedSourcePage, ScoutCandidate, AutonomyConfig } from '../types';
 
 // ---------------------------------------------------------------------------
 // Fake admin-JWT db adapter (mirrors RLS: only admin-token writes succeed)
@@ -586,5 +590,308 @@ describe('persistence + admin-only mutations', () => {
     const engine = await import('../engine');
     expect(String(engine.runScoutResearch)).not.toContain("status: 'published'");
     expect(String(engine.researchUrl)).not.toContain("status: 'published'");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4B — Market Intelligence + Guarded Autonomy
+// ---------------------------------------------------------------------------
+
+describe('market intelligence (Phase 4B)', () => {
+  const signals = () => [
+    {
+      id: 's1', signalType: 'search_pattern', source: 'DuckDuckGo', sourceUrl: 'https://html.duckduckgo.com/',
+      observedAt: 't', summary: 'Query "dog toys" (USA) surfaced 18 product-page URLs (2 duplicates dropped, 3 non-product pages filtered).',
+      confidence: 'verified' as const, limitations: 'Snapshot',
+    },
+    {
+      id: 's2', signalType: 'competition', source: 'DuckDuckGo', sourceUrl: '',
+      observedAt: 't', summary: '6 distinct retailer/manufacturer domains appeared for "dog toys" — competitive market.',
+      confidence: 'inferred' as const, limitations: 'Rough proxy',
+    },
+    {
+      id: 's3', signalType: 'price_range', source: 'Researched pages', sourceUrl: '',
+      observedAt: 't', summary: 'Observed supplier-price range $8.99–$49.99 across 18 products (avg $21.00).',
+      confidence: 'verified' as const, limitations: 'Snapshot',
+    },
+    {
+      id: 's4', signalType: 'rating_evidence', source: 'Researched pages', sourceUrl: '',
+      observedAt: 't', summary: '12 of 18 researched pages carried rating/review evidence.',
+      confidence: 'verified' as const, limitations: 'Own ratings',
+    },
+    {
+      id: 's5', signalType: 'availability', source: 'Researched pages', sourceUrl: '',
+      observedAt: 't', summary: '15 of 18 researched pages showed positive availability.',
+      confidence: 'verified' as const, limitations: 'Point-in-time',
+    },
+  ];
+
+  it('normalizes discovery results into durable market signals with statuses', () => {
+    const s = signalsFromDiscovery({ query: 'dog toys', market: 'USA', maxResults: 20 }, { query: 'dog toys', rawLinks: [], urls: ['https://a.com/p1', 'https://b.com/p2'], duplicates: 2, filtered: 3 }, 't');
+    expect(s.length).toBeGreaterThanOrEqual(2);
+    const pattern = s.find((x) => x.signalType === 'search_pattern');
+    expect(pattern?.confidence).toBe('verified');
+    expect(pattern?.summary).toContain('2 product-page URLs');
+    expect(pattern?.limitations.length).toBeGreaterThan(0);
+  });
+
+  it('scores market opportunity from signals only (no invention)', () => {
+    const r = scoreMarketOpportunity({ signals: signals(), category: 'Dog' });
+    expect(r.score).toBeGreaterThanOrEqual(50);
+    expect(r.score).toBeLessThanOrEqual(100);
+    expect(r.breakdown.demand.points).toBe(30); // 18 URLs
+    expect(r.breakdown.competition.points).toBe(6); // 6 domains = saturated
+    expect(r.explanation).toContain('Market opportunity');
+  });
+
+  it('gives zero market points when there is no evidence', () => {
+    const r = scoreMarketOpportunity({ signals: [], category: null });
+    expect(r.score).toBe(0);
+  });
+
+  it('computes the final opportunity score with the documented 70/30 formula', () => {
+    const f = finalOpportunityScore(80, 60);
+    expect(f.productWeight).toBe(0.7);
+    expect(f.marketWeight).toBe(0.3);
+    expect(f.overall).toBe(Math.round(80 * 0.7 + 60 * 0.3)); // 74
+    expect(f.formula).toContain('70%');
+  });
+
+  it('validates AI structured output and rejects malformed responses', () => {
+    const good = parseMarketAnalysis('{"marketOpportunityScore": 78, "trendConfidence": "inferred", "demandEvidence": "18 URLs surfaced", "competitionLevel": "high", "customerPainPoint": "toys wear out fast", "priceBand": {"min": 8, "max": 50}, "risks": ["x"], "recommendedSearchQueries": ["a"], "reasoningSummary": "evidence only"}');
+    expect(good?.marketOpportunityScore).toBe(78);
+    expect(good?.competitionLevel).toBe('high');
+    const bad = parseMarketAnalysis('not json at all');
+    expect(bad).toBeNull();
+    const outOfRange = parseMarketAnalysis('{"marketOpportunityScore": 500, "trendConfidence": "madeup", "competitionLevel": "madeup"}');
+    expect(outOfRange?.marketOpportunityScore).toBe(100); // clamped
+    expect(outOfRange?.trendConfidence).toBe('unknown');
+  });
+
+  it('drops unsupported AI claims (evidence grounding) and falls back to deterministic when DeepSeek is missing', async () => {
+    const det = { score: 62, explanation: 'deterministic', breakdown: {} };
+    // Missing-key path: the injected aiCall throws → deterministic used, aiUsed false.
+    const fallback = await runMarketIntelligence({ signals: signals(), category: 'Dog' }, det, async () => { throw new Error('not configured'); });
+    expect(fallback.aiUsed).toBe(false);
+    expect(fallback.marketOpportunityScore).toBe(62);
+    expect(fallback.unsupportedClaims.length).toBeGreaterThan(0);
+    // Grounding path: AI proposes a pain point with no evidence → dropped + recorded.
+    const grounded = await runMarketIntelligence({ signals: [], category: null }, det, async () => JSON.stringify({ marketOpportunityScore: 90, trendConfidence: 'verified', demandEvidence: 'Big demand', competitionLevel: 'low', customerPainPoint: 'dogs are sad', priceBand: null, risks: [], recommendedSearchQueries: [], reasoningSummary: 'x' }));
+    expect(grounded.aiUsed).toBe(true);
+    expect(grounded.customerPainPoint).toBeNull(); // dropped — no supporting evidence
+    expect(grounded.unsupportedClaims.some((c) => c.includes('customerPainPoint'))).toBe(true);
+  });
+});
+
+describe('guarded autonomy (Phase 4B)', () => {
+  const makeCandidate = (over: Partial<ScoutCandidate>): ScoutCandidate => ({
+    id: 'c', title: 'KONG Classic', source: 'KONG', sourceUrl: 'https://www.kongcompany.com/kong-classic/', supplierSlug: 'kong',
+    images: ['https://img/1.jpg'],
+    evidence: {
+      sourceUrl: 'https://www.kongcompany.com/kong-classic/', observedAt: 't',
+      title: { status: 'verified', value: 'KONG Classic' },
+      supplierPrice: { status: 'verified', value: 11.96 },
+      shippingCost: { status: 'inferred', value: 0, note: 'Free shipping' },
+      shippingDays: { status: 'verified', value: { min: 3, max: 5 } },
+      availability: { status: 'verified', value: 'available' },
+      images: { status: 'verified', value: ['https://img/1.jpg'] },
+      rating: { status: 'unknown', value: null },
+      origin: { status: 'verified', value: 'USA' },
+      category: { status: 'inferred', value: 'Dog' },
+      sizes: { status: 'verified', value: ['S', 'M', 'L'] },
+      unknownFields: [], riskNotes: [],
+    },
+    margin: { supplierPrice: 11.96, shippingCost: 0, landedCost: 11.96, proposedLuxedgePrice: 29.99, grossMarginDollars: 18.03, grossMarginPct: 0.6, confidence: 'high', notes: [] },
+    score: { overall: 80, weights: {}, breakdown: {}, explanation: 'ok' },
+    status: 'qualified', createdAt: 't',
+    ...over,
+  });
+
+  it('MANUAL mode never auto-advances and requires owner', () => {
+    const d = evaluateAutonomy({ candidate: makeCandidate({}), marketScore: 70, qa: { candidateId: 'c', title: 'x', passed: true, issues: [] }, config: { ...DEFAULT_AUTONOMY_CONFIG, mode: 'MANUAL' } });
+    expect(d.eligibleForAutoPublish).toBe(false);
+    expect(d.reason).toContain('MANUAL');
+  });
+
+  it('REVIEW mode prepares candidates but requires owner approval', () => {
+    const d = evaluateAutonomy({ candidate: makeCandidate({}), marketScore: 70, qa: { candidateId: 'c', title: 'x', passed: true, issues: [] }, config: { ...DEFAULT_AUTONOMY_CONFIG, mode: 'REVIEW' } });
+    expect(d.eligibleForAutoPublish).toBe(false);
+    expect(d.reason).toContain('owner approval required');
+  });
+
+  it('AUTO mode advances only when every gate passes', () => {
+    const cfg = { ...DEFAULT_AUTONOMY_CONFIG, mode: 'AUTO' as const };
+    const qa = qaCandidate(makeCandidate({}));
+    const d = evaluateAutonomy({ candidate: makeCandidate({}), marketScore: 70, qa, config: cfg });
+    expect(d.eligibleForAutoPublish).toBe(true);
+    expect(Object.values(d.gates).every(Boolean)).toBe(true);
+    // A hard gate failure blocks AUTO even with a high market score:
+    const rejected = evaluateAutonomy({ candidate: makeCandidate({ status: 'rejected', rejectionReason: 'counterfeit risk' }), marketScore: 95, qa, config: cfg });
+    expect(rejected.eligibleForAutoPublish).toBe(false);
+    expect(rejected.gates.noHardRejection).toBe(false);
+    expect(rejected.needsOwnerAttention).toBe(true);
+  });
+
+  it('AUTO never overrides thin margin or low confidence', () => {
+    const cfg = { ...DEFAULT_AUTONOMY_CONFIG, mode: 'AUTO' as const };
+    const weak = makeCandidate({ margin: { supplierPrice: 20, shippingCost: null, landedCost: null, proposedLuxedgePrice: null, grossMarginDollars: null, grossMarginPct: null, confidence: 'low', notes: [] } });
+    const d = evaluateAutonomy({ candidate: weak, marketScore: 90, qa: null, config: cfg });
+    expect(d.eligibleForAutoPublish).toBe(false);
+    expect(d.gates.marginHigh).toBe(false);
+  });
+
+  it('emergency pause is a kill switch even in AUTO', () => {
+    const cfg = { ...DEFAULT_AUTONOMY_CONFIG, mode: 'AUTO' as const, emergencyPause: true };
+    const d = evaluateAutonomy({ candidate: makeCandidate({}), marketScore: 95, qa: { candidateId: 'c', title: 'x', passed: true, issues: [] }, config: cfg });
+    expect(d.eligibleForAutoPublish).toBe(false);
+    expect(d.reason).toContain('EMERGENCY PAUSE');
+  });
+
+  it('routes meaningful exceptions to the owner attention queue (deduped)', () => {
+    const storage = (() => {
+      const m = new Map<string, string>();
+      return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); } };
+    })();
+    const candidate = makeCandidate({ status: 'rejected', rejectionReason: 'medical claim' });
+    const decision = evaluateAutonomy({ candidate, marketScore: null, qa: null, config: { ...DEFAULT_AUTONOMY_CONFIG, mode: 'REVIEW' } });
+    const items = attentionForCandidate(candidate, decision, null, null);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.some((i) => i.reason.includes('Hard-rejected'))).toBe(true);
+    const first = pushAttentionItem(items[0], storage);
+    const dup = pushAttentionItem(items[0], storage);
+    expect(dup.id).toBe(first.id); // deduped
+    expect(loadAttentionItems(storage).length).toBe(1);
+    resolveAttentionItem(first.id, storage);
+    expect(loadAttentionItems(storage)[0].status).toBe('resolved');
+  });
+
+  it('owner attention surfaces high-margin risk and missing market score', () => {
+    const candidate = makeCandidate({ margin: { supplierPrice: 5, shippingCost: 1, landedCost: 6, proposedLuxedgePrice: 14.99, grossMarginDollars: 8.99, grossMarginPct: 0.6, confidence: 'high', notes: [] } });
+    const items = attentionForCandidate(candidate, { eligibleForAutoPublish: false, reason: 'x', gates: {}, needsOwnerAttention: true }, null, null);
+    expect(items.some((i) => i.reason.includes('No market opportunity'))).toBe(true);
+    expect(items.some((i) => i.reason.includes('high margin'))).toBe(true);
+  });
+});
+
+describe('AI cost control (Phase 4B)', () => {
+  it('fingerprints evidence deterministically and caches identical evidence', () => {
+    clearAiCache();
+    expect(evidenceFingerprint(['a', 1, null])).toBe(evidenceFingerprint(['a', 1, null]));
+    expect(evidenceFingerprint(['a', 1])).not.toBe(evidenceFingerprint(['a', 2]));
+    const key = candidateEvidenceKey({ sourceUrl: 'u', title: 't', evidence: { supplierPrice: { value: 10 }, shippingDays: { value: { min: 3, max: 5 } }, availability: { value: 'available' }, rating: { value: 4.5 } } });
+    cachePut(key, 'result');
+    expect(cacheGet(key)).toBe('result');
+    const same = candidateEvidenceKey({ sourceUrl: 'u', title: 't', evidence: { supplierPrice: { value: 10 }, shippingDays: { value: { min: 3, max: 5 } }, availability: { value: 'available' }, rating: { value: 4.5 } } });
+    expect(same).toBe(key);
+  });
+
+  it('deterministic prefilter runs before any AI spend', () => {
+    const cfg = { productScoreThreshold: 75, maxAiCallsPerRun: 3 } as unknown as AutonomyConfig;
+    expect(aiPrefilter({ hardRejected: true, productScore: 90, hasSourceCost: true, config: cfg }).allow).toBe(false);
+    expect(aiPrefilter({ hardRejected: false, productScore: 40, hasSourceCost: true, config: cfg }).allow).toBe(false);
+    expect(aiPrefilter({ hardRejected: false, productScore: 80, hasSourceCost: false, config: cfg }).allow).toBe(false);
+    expect(aiPrefilter({ hardRejected: false, productScore: 80, hasSourceCost: true, config: cfg }).allow).toBe(true);
+    const budget = makeAiBudget(2);
+    expect(budget.canCall()).toBe(true);
+    budget.record();
+    budget.record();
+    expect(budget.canCall()).toBe(false);
+    expect(budget.used()).toBe(2);
+  });
+});
+
+describe('listing generation + factual QA (Phase 4B)', () => {
+  const candidate: ScoutCandidate = {
+    id: 'c', title: 'KONG Classic', source: 'KONG Company', sourceUrl: 'https://www.kongcompany.com/kong-classic/', supplierSlug: 'kong',
+    images: ['https://img/1.jpg'],
+    evidence: {
+      sourceUrl: 'https://www.kongcompany.com/kong-classic/', observedAt: 't',
+      title: { status: 'verified', value: 'KONG Classic' },
+      supplierPrice: { status: 'verified', value: 11.96 },
+      shippingCost: { status: 'inferred', value: 0, note: 'Free shipping' },
+      shippingDays: { status: 'verified', value: { min: 3, max: 5 } },
+      availability: { status: 'verified', value: 'available' },
+      images: { status: 'verified', value: ['https://img/1.jpg'] },
+      rating: { status: 'unknown', value: null },
+      origin: { status: 'verified', value: 'USA' },
+      category: { status: 'inferred', value: 'Dog' },
+      sizes: { status: 'unknown', value: null },
+      unknownFields: ['rating'], riskNotes: [],
+    },
+    margin: { supplierPrice: 11.96, shippingCost: 0, landedCost: 11.96, proposedLuxedgePrice: 29.99, grossMarginDollars: 18.03, grossMarginPct: 0.6, confidence: 'high', notes: [] },
+    score: { overall: 80, weights: {}, breakdown: {}, explanation: 'ok' },
+    status: 'approved', createdAt: 't',
+  };
+
+  it('classifies listing claims as SUPPORTED / UNSUPPORTED / UNKNOWN', () => {
+    const listing = buildDeterministicListing(candidate);
+    const qa = qaListing(candidate, listing);
+    expect(qa.passed).toBe(true);
+    // Unsupported claim must fail QA:
+    const fake = { ...listing, features: [...listing.features, 'FDA approved — cures arthritis in dogs'] };
+    const bad = qaListing(candidate, fake);
+    expect(bad.passed).toBe(false);
+    expect(bad.unsupported.some((u) => /fda|medical|certif|cures/i.test(u))).toBe(true);
+  });
+
+  it('rejects hallucinated certifications, dimensions, ratings and inventory in listing QA', () => {
+    const fake = {
+      title: 'KONG Classic', shortDescription: 'Certified organic FDA-approved rubber toy ships within 1-2 days (4.9/5 stars, 50 in stock)',
+      longDescription: '', features: [], benefits: [], specifications: {}, seoTitle: '', metaDescription: '', keywords: [], imageAlts: [], faqs: [],
+    };
+    const qa = qaListing(candidate, fake);
+    expect(qa.passed).toBe(false);
+    expect(qa.unsupported.length).toBeGreaterThanOrEqual(1); // one claim, flagged as unsupported
+    const text = qa.unsupported.join(' ').toLowerCase();
+    expect(text).toMatch(/certif|fda|approve/);
+    expect(text).toMatch(/days/);
+    expect(text).toMatch(/star/);
+    expect(text).toMatch(/stock/);
+  });
+
+  it('parses AI listing JSON and rejects garbage', () => {
+    const ok = parseListingJson('{"title":"X","shortDescription":"d","longDescription":"l","features":["f"],"benefits":[],"specifications":{},"seoTitle":"","metaDescription":"","keywords":[],"imageAlts":[],"faqs":[]}');
+    expect(ok?.title).toBe('X');
+    expect(parseListingJson('garbage')).toBeNull();
+  });
+
+  it('generates a listing via AI and falls back to deterministic when DeepSeek is missing', async () => {
+    // Missing key → generateListingDraft returns null (caught) → caller uses deterministic.
+    const missing = await generateListingDraft(candidate, async () => { throw new Error('not configured'); });
+    expect(missing).toBeNull();
+    const det = buildDeterministicListing(candidate);
+    expect(det.title).toContain('KONG');
+    expect(det.features.length).toBeGreaterThan(0);
+    const qa = qaListing(candidate, det);
+    expect(qa.passed).toBe(true);
+  });
+
+  it('never auto-publishes: the Phase 4B path only ever creates a DRAFT', () => {
+    expect(String(runScoutResearch)).not.toContain("'published'");
+    expect(String(createProductDraft)).not.toContain("status: 'published'");
+    expect(String(buildDeterministicListing)).not.toContain('published');
+  });
+});
+
+describe('MARKET_INTELLIGENCE job (Phase 4B)', () => {
+  it('records a durable MARKET_INTELLIGENCE job with signals/score/ai fallback', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runMarketIntelligenceJob({
+      query: 'dog toys',
+      market: 'USA',
+      db: db as unknown as DbAdapter,
+      discover: async () => ({ query: 'dog toys', rawLinks: [], urls: ['https://a.com/p1', 'https://b.com/p2', 'https://c.com/p3'], duplicates: 0, filtered: 0 }),
+      aiCall: async () => { throw new Error('not configured'); },
+    });
+    expect(result.jobId).toBeTruthy();
+    expect(result.signals).toBeGreaterThan(0);
+    expect(result.aiUsed).toBe(false);
+    const jobs = db.rows.get('agent_jobs') as { type: string; status: string }[];
+    expect(jobs.length).toBe(1);
+    expect(jobs[0].type).toBe('MARKET_INTELLIGENCE');
+    expect(jobs[0].status).toBe('completed');
+    const runs = db.rows.get('agent_runs') as { job_id: string }[];
+    expect(runs.length).toBeGreaterThanOrEqual(1);
   });
 });

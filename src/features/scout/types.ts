@@ -126,3 +126,139 @@ export interface PageExtract {
   origin: string | null;
   sizes: string[] | null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4B — Market Intelligence + Guarded Autonomy
+// ---------------------------------------------------------------------------
+
+/** A single collected market signal (evidence-based, never invented). */
+export interface MarketSignal {
+  id: string;
+  /** e.g. 'search_pattern', 'price_range', 'rating_evidence', 'availability', 'competition', 'product_concept'. */
+  signalType: string;
+  source: string;
+  sourceUrl: string;
+  observedAt: string;
+  /** Human-readable summary of the observed signal. */
+  summary: string;
+  confidence: 'verified' | 'inferred' | 'unknown';
+  /** What this signal does NOT prove (honesty guard). */
+  limitations: string;
+}
+
+/** Market analysis result (AI-grounded or deterministic fallback). */
+export interface MarketAnalysis {
+  /** Separate 100-pt market opportunity score (NOT the product score). */
+  marketOpportunityScore: number;
+  trendConfidence: 'verified' | 'inferred' | 'unknown';
+  demandEvidence: string;
+  competitionLevel: 'low' | 'medium' | 'high' | 'unknown';
+  customerPainPoint: string | null;
+  priceBand: { min: number; max: number } | null;
+  risks: string[];
+  recommendedSearchQueries: string[];
+  reasoningSummary: string;
+  /** true when DeepSeek produced this analysis over the collected signals. */
+  aiUsed: boolean;
+  model?: string;
+  /** Claims the AI proposed that had NO supporting evidence and were removed. */
+  unsupportedClaims: string[];
+  analyzedAt: string;
+}
+
+/** Final combined opportunity score — documented formula, not a silent swap. */
+export interface FinalOpportunityScore {
+  productScore: number;
+  marketScore: number;
+  /** Formula weights (default product 0.7 / market 0.3). */
+  productWeight: number;
+  marketWeight: number;
+  overall: number;
+  formula: string;
+}
+
+/** Listing generated for an approved candidate (always a DB draft). */
+export interface ListingDraft {
+  title: string;
+  shortDescription: string;
+  longDescription: string;
+  features: string[];
+  benefits: string[];
+  specifications: Record<string, string>;
+  seoTitle: string;
+  metaDescription: string;
+  keywords: string[];
+  imageAlts: string[];
+  faqs: { q: string; a: string }[];
+}
+
+/** Factual-QA classification of one listing claim against source evidence. */
+export type ClaimStatus = 'supported' | 'unsupported' | 'unknown';
+
+export interface ListingClaim {
+  claim: string;
+  status: ClaimStatus;
+  /** Why this classification (which evidence field supports/contradicts it). */
+  reason: string;
+}
+
+/** Result of the listing factual-QA pass. */
+export interface ListingQAResult {
+  claims: ListingClaim[];
+  /** false when any important claim is UNSUPPORTED → listing must be corrected. */
+  passed: boolean;
+  unsupported: string[];
+  unknown: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Autonomy policy
+// ---------------------------------------------------------------------------
+
+export type AutonomyMode = 'MANUAL' | 'REVIEW' | 'AUTO';
+
+/** Configurable autonomy thresholds (admin-settable). */
+export interface AutonomyConfig {
+  mode: AutonomyMode;
+  /** Minimum Product Score /100 to consider advancing. */
+  productScoreThreshold: number;
+  /** Minimum Market Opportunity Score /100 to consider advancing. */
+  marketScoreThreshold: number;
+  /** Minimum gross margin fraction (e.g. 0.4 = 40%). */
+  minMarginPct: number;
+  /** Maximum allowed unknown evidence fields before QA forces owner review. */
+  maxUnknownFields: number;
+  /** Require positive USA delivery evidence. */
+  requireUsaDelivery: boolean;
+  /** Require PRODUCT_QA pass before advancing. */
+  requireQa: boolean;
+  /** Emergency pause — when true NO auto approvals/drafts/publishing. */
+  emergencyPause: boolean;
+  /** Max DeepSeek calls per scout run (cost control). */
+  maxAiCallsPerRun: number;
+}
+
+export interface AutonomyDecision {
+  eligibleForAutoPublish: boolean;
+  reason: string;
+  /** Gates checked (each true = passed). */
+  gates: Record<string, boolean>;
+  needsOwnerAttention: boolean;
+}
+
+/** Owner attention queue item — surfaced only for meaningful decisions. */
+export interface OwnerAttentionItem {
+  id: string;
+  candidateId: string | null;
+  title: string;
+  /** WHY owner attention is required. */
+  reason: string;
+  /** Recommended action. */
+  recommendedAction: string;
+  /** Risk if ignored. */
+  riskIfIgnored: string;
+  /** Evidence reference. */
+  evidence: string;
+  createdAt: string;
+  status: 'pending' | 'resolved';
+}

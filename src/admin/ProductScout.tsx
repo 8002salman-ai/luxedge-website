@@ -15,18 +15,21 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Ban, CheckCircle, Compass, Eye, FilePlus2, Loader2, Package, Play,
-  RefreshCw, Search, Shield, Target, Zap,
+  AlertTriangle, Ban, Brain, CheckCircle, Compass, Eye, FilePlus2, Loader2, Package, Play,
+  RefreshCw, Search, Shield, Siren, Target, Zap,
 } from 'lucide-react';
 import { useApp, Modal, fetchPageContent } from '../App';
 import { getDb } from '../services/db';
 import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
-import { runScoutResearch } from '../features/scout/engine';
+import { runScoutResearch, runMarketIntelligenceJob, qaCandidate } from '../features/scout/engine';
+import type { QAOutcome } from '../features/scout/engine';
 import { createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
-import type { CandidateEvidence } from '../features/scout/types';
+import type { CandidateEvidence, ScoutCandidate, AutonomyConfig, OwnerAttentionItem, ListingDraft, ListingQAResult, MarketAnalysis } from '../features/scout/types';
 import type { FetchedSourcePage } from '../features/scout/types';
+import { loadAutonomyConfig, saveAutonomyConfig, setEmergencyPause, AUTONOMY_MODES, evaluateAutonomy, attentionForCandidate, loadAttentionItems, pushAttentionItem, resolveAttentionItem } from '../features/scout/autonomy';
+import { qaListing, generateListingDraft, buildDeterministicListing } from '../features/scout/listing';
 
 // Real seed sources for the first controlled research run (pet products,
 // USA-focused). Each URL was verified fetchable (manufacturer + retailer
@@ -107,6 +110,20 @@ export default function ProductScout() {
   const [rejectReason, setRejectReason] = useState('');
   const [drafting, setDrafting] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
+
+  // Phase 4B — Market Intelligence + Autonomy + Owner Attention
+  const [miOpen, setMiOpen] = useState(false);
+  const [miQuery, setMiQuery] = useState('dog toys');
+  const [miMarket, setMiMarket] = useState('USA');
+  const [miRunning, setMiRunning] = useState(false);
+  const [miLog, setMiLog] = useState<string[]>([]);
+  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null } | null>(null);
+  const [autonomyCfg, setAutonomyCfg] = useState<AutonomyConfig>(() => loadAutonomyConfig());
+  const [attention, setAttention] = useState<OwnerAttentionItem[]>(() => loadAttentionItems());
+  const [scanning, setScanning] = useState(false);
+  const [listingFor, setListingFor] = useState<ViewCandidate | null>(null);
+  const [listingResult, setListingResult] = useState<{ listing: ListingDraft; qa: ListingQAResult; decision: { eligibleForAutoPublish: boolean; reason: string } | null; draftId: string | null; aiUsed: boolean; deterministic: boolean } | null>(null);
+  const [generating, setGenerating] = useState<string | null>(null);
 
   // Run state
   const [runOpen, setRunOpen] = useState(false);
@@ -320,6 +337,195 @@ export default function ProductScout() {
     }
   };
 
+  /** Build a ScoutCandidate (for autonomy/QA/listing) from a DB view row. */
+  const toScoutCandidate = (v: ViewCandidate): ScoutCandidate => {
+    const ev = v.candidate.evidence;
+    const price = (ev?.supplierPrice?.value as number | null) ?? null;
+    const marginPts = v.score?.breakdown?.profitMargin?.points ?? 0;
+    const marginPct = marginPts > 0 ? (marginPts / 15) * 50 : null;
+    const shippingKnown = ev?.shippingCost?.status !== 'unknown';
+    const conf = price !== null && shippingKnown && marginPct !== null ? 'high' : 'low';
+    return {
+      id: v.candidate.id,
+      title: v.candidate.title,
+      source: v.candidate.source,
+      sourceUrl: v.candidate.source_url,
+      supplierSlug: '',
+      images: v.candidate.images,
+      evidence: ev as CandidateEvidence,
+      margin: {
+        supplierPrice: price,
+        shippingCost: null,
+        landedCost: price,
+        proposedLuxedgePrice: price !== null ? price * 2.5 : null,
+        grossMarginDollars: null,
+        grossMarginPct: marginPct !== null ? marginPct / 100 : null,
+        confidence: conf as 'high' | 'low',
+        notes: [],
+      },
+      score: v.score ? {
+        overall: v.score.overall,
+        weights: v.score.weights,
+        breakdown: v.score.breakdown,
+        explanation: v.score.explanation,
+      } : null,
+      status: v.candidate.status as ScoutCandidate['status'],
+      rejectionReason: v.candidate.rejection_reason ?? undefined,
+      createdAt: v.candidate.created_at,
+    };
+  };
+
+  /** Market score for a candidate — from its stored evidence or the last MI run. */
+  const marketScoreFor = (v: ViewCandidate): number | null => {
+    const m = (v.candidate.evidence as Record<string, unknown> | null)?.market as { marketOpportunityScore?: number } | undefined;
+    if (m && typeof m.marketOpportunityScore === 'number') return m.marketOpportunityScore;
+    return miResult?.marketScore ?? null;
+  };
+
+  // ------------------------------------------------------------------- Market Intelligence
+  const runMarketIntel = async () => {
+    if (!db) { notify('Database not ready'); return; }
+    const q = miQuery.trim();
+    if (!q) { notify('Enter a market query (e.g. “dog toys”)'); return; }
+    setMiRunning(true);
+    setMiLog([]);
+    const log: string[] = [];
+    const onProgress = (m: string) => { log.push(m); setMiLog([...log]); };
+    try {
+      const result = await runMarketIntelligenceJob({
+        query: q,
+        market: miMarket.trim() || undefined,
+        db,
+        onProgress,
+      });
+      log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore}/100, ai=${result.aiUsed}`);
+      setMiLog([...log]);
+      setMiResult({ signals: result.signals, marketScore: result.marketScore, aiUsed: result.aiUsed, analysis: result.analysis });
+      notify(`Market Intelligence complete — score ${result.marketScore}/100${result.aiUsed ? ' (DeepSeek)' : ' (deterministic — AI not configured)'}`);
+    } catch (e) {
+      log.push(`✗ ${(e as Error).message}`);
+      setMiLog([...log]);
+      notify(`Market Intelligence failed: ${(e as Error).message}`);
+    } finally {
+      setMiRunning(false);
+    }
+  };
+
+  // ------------------------------------------------------------------- Autonomy controls
+  const saveCfg = () => {
+    saveAutonomyConfig(autonomyCfg);
+    notify('Autonomy policy saved');
+  };
+
+  const togglePause = () => {
+    const next = !autonomyCfg.emergencyPause;
+    setEmergencyPause(next);
+    setAutonomyCfg((c) => ({ ...c, emergencyPause: next }));
+    notify(next ? 'EMERGENCY PAUSE ACTIVE — no auto approvals/drafts/publishing' : 'Emergency pause released');
+  };
+
+  // ------------------------------------------------------------------- Owner attention queue
+  const scanAttention = () => {
+    if (!db) return;
+    setScanning(true);
+    try {
+      let added = 0;
+      for (const v of candidates) {
+        const c = toScoutCandidate(v);
+        const decision = evaluateAutonomy({
+          candidate: c,
+          marketScore: marketScoreFor(v),
+          qa: c.status === 'qualified' ? qaCandidate(c) : null,
+          config: autonomyCfg,
+        });
+        const items = attentionForCandidate(c, decision, marketScoreFor(v), qaCandidate(c));
+        for (const it of items) {
+          pushAttentionItem(it);
+          added++;
+        }
+      }
+      setAttention(loadAttentionItems());
+      notify(added ? `${added} attention item(s) queued` : 'No attention items — candidates within policy');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const resolveItem = (id: string) => {
+    resolveAttentionItem(id);
+    setAttention(loadAttentionItems());
+  };
+
+  // ------------------------------------------------------------------- One-product listing test
+  /** Prepare the strongest candidate's listing: generate → factual QA → AUTO decision → DRAFT ONLY. */
+  const prepareListing = async (v: ViewCandidate) => {
+    if (!db) return;
+    setGenerating(v.candidate.id);
+    try {
+      const c = toScoutCandidate(v);
+      const marketScore = marketScoreFor(v);
+      const qa: QAOutcome = qaCandidate(c);
+
+      // AI generation via secure proxy — graceful deterministic fallback.
+      let listing: ListingDraft | null = null;
+      let aiUsed = false;
+      try {
+        const ai = await generateListingDraft(c);
+        if (ai) { listing = ai.listing; aiUsed = true; }
+      } catch { /* fall through to deterministic */ }
+      const deterministic = !aiUsed;
+      if (!listing) listing = buildDeterministicListing(c);
+
+      const lqa = qaListing(c, listing);
+
+      const decision = evaluateAutonomy({
+        candidate: c,
+        marketScore,
+        qa,
+        config: autonomyCfg,
+      });
+
+      // DRAFT ONLY — never published. Requires explicit owner UI action (this button).
+      let draftId: string | null = null;
+      if (lqa.passed) {
+        const ev = v.candidate.evidence;
+        const price = (ev?.supplierPrice?.value as number | null) ?? null;
+        const category = String(ev?.category?.value || '');
+        const categoryId = category ? await findCategoryId(db, category) : null;
+        const result = await createProductDraft(db, {
+          title: listing.title,
+          slug: c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item',
+          categoryId,
+          price,
+          compareAtPrice: null,
+          costPrice: price,
+          landedCost: price,
+          grossMargin: c.margin.grossMarginPct,
+          images: v.candidate.images.length ? v.candidate.images : (v.supplierProduct?.images || []),
+          shortDesc: listing.shortDescription,
+          sourceUrl: v.candidate.source_url,
+          supplierName: v.candidate.source,
+          scoreOverall: v.score?.overall ?? null,
+        });
+        draftId = result.id;
+      }
+
+      setListingResult({
+        listing,
+        qa: lqa,
+        decision,
+        draftId,
+        aiUsed,
+        deterministic,
+      });
+      setListingFor(v);
+    } catch (e) {
+      notify(`Listing prep failed: ${(e as Error).message}`);
+    } finally {
+      setGenerating(null);
+    }
+  };
+
   const renderEvidence = (ev: CandidateEvidence | null) => {
     if (!ev) return <p className="text-sm text-gray-500">No evidence recorded for this candidate.</p>;
     // Legacy Phase-3B evidence rows have a flat shape (no per-field statuses);
@@ -401,6 +607,12 @@ export default function ProductScout() {
           <p className="text-sm text-gray-500">Autonomous research → verify → score → shortlist (no auto-publishing)</p>
         </div>
         <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => setMiOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Brain size={16} /> Market Intelligence
+          </button>
           <button onClick={() => setRunOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
             <Play size={16} /> Run Scout Run
           </button>
@@ -474,6 +686,92 @@ export default function ProductScout() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {/* Autonomy policy — guarded autonomy control center */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
+        <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <Shield size={14} /> Autonomy Policy <span className="font-normal normal-case text-gray-400">· guarded autonomy — AUTO never overrides hard safety gates</span>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Mode</label>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              {AUTONOMY_MODES.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setAutonomyCfg((c) => ({ ...c, mode: m }))}
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors ${autonomyCfg.mode === m ? (m === 'AUTO' ? 'bg-green-600 text-white' : m === 'REVIEW' ? 'bg-amber-500 text-white' : 'bg-gray-600 text-white') : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                >{m}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Product Score ≥</label>
+            <input type="number" value={autonomyCfg.productScoreThreshold} onChange={(e) => setAutonomyCfg((c) => ({ ...c, productScoreThreshold: parseInt(e.target.value, 10) || 0 }))} className={`${inputCls} w-20`} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Market Score ≥</label>
+            <input type="number" value={autonomyCfg.marketScoreThreshold} onChange={(e) => setAutonomyCfg((c) => ({ ...c, marketScoreThreshold: parseInt(e.target.value, 10) || 0 }))} className={`${inputCls} w-20`} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Min margin %</label>
+            <input type="number" value={Math.round(autonomyCfg.minMarginPct * 100)} onChange={(e) => setAutonomyCfg((c) => ({ ...c, minMarginPct: (parseInt(e.target.value, 10) || 0) / 100 }))} className={`${inputCls} w-20`} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Max unknown</label>
+            <input type="number" value={autonomyCfg.maxUnknownFields} onChange={(e) => setAutonomyCfg((c) => ({ ...c, maxUnknownFields: parseInt(e.target.value, 10) || 0 }))} className={`${inputCls} w-20`} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Max AI calls/run</label>
+            <input type="number" value={autonomyCfg.maxAiCallsPerRun} onChange={(e) => setAutonomyCfg((c) => ({ ...c, maxAiCallsPerRun: parseInt(e.target.value, 10) || 0 }))} className={`${inputCls} w-20`} />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={autonomyCfg.requireUsaDelivery} onChange={(e) => setAutonomyCfg((c) => ({ ...c, requireUsaDelivery: e.target.checked }))} className="rounded" /> USA delivery required
+          </label>
+          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox" checked={autonomyCfg.requireQa} onChange={(e) => setAutonomyCfg((c) => ({ ...c, requireQa: e.target.checked }))} className="rounded" /> QA required
+          </label>
+          <button onClick={saveCfg} className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-xl text-xs font-semibold">Save Policy</button>
+          <button
+            onClick={togglePause}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors ${autonomyCfg.emergencyPause ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'}`}
+          >
+            <Siren size={14} /> {autonomyCfg.emergencyPause ? 'EMERGENCY PAUSE ACTIVE' : 'Emergency Pause'}
+          </button>
+        </div>
+        {autonomyCfg.emergencyPause && (
+          <p className="text-xs font-semibold text-red-600">Kill switch ON — no auto approvals, no auto drafts, no auto publishing, no marketing actions. Read-only research may continue.</p>
+        )}
+      </div>
+
+      {/* Owner attention queue — exception-based owner review */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
+        <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <AlertTriangle size={14} /> Owner Attention Queue <span className="font-normal normal-case text-gray-400">· only meaningful decisions surface here</span>
+          <button onClick={scanAttention} disabled={scanning} className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-black text-white rounded-lg text-[11px] font-semibold disabled:opacity-50">
+            {scanning ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Scan candidates
+          </button>
+        </div>
+        {attention.length === 0 ? (
+          <p className="text-sm text-gray-400">No pending attention items. Run “Scan candidates” to route exception decisions here.</p>
+        ) : (
+          <div className="space-y-2">
+            {attention.filter((a) => a.status === 'pending').map((a) => (
+              <div key={a.id} className="flex items-start gap-3 p-3 bg-amber-50/60 border border-amber-200 rounded-xl">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{a.title}</p>
+                  <p className="text-xs text-gray-600 mt-0.5"><span className="font-semibold">Why:</span> {a.reason}</p>
+                  <p className="text-xs text-gray-500 mt-0.5"><span className="font-semibold">Recommended:</span> {a.recommendedAction}</p>
+                  <p className="text-xs text-red-500 mt-0.5"><span className="font-semibold">Risk if ignored:</span> {a.riskIfIgnored}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5 break-all">{a.evidence}</p>
+                </div>
+                <button onClick={() => resolveItem(a.id)} className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[11px] font-semibold text-gray-600 hover:bg-gray-50 shrink-0">Resolve</button>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -594,6 +892,14 @@ export default function ProductScout() {
                               className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 disabled:opacity-50"
                               title="Reject candidate"
                             ><Ban size={15} /></button>
+                          )}
+                          {c.status !== 'rejected' && c.status !== 'failed' && (
+                            <button
+                              onClick={() => void prepareListing(v)}
+                              disabled={generating === c.id}
+                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-50"
+                              title="Prepare listing (generate → factual QA → draft) — one-product test, DRAFT ONLY"
+                            >{generating === c.id ? <Loader2 size={15} className="animate-spin" /> : <Brain size={15} />}</button>
                           )}
                           <button
                             onClick={() => void createDraft(v)}
@@ -723,6 +1029,108 @@ export default function ProductScout() {
           </div>
           <p className="text-[11px] text-gray-400">No AI credits consumed — extraction and scoring are rule-based. Candidates are never auto-published.</p>
         </div>
+      </Modal>
+
+      {/* Market Intelligence modal — signals → market opportunity score → (DeepSeek when configured) */}
+      <Modal open={miOpen} onClose={() => { if (!miRunning) setMiOpen(false); }} title="Market Intelligence">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={miQuery}
+              onChange={(e) => setMiQuery(e.target.value)}
+              placeholder="Market query, e.g. dog toys / cat grooming"
+              disabled={miRunning}
+              className="flex-1 min-w-[200px] px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-gray-50"
+            />
+            <input
+              value={miMarket}
+              onChange={(e) => setMiMarket(e.target.value)}
+              placeholder="Market (USA)"
+              disabled={miRunning}
+              className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 disabled:bg-gray-50"
+            />
+            <button
+              onClick={() => void runMarketIntel()}
+              disabled={miRunning}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+            >
+              {miRunning ? <Loader2 size={15} className="animate-spin" /> : <Brain size={15} />} {miRunning ? 'Analyzing…' : 'Run Analysis'}
+            </button>
+          </div>
+          {miResult && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
+              <p className="text-sm font-bold text-indigo-800">Market Opportunity Score: <span className="text-xl">{miResult.marketScore}</span>/100</p>
+              <p className="text-xs text-indigo-700">{miResult.signals} evidence signals collected · {miResult.aiUsed ? 'DeepSeek analysis used' : 'DeepSeek not configured — deterministic evidence analysis used'}</p>
+              {miResult.analysis && (
+                <div className="space-y-1 text-xs text-indigo-800">
+                  {miResult.analysis.trendConfidence && <p><span className="font-semibold">Trend confidence:</span> {miResult.analysis.trendConfidence}</p>}
+                  {miResult.analysis.demandEvidence && <p><span className="font-semibold">Demand evidence:</span> {miResult.analysis.demandEvidence.slice(0, 220)}</p>}
+                  {miResult.analysis.competitionLevel && <p><span className="font-semibold">Competition:</span> {miResult.analysis.competitionLevel}</p>}
+                  {miResult.analysis.priceBand && <p><span className="font-semibold">Price band:</span> ${miResult.analysis.priceBand.min}–${miResult.analysis.priceBand.max}</p>}
+                  {miResult.analysis.risks.length > 0 && <p><span className="font-semibold">Risks:</span> {miResult.analysis.risks.join('; ')}</p>}
+                  {miResult.analysis.unsupportedClaims.length > 0 && (
+                    <p className="text-amber-700"><span className="font-semibold">Unsupported claims dropped:</span> {miResult.analysis.unsupportedClaims.join('; ')}</p>
+                  )}
+                  {miResult.analysis.recommendedSearchQueries.length > 0 && <p><span className="font-semibold">Recommended searches:</span> {miResult.analysis.recommendedSearchQueries.join(', ')}</p>}
+                </div>
+              )}
+            </div>
+          )}
+          {miLog.length > 0 && (
+            <div className="bg-gray-900 rounded-xl p-3 max-h-40 overflow-y-auto">
+              {miLog.map((l, i) => (
+                <p key={i} className={`text-[11px] font-mono leading-5 ${l.startsWith('✗') ? 'text-red-400' : l.startsWith('[warn]') ? 'text-amber-400' : l.startsWith('[signals]') || l.startsWith('✔') ? 'text-green-400' : 'text-gray-300'}`}>{l}</p>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-gray-400">DeepSeek is called ONLY through the secure server proxy (key server-side). With no AI key configured, the deterministic evidence layer still produces the same structured market analysis. Evidence is never invented — unverified signals stay UNKNOWN.</p>
+        </div>
+      </Modal>
+
+      {/* One-product listing result modal — generated listing + factual QA + AUTO decision + DRAFT ONLY */}
+      <Modal open={!!listingFor} onClose={() => setListingFor(null)} title="Listing Preparation — DRAFT ONLY">
+        {listingFor && listingResult && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${listingResult.aiUsed ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>{listingResult.aiUsed ? 'DeepSeek-generated' : 'Deterministic (AI not configured)'}</span>
+              <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${listingResult.qa.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Factual QA {listingResult.qa.passed ? 'PASS' : 'FAIL'}</span>
+              {listingResult.draftId && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700">Draft created (never published)</span>}
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <p className="text-sm font-bold text-gray-900">{listingResult.listing.title}</p>
+              <p className="text-xs text-gray-600 mt-1">{listingResult.listing.shortDescription}</p>
+              {listingResult.listing.features.length > 0 && (
+                <ul className="text-xs text-gray-600 mt-2 space-y-1">
+                  {listingResult.listing.features.slice(0, 6).map((f, i) => <li key={i}>· {f}</li>)}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Factual QA — claims vs source evidence</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {listingResult.qa.claims.slice(0, 25).map((cl, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${cl.status === 'supported' ? 'bg-green-100 text-green-700' : cl.status === 'unsupported' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>{cl.status.toUpperCase()}</span>
+                    <span className="text-gray-600">{cl.claim}</span>
+                  </div>
+                ))}
+              </div>
+              {listingResult.qa.unsupported.length > 0 && (
+                <p className="text-xs text-red-600 mt-2 font-semibold">Unsupported claims must be corrected: {listingResult.qa.unsupported.slice(0, 5).join('; ')}</p>
+              )}
+            </div>
+
+            <div className={`rounded-xl p-3 text-xs ${listingResult.decision?.eligibleForAutoPublish ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+              <p className="font-bold">AUTO POLICY DECISION: {listingResult.decision?.eligibleForAutoPublish ? 'eligible_for_auto_publish = YES' : 'eligible_for_auto_publish = NO'}</p>
+              <p className="mt-1">{listingResult.decision?.reason}</p>
+              <p className="mt-2 font-semibold text-gray-700">ACTUAL PHASE 4B ACTION: KEEP DRAFT — never auto-published.</p>
+            </div>
+
+            <button onClick={() => setListingFor(null)} className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-semibold">Close</button>
+          </div>
+        )}
       </Modal>
     </div>
   );

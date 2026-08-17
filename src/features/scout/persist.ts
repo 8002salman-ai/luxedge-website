@@ -387,3 +387,35 @@ export async function findCategoryId(db: DbAdapter, name: string): Promise<strin
   const row = await db.findFirst<{ id: string }>('categories', 'name', name);
   return row ? row.id : null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4B — market intelligence persistence
+// ---------------------------------------------------------------------------
+
+/** Read the evidence jsonb of a candidate row (defensive about legacy shapes). */
+export async function readCandidateEvidence(db: DbAdapter, id: string): Promise<Record<string, unknown> | null> {
+  const row = await db.findFirst<{ id: string; evidence: Record<string, unknown> | null }>('product_candidates', 'id', id);
+  if (!row) return null;
+  return row.evidence && typeof row.evidence === 'object' ? row.evidence : {};
+}
+
+/** Merge market-intelligence fields into a candidate's evidence jsonb. */
+export async function persistMarketIntelligence(
+  db: DbAdapter,
+  candidateId: string,
+  analysis: { marketOpportunityScore: number; aiUsed: boolean; reasoningSummary: string; unsupportedClaims: string[] }
+): Promise<void> {
+  const current = (await readCandidateEvidence(db, candidateId)) || {};
+  await db.update<{ id: string; evidence: Record<string, unknown> }>('product_candidates', candidateId, {
+    evidence: {
+      ...current,
+      market: {
+        marketOpportunityScore: analysis.marketOpportunityScore,
+        aiUsed: analysis.aiUsed,
+        reasoningSummary: analysis.reasoningSummary.slice(0, 400),
+        unsupportedClaims: analysis.unsupportedClaims,
+        analyzedAt: new Date().toISOString(),
+      },
+    },
+  });
+}

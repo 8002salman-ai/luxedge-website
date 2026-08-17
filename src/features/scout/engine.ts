@@ -20,16 +20,18 @@
 // ============================================================================
 
 import type { DbAdapter } from '../../services/db';
-import type { FetchedSourcePage, PageExtract, ScoutCandidate, ScoutRunResult } from './types';
+import type { FetchedSourcePage, PageExtract, ScoutCandidate, ScoutRunResult, MarketAnalysis } from './types';
 import { supplierFromUrl, dedupeKey, normalizeTitle } from './normalize';
 import { extractPageFacts, describeExtract } from './extract';
 import { calculateMargin } from './margin';
 import { applyRejectFilters, collectRiskFlags } from './reject';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from './score';
+import { signalsFromDiscovery, signalsFromExtracts, scoreMarketOpportunity, runMarketIntelligence } from './market';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
   createJob, completeJob, addRun, addLog,
 } from './persist';
+import type { DiscoverResult } from './discover';
 
 export interface ScoutRunOptions {
   /** Source URLs to research (pet products only). */
@@ -294,6 +296,107 @@ export function qaCandidate(candidate: ScoutCandidate): QAOutcome {
   }
 
   return { candidateId: candidate.id, title: candidate.title, passed: issues.length === 0, issues };
+}
+
+// ---------------------------------------------------------------------------
+// MARKET INTELLIGENCE JOB (Phase 4B) — separate from the product pipeline
+// ---------------------------------------------------------------------------
+
+export interface MarketIntelligenceOptions {
+  /** Market/niche to investigate, e.g. "dog toys". */
+  query: string;
+  market?: string;
+  db: DbAdapter;
+  /** Injectable discovery (defaults to real DuckDuckGo path). */
+  discover?: (q: { query: string; market?: string; maxResults?: number }) => Promise<DiscoverResult>;
+  /** Injectable AI call (defaults to DeepSeek via secure server proxy). */
+  aiCall?: (prompt: string, model?: string) => Promise<string>;
+  /** Candidate extracts to fold into signals (from a previous research run). */
+  extracts?: { title: string; extract: PageExtract }[];
+  onProgress?: (msg: string) => void;
+}
+
+export interface MarketIntelligenceResult {
+  jobId: string;
+  query: string;
+  signals: number;
+  marketScore: number | null;
+  aiUsed: boolean;
+  analysis: MarketAnalysis | null;
+}
+
+/**
+ * Run one MARKET_INTELLIGENCE agent job: collect signals → score market
+ * opportunity → (DeepSeek analysis when configured) → persist to candidates.
+ * Deterministic fallback keeps it working with no AI keys configured.
+ */
+export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions): Promise<MarketIntelligenceResult> {
+  const { query, market, db, extracts, onProgress } = opts;
+  const progress = (m: string) => onProgress?.(m);
+  const at = new Date().toISOString();
+
+  const jobId = await createJob(db, 'MARKET_INTELLIGENCE', {
+    query,
+    market: market || null,
+    at,
+    note: 'Collect market signals → market opportunity score → (DeepSeek when configured)',
+  });
+  await addRun(db, jobId, 'market-intelligence', 'running', `Analyzing market: ${query}`);
+  await addLog(db, jobId, 'info', `MARKET_INTELLIGENCE started for "${query}" (retries=0)`);
+
+  let signals = [] as Awaited<ReturnType<typeof signalsFromDiscovery>>;
+  let warning = '';
+  try {
+    const result = opts.discover
+      ? await opts.discover({ query, market, maxResults: 12 })
+      : await import('./discover').then((m) => m.discoverUrls({ query, market, maxResults: 12 }));
+    signals = signalsFromDiscovery({ query, market, maxResults: 12 }, result, at);
+    if (result.warning) warning = result.warning;
+    progress(`[signals] ${query}: ${result.urls.length} product URLs discovered`);
+  } catch (e) {
+    warning = `Discovery failed: ${(e as Error).message}`;
+    progress(`[warn] ${warning}`);
+  }
+
+  if (extracts?.length) {
+    signals = [...signals, ...signalsFromExtracts(extracts, at)];
+  }
+
+  const category = query.toLowerCase().includes('cat')
+    ? 'Cat' : query.toLowerCase().includes('dog') || query.toLowerCase().includes('puppy')
+      ? 'Dog' : query.toLowerCase().includes('groom')
+        ? 'Grooming' : 'Pet';
+
+  const det = scoreMarketOpportunity({ signals, category });
+  progress(`[market] ${query}: deterministic market score ${det.score}/100`);
+
+  const analysis = await runMarketIntelligence({ signals, category }, det, opts.aiCall);
+  if (analysis.aiUsed) {
+    progress(`[ai] DeepSeek market analysis used (model ${analysis.model || 'deepseek-chat'})`);
+  } else {
+    progress(`[ai] ${analysis.unsupportedClaims[0] || 'Market Intelligence AI not configured — deterministic analysis used'}`);
+  }
+
+  await addLog(db, jobId, 'info',
+    `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}${warning ? '; ' + warning : ''} (retries=0)`);
+  await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'}`);
+  await completeJob(db, jobId, 'completed', {
+    query,
+    signals: signals.length,
+    marketScore: analysis.marketOpportunityScore,
+    aiUsed: analysis.aiUsed,
+    warning: warning || null,
+    at: new Date().toISOString(),
+  });
+
+  return {
+    jobId,
+    query,
+    signals: signals.length,
+    marketScore: analysis.marketOpportunityScore,
+    aiUsed: analysis.aiUsed,
+    analysis,
+  };
 }
 
 // ---------------------------------------------------------------------------
