@@ -14,7 +14,7 @@ import {
   ChevronDown, ChevronRight, ArrowLeft, Upload,
   Globe, Clock, Send, Headphones, Sparkles,
   PenLine, Calendar, Tag, BookOpen, EyeOff,
-  Moon, Heart, SlidersHorizontal,
+  Moon, SlidersHorizontal,
 } from 'lucide-react';
 
 // ============================================================================
@@ -106,18 +106,18 @@ const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'10', name:'Cozy Calming Cat Bed', shortDesc:'Cuddler donut cat bed', description:'Cozy donut-shaped cat bed with a raised rim for security and warmth. Machine-washable plush design gives cats a calm, snug place to curl up.', price:32.99, originalPrice:54.99, category:'Pet Beds', stock:84, images:['https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg'], rating:4.9, reviews:734, isActive:true, brand:'SnugglePet', weight:'1.8 lbs', tags:['cat bed','calming','cuddler'] },
   { ...DP, id:'11', name:'Automatic Pet Food Dispenser', shortDesc:'Programmable meal feeder', description:'Automatic pet food dispenser with programmable portions and a built-in voice recorder. Keeps your pet on a consistent feeding schedule even when you are away.', price:54.99, originalPrice:89.99, category:'Feeding & Water', stock:46, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG'], rating:4.7, reviews:318, isActive:true, brand:'SmartFeed', weight:'3.6 lbs', tags:['food dispenser','automatic','programmable'] },
   { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
-  { ...DP, id:'13', name:'SonicGlow Electric Toothbrush', shortDesc:'Sonic toothbrush, 5 modes', description:'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A hygiene bestseller across AliExpress and Amazon.', price:26.99, originalPrice:54.99, category:'Wellness', stock:88, images:['https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2456, isActive:true, brand:'SonicGlow', weight:'0.3 lbs', tags:['toothbrush','electric','oral care'], variants:[{id:'v13a',color:'White',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-WHT'},{id:'v13b',color:'Black',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-BLK'}] },
-  { ...DP, id:'14', name:'FlexCore Adjustable Dumbbell', shortDesc:'5-in-1 adjustable dumbbell', description:'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.', price:64.99, originalPrice:119.99, category:'Wellness', stock:42, images:['https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:1367, isActive:true, brand:'FlexCore', weight:'25 lbs', tags:['dumbbell','home gym','fitness'] },
-  { ...DP, id:'15', name:'AuroraCharge 3-in-1 Wireless Station', shortDesc:'3-in-1 wireless charger', description:'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.', price:33.99, originalPrice:59.99, category:'Tech & Gadgets', stock:130, images:['https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2078, isActive:true, brand:'AuroraCharge', weight:'0.5 lbs', tags:['wireless charger','magsafe','desk'] },
-  { ...DP, id:'16', name:'ZenMist Ultrasonic Aroma Diffuser', shortDesc:'300ml essential-oil diffuser', description:'300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.', price:21.99, originalPrice:39.99, category:'Home & Living', stock:156, images:['https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:3945, isActive:true, brand:'ZenMist', weight:'0.8 lbs', tags:['diffuser','aromatherapy','home'] },
-  { ...DP, id:'17', name:'CoreFlex Non-Slip Yoga Mat', shortDesc:'6mm TPE yoga mat', description:'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.', price:19.99, originalPrice:36.99, category:'Wellness', stock:187, images:['https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2611, isActive:true, brand:'CoreFlex', weight:'2.2 lbs', tags:['yoga mat','fitness','non-slip'], variants:[{id:'v17a',color:'Blue',size:'6mm',price:19.99,salePrice:19.99,stock:94,sku:'CF-BLU'},{id:'v17b',color:'Pink',size:'6mm',price:19.99,salePrice:19.99,stock:93,sku:'CF-PNK'}] },
-  { ...DP, id:'18', name:'ClarityPro Blue-Light Glasses', shortDesc:'Anti-blue-light computer glasses', description:'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.', price:17.99, originalPrice:34.99, category:'Accessories', stock:164, images:['https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:1743, isActive:true, brand:'ClarityPro', weight:'0.05 lbs', tags:['glasses','blue light','eye care'] },
-  { ...DP, id:'19', name:'ChillBreeze Portable Neck Fan', shortDesc:'Bladeless hands-free neck fan', description:'Hands-free bladeless neck fan with 3 speed settings, 360° airflow, and a rechargeable 4000mAh battery lasting up to 16 hours. Lightweight, whisper-quiet, and hair-safe — perfect for commutes, travel, and outdoor work. A viral summer bestseller on TikTok and Amazon.', price:23.99, originalPrice:42.99, category:'Tech & Gadgets', stock:140, images:['https://images.pexels.com/photos/4491881/pexels-photo-4491881.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2734, isActive:true, brand:'ChillBreeze', weight:'0.4 lbs', tags:['neck fan','portable','bladeless','summer'], variants:[{id:'v19a',color:'White',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-WHT'},{id:'v19b',color:'Black',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-BLK'}] },
-  { ...DP, id:'20', name:'RelaxEye Heated Eye Massager', shortDesc:'Bluetooth heated eye massager', description:'Rechargeable heated eye massager with air-compression, gentle vibration, and soothing warmth to relieve eye strain, puffiness, and headaches. Built-in Bluetooth music, 5 modes, and a foldable travel design. A top self-care gadget trending on Amazon and AliExpress.', price:38.99, originalPrice:74.99, category:'Wellness', stock:82, images:['https://images.pexels.com/photos/3865711/pexels-photo-3865711.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:1988, isActive:true, brand:'RelaxEye', weight:'0.7 lbs', tags:['eye massager','relaxation','self care','bluetooth'] },
-  { ...DP, id:'21', name:'PostureFix Smart Posture Corrector', shortDesc:'Vibrating smart posture trainer', description:'Discreet smart posture corrector that gently vibrates when you slouch, retraining your back and shoulders for a healthier posture. Adjustable, breathable, and unisex — pairs with a free app to track progress. A viral wellness bestseller for desk workers.', price:27.99, originalPrice:49.99, category:'Wellness', stock:110, images:['https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1524, isActive:true, brand:'PostureFix', weight:'0.3 lbs', tags:['posture corrector','back support','wellness','smart'] },
-  { ...DP, id:'22', name:'AquaTrack Smart Water Bottle', shortDesc:'LED reminder insulated bottle', description:'Smart insulated stainless-steel water bottle with an LED hydration reminder and temperature display in the cap. Keeps drinks cold 24h / hot 12h, 500ml, BPA-free, and leak-proof. A trending health-and-fitness gadget across Amazon and TikTok.', price:25.99, originalPrice:46.99, category:'Wellness', stock:125, images:['https://images.pexels.com/photos/1000084/pexels-photo-1000084.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2103, isActive:true, brand:'AquaTrack', weight:'0.6 lbs', tags:['water bottle','smart','hydration','insulated'], variants:[{id:'v22a',color:'Silver',size:'500ml',price:25.99,salePrice:25.99,stock:63,sku:'AT-SLV'},{id:'v22b',color:'Black',size:'500ml',price:25.99,salePrice:25.99,stock:62,sku:'AT-BLK'}] },
-  { ...DP, id:'23', name:'LumaStrip RGB LED Light Strip', shortDesc:'App & music-sync LED strip 16ft', description:'16ft app-controlled RGB LED light strip with 16 million colors, music sync, and voice control (Alexa & Google). Easy peel-and-stick install, remote included, and dimmable scenes for gaming setups and bedrooms. One of the top-selling home-decor items on Amazon.', price:18.99, originalPrice:35.99, category:'Home & Living', stock:198, images:['https://images.pexels.com/photos/1616403/pexels-photo-1616403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:4562, isActive:true, brand:'LumaStrip', weight:'0.5 lbs', tags:['led strip','rgb','home decor','gaming'] },
-  { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:true, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
+  { ...DP, id:'13', name:'SonicGlow Electric Toothbrush', shortDesc:'Sonic toothbrush, 5 modes', description:'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A hygiene bestseller across AliExpress and Amazon.', price:26.99, originalPrice:54.99, category:'Wellness', stock:88, images:['https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2456, isActive:false, brand:'SonicGlow', weight:'0.3 lbs', tags:['toothbrush','electric','oral care'], variants:[{id:'v13a',color:'White',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-WHT'},{id:'v13b',color:'Black',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-BLK'}] },
+  { ...DP, id:'14', name:'FlexCore Adjustable Dumbbell', shortDesc:'5-in-1 adjustable dumbbell', description:'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.', price:64.99, originalPrice:119.99, category:'Wellness', stock:42, images:['https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:1367, isActive:false, brand:'FlexCore', weight:'25 lbs', tags:['dumbbell','home gym','fitness'] },
+  { ...DP, id:'15', name:'AuroraCharge 3-in-1 Wireless Station', shortDesc:'3-in-1 wireless charger', description:'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.', price:33.99, originalPrice:59.99, category:'Tech & Gadgets', stock:130, images:['https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2078, isActive:false, brand:'AuroraCharge', weight:'0.5 lbs', tags:['wireless charger','magsafe','desk'] },
+  { ...DP, id:'16', name:'ZenMist Ultrasonic Aroma Diffuser', shortDesc:'300ml essential-oil diffuser', description:'300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.', price:21.99, originalPrice:39.99, category:'Home & Living', stock:156, images:['https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:3945, isActive:false, brand:'ZenMist', weight:'0.8 lbs', tags:['diffuser','aromatherapy','home'] },
+  { ...DP, id:'17', name:'CoreFlex Non-Slip Yoga Mat', shortDesc:'6mm TPE yoga mat', description:'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.', price:19.99, originalPrice:36.99, category:'Wellness', stock:187, images:['https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2611, isActive:false, brand:'CoreFlex', weight:'2.2 lbs', tags:['yoga mat','fitness','non-slip'], variants:[{id:'v17a',color:'Blue',size:'6mm',price:19.99,salePrice:19.99,stock:94,sku:'CF-BLU'},{id:'v17b',color:'Pink',size:'6mm',price:19.99,salePrice:19.99,stock:93,sku:'CF-PNK'}] },
+  { ...DP, id:'18', name:'ClarityPro Blue-Light Glasses', shortDesc:'Anti-blue-light computer glasses', description:'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.', price:17.99, originalPrice:34.99, category:'Accessories', stock:164, images:['https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:1743, isActive:false, brand:'ClarityPro', weight:'0.05 lbs', tags:['glasses','blue light','eye care'] },
+  { ...DP, id:'19', name:'ChillBreeze Portable Neck Fan', shortDesc:'Bladeless hands-free neck fan', description:'Hands-free bladeless neck fan with 3 speed settings, 360° airflow, and a rechargeable 4000mAh battery lasting up to 16 hours. Lightweight, whisper-quiet, and hair-safe — perfect for commutes, travel, and outdoor work. A viral summer bestseller on TikTok and Amazon.', price:23.99, originalPrice:42.99, category:'Tech & Gadgets', stock:140, images:['https://images.pexels.com/photos/4491881/pexels-photo-4491881.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2734, isActive:false, brand:'ChillBreeze', weight:'0.4 lbs', tags:['neck fan','portable','bladeless','summer'], variants:[{id:'v19a',color:'White',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-WHT'},{id:'v19b',color:'Black',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-BLK'}] },
+  { ...DP, id:'20', name:'RelaxEye Heated Eye Massager', shortDesc:'Bluetooth heated eye massager', description:'Rechargeable heated eye massager with air-compression, gentle vibration, and soothing warmth to relieve eye strain, puffiness, and headaches. Built-in Bluetooth music, 5 modes, and a foldable travel design. A top self-care gadget trending on Amazon and AliExpress.', price:38.99, originalPrice:74.99, category:'Wellness', stock:82, images:['https://images.pexels.com/photos/3865711/pexels-photo-3865711.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:1988, isActive:false, brand:'RelaxEye', weight:'0.7 lbs', tags:['eye massager','relaxation','self care','bluetooth'] },
+  { ...DP, id:'21', name:'PostureFix Smart Posture Corrector', shortDesc:'Vibrating smart posture trainer', description:'Discreet smart posture corrector that gently vibrates when you slouch, retraining your back and shoulders for a healthier posture. Adjustable, breathable, and unisex — pairs with a free app to track progress. A viral wellness bestseller for desk workers.', price:27.99, originalPrice:49.99, category:'Wellness', stock:110, images:['https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1524, isActive:false, brand:'PostureFix', weight:'0.3 lbs', tags:['posture corrector','back support','wellness','smart'] },
+  { ...DP, id:'22', name:'AquaTrack Smart Water Bottle', shortDesc:'LED reminder insulated bottle', description:'Smart insulated stainless-steel water bottle with an LED hydration reminder and temperature display in the cap. Keeps drinks cold 24h / hot 12h, 500ml, BPA-free, and leak-proof. A trending health-and-fitness gadget across Amazon and TikTok.', price:25.99, originalPrice:46.99, category:'Wellness', stock:125, images:['https://images.pexels.com/photos/1000084/pexels-photo-1000084.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2103, isActive:false, brand:'AquaTrack', weight:'0.6 lbs', tags:['water bottle','smart','hydration','insulated'], variants:[{id:'v22a',color:'Silver',size:'500ml',price:25.99,salePrice:25.99,stock:63,sku:'AT-SLV'},{id:'v22b',color:'Black',size:'500ml',price:25.99,salePrice:25.99,stock:62,sku:'AT-BLK'}] },
+  { ...DP, id:'23', name:'LumaStrip RGB LED Light Strip', shortDesc:'App & music-sync LED strip 16ft', description:'16ft app-controlled RGB LED light strip with 16 million colors, music sync, and voice control (Alexa & Google). Easy peel-and-stick install, remote included, and dimmable scenes for gaming setups and bedrooms. One of the top-selling home-decor items on Amazon.', price:18.99, originalPrice:35.99, category:'Home & Living', stock:198, images:['https://images.pexels.com/photos/1616403/pexels-photo-1616403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:4562, isActive:false, brand:'LumaStrip', weight:'0.5 lbs', tags:['led strip','rgb','home decor','gaming'] },
+  { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:false, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
 ];
 
 // ═══════════ 120-Product Catalog — extends the 12 featured products to a full store ═══════════
@@ -439,7 +439,7 @@ function AppProvider({ children }: { children: ReactNode }) {
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle size={18} className="text-green-400" />{notif}</div></div>; }
+function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
@@ -760,10 +760,10 @@ function Footer() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-5">
               {[
-                { icon: Shield, text: 'Secure Checkout' },
                 { icon: Truck, text: 'Free Shipping $50+' },
                 { icon: RotateCcw, text: '30-Day Returns' },
                 { icon: Headphones, text: 'Customer Support' },
+                { icon: Shield, text: 'Quality Checked' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
                   <b.icon size={14} className="text-luxe-gold-light" />
@@ -771,14 +771,7 @@ function Footer() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-luxe-white/50 mr-1">We accept:</span>
-              {['VISA', 'MC', 'AMEX', 'PayPal', 'Apple Pay'].map(c => (
-                <span key={c} className="px-2.5 py-1 bg-luxe-white/5 border border-luxe-white/15 rounded-md text-[10px] font-bold text-luxe-white/80 tracking-wide">
-                  {c}
-                </span>
-              ))}
-            </div>
+            <p className="text-[11px] text-luxe-white/45">Online payments are in demo mode — a real provider is being integrated.</p>
           </div>
         </div>
       </div>
@@ -810,21 +803,15 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user, notify } = useApp(); const nav = useNavigate();
-  const d = Math.round((1 - product.price / product.originalPrice) * 100);
-  const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
+  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const d = product.originalPrice > product.price ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
   return (
-    <Link to={`/product/${product.id}`} className="block group">
+    <Link to={`/product/${product.id}`} className="block group focus-visible:outline-luxe-gold">
       <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
         <div className="relative bg-luxe-cream overflow-hidden">
-          <img src={product.images[0]} alt={product.name} aria-hidden="true" loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" />
+          <img src={product.images[0]} alt={product.name} loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" />
           {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
-          <button aria-label="Save to wishlist"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); notify('Saved to wishlist ♥'); }}
-            className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-luxe-gray hover:text-sale shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110">
-            <Heart size={13} />
-          </button>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 right-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
+          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
             className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
@@ -833,8 +820,8 @@ function PCard({ product }: { product: Product }) {
         <div className="px-3.5 py-3">
           <div className="flex items-center justify-between gap-2 mb-1">
             <p className="eyebrow truncate">{product.category}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              <Star size={10} className="text-star fill-star" />
+            <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${product.rating.toFixed(1)} out of 5`}>
+              <Star size={10} className="text-star fill-star" aria-hidden="true" />
               <span className="text-[10px] font-semibold text-luxe-charcoal">{product.rating.toFixed(1)}</span>
             </div>
           </div>
@@ -842,10 +829,6 @@ function PCard({ product }: { product: Product }) {
           <div className="flex items-baseline gap-1.5 mt-1.5">
             <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
             {d > 0 && <span className="text-[11px] text-luxe-gray line-through">${product.originalPrice.toFixed(2)}</span>}
-            <span className="ml-auto flex items-center gap-1 text-[9px] text-luxe-gray">
-              <span className="w-1 h-1 rounded-full bg-luxe-gold" />
-              {sold > 0 ? `${sold} sold` : 'New'}
-            </span>
           </div>
         </div>
       </div>
@@ -859,7 +842,7 @@ function PCardPremium({ product }: { product: Product }) {
 }
 
 
-// Per-route document title for SEO
+// Per-route document title + meta description + canonical for SEO
 function RouteTitle() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -867,28 +850,48 @@ function RouteTitle() {
     const segs = pathname.split("/").filter(Boolean);
     const set = (t: string) => { document.title = t + " | " + brand; };
     const full = (t: string) => { document.title = t; };
-    if (segs.length === 0) full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets");
-    else if (segs[0] === "shop") set("Shop All Products");
-    else if (segs[0] === "category") set("Shop " + fromSlug(decodeURIComponent(segs[1] || "")));
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setOg = (prop: string, content: string) => {
+      let el = document.head.querySelector(`meta[property="${prop}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setCanonical = () => {
+      const href = `https://luxedge.us/#${pathname}`;
+      let el = document.head.querySelector('link[rel="canonical"]');
+      if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
+      el.setAttribute('href', href);
+      setOg('og:url', href);
+    };
+    const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
+    setCanonical();
+    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming. Free shipping over $50, 30-day easy returns."); }
+    else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
+    else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
       const p = ALL_PRODUCTS.find((x) => x.id === decodeURIComponent(segs[1] || ""));
       set(p ? p.name : "Product");
+      if (p) desc(p.shortDesc || p.description.slice(0, 155));
     }
-    else if (segs[0] === "cart") set("Shopping Cart");
-    else if (segs[0] === "checkout") set("Secure Checkout");
-    else if (segs[0] === "orders") set("My Orders");
-    else if (segs[0] === "about") set("About Us");
-    else if (segs[0] === "contact") set("Contact Us");
-    else if (segs[0] === "privacy") set("Privacy Policy");
-    else if (segs[0] === "terms") set("Terms of Service");
-    else if (segs[0] === "returns") set("Return Policy");
-    else if (segs[0] === "shipping-policy") set("Shipping Policy");
-    else if (segs[0] === "faq") set("Frequently Asked Questions");
-    else if (segs[0] === "careers") set("Careers");
-    else if (segs[0] === "blog") set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights");
-    else if (segs[0] === "login") set("Sign In");
-    else if (segs[0] === "signup") set("Create Account");
-    else if (segs[0] === "admin") set("Admin Dashboard");
+    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — free shipping on orders over $50."); }
+    else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
+    else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
+    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
+    else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
+    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
+    else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
+    else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
+    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — free shipping on orders over $50."); }
+    else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
+    else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
+    else if (segs[0] === "blog") { set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"); desc("Pet care tips and insights from the Luxedge team."); }
+    else if (segs[0] === "login") { set("Sign In"); desc("Sign in to your Luxedge account."); }
+    else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
+    else if (segs[0] === "admin") { set("Admin Dashboard"); }
     else set("Luxedge");
   }, [pathname]);
   return null;
@@ -937,6 +940,86 @@ function ProductDetailPage() {
   const [showRevForm, setShowRevForm] = useState(false);
   const [selColor, setSelColor] = useState('');
   const [selSize, setSelSize] = useState('');
+  const [ctaVisible, setCtaVisible] = useState(true);
+  const ctaRef = useRef<HTMLDivElement>(null);
+
+  // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
+  useEffect(() => {
+    const el = ctaRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setCtaVisible(e.isIntersecting), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [product?.id]);
+
+  // Per-product SEO: canonical, meta description and Product + Breadcrumb
+  // structured data. Only verified review data is ever emitted.
+  useEffect(() => {
+    if (!product) return;
+    const verified = allReviews.filter(r => r.productId === product.id && r.status === 'approved');
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setCanonical = () => {
+      const href = `https://luxedge.us/#/product/${product.id}`;
+      let el = document.head.querySelector('link[rel="canonical"]');
+      if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
+      el.setAttribute('href', href);
+    };
+    setMeta('description', product.shortDesc || product.description.slice(0, 155));
+    setCanonical();
+    if (product.images[0]) {
+      const ogImg = document.head.querySelector('meta[property="og:image"]');
+      if (ogImg) ogImg.setAttribute('content', product.images[0]);
+      const twImg = document.head.querySelector('meta[name="twitter:image"]');
+      if (twImg) twImg.setAttribute('content', product.images[0]);
+    }
+    const jsonLd: Record<string, unknown>[] = [{
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us/' },
+        { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://luxedge.us/#/shop' },
+        { '@type': 'ListItem', position: 3, name: product.name, item: `https://luxedge.us/#/product/${product.id}` },
+      ],
+    }];
+    const offers: Record<string, unknown> = {
+      '@type': 'Offer',
+      price: product.price,
+      priceCurrency: 'USD',
+      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    };
+    if (product.variants[0]?.sku) offers.sku = product.variants[0].sku;
+    const prodSchema: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      image: product.images.slice(0, 8),
+      description: product.shortDesc || product.description,
+      brand: { '@type': 'Brand', name: product.brand || 'Luxedge' },
+      offers,
+    };
+    if (product.category) prodSchema.category = product.category;
+    // Only verified, user-submitted reviews go into schema — never the catalog stub.
+    if (verified.length > 0) {
+      const avg = verified.reduce((s, r) => s + r.rating, 0) / verified.length;
+      prodSchema.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: avg.toFixed(1),
+        reviewCount: verified.length,
+      };
+    }
+    jsonLd.push(prodSchema);
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'product-jsonld';
+    script.text = JSON.stringify(jsonLd);
+    document.getElementById('product-jsonld')?.remove();
+    document.head.appendChild(script);
+    return () => { document.getElementById('product-jsonld')?.remove(); };
+  }, [product?.id]);
 
   // Scroll to top on product change
   useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); if (product) { trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() }); } }, [id, product?.id]);
@@ -1061,12 +1144,10 @@ function ProductDetailPage() {
 
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
-          {/* Rating */}
+          {/* Rating — shown only from verified review data; falls back to catalog rating */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
-            <span className="text-gray-300">|</span>
-            <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
+            <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+            <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} review{reviews.length !== 1 ? 's' : ''})</span>
           </div>
 
           {/* Price */}
@@ -1118,7 +1199,7 @@ function ProductDetailPage() {
           )}
 
           {/* Buttons */}
-          <div className="flex items-stretch gap-3 mb-4">
+          <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
             <div className="flex items-center border-2 border-gray-200 rounded-xl">
               <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus size={14} /></button>
               <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
@@ -1243,6 +1324,20 @@ function ProductDetailPage() {
           {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
         </div>
       </div>
+
+      {/* ── Sticky mobile Add to Cart (hidden on desktop) ── */}
+      <div className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-luxe-silver/70 shadow-[0_-8px_30px_-12px_rgba(16,26,46,0.2)] transition-transform duration-300 luxe-safe-bottom ${ctaVisible ? 'translate-y-full' : 'translate-y-0'}`} aria-hidden={ctaVisible} inert={ctaVisible}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-luxe-black leading-tight">${activePrice.toFixed(2)}</p>
+            {discount > 0 && <p className="text-[10px] text-luxe-gray line-through">${activeOriginal.toFixed(2)}</p>}
+          </div>
+          <button onClick={handleAddToCart} disabled={activeStock === 0}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold">
+            <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -1289,7 +1384,9 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
 }
 
 function HomePage() {
-  const { products, notify } = useApp();
+  const { products } = useApp();
+  const [nlEmail, setNlEmail] = useState('');
+  const [nlDone, setNlDone] = useState(false);
   const featured = products.filter(p => p.isActive);
   const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
   const hero = featured.slice(0, 4);
@@ -1325,14 +1422,11 @@ function HomePage() {
                 Explore Deals
               </Link>
             </div>
-            {/* Social proof */}
+            {/* Trust row — factual store policies only, no invented stats */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={13} className="text-star fill-star" />)}</div>
-                <span className="text-[12px] text-luxe-gray"><strong className="text-luxe-black font-bold">4.9/5</strong> · 2,000+ happy pet parents</span>
-              </div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones size={14} className="text-luxe-gold" /> Real customer support</div>
             </div>
           </div>
 
@@ -1434,10 +1528,10 @@ function HomePage() {
       {/* ════════ PROMO BANNERS ════════ */}
       <section className="py-14 sm:py-18 bg-white">
         <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
-          <Reveal><Link to="/shop" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
+          <Reveal><Link to="/shop?max=30" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap size={11} /> Deal</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
-            <p className="text-xs text-luxe-gray mb-4">Everyday essentials your pet will love.</p>
+            <p className="text-xs text-luxe-gray mb-4">Everyday essentials under $30 — handpicked and priced fairly.</p>
             <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight size={12} /></span>
           </Link></Reveal>
           <Reveal delay={70}><Link to="/category/pet-beds" className="group relative block rounded-3xl overflow-hidden bg-luxe-gold-soft border border-luxe-gold/25 p-7 hover:shadow-xl hover:shadow-luxe-gold/15 hover:-translate-y-1 transition-all duration-300">
@@ -1514,7 +1608,7 @@ function HomePage() {
           {[
             { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
             { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
-            { icon: Shield, title: 'Secure Checkout', desc: '256-bit SSL encryption' },
+            { icon: Shield, title: 'Quality Checked', desc: 'Handpicked & tested by our team' },
             { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
@@ -1535,13 +1629,20 @@ function HomePage() {
           <p className="eyebrow mb-3 text-luxe-gold-light">Stay in the Loop</p>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-white tracking-tight mb-3">Join the Luxedge Pet Family</h2>
           <p className="text-luxe-white/65 text-sm mb-8 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
-          <form onSubmit={e => { e.preventDefault(); notify('Thanks for subscribing! 🐾'); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input type="email" required placeholder="Your email address" aria-label="Email address"
-              className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
-            <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
-              Subscribe
-            </button>
-          </form>
+          {nlDone ? (
+            <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
+              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list! 🐾</p>
+              <p className="text-xs text-luxe-white/65">We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> locally and will let you know when email updates go live.</p>
+            </div>
+          ) : (
+            <form onSubmit={e => { e.preventDefault(); if (nlEmail.trim()) { try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: nlEmail.trim(), at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } setNlDone(true); } }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
+                className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
+              <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
+                Subscribe
+              </button>
+            </form>
+          )}
         </div>
       </section>
     </div>
@@ -1558,17 +1659,19 @@ function ShopPage() {
   const [cat, setCat] = useState(initialCat);
   const [q, setQ] = useState(params.get('q') || '');
   const [sort, setSort] = useState('featured');
-  const [maxPrice, setMaxPrice] = useState(0); // 0 = no limit
+  const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
   const [minRating, setMinRating] = useState(0); // 0 = any
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isDeals = q.toLowerCase() === 'deal';
 
   // Sync when URL slug or query changes
   useEffect(() => { setCat(slug ? fromSlug(slug) : 'All'); }, [slug]);
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
+  useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
-    .filter(p => p.name.toLowerCase().includes(q.toLowerCase()))
+    .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
     .filter(p => minRating === 0 || p.rating >= minRating)
     .sort((a, b) => {
@@ -1584,8 +1687,8 @@ function ShopPage() {
     else nav(`/category/${toSlug(newCat)}`);
   };
 
-  const pageTitle = cat === 'All' ? 'Shop All Products' : cat;
-  const pageDesc = cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`;
+  const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
+  const pageDesc = isDeals ? 'Products with compare-at savings, updated as new deals land.' : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
   const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0);
 
   const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); nav('/shop'); };
@@ -1643,14 +1746,14 @@ function ShopPage() {
       {/* Page Header */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12">
-          <p className="eyebrow mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
           <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
         </div>
       </section>
 
-      {/* Toolbar: mobile Filter button + search + sort */}
-      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-0 z-20 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
+      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-16 lg:top-[7.1rem] z-30 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
             className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
@@ -1909,9 +2012,6 @@ function CartPage() {
               <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
             </button>
             <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
-            <div className="mt-5 pt-4 border-t border-luxe-silver/60 flex items-center justify-center gap-2">
-              {['VISA', 'MC', 'AMEX', 'PayPal'].map(c => <span key={c} className="px-2 py-1 bg-luxe-cream border border-luxe-silver rounded text-[9px] font-bold text-luxe-gray">{c}</span>)}
-            </div>
           </div>
         </div>
       </div>
@@ -2216,11 +2316,9 @@ function CheckoutPage() {
                 ))}
               </div>
 
-              {/* Payment Icons */}
-              <div className="mt-5 pt-4 border-t flex items-center justify-center gap-2">
-                {['VISA','MC','AMEX','PayPal'].map(c => (
-                  <span key={c} className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-500">{c}</span>
-                ))}
+              {/* Demo note — mirrors the explicit notice shown on the payment step */}
+              <div className="mt-5 pt-4 border-t">
+                <p className="text-[10px] text-amber-600 text-center">Demo checkout — no real payment is processed.</p>
               </div>
             </div>
           </div>

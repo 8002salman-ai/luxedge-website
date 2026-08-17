@@ -323,6 +323,12 @@ h1, h2, h3, h4, h5, h6 {
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* ── Text balance for headings ── */
+.text-balance { text-wrap: balance; }
+
+/* ── Mobile sticky CTA safe area ── */
+.luxe-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
 /* ── Form number input cleanup ── */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
