@@ -1,6 +1,6 @@
 # LUXEDGE STATE — Agent Handoff
 
-Updated **2026-08-17** after **PHASE 4A FINAL CLOSURE (PASS)** on `luxedge-v2`. Phase 1 security, Phase 2 storefront, Phase 3A auth/API, and Phase 3B live-database work remain intact.
+Updated **2026-08-17** after **PHASE 4B (AI MARKET INTELLIGENCE + GUARDED AUTONOMY + ONE-PRODUCT LISTING)** on `luxedge-v2`. Phase 1 security, Phase 2 storefront, Phase 3A auth/API, Phase 3B live-database, and Phase 4A Product Scout work remain intact.
 
 ## Phase 3B FINAL STATUS = PASS (closed)
 
@@ -8,7 +8,8 @@ Updated **2026-08-17** after **PHASE 4A FINAL CLOSURE (PASS)** on `luxedge-v2`. 
 - **Migrations applied to the REAL Supabase project (owner, Dashboard → SQL Editor):**
   - `0004_reconcile_live.sql` — applied ✅ (reconciled the legacy 13-table DB to the V2 schema)
   - `0005_drop_legacy_currency_checks.sql` — applied ✅ (dropped stale legacy `%_currency_check` / `%_country_check` constraints)
-  - `0006_products_status_allow_draft.sql` — **new, owner to apply before Phase 4** (adds `'draft'` to `products_status_check` so bare/draft-status product writes don't fail; verified live that `status='draft'` is currently rejected)
+  - `0006_products_status_allow_draft.sql` — applied ✅ (adds `'draft'` to `products_status_check`; verified live — Phase 4A and Phase 4B product-draft writes with `status='draft'` succeed)
+  - `0007_market_intelligence_job_type.sql` — **owner to apply in Dashboard → SQL Editor** (adds `'MARKET_INTELLIGENCE'` to `agent_jobs_type_check` so the Phase 4B market-intelligence job can be recorded durably; `LISTING_GENERATE` already exists in the constraint)
 - **Live schema (verified):** **30 V2 tables** all present (customers, suppliers, supplier_products, supplier_variants, supplier_shipping, reviews, ai_providers, agent_jobs, agent_runs, agent_logs, product_candidates, product_scores, creative_assets, creative_jobs, campaigns, ad_creatives, ad_performance, + others) — MISSING: NONE — plus **5 preserved legacy tables** (profiles, admin_email_allowlist, supplier_mappings, price_history, processed_webhook_events) = 35 total.
 - **Uppercase USD V2 write verified live:** after 0005, a products write with `currency='USD'` passes (previously 23514 on `products_currency_check`).
 - **KONG product normalized:** the one real product now stores `currency='USD'` (PATCH verified, HTTP 200).
@@ -25,7 +26,8 @@ Updated **2026-08-17** after **PHASE 4A FINAL CLOSURE (PASS)** on `luxedge-v2`. 
    - `orders.customer_id` / `addresses.customer_id` FKs referenced `customers` before it was created → reordered (create V2 tables first, then FK columns).
    - legacy RLS policies blocked `ALTER COLUMN TYPE` on status enums ("cannot alter type of a column used in a policy definition") → POLICY CLEANUP moved to section 2, before any type change, using `pg_policies` + `to_regclass` (drops unknown legacy names like "Published products are public"). Also: dropped stale enum check constraints, guarded every legacy ALTER, reconciled `inventory` (legacy PK = variant_id), skipped the `updated_at` trigger on `creative_jobs`, wrapped everything in `BEGIN/COMMIT`.
 3. `0005_drop_legacy_currency_checks.sql` — applied ✅. Dropped stale `%_currency_check` / `%_country_check` constraints (verified live: `'USD'` now accepted).
-4. `0006_products_status_allow_draft.sql` — **owner to apply before Phase 4** (see below).
+4. `0006_products_status_allow_draft.sql` — applied ✅ (draft-status product writes verified live).
+5. `0007_market_intelligence_job_type.sql` — **owner to apply** (adds `MARKET_INTELLIGENCE` to the `agent_jobs` type check; live MARKET_INTELLIGENCE job writes currently fail with 23514 until applied — the deterministic analysis still runs in-browser).
 
 ## Live Supabase project (owner-provided)
 
@@ -42,7 +44,7 @@ Updated **2026-08-17** after **PHASE 4A FINAL CLOSURE (PASS)** on `luxedge-v2`. 
 
 ## Known issues / next owner actions
 
-- **Apply `0006_products_status_allow_draft.sql`** in the Dashboard → SQL Editor before Phase 4 (adds `'draft'` to `products_status_check`; verified live that `status='draft'` is currently rejected even though it's 0001's default). Also the seeded KONG product can be left as-is (already `USD`).
+- **Apply `0007_market_intelligence_job_type.sql`** in the Dashboard → SQL Editor (adds `MARKET_INTELLIGENCE` to `agent_jobs_type_check`; without it the live Market Intelligence job write fails with 23514 — the deterministic analysis still runs in-browser).
 - `/api/ai/*` + `/api/fetch-page` require an admin JWT; Vercel env vars + AI provider keys needed for actual generation (never commit them).
 - Checkout payment is demo mode (no processor) — explicit notice shown.
 - Customer-profile sync verified live; Phase 3C should wire the admin UI (products/candidates/suppliers/orders/AI jobs/campaigns) to the real DB and reconcile legacy address/order column requirements.
@@ -106,6 +108,22 @@ Updated **2026-08-17** after **PHASE 4A FINAL CLOSURE (PASS)** on `luxedge-v2`. 
 
 **PHASE 4A FINAL VERDICT: PASS** — READY FOR PHASE 4B: YES (one-product autonomous listing: owner-verified sources → listing generation via secure proxy if AI keys configured → QA → owner publish).
 
+## PHASE 4B — AI MARKET INTELLIGENCE + GUARDED AUTONOMY + ONE-PRODUCT LISTING (2026-08-17)
+
+**What was built** — the Market Intelligence + Guarded Autonomy layer over the Phase 4A Product Scout, plus the one-product autonomous listing test (DRAFT ONLY). All AI calls go through the secure server proxy (`serverGenerate`); DeepSeek is NOT configured on this project, so the **deterministic evidence layer is the live path** (the missing-key fallback is exercised and tested). No market facts are ever invented — every signal carries VERIFIED/INFERRED/UNKNOWN and unverified AI claims are dropped and recorded.
+
+**New modules** — `src/features/scout/market.ts` (signal collector: search-pattern/competition/price-range/rating/availability signals from real discovery + researched extracts; **Market Opportunity Score /100** — demand 30, price band 20, competition 20, ratings 15, availability 15, zero points without evidence; **Final Opportunity Score** = Product 70% × product + 30% × market, documented formula; `parseMarketAnalysis` validates DeepSeek structured output and clamps ranges; `runMarketIntelligence` grounds AI claims — unsupported claims are dropped + recorded, deterministic fallback when DeepSeek is missing). `src/features/scout/autonomy.ts` (policy layer: **MANUAL / REVIEW / AUTO** modes, configurable thresholds — product score ≥ 75, market score ≥ 60, min margin 35%, max unknown fields 3, USA-delivery + QA requirements, max AI calls/run — **EMERGENCY PAUSE kill switch**, owner attention queue with why/recommended-action/risk-if-ignored/evidence; AUTO can never override hard safety gates: hard rejection, missing source cost, low margin confidence, IP/regulatory risk, QA failure, pause). `src/features/scout/listing.ts` (DeepSeek listing generation via the secure proxy — AI may rewrite ONLY verified source facts, never certifications/dimensions/materials/shipping-times/ratings/reviews/warranty/medical/inventory/sales; **factual QA** classifies every claim SUPPORTED/UNSUPPORTED/UNKNOWN, any important unsupported claim FAILS QA; **deterministic listing fallback** when AI is missing — every field traces to stored evidence). `src/features/scout/aiCost.ts` (evidence fingerprint + in-memory cache so identical evidence never pays twice, deterministic prefilter before any AI spend, per-run AI-call budget). `engine.ts` gains `runMarketIntelligenceJob` (records a durable MARKET_INTELLIGENCE job → signals → market score → analysis). Migration `0007` adds `MARKET_INTELLIGENCE` to the `agent_jobs` type constraint.
+
+**Admin UI (Product Scout page)** — "Market Intelligence" modal (query + market + run; shows signals count, market score/100, AI vs deterministic, trend/competition/price-band/risks/unsupported-claims/recommended searches); **Autonomy Policy** panel (MANUAL/REVIEW/AUTO toggle, thresholds, save, Emergency Pause button); **Owner Attention Queue** (Scan candidates → routes exceptions like hard-rejection, missing market score, high-margin risk, QA flags; resolve); per-candidate **Prepare Listing** (Brain) button → generates listing (AI or deterministic) → factual QA → AUTO policy decision → creates the product DRAFT (never published).
+
+**One-product test (live, 2026-08-17)** — Market Intelligence compared the viable candidates for "dog toys / USA": 12 real product URLs discovered, **Market Opportunity Score 28/100** (deterministic — honest: 9 competing domains, no price/rating signals folded in this standalone run). Final Opportunity: **KONG Extreme = 0.7×58 + 0.3×28 = 49** vs KONG Flyer = 46 → **KONG Extreme selected on evidence** (highest product score, not because it pre-exists). Listing prepared via the UI: **deterministic listing** (AI not configured), **factual QA PASS**, **AUTO POLICY DECISION: eligible_for_auto_publish = NO** (product 58 < 75 threshold), **ACTUAL ACTION: KEEP DRAFT** — product draft `Luxedge KONG Extreme` created at `status='draft'`, `currency='USD'`, inventory 0, never published (storefront verified: only the published KONG Classic renders). The durable MARKET_INTELLIGENCE job row could not be written live because `0007` is not yet applied (23514 constraint error surfaced cleanly in the UI) — apply 0007 to enable job persistence.
+
+**Tests** — 20 new Phase 4B tests (market signal normalization, market opportunity scoring incl. zero-evidence, final-opportunity 70/30 formula, AI structured-output validation + clamping, evidence grounding / unsupported-claim drop, DeepSeek missing-key fallback, autonomy MANUAL/REVIEW/AUTO, emergency pause, owner-attention routing + dedupe, AI-cache fingerprint, deterministic prefilter + budget, listing factual QA incl. hallucination rejection, deterministic fallback, never-auto-publish, MARKET_INTELLIGENCE job persistence). **146/146 tests pass · tsc 0 errors · build pass** (storefront 410.46 KB unchanged; admin lazy 335.53 KB — includes the Phase 4B panels).
+
+**Security** — DeepSeek key server-side only (client uses `serverGenerate` → `/api/ai/generate`, admin JWT); no service-role key in the browser bundle (bundle scan CLEAN of secret values — only env-var *names* like `DEEPSEEK_API_KEY` in the admin AI-settings UI, public publishable key by design); scout/autonomy mutations remain admin-JWT-only; owner attention + autonomy config are local-state UI (no secret material); credentials unchanged.
+
+**Known blockers** — (1) **Apply `0007_market_intelligence_job_type.sql`** in Dashboard → SQL Editor to persist MARKET_INTELLIGENCE jobs (the deterministic analysis already runs; only the durable job record is blocked). (2) DeepSeek (or another AI provider) key is not configured — Market Intelligence shows "not configured" and listing generation uses the deterministic fallback; add a server-side key when AI-generated copy is wanted.
+
 ## Exact recommended next task
 
-**Phase 4B — one-product autonomous listing.** Using an owner-approved candidate (the KONG Extreme candidate is back at `researching` awaiting explicit owner approval), run listing generation (title/description/specs via the secure server proxy, if AI keys are configured) → QA → owner publish; wire admin Products/orders views to real DB reads; reconcile legacy order/address columns. Do NOT deploy to production from this branch; `main` stays live.
+**Phase 4B closure:** (1) owner applies `0007_market_intelligence_job_type.sql` in the SQL Editor, then re-run the Market Intelligence modal once to persist a durable job record; (2) optionally configure a DeepSeek/OpenRouter server key to exercise the AI-grounded analysis + AI listing generation; (3) then Phase 4C: wire admin Products/orders views to real DB reads, reconcile legacy order/address columns, and design the daily autonomous loop (monitor stock/price/sales, pause weak products) using the autonomy policy state machine. Do NOT deploy to production from this branch; `main` stays live.
