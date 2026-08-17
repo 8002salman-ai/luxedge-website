@@ -7,7 +7,7 @@
 
 **Master Plan V1.1 installed:** YES — `LUXEDGE_MASTER_PLAN.md` at repository root (2026-08-17, verbatim canonical content). It is the WHY / North Star / anti-drift constitution; this file is the WHAT / current technical state. Read BOTH before any Luxedge work.
 
-Updated **2026-08-17** after **PHASE 4C PRE-LIVE HARDENING** on `luxedge-v2` — the CJ supplier discovery architecture is now business-ready before any API key: two-stage enrichment (list → detail → freight) with a hard per-run CJ point budget (250, listV2=50/query=10/freight=10), one internally-consistent selected variant, dynamic freight origin (never hardcoded CN), totalPostageFee-aware landed cost, exact delivery-cycle parsing, no arbitrary <$1/>$40 hard rejects, no manufacturer-source inflation, and score-honesty fixes. **CJ INTEGRATION ARCHITECTURE = BUILT; LIVE CJ SUPPLIER PROOF = PENDING** (no `CJ_API_KEY` — never add until the owner supplies it). 229/229 tests.
+Updated **2026-08-17** after **PHASE 4C FINAL PRE-KEY AUDIT** on `luxedge-v2` — the CJ supplier discovery architecture passed the independent owner audit: **CJ INTEGRATION ARCHITECTURE = PASS · PRE-LIVE BUSINESS GATES = PASS · LIVE CJ SUPPLIER PROOF = PENDING · CJ_API_KEY = NOT YET ADDED** (never add until the owner supplies it). The final audit added (a) a **server-authoritative hard point cap** — every actual paid CJ request/retry reserves its points server-side before any HTTP goes out, budget hard-clamped to 250/run, client/AI can never raise it, `CJ_POINT_BUDGET_EXHAUSTED` returned with zero outbound calls when exhausted, true usage persisted on the job record; (b) **SKU→sizes honesty** — a SKU/variant id is NOT size/upsell/competition evidence, so sizes stay UNKNOWN unless real variant-option semantics exist (a CJ-only candidate's truthful ceiling is exactly 75/100 — no inflation); (c) the **market business gate** — two qualification levels (`PRODUCT_SHORTLISTED` = Product ≥75 + no hard rejection vs `BUSINESS_QUALIFIED` = + Market ≥60 + QA PASS + verified landed cost + USA delivery evidence), Market Score UNKNOWN ⇒ never business-qualified, and every run persists the market link (MI job id / market score / evidence fingerprint / observed_at / supplier search query). 239/239 tests.
 
 ## Phase 3B FINAL STATUS = PASS (closed)
 
@@ -231,6 +231,34 @@ Deleted their 50 draft-only `product_images` rows + the two `products` rows. **P
 **12. Live-readiness simulation (fixtures, NO key).** Tests simulate 50 listV2 records → prefilter → 10 detail calls → 5 freight calls = 200/250 pts within budget (one search call, no pagination, zero denials, enrichment capped ≤12); and a no-winner run reports shortlisted **0** honestly (zero candidates persisted).
 
 **Security:** CJ_API_KEY still server-side only, never added, no `VITE_CJ_*`, admin-JWT proxy, secret scrub, no order/payment/sourcing endpoints. **READY TO ADD CJ_API_KEY: YES** (integration is fail-closed NOT CONFIGURED until then). **READY FOR LIVE CJ WINNER SEARCH: YES only after key.**
+
+## PHASE 4C FINAL PRE-KEY AUDIT (2026-08-17) — THREE GAPS FIXED BEFORE ANY CJ POINTS
+
+**Independent owner audit found three correctness gaps in the hardening pass. All fixed (fixtures-only, NO CJ key, zero live CJ calls):**
+
+**1. Point budget is now a REAL hard cap, enforced SERVER-side.** The old flow checked `canSpend()` client-side then spent AFTER success — a paid retry inside the server client could exceed the run budget and failed paid calls were recorded as 0. Now `CjServerRunBudget` (server-scoped per-run token in `api/_lib/cj.ts`) **reserves the endpoint point cost BEFORE every actual outbound paid request — including every paid retry**. If remaining budget is insufficient the HTTP request is NEVER issued; the proxy returns the safe `CJ_POINT_BUDGET_EXHAUSTED` signal (no outbound call). A run-scoped map threads one budget through search → detail → freight; the proxy's `budget` action exposes the authoritative usage.
+
+**2. The hard cap cannot be raised by callers/AI.** `CjPointBudget` and `CjServerRunBudget` clamp ANY requested budget to `CJ_POINTS_HARD_MAX = 250` (requested 100 → 100, 250 → 250, 500/1000/NaN → 250). Client-side `pointsBudget` remains UX/forecast only; server accounting is authoritative. Client "owner" flags are never trusted — a separate authenticated server-side owner policy would be required for a real override (not built, not needed now).
+
+**3. True point usage persisted.** The RESEARCH job output now records server-authoritative usage — `budget / actual_reserved_points / list attempts / detail attempts / freight attempts / paid retries / denied / remaining` — labeled honestly as **estimated/authorized CJ point consumption** (every outbound paid request incl. retries represented; CJ's exact supplier billing is not claimed unless CJ itself reports it). No secrets in any record.
+
+**4. SKU → size score inflation fixed.** `evidenceFromSupplierRecord` no longer maps `sizes = [selectedVariant.sku]`. A SKU/variant id is NOT size evidence, variant-upsell evidence or competition evidence. `sizes` stay UNKNOWN unless real variant-option attributes (size/color/pack/model) demonstrate customer-selectable options. SKU + variant id remain in the supplier raw/variant evidence only. Regression test: one SKU with no option semantics → **zero** size-derived upsell/competition points. Consequence (truthful, per audit §9): a CJ-only candidate — no customer ratings, no variant-option semantics — has an honest ceiling of exactly **75/100** (demand 20 + supplier 10 + delivery 15 + margin 15 + visual 10 + competition 2 keyword + return-risk 3 = 75); nothing is compensated elsewhere to restore old scores.
+
+**5. Market business gate enforced (scores stay separate).** The supplier search now accepts a grounded `marketContext` (MI job id / opportunity / Market Score / evidence fingerprint / observed_at) and the run is linked to the exact MI evidence that generated the search query. Two qualification levels, never conflated:
+- **PRODUCT_SHORTLISTED** = Product Score ≥75 + no hard rejection.
+- **BUSINESS_QUALIFIED** = Product Score ≥75 + **Market Score ≥60** + QA PASS + verified landed cost (margin HIGH) + sufficient USA delivery evidence + no hard rejection. Only BUSINESS_QUALIFIED may enter "QUALIFIED WINNER READY FOR OWNER REVIEW".
+Market Score is NEVER invented: no valid linked MI context ⇒ **Market Score = UNKNOWN (null)** ⇒ BUSINESS_QUALIFIED = false; it is never defaulted to 50/60/any neutral number and never recalculated from CJ `listedNum`. The market link (market_intelligence_job_id / market_score / market_evidence_fingerprint / market_observed_at / supplier_search_query) is persisted on the RESEARCH job output so every run can prove WHY a product was searched and WHICH market evidence justified it.
+
+**6. Winner result model.** `SupplierSearchRunResult` reports `productShortlisted`, `qaPassed` and `businessQualified` separately, with per-candidate `productScore / marketScore / finalOpportunityScore / landedCostConfidence / usaDeliveryConfidence`. Zero qualified ⇒ **BUSINESS QUALIFIED WINNER = NONE** reported honestly.
+
+**Live-readiness simulation (fixtures, NO key) — all green:**
+- **Server budget:** budget 250 — 1 list (50) + 10 detail (10 each) + 5 freight (10 each) incl. one paid retry = every outbound attempt reserves points; authorized spend can never exceed 250. An attempted call with only 5 points remaining issues **NO outbound HTTP request** (denied counted). Requested client budget 1000 ⇒ server hard cap stays 250 (clamped).
+- **Market gate:** Product 75 / Market 55 + QA PASS ⇒ PRODUCT_SHORTLISTED YES, BUSINESS_QUALIFIED NO. Product 75 / Market 65 + QA PASS + landed cost HIGH + USA evidence ⇒ BUSINESS_QUALIFIED YES (Final = 0.7×75 + 0.3×65 = 72). Product 75 / Market UNKNOWN ⇒ BUSINESS_QUALIFIED NO.
+- **SKU honesty:** one SKU, no real size/options ⇒ no size/upsell bonus (competition ≤2 keyword-only, upsell 0).
+
+**Quality:** `npm test` ✅ **239/239** (10 new audit tests: server-budget clamp/reserve-before-call/denied-no-call/exhausted signal, retries counted, market gate 55/65/UNKNOWN, market link persisted, server usage surfaced, SKU-honesty no-size-bonus) · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅. **Security:** CJ key NOT added, live CJ calls = 0, no browser secrets, credentials unchanged. **GIT:** pushed to `luxedge-v2` only; **main untouched** (`4d0086d`).
+
+**CJ INTEGRATION ARCHITECTURE = PASS · PRE-LIVE BUSINESS GATES = PASS · LIVE CJ SUPPLIER PROOF = PENDING · READY TO ADD CJ_API_KEY = YES.**
 
 ## PHASE 4C — AUTONOMOUS SUPPLIER DISCOVERY (CJ OFFICIAL API FIRST) (2026-08-17)
 
