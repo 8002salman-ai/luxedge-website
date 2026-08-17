@@ -2,6 +2,22 @@
 
 Updated after **Phase 3B (database completion attempt)** on `luxedge-v2`. Phase 1 security, Phase 2 storefront, and Phase 3A auth/API work remain intact.
 
+## Phase 3B — Migration Correction (dependency-safe rewrite, 2026-08-17)
+
+- **Why:** the first `0004` draft added `orders.customer_id` / `addresses.customer_id` FOREIGN KEYs to `public.customers` BEFORE `customers` was created, so the migration would fail on the live legacy DB (which has no `customers`).
+- **Fix:** `supabase/migrations/0004_reconcile_live.sql` was rewritten and fully re-audited in execution order:
+  1. **Dependency ordering** — legacy tables are reconciled first (no FKs to NEW tables), then all 22 missing V2 tables are created (`customers` included), and ONLY THEN are the `orders.customer_id` / `addresses.customer_id` FK columns added. Verified mechanically: zero forward FK references; every `references public.X(...)` targets an already-created table.
+  2. **Transaction** — the whole file now runs inside `BEGIN; … COMMIT;`. Any failing statement rolls the DB back to its prior state (never half-migrated).
+  3. **Existence guards** — every legacy-table ALTER is guarded (`to_regclass` / `information_schema.columns`), so an unexpected old-schema column can never abort the run.
+  4. **Enum check-constraint cleanup** — drops the old enum-derived constraints `product_variants_status_check` and `orders_payment_status_check` (in addition to `products_status_check` / `orders_status_check`) so valid V2 values are accepted after widening.
+  5. **inventory** — legacy `inventory` has NO `id`/`product_id` (PK = `variant_id`); the V2 `id` is added, backfilled with `gen_random_uuid()`, set NOT NULL, and made PK only if no PK exists. `product_id`/`quantity`/`warehouse` added alongside.
+  6. **Trigger guard** — `creative_jobs` has no `updated_at`; the updated-at trigger loop now skips tables lacking that column (prevents a runtime trigger error).
+  7. **RLS policy cleanup** — stale/legacy policies on all 30 managed tables are dropped before the known-good V2 policy set is recreated (no permissive `USING(true)` can survive).
+- **Live schema verified this pass (PostgREST OpenAPI, secret key):** 13 tables confirmed, all empty; `products.status`/`product_variants.status` = enum `catalog_status`; `orders.status` = `order_status`; `orders.payment_status` = `payment_status`; `inventory.variant_id` is the PK. Legacy `products.title` (V2 uses `name`) — seeders must write `name` for the storefront to display titles.
+- **Also fixed:** hero copy in `src/App.tsx` still claimed "tested by our team" — replaced with the approved truthful "thoughtfully curated for pet parents" line.
+- **Quality gate:** `npm test` ✅ 88/88 · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅ (storefront 410.45 KB / gzip 116.97 KB, admin lazy 242.37 KB).
+- **Live preview:** dev server running at http://localhost:5173 — storefront renders, hero copy verified updated, zero console errors.
+
 ## Phase 3B Status — PASS WITH WARNINGS (DB application BLOCKED on owner)
 
 - **Date:** 2026-08-17
