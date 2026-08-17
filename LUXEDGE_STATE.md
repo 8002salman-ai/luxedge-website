@@ -7,7 +7,7 @@
 
 **Master Plan V1.1 installed:** YES — `LUXEDGE_MASTER_PLAN.md` at repository root (2026-08-17, verbatim canonical content). It is the WHY / North Star / anti-drift constitution; this file is the WHAT / current technical state. Read BOTH before any Luxedge work.
 
-Updated **2026-08-17** after **PHASE 4B FINAL LIVE AI PROOF** on `luxedge-v2` — the one grounded DeepSeek Market Intelligence call succeeded against real collected evidence, so **LIVE AI-GROUNDED MARKET INTELLIGENCE = PASS**. Phase 1 security, Phase 2 storefront, Phase 3A auth/API, Phase 3B live-database, and Phase 4A Product Scout work remain intact.
+Updated **2026-08-17** after **PHASE 4B FINAL LIVE AI PROOF + BUSINESS-GATE CLOSURE** on `luxedge-v2` — the grounded DeepSeek Market Intelligence call succeeded against real collected evidence, so **LIVE AI-GROUNDED MARKET INTELLIGENCE = PASS**; the business gate closure records **QUALIFIED BUSINESS WINNER = NONE FROM SEARCH** (no candidate ≥75/≥60). Phase 1 security, Phase 2 storefront, Phase 3A auth/API, Phase 3B live-database, and Phase 4A Product Scout work remain intact.
 
 ## Phase 3B FINAL STATUS = PASS (closed)
 
@@ -171,7 +171,7 @@ Updated **2026-08-17** after **PHASE 4B FINAL LIVE AI PROOF** on `luxedge-v2` �
 **Real AI control tests (live, deployed preview):**
 - **A) AI SERVICES = OFF** → Market Intelligence run completed deterministically with **zero DeepSeek invocations** (decision log flat; run log "DeepSeek unavailable… deterministic analysis").
 - **C) DeepSeek provider = OFF** → **zero DeepSeek calls** (decision log unchanged).
-- **D) EMERGENCY PAUSE = ON** (with DeepSeek available) → **found + fixed a real bug**: the Control Center's pause toggle wrote only `luxedge_ai_control.emergencyPause` while the runtime gate reads the canonical `luxedge_scout_emergency_pause` key (`isEmergencyPaused()`) — so pause from the Control Center never engaged. Fixed `AiControlCenter.tsx` to sync the canonical key; added a regression test; **verified live** — pause now engages the canonical key and shows "EMERGENCY PAUSE ACTIVE" (read-only analysis may continue per Master Plan §14; mutations blocked).
+- **D) EMERGENCY PAUSE = ON** (with DeepSeek available) → **found + fixed a real bug**: the Control Center's pause toggle wrote only `luxedge_ai_control.emergencyPause` while the runtime gate reads the canonical `luxedge_scout_emergency_pause` key (`isEmergencyPaused()`) — so pause from the Control Center never engaged. Fixed `AiControlCenter.tsx` to sync the canonical key; added a regression test; **verified live** — pause now engages the canonical key and shows "EMERGENCY PAUSE ACTIVE". Truthful pause semantics (documented here, no behavior change): while paused the AI gate denies every AI provider call and every autonomous mutation; only deterministic read-only research/analysis continues, because it makes no AI calls and performs no mutations. (Earlier wording cited "Master Plan §14" — §14 is actually STOREFRONT/BRAND; corrected to describe the implemented behavior, not a section reference.)
 - Safe defaults restored: **AI SERVICES = ON · CONTROL MODE = ASSISTED · DeepSeek = ON · EMERGENCY PAUSE = OFF**. No production auto-publish enabled.
 
 **Security scans (values never printed):** server-side-only `DEEPSEEK_API_KEY` (no `VITE_DEEPSEEK_*` anywhere); bundle scan CLEAN of secret values; `git diff` CLEAN of the key; decision logs/DB audit records contain no key/authorization material (scrub verified); direct postgres password still unverified — no guessing, credentials unchanged.
@@ -180,8 +180,27 @@ Updated **2026-08-17** after **PHASE 4B FINAL LIVE AI PROOF** on `luxedge-v2` �
 
 **AI cost/audit:** 2 real DeepSeek calls total this proof (1 Market Intelligence + 1 listing generation) — deterministic prefilter ran first, evidence-fingerprint cache in place, no duplicate calls for unchanged evidence, 0 retries. Decision log rows record task/provider/model/control mode/fallback/fingerprint/result summary/timestamp; token/cost metadata not yet returned by the server generate endpoint (recorded honestly).
 
-**Verdicts now:** AI CONTROL ARCHITECTURE = PASS · DETERMINISTIC PIPELINE = PASS · **LIVE AI-GROUNDED MARKET INTELLIGENCE = PASS** (0007 applied ✅ + DeepSeek configured in Preview ✅ + grounded call succeeded ✅). PHASE 4B FINAL = **PASS**.
+**Verdicts now:** AI CONTROL ARCHITECTURE = PASS · DETERMINISTIC PIPELINE = PASS · **LIVE AI-GROUNDED MARKET INTELLIGENCE = PASS** (0007 applied ✅ + DeepSeek configured in Preview ✅ + grounded call succeeded ✅) · **QUALIFIED BUSINESS WINNER = NONE FROM SEARCH** (no candidate ≥75 product / ≥60 market — see BUSINESS-GATE CLOSURE below). PHASE 4B FINAL = **PASS** (architecture + proof), with the business selection gate left open pending a genuine winner.
+
+## PHASE 4B BUSINESS-GATE CLOSURE (2026-08-17)
+
+**Owner audit accepted the DeepSeek proof but flagged the business gate:** the 69/50/63 candidate was NOT a qualified winner (Product <75, AUTO eligible NO). Closure actions taken:
+
+**1. Sub-threshold test drafts removed (live DB, owner-gate revert).** Removed BOTH test-created sub-threshold product drafts (never owner-approved):
+- `Luxedge Premium Quality Dog Toys – Made in USA` (candidate 69/100) — the draft named in the audit.
+- `Luxedge KONG Extreme` (candidate 58/100) — same class: Phase 4B one-product test artifact, also sub-threshold.
+Deleted their 50 draft-only `product_images` rows + the two `products` rows. **Preserved:** candidates (restored to `researching`), evidence, Product/Market scores, AI analysis, all MARKET_INTELLIGENCE/PRODUCT_RESEARCH/SCORE/QA jobs, runs, logs. Published **KONG Classic untouched** (verified — it is now the ONLY product row). Note: no durable `LISTING_GENERATE` job row had actually been persisted in the DB (that persistence landed after the live run) — nothing to delete, reported honestly.
+
+**2. State corrected:** REAL AI-GROUNDED MARKET INTELLIGENCE = PASS (proven), but **QUALIFIED BUSINESS WINNER = NONE FROM FIRST RUN** — the 69/50/63 candidate is recorded as researching, NOT a winner. READY FOR HIGGSFIELD = NO until a genuine ≥75/≥60 winner exists.
+
+**3. Real winner search (live, DeepSeek grounded):** one additional MARKET_INTELLIGENCE run for **"pet enrichment" / USA** succeeded through the real router — DeepSeek analysis grounded on real evidence (12 URLs, 8 domains), market score **55/100**, honest unknowns ("evidence does not quantify volume or growth"), job `54c6e878` persisted (ai=true). DeepSeek recommended searches: *interactive dog toys, puzzle feeders for dogs, cat enrichment toys*. Two full deterministic research passes ran those + "pet enrichment toys": **57 candidate URLs discovered → 24 researched (33+52 fetch-failed honestly: Etsy/Chewy/Petco JS-heavy or rate-limited) → 19 rejected → 0 shortlisted ≥75** (top scores 72/70/69/66/61/58 — no inflation). Final counts: 51 candidates (41 rejected, 9 researching, 1 approved).
+
+**Exact bottleneck (honest):** generic query discovery (DuckDuckGo HTML) surfaces category/directory/list pages and Amazon *search* URLs, not single-product supplier pages — so `unclear landed cost` (no extractable product price), `unavailable`, or `unusable images` reject them. The strongest REAL researchable candidates (Natural Pet Warehouse 69, PetSmart cat toys 61, KONG Extreme 58, KONG Flyer 54) all fall below 75. To reach a qualified winner the search needs owner-verified manufacturer/retailer product URLs (manual mode) or a richer discovery source that returns single-product pages with price + USA shipping evidence.
+
+**4. Emergency-pause §14 misreference fixed (docs only, no behavior change):** code comment in `AiControlCenter.tsx` and the state doc cited "Master Plan §14" for "read-only analysis may continue" — §14 is actually STOREFRONT/BRAND. Corrected both to describe the implemented behavior truthfully: while paused the AI gate denies every AI provider call and every autonomous mutation; only deterministic read-only research continues (it makes no AI calls and performs no mutations).
+
+**Quality:** `npm test` ✅ **178/178** · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅. **Security:** no new secrets, no key material in git/logs/DB, credentials unchanged, KONG Classic live. **GIT:** branch `luxedge-v2`; docs + doc-comment commits pushed; **main untouched** (`4d0086d`).
 
 ## Exact recommended next task
 
-**Phase 4C (next):** wire admin Products/orders views to real DB reads, reconcile legacy order/address columns, and design the daily autonomous loop using the autonomy policy state machine (per Master Plan §17/§18: Listing Agent → factual QA → Higgsfield Creative Agent → Publish Agent, ADS LAST). Do NOT deploy to production from this branch; `main` stays live. Replace the temporary DeepSeek key with the owner's real key when provided.
+**To reach a genuine qualified winner (Phase 5 gate):** run the scout in manual-URL mode with owner-verified manufacturer/retailer product pages (real single-product URLs with observable price + USA shipping), or add a discovery source that returns single-product pages instead of category pages. Keep thresholds at Product ≥75 / Market ≥60; QA PASS; no hard rejection. Only then may the strongest candidate advance to an owner-review record and (with explicit owner approval) the Higgsfield Creative phase. Phase 4C (admin Products/orders real-DB wiring + daily loop design) remains the architectural next step. Do NOT deploy to production from this branch; `main` stays live.
