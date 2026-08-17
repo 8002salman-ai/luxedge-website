@@ -5,6 +5,8 @@
 > `LUXEDGE_STATE.md` defines current technical implementation/state.
 > If a task conflicts with the Master Plan, report the conflict instead of silently changing direction.
 
+**Master Plan V1.1 installed:** YES — `LUXEDGE_MASTER_PLAN.md` at repository root (2026-08-17, verbatim canonical content). It is the WHY / North Star / anti-drift constitution; this file is the WHAT / current technical state. Read BOTH before any Luxedge work.
+
 Updated **2026-08-17** after **PHASE 4B (AI MARKET INTELLIGENCE + GUARDED AUTONOMY + ONE-PRODUCT LISTING)** on `luxedge-v2`. Phase 1 security, Phase 2 storefront, Phase 3A auth/API, Phase 3B live-database, and Phase 4A Product Scout work remain intact.
 
 ## Phase 3B FINAL STATUS = PASS (closed)
@@ -152,4 +154,4 @@ Updated **2026-08-17** after **PHASE 4B (AI MARKET INTELLIGENCE + GUARDED AUTONO
 
 ## Exact recommended next task
 
-**Phase 4B live-AI closure:** (1) `0007` applied ✅ — re-run the Market Intelligence modal once to persist a durable job record (deterministic, no AI needed). (2) **Provide a server-side AI provider key** (prefer `DEEPSEEK_API_KEY` in the deployed environment; also needed in the local dev shell env only if the dev server is made to execute `/api/*`) — then the one grounded live Market Intelligence call can run and move **LIVE AI-GROUNDED MARKET INTELLIGENCE** from PENDING → PASS. (3) Add `LUXEDGE_MASTER_PLAN.md` verbatim to the repo root (content still pending from owner). (4) Then Phase 4C: wire admin Products/orders views to real DB reads, reconcile legacy order/address columns, and design the daily autonomous loop using the autonomy policy state machine. Do NOT deploy to production from this branch; `main` stays live.
+**Phase 4B live-AI closure:** (1) `0007` applied ✅ — re-run the Market Intelligence modal once to persist a durable job record (deterministic, no AI needed). (2) **Provide a server-side AI provider key** (prefer `DEEPSEEK_API_KEY` in the deployed environment; also needed in the local dev shell env only if the dev server is made to execute `/api/*`) — then the one grounded live Market Intelligence call can run and move **LIVE AI-GROUNDED MARKET INTELLIGENCE** from PENDING → PASS. (3) `LUXEDGE_MASTER_PLAN.md` **V1.1 installed verbatim at repo root** ✅ (2026-08-17). (4) Then Phase 4C: wire admin Products/orders views to real DB reads, reconcile legacy order/address columns, and design the daily autonomous loop using the autonomy policy state machine. Do NOT deploy to production from this branch; `main` stays live.
