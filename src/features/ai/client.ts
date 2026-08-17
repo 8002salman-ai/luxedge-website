@@ -10,6 +10,7 @@
 
 import type { AIProvider } from './types';
 import { resolveActiveProvider } from './providers';
+import { getAccessToken } from '../../services/supabase';
 
 const API_BASE = '/api';
 
@@ -33,12 +34,20 @@ async function parseJson(res: Response): Promise<unknown> {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  // /api/ai/* and /api/fetch-page require an authenticated admin session
+  // (Phase 3A). Attach the Supabase access token when one exists; the server
+  // responds 401/403 otherwise. The token is never stored/logged by us.
+  const token = getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(body),
     });
   } catch {
@@ -46,7 +55,13 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   }
   const data = await parseJson(res);
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `AI backend error (HTTP ${res.status})`);
+    const serverMsg = (data as { error?: string }).error;
+    const status = res.status;
+    const message =
+      status === 401 || status === 403
+        ? 'Admin session required — sign in to the admin dashboard and try again.'
+        : serverMsg || `AI backend error (HTTP ${status})`;
+    throw new Error(message);
   }
   return data as T;
 }
@@ -54,13 +69,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 async function get<T>(path: string): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`);
+    res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   } catch {
     throw new Error('AI backend not reachable. Deploy the /api serverless functions (see .env.example) to enable server-side AI.');
   }
   const data = await parseJson(res);
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `AI backend error (HTTP ${res.status})`);
+    const serverMsg = (data as { error?: string }).error;
+    const status = res.status;
+    const message =
+      status === 401 || status === 403
+        ? 'Admin session required — sign in to the admin dashboard and try again.'
+        : serverMsg || `AI backend error (HTTP ${status})`;
+    throw new Error(message);
   }
   return data as T;
 }

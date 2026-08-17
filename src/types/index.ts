@@ -6,6 +6,7 @@
 // matures in later phases, domain entities migrate here.
 //
 // SECURITY NOTE: no credential types belong here. Secrets are server-side.
+// Passwords are verified by Supabase Auth and are never stored client-side.
 // ============================================================================
 
 export type UserRole = 'admin' | 'buyer';
@@ -13,9 +14,9 @@ export type UserRole = 'admin' | 'buyer';
 export interface User {
   id: string;
   email: string;
-  password: string; // demo auth — must move to hashed server-side auth (Phase 2+)
   name: string;
   role: UserRole;
+  password?: string; // legacy demo field — Supabase Auth owns real credentials
   avatar?: string;
   phone?: string;
   address?: string;

@@ -6,6 +6,7 @@ import AdSenseAd from './components/AdSenseAd';
 import CookieConsent from './components/CookieConsent';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
+import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
 import {
   ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
   Shield, Star, Truck, RotateCcw, Zap, ArrowRight, Mail, Phone,
@@ -34,7 +35,7 @@ export interface Product {
   variants: ProductVariant[];
 }
 interface CartItem { product: Product; quantity: number; }
-interface AppUser { id: string; email: string; password: string; name: string; role: 'admin' | 'buyer'; isBlocked?: boolean; joined?: string; }
+interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
 export interface Order {
   id: string; userId: string; userName: string; items: CartItem[];
   total: number; status: string; date: string; address?: string;
@@ -171,11 +172,13 @@ const EXTRA_PRODUCTS: Product[] = Object.entries(EXTRA_PRODUCT_NAMES).flatMap(([
 
 const ALL_PRODUCTS: Product[] = [...INIT_PRODUCTS, ...EXTRA_PRODUCTS];
 
-const INIT_ADMIN: AppUser = { id: 'adm', email: 'admin@luxedge.us', password: 'admin123', name: 'Admin', role: 'admin', joined: '2024-01-01' };
+// (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
+// Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
+// users come from Supabase Auth and are never represented with passwords).
 const INIT_USERS: AppUser[] = [
-  { id: 'u1', email: 'john@test.com', password: 'password123', name: 'John Smith', role: 'buyer', joined: '2024-01-15' },
-  { id: 'u2', email: 'sarah@test.com', password: 'password123', name: 'Sarah Johnson', role: 'buyer', joined: '2024-02-20' },
-  { id: 'u3', email: 'mike@test.com', password: 'password123', name: 'Mike Williams', role: 'buyer', joined: '2024-03-01' },
+  { id: 'u1', email: 'john@test.com', name: 'John Smith', role: 'buyer', joined: '2024-01-15' },
+  { id: 'u2', email: 'sarah@test.com', name: 'Sarah Johnson', role: 'buyer', joined: '2024-02-20' },
+  { id: 'u3', email: 'mike@test.com', name: 'Mike Williams', role: 'buyer', joined: '2024-03-01' },
 ];
 
 const INIT_ORDERS: Order[] = [
@@ -237,11 +240,10 @@ interface Ctx {
   user: AppUser | null; cart: CartItem[]; orders: Order[];
   products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
-  adminCreds: AppUser;
-  login: (e: string, p: string, admin?: boolean) => boolean;
+  login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
   guestLogin: () => void;
-  logout: () => void; signup: (n: string, e: string, p: string) => boolean;
-  changePassword: (current: string, newPass: string) => { ok: boolean; msg: string };
+  logout: () => void; signup: (n: string, e: string, p: string) => Promise<string | null>;
+  changePassword: (current: string, newPass: string) => Promise<{ ok: boolean; msg: string }>;
   updateAdminProfile: (name: string, email: string) => void;
   addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
   updateQty: (id: string, q: number) => void; clearCart: () => void;
@@ -294,11 +296,10 @@ function loadSession(): AppUser | null {
     if (
       typeof u.id === 'string' &&
       typeof u.email === 'string' &&
-      typeof u.password === 'string' &&
       typeof u.name === 'string' &&
       (u.role === 'admin' || u.role === 'buyer')
     ) {
-      return { id: u.id, email: u.email, password: u.password, name: u.name, role: u.role, isBlocked: u.isBlocked, joined: u.joined };
+      return { id: u.id, email: u.email, name: u.name, role: u.role, isBlocked: u.isBlocked, joined: u.joined };
     }
     return null;
   } catch {
@@ -315,7 +316,6 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
-  const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
   const [notif, setNotif] = useState<string | null>(null);
   const notify = (m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
   const [cartOpen, setCartOpen] = useState(false);
@@ -335,96 +335,66 @@ function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* storage full or unavailable */ }
   }, [user]);
 
-  const login = (e: string, p: string, admin = false) => {
-    // Admin login — checks against live adminCreds state
-    if (admin) {
-      if (e === adminCreds.email && p === adminCreds.password) {
-        setUser({ ...adminCreds });
-        useAuthStore.getState().adminLogin(e, p);
-        notify('Welcome Admin!');
-        return true;
-      }
-      return false;
+  const login = async (e: string, p: string, admin = false): Promise<string | null> => {
+    // Real authentication via Supabase Auth (Phase 3A). Returns null on
+    // success or an honest error message on failure.
+    const result = await useAuthStore.getState().signIn(e, p);
+    if (!result.success) return result.message;
+    const sbUser = result.user;
+    if (!sbUser) return 'Sign-in did not return a session.';
+    if (admin && sbUser.role !== 'admin') {
+      return 'This account does not have admin access.';
     }
-    // Admin credentials also work through the storefront login
-    if (e.toLowerCase() === adminCreds.email.toLowerCase() && p === adminCreds.password) {
-      setUser({ ...adminCreds });
-      useAuthStore.getState().adminLogin(e, p);
-      notify('Welcome Admin!');
-      return true;
-    }
-    // Buyer login — check registered users first, then allow new
-    const existing = users.find(u => u.email.toLowerCase() === e.toLowerCase());
-    if (existing) {
-      if (existing.password === p) {
-        if (existing.isBlocked) { notify('Account blocked. Contact support.'); return false; }
-        setUser(existing);
-        useAuthStore.getState().login(e, p);
-        notify('Login successful!');
-        return true;
-      }
-      return false; // wrong password for existing user
-    }
-    // New user auto-register
-    if (p.length >= 6) {
-      const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: e.split('@')[0], role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
-      setUsers(prev => [...prev, newUser]);
-      setUser(newUser);
-      notify('Account created & logged in!');
-      return true;
-    }
-    return false;
+    setUser({ id: sbUser.id, email: sbUser.email, name: sbUser.name, role: sbUser.role, joined: new Date().toISOString().slice(0, 10) });
+    notify(admin ? 'Welcome Admin!' : 'Login successful!');
+    return null;
   };
 
   const guestLogin = () => {
-    const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', password: '', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
+    const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
     setUser(guest);
     notify('Shopping as guest — no account needed!');
   };
 
-  const logout = () => { setUser(null); notify('Logged out'); };
-
-  const signup = (n: string, e: string, p: string) => {
-    if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
-    if (p.length >= 6) {
-      const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: n, role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
-      setUsers(prev => [...prev, newUser]);
-      setUser(newUser);
-      useAuthStore.getState().signup(n, e, p);
-      notify('Account created!');
-      return true;
-    }
-    return false;
+  const logout = async () => {
+    await useAuthStore.getState().signOut();
+    setUser(null);
+    notify('Logged out');
   };
 
-  const changePassword = (current: string, newPass: string): { ok: boolean; msg: string } => {
+  const signup = async (n: string, e: string, p: string): Promise<string | null> => {
+    if (p.length < 6) return 'Password must be at least 6 characters';
+    const result = await useAuthStore.getState().signUp(n, e, p);
+    if (!result.success) return result.message;
+    if (result.user) {
+      setUser({ id: result.user.id, email: result.user.email, name: result.user.name, role: result.user.role, joined: new Date().toISOString().slice(0, 10) });
+    }
+    notify('Account created!');
+    return null;
+  };
+
+  const changePassword = async (_current: string, newPass: string): Promise<{ ok: boolean; msg: string }> => {
+    // Current password is verified by Supabase on the server; it is never
+    // stored or checked client-side.
     if (!user) return { ok: false, msg: 'Not logged in' };
-    // Check current password
-    if (user.role === 'admin') {
-      if (current !== adminCreds.password) return { ok: false, msg: 'Current password is incorrect' };
-      if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
-      const updated = { ...adminCreds, password: newPass };
-      setAdminCreds(updated);
-      setUser(updated);
-      useAuthStore.getState().changePassword(current, newPass);
+    if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
+    try {
+      await updatePassword(newPass);
       return { ok: true, msg: 'Password updated successfully!' };
-    } else {
-      if (current !== user.password) return { ok: false, msg: 'Current password is incorrect' };
-      if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
-      const updated = { ...user, password: newPass };
-      setUser(updated);
-      setUsers(prev => prev.map(u => u.id === user.id ? updated : u));
-      useAuthStore.getState().changePassword(current, newPass);
-      return { ok: true, msg: 'Password updated successfully!' };
+    } catch (e) {
+      return { ok: false, msg: (e as Error).message || 'Could not update password' };
     }
   };
 
-  const updateAdminProfile = (name: string, email: string) => {
+  const updateAdminProfile = async (name: string, email: string) => {
     if (user?.role === 'admin') {
-      const updated = { ...adminCreds, name, email };
-      setAdminCreds(updated);
-      setUser(updated);
-      notify('Profile updated!');
+      try {
+        await updateUserMetadata({ name });
+        setUser(prev => prev ? { ...prev, name, email } : prev);
+        notify('Profile updated!');
+      } catch (e) {
+        notify((e as Error).message || 'Could not update profile');
+      }
     }
   };
   const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
@@ -433,7 +403,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const clearCart = () => setCart([]);
   const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); clearCart(); return oid; };
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -2356,15 +2326,16 @@ function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, adminCreds, guestLogin, cart } = useApp();
+  const { login, guestLogin, cart } = useApp();
   const nav = useNavigate();
 
   const sub = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    if (login(e, p)) nav(e.toLowerCase() === adminCreds.email.toLowerCase() ? '/admin' : '/');
-    else { setErr('Invalid email or password'); setLoading(false); }
+    await new Promise(r => setTimeout(r, 400));
+    const errMsg = await login(e, p);
+    if (errMsg) { setErr(errMsg); setLoading(false); return; }
+    nav('/');
   };
 
   const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };
@@ -2390,6 +2361,11 @@ function LoginPage() {
           <p className="text-sm text-gray-500 mb-8">Sign in to your account to continue</p>
 
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
+          {!isSupabaseConfigured() && (
+            <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+              Account sign-in is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+            </div>
+          )}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
@@ -2477,9 +2453,9 @@ function SignupPage() {
   const sub = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setErr('');
-    if (!signup(n, e, p)) { setErr('An account with this email already exists'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
+    const errMsg = await signup(n, e, p);
+    if (errMsg) { setErr(errMsg); setLoading(false); return; }
     nav('/');
   };
 
@@ -2504,6 +2480,11 @@ function SignupPage() {
           <p className="text-sm text-gray-500 mb-8">Create your account to start shopping</p>
 
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
+          {!isSupabaseConfigured() && (
+            <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+              Account creation is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+            </div>
+          )}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
@@ -2559,17 +2540,19 @@ function AdminLoginPage() {
   const [e, setE] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useApp();
   const nav = useNavigate();
 
-  const handleSubmit = (ev: React.FormEvent) => {
+  const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setErr('');
-    if (login(e, p, true)) {
-      nav('/admin');
-    } else {
-      setErr('Invalid email or password');
-    }
+    if (!isSupabaseConfigured()) { setErr('Admin authentication is not configured yet (Supabase).'); return; }
+    setLoading(true);
+    const errMsg = await login(e, p, true);
+    setLoading(false);
+    if (errMsg) { setErr(errMsg); return; }
+    nav('/admin');
   };
 
   return (
@@ -2580,6 +2563,12 @@ function AdminLoginPage() {
           <span className="text-xl font-bold">Admin Login</span>
         </div>
         <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
+
+        {!isSupabaseConfigured() && (
+          <div className="p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+            Admin authentication is not configured yet — add <code className="font-mono">VITE_SUPABASE_URL</code> + <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> and promote your admin user (<code className="font-mono">app_metadata.role = 'admin'</code>). No demo credentials exist.
+          </div>
+        )}
 
         {err && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
@@ -2596,8 +2585,8 @@ function AdminLoginPage() {
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Password</label>
             <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
-          <button type="submit" className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
-            <Lock size={16} /> Access Dashboard
+          <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
           </button>
         </form>
 

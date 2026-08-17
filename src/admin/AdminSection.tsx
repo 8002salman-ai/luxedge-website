@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
+import { useAuthStore } from '../store/authStore';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
@@ -76,14 +77,16 @@ function ABlogs() {
 // ADMIN PANEL - FULL WORKING SYSTEM
 // ============================================================================
 function AdminLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useApp();
+  const { user, isAdmin, ready, signOut } = useAuthStore();
   const nav = useNavigate();
   const loc = useLocation();
   const [mobSide, setMobSide] = useState(false);
 
-  useEffect(() => { if (!user || user.role !== 'admin') nav('/admin/login'); }, [user, nav]);
+  // Admin access is derived from the verified Supabase JWT (app_metadata.role
+  // = 'admin'), never from a browser-supplied flag. Redirect until hydrated.
+  useEffect(() => { if (ready && (!user || !isAdmin)) nav('/admin/login'); }, [user, isAdmin, ready, nav]);
   useEffect(() => { setMobSide(false); }, [loc.pathname]);
-  if (!user || user.role !== 'admin') return null;
+  if (!ready || !user || !isAdmin) return null;
 
   const links = [
     { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
@@ -132,7 +135,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
         <Link to="/" className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-2.5 py-1 rounded-md hover:bg-white/5 transition-colors">
           <ArrowLeft size={10} />Store
         </Link>
-        <button onClick={() => { logout(); nav('/admin/login'); }}
+        <button onClick={() => { void signOut().then(() => nav('/admin/login')); }}
           className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 px-2.5 py-1 rounded-md hover:bg-red-500/10 w-full transition-colors">
           <LogOut size={10} />Logout
         </button>
@@ -751,19 +754,19 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
   const [passError, setPassError] = useState('');
   const [passOk, setPassOk] = useState(false);
 
-  const handleProfile = (e: React.FormEvent) => {
+  const handleProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profName.trim() || !profEmail.trim()) { notify('Name and email required'); return; }
-    updateAdminProfile(profName.trim(), profEmail.trim());
+    await updateAdminProfile(profName.trim(), profEmail.trim());
   };
 
-  const handlePassword = (e: React.FormEvent) => {
+  const handlePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPassError(''); setPassOk(false);
     if (newPass !== confPass) { setPassError('New passwords do not match'); return; }
     if (newPass.length < 6) { setPassError('Password must be at least 6 characters'); return; }
     if (curPass === newPass) { setPassError('New password must differ from current'); return; }
-    const result = changePassword(curPass, newPass);
+    const result = await changePassword(curPass, newPass);
     if (result.ok) {
       setPassOk(true);
       setCurPass(''); setNewPass(''); setConfPass('');
