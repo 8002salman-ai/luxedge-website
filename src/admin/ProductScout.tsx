@@ -27,6 +27,9 @@ import { runScoutResearch, runMarketIntelligenceJob, qaCandidate } from '../feat
 import type { QAOutcome } from '../features/scout/engine';
 import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
+import { runSupplierSearch } from '../features/scout/supplierSearch';
+import { CjSupplierAdapter } from '../features/suppliers/cj/adapter';
+import type { SupplierHealth } from '../features/suppliers/types';
 import type { CandidateEvidence, ScoutCandidate, AutonomyConfig, OwnerAttentionItem, ListingDraft, ListingQAResult, MarketAnalysis } from '../features/scout/types';
 import type { FetchedSourcePage } from '../features/scout/types';
 import { loadAutonomyConfig, saveAutonomyConfig, setEmergencyPause, AUTONOMY_MODES, evaluateAutonomy, attentionForCandidate, loadAttentionItems, pushAttentionItem, resolveAttentionItem } from '../features/scout/autonomy';
@@ -142,6 +145,14 @@ export default function ProductScout() {
   const [discoverMax, setDiscoverMax] = useState('20');
   const [discovering, setDiscovering] = useState(false);
   const [discoverNote, setDiscoverNote] = useState('');
+
+  // Phase 4C — CJ supplier search (official supplier API, server proxy)
+  const [cjHealth, setCjHealth] = useState<SupplierHealth>('not_configured');
+  const [cjQuery, setCjQuery] = useState('dog enrichment toy');
+  const [cjMax, setCjMax] = useState('30');
+  const [cjRunning, setCjRunning] = useState(false);
+  const [cjLog, setCjLog] = useState<string[]>([]);
+  const [cjNote, setCjNote] = useState('');
 
   // Filters
   const [fStatus, setFStatus] = useState('all');
@@ -259,6 +270,49 @@ export default function ProductScout() {
       notify(`Discovery failed: ${(e as Error).message}`);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  // Phase 4C — CJ supplier health (compact chip, real server probe)
+  const checkCjHealth = useCallback(async () => {
+    try {
+      const adapter = new CjSupplierAdapter();
+      const h = await adapter.healthCheck();
+      setCjHealth(h.health);
+    } catch {
+      setCjHealth('offline');
+    }
+  }, []);
+  useEffect(() => { void checkCjHealth(); }, [checkCjHealth]);
+
+  const runCjSearch = async () => {
+    if (!db) { notify('Database not ready'); return; }
+    const q = cjQuery.trim();
+    if (!q) { notify('Enter a CJ search query (e.g. “dog enrichment toy”)'); return; }
+    setCjRunning(true);
+    setCjLog([]);
+    setCjNote('');
+    const log: string[] = [];
+    const onProgress = (m: string) => { log.push(m); setCjLog([...log]); };
+    try {
+      const adapter = new CjSupplierAdapter();
+      const result = await runSupplierSearch({
+        adapter,
+        search: { query: q, market: 'US', maxResults: Math.min(100, Math.max(1, parseInt(cjMax || '30', 10) || 30)) },
+        db,
+        onProgress,
+      });
+      setCjNote(`CJ search complete — ${result.searched} searched, ${result.shortlisted} shortlisted (health=${result.health})${result.warning ? ' · ' + result.warning : ''}`);
+      setCjHealth(result.health as SupplierHealth);
+      notify(`CJ search complete — ${result.shortlisted} shortlisted`);
+      await load();
+    } catch (e) {
+      log.push(`✗ ${(e as Error).message}`);
+      setCjLog([...log]);
+      setCjNote(`CJ search failed: ${(e as Error).message}`);
+      notify(`CJ search failed: ${(e as Error).message}`);
+    } finally {
+      setCjRunning(false);
     }
   };
 
@@ -629,6 +683,10 @@ export default function ProductScout() {
         <span className="font-semibold text-gray-700">Control Mode: {aiControl.controlMode}</span>
         <span className="text-gray-500">·</span>
         <span className={`font-semibold ${aiControl.emergencyPause ? 'text-red-600' : 'text-gray-600'}`}>{aiControl.emergencyPause ? 'EMERGENCY PAUSE ACTIVE' : 'Pause inactive'}</span>
+        <span className="text-gray-500">·</span>
+        <span className={`font-semibold ${cjHealth === 'online' || cjHealth === 'configured' ? 'text-green-600' : cjHealth === 'rate_limited' ? 'text-amber-600' : 'text-gray-500'}`}>
+          CJ Supplier API: {cjHealth === 'not_configured' ? 'NOT CONFIGURED' : cjHealth.toUpperCase()}
+        </span>
         <button onClick={() => nav('/admin/ai-control')} className="ml-auto flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800">
           AI Control Center →
         </button>
@@ -1034,6 +1092,48 @@ export default function ProductScout() {
             </div>
             {discoverNote && <p className="text-xs text-blue-700">{discoverNote}</p>}
             <p className="text-[11px] text-blue-500">Searches public sources (DuckDuckGo) for real pet-product pages, decodes redirects, filters out category/search/blog pages, dedupes, then adds the URLs to the list below.</p>
+          </div>
+
+          {/* Supplier API mode (CJ official API — server proxy, admin JWT) */}
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wide">
+              <Package size={14} /> Official Supplier Search (CJ)
+              <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${cjHealth === 'online' || cjHealth === 'configured' ? 'bg-green-100 text-green-700' : cjHealth === 'rate_limited' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                {cjHealth === 'not_configured' ? 'NOT CONFIGURED' : cjHealth === 'online' || cjHealth === 'configured' ? 'ONLINE' : cjHealth === 'rate_limited' ? 'RATE LIMITED' : 'OFFLINE'}
+              </span>
+            </div>
+            <p className="text-[11px] text-indigo-500">Supplier data source (NOT an AI provider) — deterministic, admin-JWT, CJ credentials stay server-side. Returns real CJ product records with US inventory + freight evidence.</p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={cjQuery}
+                onChange={(e) => setCjQuery(e.target.value)}
+                placeholder="CJ query, e.g. dog enrichment toy / cat scratching post"
+                disabled={cjRunning}
+                className="flex-1 min-w-[220px] px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-indigo-50"
+              />
+              <input
+                value={cjMax}
+                onChange={(e) => setCjMax(e.target.value)}
+                placeholder="Max records"
+                disabled={cjRunning}
+                className="w-24 px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
+              />
+              <button
+                onClick={() => void runCjSearch()}
+                disabled={cjRunning}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {cjRunning ? <Loader2 size={15} className="animate-spin" /> : <Package size={15} />} {cjRunning ? 'Searching CJ…' : 'Search CJ'}
+              </button>
+            </div>
+            {cjNote && <p className="text-xs text-indigo-700">{cjNote}</p>}
+            {cjLog.length > 0 && (
+              <div className="bg-gray-900 rounded-lg p-3 max-h-40 overflow-y-auto">
+                {cjLog.map((l, i) => (
+                  <p key={i} className={`text-[11px] font-mono leading-5 ${l.startsWith('✗') ? 'text-red-400' : l.startsWith('[fail]') || l.startsWith('[reject]') ? 'text-amber-400' : l.startsWith('[ok]') ? 'text-green-400' : 'text-gray-300'}`}>{l}</p>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Manual URL mode (advanced) */}
