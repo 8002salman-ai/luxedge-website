@@ -22,16 +22,20 @@ const IP_RE = /(\bgucci\b|\bchanel\b|\blouis vuitton\b|\bhermes\b|\bnike\b|\badi
 const MED_RE = /(veterinary|veterinarian|prescription|medication|antibiotic|steroid|inject|vaccine|antiseptic|fungal|bacterial|treatment for (?!.*toy))/i;
 const BATTERY_RE = /(lithium|li-?ion|220v|110v|electric shock|heating pad.*electric|heated.*120v)/i;
 
-/** Default max supplier cost considered viable (configurable per search). */
-export const DEFAULT_MAX_SUPPLIER_COST = 40;
-
 /**
  * Deterministic prefilter for one CJ record. Does NOT score — it only
  * removes records that can never qualify. Returns ok:true to keep.
+ *
+ * HARDENING: price bounds are NOT universal hard rejects. A $0.80 accessory
+ * or a $45 premium product may both have excellent economics — profitability
+ * is judged from real supplier price + real freight = landed cost vs a
+ * defensible selling price. Only obviously invalid prices (<= 0) hard-reject.
+ * Optional min/max supplier-cost filters are applied ONLY when explicitly
+ * supplied for a specific search strategy.
  */
 export function prefilterCjRecord(
   r: SupplierProductRecord,
-  opts: { maxSupplierCost?: number; requireUsInventory?: boolean; market?: string } = {}
+  opts: { minSupplierCost?: number; maxSupplierCost?: number; requireUsInventory?: boolean; market?: string } = {}
 ): PrefilterOutcome {
   // 1) Actual product record?
   if (!r.productId || !r.title) return { ok: false, reason: 'no actual product: missing CJ product id or title' };
@@ -53,18 +57,15 @@ export function prefilterCjRecord(
     return { ok: false, reason: 'battery/fire risk: lithium/electric product without justification' };
   }
 
-  // 4) Real supplier price.
+  // 4) Real supplier price — hard reject ONLY for invalid/unverifiable.
   if (r.sellPrice === null || r.sellPrice <= 0) {
-    return { ok: false, reason: 'missing price: no supplier sell price returned by CJ' };
+    return { ok: false, reason: 'missing price: no valid supplier sell price returned by CJ' };
   }
-  const maxCost = opts.maxSupplierCost ?? DEFAULT_MAX_SUPPLIER_COST;
-  if (r.sellPrice > maxCost) {
-    return { ok: false, reason: `supplier cost $${r.sellPrice.toFixed(2)} exceeds configured max $${maxCost.toFixed(2)}` };
+  if (opts.minSupplierCost !== undefined && r.sellPrice < opts.minSupplierCost) {
+    return { ok: false, reason: `supplier cost $${r.sellPrice.toFixed(2)} below explicit strategy min $${opts.minSupplierCost.toFixed(2)}` };
   }
-  // Impossibly thin margin — < $1 supplier cost is either an error or a
-  // no-margin listing.
-  if (r.sellPrice < 1) {
-    return { ok: false, reason: 'impossible margin: supplier cost below $1' };
+  if (opts.maxSupplierCost !== undefined && r.sellPrice > opts.maxSupplierCost) {
+    return { ok: false, reason: `supplier cost $${r.sellPrice.toFixed(2)} exceeds explicit strategy max $${opts.maxSupplierCost.toFixed(2)}` };
   }
 
   // 5) Usable images.
@@ -89,7 +90,7 @@ export function prefilterCjRecord(
 /** Batch prefilter: returns the survivors + per-record reasons. */
 export function prefilterCjRecords(
   records: SupplierProductRecord[],
-  opts: { maxSupplierCost?: number; requireUsInventory?: boolean; market?: string } = {}
+  opts: { minSupplierCost?: number; maxSupplierCost?: number; requireUsInventory?: boolean; market?: string } = {}
 ): { kept: SupplierProductRecord[]; rejected: { record: SupplierProductRecord; reason: string }[] } {
   const kept: SupplierProductRecord[] = [];
   const rejected: { record: SupplierProductRecord; reason: string }[] = [];

@@ -21,6 +21,7 @@
 import type { DbAdapter } from '../../services/db';
 import type {
   SupplierDiscoveryAdapter, SupplierSearchOptions, SupplierProductRecord,
+  SupplierShippingEvidence,
 } from '../suppliers/types';
 import type { ScoutCandidate, CandidateEvidence } from './types';
 import { calculateMargin } from './margin';
@@ -33,6 +34,9 @@ import {
 } from './persist';
 import { cjProductKey, cjSkuKey } from '../suppliers/cj/dedupe';
 import { prefilterCjRecords } from '../suppliers/cj/prefilter';
+import { CjPointBudget, enrichmentCaps, CJ_POINT_COST } from '../suppliers/cj/points';
+import { parseDeliveryCycle, normalizeCountryCode } from '../suppliers/cj/normalize';
+import type { CjPointUsage } from '../suppliers/cj/points';
 
 export interface SupplierSearchRunOptions {
   adapter: SupplierDiscoveryAdapter;
@@ -64,19 +68,34 @@ export interface SupplierSearchRunResult {
   failed: number;
   candidates: ScoutCandidate[];
   warning?: string;
+  /** CJ point budget usage for the run (Phase 4C hardening). */
+  points?: CjPointUsage;
 }
 
-/** Convert a normalized supplier record into scout evidence (honest statuses). */
-export function evidenceFromSupplierRecord(r: SupplierProductRecord, market?: string): CandidateEvidence {
+/**
+ * Convert a normalized supplier record into scout evidence (honest statuses).
+ * `freight` (when present) supplies a VERIFIED total shipping cost and arrival
+ * range from the selected variant's quote; delivery-cycle parsing is exact
+ * ("3-5" → 3..5, "5" → 5..5, junk → UNKNOWN).
+ */
+export function evidenceFromSupplierRecord(
+  r: SupplierProductRecord,
+  market?: string,
+  freight?: SupplierShippingEvidence | null
+): CandidateEvidence {
   const observedAt = new Date().toISOString();
   const unknownFields: string[] = [];
   if (!r.sellPrice) unknownFields.push('price');
   if (r.usInventoryTotal === null) unknownFields.push('usInventory');
-  if (r.deliveryCycle === null) unknownFields.push('shippingDays');
+  if (r.deliveryCycle === null && !freight?.arrivalDays) unknownFields.push('shippingDays');
   if (r.weightGrams === null) unknownFields.push('weight');
 
-  const country = (market || 'US').trim().toUpperCase() === 'US' ? 'US' : null;
-  const usaDelivery = r.deliveryCycle || null;
+  const country = normalizeCountryCode(market);
+  const deliveryRange = parseDeliveryCycle(r.deliveryCycle) ?? (freight?.arrivalDays ? parseDeliveryCycle(freight.arrivalDays) : null);
+
+  const shippingCostNote = freight
+    ? `CJ freight quote (${freight.origin ?? 'origin unknown'} → ${freight.destination ?? 'US'}): ${freight.note}`
+    : 'CJ freight requires a per-variant quote (freightCalculate). Not folded into this record; margin confidence LOW until quoted.';
 
   return {
     sourceUrl: r.sourceUrl,
@@ -85,24 +104,24 @@ export function evidenceFromSupplierRecord(r: SupplierProductRecord, market?: st
     supplierPrice: {
       status: r.sellPrice !== null ? 'verified' : 'unknown',
       value: r.sellPrice,
-      source: `CJ pid ${r.productId}`,
+      source: `CJ pid ${r.productId}${r.selectedVariant ? ` variant ${r.selectedVariant.variantId}` : ''}`,
     },
     shippingCost: {
-      status: 'unknown',
-      value: null,
-      note: 'CJ freight requires a per-variant quote (freightCalculate). Not folded into this record; margin confidence LOW until quoted.',
+      status: freight?.costUsd !== null && freight?.costUsd !== undefined ? 'verified' : 'unknown',
+      value: freight?.costUsd ?? null,
+      note: shippingCostNote,
     },
     shippingDays: {
-      status: usaDelivery ? 'verified' : 'unknown',
-      value: usaDelivery ? { min: 1, max: parseInt(usaDelivery.split('-')[1] || '14', 10) } : null,
-      source: usaDelivery ? `CJ deliveryCycle ${usaDelivery}` : undefined,
-      note: usaDelivery ? `CJ delivery cycle ${usaDelivery} days` : 'CJ returned no delivery window',
+      status: deliveryRange ? 'verified' : 'unknown',
+      value: deliveryRange,
+      source: r.deliveryCycle ? `CJ deliveryCycle ${r.deliveryCycle}` : (freight?.arrivalDays ? `CJ freight arrival ${freight.arrivalDays}` : undefined),
+      note: deliveryRange ? `Delivery ${deliveryRange.min}-${deliveryRange.max} days (supplier evidence)` : 'No verified delivery window',
     },
     availability: {
       status: r.usInventoryInCountry ? 'verified' : 'unknown',
       value: r.usInventoryInCountry ? 'available' : 'unknown',
       note: country === 'US'
-        ? (r.usInventoryTotal !== null ? `CJ reports ${r.usInventoryTotal} US inventory` : 'CJ reported no US inventory figure')
+        ? (r.usInventoryTotal !== null ? `CJ reports ${r.usInventoryTotal} US inventory${r.selectedVariant?.usInventoryVerified !== null && r.selectedVariant?.usInventoryVerified !== undefined ? ` (${r.selectedVariant.usInventoryVerified} verified)` : ''}` : 'CJ reported no US inventory figure')
         : 'No US inventory claim (search did not target US)',
     },
     images: { status: r.images.length ? 'verified' : 'unknown', value: r.images, source: `CJ pid ${r.productId}` },
@@ -112,12 +131,18 @@ export function evidenceFromSupplierRecord(r: SupplierProductRecord, market?: st
       note: 'CJ API does not return verified customer ratings/reviews — external demand evidence must come from Market Intelligence, never invented.',
     },
     origin: {
-      status: r.warehouse ? 'inferred' : 'unknown',
-      value: r.warehouse,
-      note: r.warehouse ? `CJ warehouse: ${r.warehouse}` : 'CJ origin/warehouse unknown',
+      status: r.selectedVariant?.originCountry ? 'verified' : (r.warehouse ? 'inferred' : 'unknown'),
+      value: r.selectedVariant?.originCountry ?? r.warehouse,
+      note: r.selectedVariant?.originCountry
+        ? `Selected variant origin: ${r.selectedVariant.originCountry} (inventory/warehouse evidence)`
+        : (r.warehouse ? `CJ warehouse: ${r.warehouse}` : 'CJ origin/warehouse unknown'),
     },
     category: { status: r.category ? 'verified' : 'unknown', value: r.category, source: 'CJ category' },
-    sizes: { status: 'unknown', value: null, note: 'Variant sizes require a per-variant product query' },
+    sizes: {
+      status: r.selectedVariant ? 'inferred' : 'unknown',
+      value: r.selectedVariant ? [r.selectedVariant.sku] : null,
+      note: r.selectedVariant ? `Selected variant ${r.selectedVariant.variantId} (sku ${r.selectedVariant.sku})` : 'No variant data — variant UNKNOWN',
+    },
     unknownFields,
     riskNotes: [],
   };
@@ -125,37 +150,83 @@ export function evidenceFromSupplierRecord(r: SupplierProductRecord, market?: st
 
 
 /**
+ * Free local ranking of a listV2 record (Stage A). Uses ONLY listV2 data —
+ * no paid calls. Ranks what is worth a paid product/query enrichment:
+ * US inventory signal, verified warehouse, viable price, image, delivery
+ * cycle, listing count. Not a business score — just an enrichment selector.
+ */
+export function rankCjRecord(r: SupplierProductRecord, market?: string): number {
+  let pts = 0;
+  const country = normalizeCountryCode(market);
+  if (country === 'US') {
+    if (r.usInventoryInCountry) pts += 30;
+    else if (r.usInventoryTotal !== null) pts += 15;
+    if (r.usInventoryVerified !== null) pts += 10;
+  }
+  if (r.freeShipping) pts += 5;
+  if (r.sellPrice !== null && r.sellPrice > 0) pts += 10;
+  if (r.images.length) pts += 10;
+  if (parseDeliveryCycle(r.deliveryCycle)) pts += 5;
+  if (r.listedNum !== null && r.listedNum > 0) pts += 5;
+  return pts;
+}
+
+/**
  * Run ONE controlled supplier search through the scout pipeline. Records the
  * three durable jobs (PRODUCT_RESEARCH → PRODUCT_SCORE → PRODUCT_QA), like
  * runScoutResearch, but sources candidates from a supplier API adapter.
  * Never approves/drafts/publishes/orders.
+ *
+ * TWO-STAGE ENRICHMENT (Phase 4C hardening):
+ *   Stage A (free): prefilter + rank all listV2 records with listV2 data only.
+ *   Stage B (paid, budget-gated): product/query for the TOP N ranked records,
+ *     then freightCalculate for the TOP M that survive with a consistent
+ *     selected variant. Enrichment caps derive from the run point budget —
+ *     a run NEVER exceeds it. Freight origin comes from the selected
+ *     variant's inventory/warehouse evidence (never hardcoded).
  */
 export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise<SupplierSearchRunResult> {
   const { adapter, search, db, markup, onProgress } = opts;
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
+  // Hard per-run CJ point budget (owner-configured default; AI cannot raise it).
+  const budget = new CjPointBudget(search.pointsBudget);
+  const caps = enrichmentCaps(budget);
+
   const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
     provider: adapter.provider,
     query: search.query,
     market: search.market || null,
     at,
-    note: 'Supplier-API discovery (CJ) → normalize → dedupe → prefilter → persist',
+    note: `Supplier-API discovery (CJ) → normalize → dedupe → Stage A filter/rank → Stage B enrichment (detail ≤${caps.detailMax}, freight ≤${caps.freightMax}) → persist`, // eslint-disable-line max-len
   });
   await addRun(db, jobId, 'supplier-search', 'running', `Searching ${adapter.provider.toUpperCase()}: ${search.query}`);
-  await addLog(db, jobId, 'info', `SUPPLIER_SEARCH(${adapter.provider}) started for "${search.query}" (retries=0)`);
+  await addLog(db, jobId, 'info', `SUPPLIER_SEARCH(${adapter.provider}) started for "${search.query}" (budget=${budget.budget}pts, retries=0)`);
 
-  // 1) SEARCH
+  // 1) SEARCH — one listV2 call (50 pts). No pagination unless evidence justifies.
   let result;
+  if (!budget.canSpend('listV2')) {
+    await addLog(db, jobId, 'error', `CJ point budget ${budget.budget} exhausted before the search — run denied.`);
+    await addRun(db, jobId, 'supplier-search', 'failed', 'CJ point budget exhausted before search');
+    await completeJob(db, jobId, 'failed', { error: 'CJ point budget exhausted', points: budget.usage() });
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, shortlisted: 0, failed: 1, candidates: [], points: budget.usage() };
+  }
   try {
     result = await adapter.searchProducts(search);
+    budget.spend('listV2');
+    // Prefer the server's reported points when provided.
+    if (typeof result.points === 'number') {
+      const diff = result.points - CJ_POINT_COST.listV2;
+      if (diff > 0) budget.used = Math.min(budget.budget, budget.used + diff);
+    }
   } catch (e) {
     await addLog(db, jobId, 'error', `SUPPLIER_SEARCH failed: ${(e as Error).message} (retries=0)`);
     await addRun(db, jobId, 'supplier-search', 'failed', `Search failed: ${(e as Error).message}`);
-    await completeJob(db, jobId, 'failed', { error: (e as Error).message, retries: 0 });
-    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, shortlisted: 0, failed: 1, candidates: [] };
+    await completeJob(db, jobId, 'failed', { error: (e as Error).message, retries: 0, points: budget.usage() });
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, shortlisted: 0, failed: 1, candidates: [], points: budget.usage() };
   }
-  progress(`[search] ${adapter.provider.toUpperCase()} returned ${result.records.length} records (health=${result.health})${result.warning ? ' — ' + result.warning : ''}`);
+  progress(`[search] ${adapter.provider.toUpperCase()} returned ${result.records.length} records (health=${result.health}, points used ${budget.used}/${budget.budget})${result.warning ? ' — ' + result.warning : ''}`);
   await addLog(db, jobId, 'info', `SUPPLIER_SEARCH: ${result.records.length} records, health=${result.health}${result.warning ? '; ' + result.warning : ''}`);
 
   // 2) DEDUPE against existing candidates (stable CJ pid/SKU keys)
@@ -182,22 +253,89 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   }
   if (duplicates) progress(`[dedupe] ${duplicates} duplicate CJ records skipped (stable pid/SKU keys)`);
 
-  // 3) DETERMINISTIC PREFILTER (before any scoring/AI)
+  // 3) STAGE A — FREE deterministic prefilter + rank (listV2 data only, no AI, no paid calls)
   const { kept, rejected: prefiltered } = prefilterCjRecords(unique, {
     market: search.market,
+    minSupplierCost: search.minSupplierCost,
     maxSupplierCost: search.maxSupplierCost,
   });
   for (const rej of prefiltered) {
     progress(`[reject] ${rej.record.title.slice(0, 60)} — ${rej.reason}`);
     await addLog(db, jobId, 'warn', `PREFILTER reject: ${rej.record.title} — ${rej.reason}`);
   }
-  progress(`[prefilter] ${kept.length} kept, ${prefiltered.length} rejected deterministically`);
+  const ranked = [...kept].sort((a, b) => rankCjRecord(b, search.market) - rankCjRecord(a, search.market));
+  progress(`[stage A] ${kept.length} kept, ${prefiltered.length} rejected deterministically; ranked for enrichment`);
 
-  // 4) PERSIST candidates (researching) — admin JWT, RLS
+  // 4) STAGE B — PAID enrichment within the point budget:
+  //    product/query for the top N, then freightCalculate for the top M.
+  const detailTargets = ranked.slice(0, caps.detailMax);
+  const enriched: { record: SupplierProductRecord; freight: SupplierShippingEvidence | null }[] = [];
+  let detailCallsMade = 0;
+  for (const r of detailTargets) {
+    if (!budget.canSpend('productQuery')) {
+      progress(`[stage B] point budget reached — ${enriched.length} enriched, further detail calls denied`);
+      break;
+    }
+    try {
+      const detail = await adapter.getProduct(r.productId, search.market || 'US');
+      budget.spend('productQuery');
+      detailCallsMade++;
+      if (!detail) {
+        progress(`[enrich] ${r.title.slice(0, 50)} — no usable detail (variant UNKNOWN)`);
+        continue;
+      }
+      enriched.push({ record: detail, freight: null });
+      progress(`[enrich] ${detail.title.slice(0, 50)} — detail ok (${detail.selectedVariant ? `variant ${detail.selectedVariant.variantId} ${detail.selectedVariant.originCountry ?? 'origin unknown'}` : 'variant UNKNOWN'})`);
+    } catch (e) {
+      budget.noteRetry();
+      progress(`[enrich] ${r.title.slice(0, 50)} — detail failed: ${(e as Error).message}`);
+    }
+  }
+
+  // Freight for the strongest subset ONLY — those with a consistent selected
+  // variant and real price, ranked again by variant quality.
+  const variantRank = (rec: SupplierProductRecord) => {
+    const v = rec.selectedVariant;
+    let s = 0;
+    if (v?.usInventoryInCountry) s += 40;
+    if (v?.verifiedWarehouse) s += 20;
+    if (v?.originCountry) s += 10;
+    if (v?.sellPrice !== null && v?.sellPrice !== undefined) s += 10;
+    return s;
+  };
+  const freightTargets = enriched
+    .filter((e) => e.record.selectedVariant && e.record.sellPrice !== null)
+    .sort((a, b) => variantRank(b.record) - variantRank(a.record))
+    .slice(0, caps.freightMax);
+  for (const e of freightTargets) {
+    const v = e.record.selectedVariant!;
+    if (!budget.canSpend('freightCalculate')) {
+      progress(`[freight] point budget reached — ${enriched.filter((x) => x.freight).length} freighted, further calls denied`);
+      break;
+    }
+    try {
+      const ev = await adapter.getShippingEvidence(e.record.productId, v.variantId, {
+        market: search.market || 'US',
+        originCountry: v.originCountry, // dynamic origin — never hardcoded
+      });
+      budget.spend('freightCalculate');
+      e.freight = ev;
+      progress(ev.costUsd !== null
+        ? `[freight] ${e.record.title.slice(0, 50)} — total $${ev.costUsd.toFixed(2)} (${ev.origin ?? '?'}→${ev.destination ?? 'US'})${ev.arrivalDays ? ', ' + ev.arrivalDays : ''}`
+        : `[freight] ${e.record.title.slice(0, 50)} — UNKNOWN: ${ev.note}`);
+    } catch (err) {
+      budget.noteRetry();
+      progress(`[freight] ${e.record.title.slice(0, 50)} — failed: ${(err as Error).message}`);
+    }
+  }
+
+  // 5) PERSIST candidates (researching) — admin JWT, RLS. Only enriched
+  //    records become candidates (we never persist every search result).
   const candidates: ScoutCandidate[] = [];
   let failed = 0;
-  for (const r of kept) {
-    const margin = calculateMargin({ supplierPrice: r.sellPrice, shippingCost: null, markup });
+  for (const { record: r, freight } of enriched) {
+    const shippingCost = freight?.costUsd ?? null;
+    const margin = calculateMargin({ supplierPrice: r.sellPrice, shippingCost, markup });
     const candidate: ScoutCandidate = {
       id: '',
       title: r.title,
@@ -205,7 +343,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
       sourceUrl: r.sourceUrl,
       supplierSlug: 'cj-dropshipping',
       images: r.images,
-      evidence: evidenceFromSupplierRecord(r, search.market),
+      evidence: evidenceFromSupplierRecord(r, search.market, freight),
       margin,
       score: null,
       status: 'researching',
@@ -226,13 +364,27 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
           provider: 'cj',
           product_id: r.productId,
           sku: r.sku,
-          variant_id: r.variantId,
+          selected_variant: r.selectedVariant ?? null,
+          variant_id: r.selectedVariant?.variantId ?? null,
           sell_price: r.sellPrice,
           us_inventory_total: r.usInventoryTotal,
           us_inventory_verified: r.usInventoryVerified,
           warehouse: r.warehouse,
           delivery_cycle: r.deliveryCycle,
           free_shipping: r.freeShipping,
+          freight: freight ? {
+            cost_usd: freight.costUsd,
+            base_freight_usd: freight.baseFreightUsd,
+            taxes_fee_usd: freight.taxesFeeUsd,
+            clearance_fee_usd: freight.clearanceFeeUsd,
+            tariff_usd: freight.tariffUsd,
+            carrier: freight.carrier,
+            origin: freight.origin,
+            destination: freight.destination,
+            arrival_days: freight.arrivalDays,
+            observed_at: freight.observedAt,
+            note: freight.note,
+          } : null,
           observed_at: r.observedAt,
         },
       });
@@ -247,22 +399,25 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
       });
       candidate.id = cand.id;
       candidates.push(candidate);
-      progress(`[ok] ${r.title.slice(0, 60)} — researched (CJ ${r.productId})`);
+      progress(`[ok] ${r.title.slice(0, 60)} — researched (CJ ${r.productId}${freight?.costUsd !== null ? ', landed cost verified' : ', freight UNKNOWN'})`);
     } catch (e) {
       failed++;
       progress(`[error] ${r.title.slice(0, 60)} — persistence failed: ${(e as Error).message}`);
     }
   }
-  await addRun(db, jobId, 'supplier-search', 'completed', `${candidates.length} candidates researched from ${adapter.provider.toUpperCase()}`);
+  await addRun(db, jobId, 'supplier-search', 'completed', `${candidates.length} candidates researched from ${adapter.provider.toUpperCase()} (budget ${budget.used}/${budget.budget}pts)`);
   await completeJob(db, jobId, 'completed', {
     provider: adapter.provider,
     query: search.query,
     searched: result.records.length,
     duplicates,
     prefilterRejected: prefiltered.length,
+    detailCalls: detailCallsMade,
+    freightCalls: freightTargets.filter((e) => e.freight).length,
     researched: candidates.length,
     failed,
     retries: 0,
+    points: budget.usage(),
   });
 
   // 5) PRODUCT_SCORE (reuse the existing phase)
@@ -317,7 +472,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   await addRun(db, qaJobId, 'supplier-search', 'completed', `${qaPassed} passed, ${qaTargets.length - qaPassed} flagged`);
   await completeJob(db, qaJobId, 'completed', { passed: qaPassed, flagged: qaTargets.length - qaPassed, retries: 0 });
 
-  progress(`Done — searched ${result.records.length}, kept ${kept.length}, researched ${scored.length}, shortlisted ${shortlisted}, QA passed ${qaPassed}.`);
+  progress(`Done — searched ${result.records.length}, kept ${kept.length}, enriched ${enriched.length}, researched ${scored.length}, shortlisted ${shortlisted}, QA passed ${qaPassed}.`);
   return {
     jobId, scoreJobId, qaJobId,
     health: result.health,
@@ -330,6 +485,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     failed,
     candidates: scored,
     warning: result.warning,
+    points: budget.usage(),
   };
 }
 
@@ -359,7 +515,10 @@ export function scoreSupplierCandidate(candidate: ScoutCandidate, markup?: numbe
     extract,
     margin,
     supplierVerified: true,
-    sourceIsManufacturer: true, // CJ is the supplier/manufacturer source
+    // Phase 4C hardening: a CJ official-API record is a VERIFIED supplier-
+    // platform source — NOT automatically a manufacturer source. Manufacturer
+    // reliability points require independently verified manufacturer status.
+    sourceIsManufacturer: false,
     images: extract.images,
     riskFlags,
   });

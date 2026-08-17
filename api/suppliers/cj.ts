@@ -21,8 +21,9 @@ import {
   cjConfigured, cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
 } from '../_lib/cj.js';
 import {
-  normalizeCjListProduct, normalizeCjProductDetail, normalizeCountryCode,
+  normalizeCjListProduct, normalizeCjProductDetail, normalizeCountryCode, normalizeCjFreight,
 } from '../../src/features/suppliers/cj/normalize.js';
+import { CJ_POINT_COST } from '../../src/features/suppliers/cj/points.js';
 
 const MAX_SEARCH_SIZE = 100;
 
@@ -108,7 +109,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const records = products
         .map((p) => normalizeCjListProduct(p as never, { market: country ?? undefined }))
         .filter((r): r is NonNullable<typeof r> => r !== null);
-      sendJson(res, 200, { provider: 'cj', health: 'online', records, total, query: q });
+      sendJson(res, 200, {
+        provider: 'cj', health: 'online', records, total, query: q,
+        points: CJ_POINT_COST.listV2,
+      });
     } catch (e) {
       sendJson(res, 200, {
         provider: 'cj',
@@ -136,7 +140,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sendJson(res, 404, { error: 'CJ product not found or unverifiable' });
         return;
       }
-      sendJson(res, 200, { provider: 'cj', health: 'online', record });
+      sendJson(res, 200, { provider: 'cj', health: 'online', record, points: CJ_POINT_COST.productQuery });
     } catch (e) {
       sendJson(res, 200, { provider: 'cj', health: 'offline', record: null, warning: cjSafeError(e) });
     }
@@ -144,18 +148,31 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   // ---------------- freight ----------------
+  // Origin is NOT hardcoded: the client passes the SELECTED VARIANT's origin
+  // (from inventory/warehouse evidence). When origin is genuinely unknown the
+  // client should NOT call freight — it records freight UNKNOWN instead.
   if (action === 'freight' && req.method === 'POST') {
     const body = await readBody(req);
     const vid = String(body.vid || '').trim();
-    const startCountryCode = String(body.startCountryCode || 'CN').trim().toUpperCase();
+    const startCountryCode = String(body.startCountryCode || '').trim().toUpperCase();
     const endCountryCode = String(body.endCountryCode || 'US').trim().toUpperCase();
     if (!vid) {
       sendJson(res, 400, { error: 'A variant id (vid) is required for freight calculation' });
       return;
     }
+    if (!startCountryCode) {
+      sendJson(res, 200, {
+        provider: 'cj', health: 'online', quotes: [], points: 0,
+        warning: 'Origin UNKNOWN — freight not quoted (never fabricate an origin).',
+      });
+      return;
+    }
     try {
       const quotes = await cjFreightCalculate({ startCountryCode, endCountryCode, vid });
-      sendJson(res, 200, { provider: 'cj', health: 'online', quotes });
+      const normalized = (Array.isArray(quotes) ? quotes : [])
+        .map((q) => normalizeCjFreight(q as never, { origin: startCountryCode, destination: endCountryCode }))
+        .filter((q): q is NonNullable<typeof q> => q !== null);
+      sendJson(res, 200, { provider: 'cj', health: 'online', quotes: normalized, points: CJ_POINT_COST.freightCalculate });
     } catch (e) {
       sendJson(res, 200, { provider: 'cj', health: 'offline', quotes: [], warning: cjSafeError(e) });
     }

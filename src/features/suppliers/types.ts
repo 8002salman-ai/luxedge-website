@@ -47,8 +47,12 @@ export interface SupplierProductRecord {
   productId: string;
   /** Supplier SKU / SPU code (stable across repeated searches). */
   sku: string;
-  /** First verified variant id, when available. */
-  variantId: string | null;
+  /**
+   * The ONE internally-consistent variant selected for this candidate
+   * (Phase 4C pre-live hardening). When null, the record is list-level only:
+   * variant UNKNOWN → no freight quote, no high-confidence margin.
+   */
+  selectedVariant: SupplierVariantEvidence | null;
   title: string;
   imageUrl: string | null;
   images: string[];
@@ -75,11 +79,45 @@ export interface SupplierProductRecord {
   raw: Record<string, unknown>;
 }
 
-/** USA delivery evidence — never conflated with US inventory. */
+/**
+ * The explicitly selected variant. THE SAME variant drives variantId,
+ * variant SKU, variant price, weight, dimensions, US inventory,
+ * verifiedWarehouse, the freight quote and the landed cost — they can never
+ * come from different variants (Phase 4C hardening).
+ */
+export interface SupplierVariantEvidence {
+  variantId: string;
+  sku: string;
+  sellPrice: number | null;
+  weightGrams: number | null;
+  dimensions: string | null;
+  usInventoryVerified: number | null;
+  usInventoryTotal: number | null;
+  usInventoryInCountry: boolean;
+  verifiedWarehouse: boolean;
+  /** Origin country derived from inventory/warehouse evidence (e.g. "US"/"CN"). */
+  originCountry: string | null;
+  raw: Record<string, unknown>;
+}
+
+/**
+ * USA delivery evidence — never conflated with US inventory. Enriched with
+ * the REAL usable total (totalPostageFee preferred), origin/destination and
+ * fee breakdown so landed cost never silently ignores applicable fees.
+ */
 export interface SupplierShippingEvidence {
+  /** Usable total freight — totalPostageFee when returned, else logisticPrice. */
   costUsd: number | null;
+  /** Base freight (logisticPrice) — the headline figure only. */
+  baseFreightUsd: number | null;
+  taxesFeeUsd: number | null;
+  clearanceFeeUsd: number | null;
+  tariffUsd: number | null;
   arrivalDays: string | null;
   carrier: string | null;
+  origin: string | null;
+  destination: string | null;
+  observedAt: string;
   verified: boolean;
   note: string;
 }
@@ -89,14 +127,26 @@ export interface SupplierSearchOptions {
   /** Target market, e.g. "US" / "USA". */
   market?: string;
   maxResults?: number;
-  /** Optional max supplier cost (deterministic filter bias, not fabrication). */
+  /**
+   * Optional explicit strategy cost filters. These are NOT universal hard
+   * rejects — they apply ONLY when supplied for a specific search strategy.
+   */
+  minSupplierCost?: number;
   maxSupplierCost?: number;
+  /**
+   * Hard per-run CJ point budget (Phase 4C hardening). Defaults to the
+   * owner-configured CJ_POINTS_BUDGET_PER_RUN (250). AI can never raise it —
+   * only the owner may supply a different value.
+   */
+  pointsBudget?: number;
 }
 
 export interface SupplierSearchResult {
   records: SupplierProductRecord[];
   health: SupplierHealth;
   warning?: string;
+  /** Estimated/actual CJ points consumed by the search call, when known. */
+  points?: number;
 }
 
 export interface SupplierHealthResult {
@@ -112,11 +162,11 @@ export interface SupplierHealthResult {
 export interface SupplierDiscoveryAdapter {
   readonly provider: SupplierProviderId;
   searchProducts(opts: SupplierSearchOptions): Promise<SupplierSearchResult>;
-  getProduct(productId: string): Promise<SupplierProductRecord | null>;
+  getProduct(productId: string, market?: string): Promise<SupplierProductRecord | null>;
   getShippingEvidence(
     productId: string,
     variantId: string,
-    opts?: { market?: string }
+    opts?: { market?: string; originCountry?: string | null }
   ): Promise<SupplierShippingEvidence>;
   healthCheck(): Promise<SupplierHealthResult>;
 }

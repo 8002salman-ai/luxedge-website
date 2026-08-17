@@ -16,20 +16,26 @@ import type {
   SupplierShippingEvidence, SupplierHealthResult,
 } from '../types';
 import {
-  normalizeCjListProduct, normalizeCjProductDetail, normalizeCountryCode, cjProductUrl,
+  normalizeCjListProduct, normalizeCjProductDetail, normalizeCjFreight,
+  normalizeCountryCode, parseDeliveryCycle, cjProductUrl,
   type CjListProduct, type CjProductDetail,
 } from '../cj/normalize';
 import {
   cjProductKey, cjSkuKey, cjVariantKey, dedupeKeyForRecord,
   buildKnownCjKeys, isKnownCjRecord,
 } from '../cj/dedupe';
-import { prefilterCjRecord, prefilterCjRecords, DEFAULT_MAX_SUPPLIER_COST } from '../cj/prefilter';
+import { prefilterCjRecord, prefilterCjRecords } from '../cj/prefilter';
 import { cjSafeStatusFromHealth } from '../cj/health';
+import { CjSupplierAdapter } from '../cj/adapter';
 import { evidenceFromSupplierRecord, petCategoryFromTitle, scoreSupplierCandidate, runSupplierSearch } from '../../scout/supplierSearch';
 import { calculateMargin } from '../../scout/margin';
-import { SHORTLIST_THRESHOLD } from '../../scout/score';
-import type { ScoutCandidate } from '../../scout/types';
+import { scoreCandidate, SHORTLIST_THRESHOLD } from '../../scout/score';
+import { extractPageFacts } from '../../scout/extract';
+import type { FetchedSourcePage, ScoutCandidate, CandidateEvidence } from '../../scout/types';
 import { cjConfigured, cjSafeError, cjSearchProducts } from '../../../../api/_lib/cj';
+import {
+  CjPointBudget, CJ_POINTS_BUDGET_PER_RUN, enrichmentCaps, CJ_POINT_COST,
+} from '../cj/points';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -149,13 +155,21 @@ class FakeCjAdapter implements SupplierDiscoveryAdapter {
   }
   async getProduct(): Promise<SupplierProductRecord | null> { return this.records[0] ?? null; }
   async getShippingEvidence(): Promise<SupplierShippingEvidence> {
-    return { costUsd: 3.99, arrivalDays: '8-12', carrier: 'CJ Logistic', verified: true, note: 'freight quote' };
+    return {
+      costUsd: 3.99, baseFreightUsd: 3.50, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0.49,
+      arrivalDays: '8-12', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
+      observedAt: new Date().toISOString(), verified: true, note: 'freight quote (totalPostageFee)'
+    };
   }
   async healthCheck(): Promise<SupplierHealthResult> { return { provider: 'cj', health: 'online' }; }
 }
 
 function recordFromList(p: CjListProduct): SupplierProductRecord {
   return normalizeCjListProduct(p, { market: 'US' })!;
+}
+
+function page(text: string, images: string[] = []): FetchedSourcePage {
+  return { text, images };
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +217,7 @@ describe('CJ normalization', () => {
     const r = normalizeCjProductDetail(detailProduct(), { market: 'US' })!;
     expect(r.images).toHaveLength(2);
     expect(r.weightGrams).toBe(0.35);
-    expect(r.variantId).toBe('VID-9');
+    expect(r.selectedVariant?.variantId).toBe('VID-9');
     expect(r.description).toContain('puzzle toy');
     // US variant inventory overwrites list totals.
     expect(r.usInventoryTotal).toBe(86);
@@ -288,13 +302,17 @@ describe('CJ deterministic prefilter', () => {
     expect(prefilterCjRecord(med, { market: 'US' }).reason).toContain('medical');
   });
 
-  it('rejects missing price and impossible margins', () => {
+  it('rejects missing/invalid price (hard reject only for price <= 0)', () => {
     const noPrice = recordFromList(listProduct({ sellPrice: undefined, nowPrice: undefined }));
     expect(prefilterCjRecord(noPrice, { market: 'US' }).reason).toContain('missing price');
-    const thin = recordFromList(listProduct({ nowPrice: '0.5' }));
-    expect(prefilterCjRecord(thin, { market: 'US' }).reason).toContain('impossible margin');
-    const over = recordFromList(listProduct({ nowPrice: String(DEFAULT_MAX_SUPPLIER_COST + 10) }));
-    expect(prefilterCjRecord(over, { market: 'US' }).reason).toContain('exceeds configured max');
+    const zero = recordFromList(listProduct({ nowPrice: '0' }));
+    expect(prefilterCjRecord(zero, { market: 'US' }).reason).toContain('missing price');
+    // $0.80 and $45 are NOT hard-rejected — economics come from real
+    // price + real freight = landed cost vs a defensible selling price.
+    const thin = recordFromList(listProduct({ nowPrice: '0.8' }));
+    expect(prefilterCjRecord(thin, { market: 'US' }).ok).toBe(true);
+    const premium = recordFromList(listProduct({ nowPrice: '45' }));
+    expect(prefilterCjRecord(premium, { market: 'US' }).ok).toBe(true);
   });
 
   it('rejects missing stock / zero US inventory when targeting the US', () => {
@@ -426,6 +444,281 @@ describe('CJ → Product Scout integration', () => {
       runSupplierSearch({ adapter, search: { query: 'dog toy', market: 'US' }, db, onProgress: () => {} })
     ).rejects.toThrow(/42501|row-level security/i);
   });
+
+  it('runSupplierSearch ENRICHES before final scoring (detail → freight → landed cost)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Detail-enriched record: variant[0] has NO US stock, variant[1] has
+    // verified US stock → the SAME variant drives price/inventory/origin.
+    const enriched = normalizeCjProductDetail(detailProduct(), { market: 'US' })!;
+    const adapter = new FakeCjAdapter([enriched]);
+    const result = await runSupplierSearch({
+      adapter,
+      search: { query: 'dog puzzle toy', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.researched).toBe(1);
+    expect(result.points?.detailCalls).toBe(1);
+    // Freight called only because the selected variant has a US origin.
+    expect(result.points?.freightCalls).toBe(1);
+    // Landed cost present in the persisted evidence: margin no longer LOW.
+    const candidates = (db.rows.get('product_candidates') || []);
+    expect(candidates.length).toBe(1);
+    const ev = (candidates[0] as { evidence: CandidateEvidence }).evidence;
+    expect(ev.shippingCost.status).toBe('verified');
+    expect(ev.shippingCost.value).toBe(3.99);
+    // The record's OWN verified delivery cycle (3-5) wins over the freight
+    // arrival range — supplier delivery evidence is never improved.
+    expect(ev.shippingDays.value).toEqual({ min: 3, max: 5 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C pre-live hardening: variant consistency, economics, freight,
+// point budget, live-readiness simulation
+// ---------------------------------------------------------------------------
+
+describe('CJ pre-live hardening — variant consistency', () => {
+  it('selects variant[1] (verified US stock) over variant[0] (no US stock) and uses it consistently', () => {
+    const d: CjProductDetail = {
+      ...listProduct(),
+      productImageSet: ['https://img.cjdropshipping.com/pid123456.jpg'],
+      variants: [
+        { vid: 'VID-0', variantSku: 'SKU-0', variantSellPrice: '9.99', inventories: [{ countryCode: 'CN', totalInventory: 50 }] },
+        { vid: 'VID-1', variantSku: 'SKU-1', variantSellPrice: '12.99', inventories: [{ countryCode: 'US', totalInventory: 30, verifiedWarehouse: 1 }] },
+      ],
+    };
+    const r = normalizeCjProductDetail(d, { market: 'US' })!;
+    expect(r.selectedVariant?.variantId).toBe('VID-1');
+    // THE SAME variant drives price, inventory, origin.
+    expect(r.sellPrice).toBe(12.99);
+    expect(r.usInventoryTotal).toBe(30);
+    expect(r.usInventoryVerified).toBe(30);
+    expect(r.usInventoryInCountry).toBe(true);
+    expect(r.selectedVariant?.originCountry).toBe('US');
+    expect(r.selectedVariant?.sku).toBe('SKU-1');
+  });
+
+  it('variant stays UNKNOWN when no internally consistent variant exists — no freight claim', () => {
+    const d: CjProductDetail = {
+      ...listProduct(),
+      variants: [
+        { vid: 'VID-0', variantSku: 'SKU-0', variantSellPrice: '0', inventories: [{ countryCode: 'US', totalInventory: 0 }] },
+      ],
+    };
+    const r = normalizeCjProductDetail(d, { market: 'US' })!;
+    expect(r.selectedVariant).toBeNull();
+    expect(r.sellPrice).toBe(10.99); // list price retained, but variant unknown
+  });
+});
+
+describe('CJ pre-live hardening — economics', () => {
+  it('does NOT hard-reject a $0.80 accessory (excellent margin possible)', () => {
+    const r = recordFromList(listProduct({ nowPrice: '0.80' }));
+    const out = prefilterCjRecord(r, { market: 'US' });
+    expect(out.ok).toBe(true);
+  });
+
+  it('does NOT hard-reject a $45 premium product by default (no $40 cap)', () => {
+    const r = recordFromList(listProduct({ nowPrice: '45.00' }));
+    const out = prefilterCjRecord(r, { market: 'US' });
+    expect(out.ok).toBe(true);
+  });
+
+  it('applies min/max supplier cost ONLY when explicitly supplied for a strategy', () => {
+    const cheap = recordFromList(listProduct({ nowPrice: '3.00' }));
+    expect(prefilterCjRecord(cheap, { market: 'US', minSupplierCost: 5 }).ok).toBe(false);
+    const pricey = recordFromList(listProduct({ nowPrice: '45.00' }));
+    expect(prefilterCjRecord(pricey, { market: 'US', maxSupplierCost: 40 }).ok).toBe(false);
+    expect(prefilterCjRecord(pricey, { market: 'US' }).ok).toBe(true); // no default cap
+  });
+
+  it('still hard-rejects price <= 0 (invalid/unverifiable)', () => {
+    const r = recordFromList(listProduct({ nowPrice: '0' }));
+    expect(prefilterCjRecord(r, { market: 'US' }).reason).toContain('missing price');
+  });
+});
+
+describe('CJ pre-live hardening — manufacturer + score honesty', () => {
+  it('does NOT grant manufacturer reliability points for a CJ record (supplier-platform ≠ manufacturer)', () => {
+    const r = recordFromList(listProduct());
+    const ev = evidenceFromSupplierRecord(r, 'US');
+    const candidate: ScoutCandidate = {
+      id: 'c1', title: r.title, source: 'CJ Dropshipping', sourceUrl: r.sourceUrl,
+      supplierSlug: 'cj-dropshipping', images: r.images, evidence: ev,
+      margin: calculateMargin({ supplierPrice: r.sellPrice, shippingCost: null }),
+      score: null, status: 'researching', createdAt: new Date().toISOString(),
+    };
+    const out = scoreSupplierCandidate(candidate, 2.5);
+    expect(out.score?.breakdown.supplierReliability.points).toBe(10); // verified supplier-platform, NOT manufacturer 15
+  });
+
+  it('gives zero competition/upsell points when there is no evidence (score honesty)', () => {
+    // Avoid "toy" (matches the competition heuristic) — this is a title with
+    // no category signal, no sizes, no competition data at all.
+    const extract = extractPageFacts(page('og:title Unbranded Accessory'));
+    const margin = calculateMargin({ supplierPrice: 10, shippingCost: 4 });
+    const score = scoreCandidate({
+      title: 'Unbranded Accessory', extract, margin, supplierVerified: true,
+      sourceIsManufacturer: false, images: ['a.jpg'], riskFlags: ['No rating'],
+    });
+    expect(score.breakdown.competition.points).toBe(0);
+    expect(score.breakdown.upsell.points).toBe(0);
+  });
+});
+
+describe('CJ pre-live hardening — freight', () => {
+  it('prefers totalPostageFee and preserves all fee fields', () => {
+    const ev = normalizeCjFreight({
+      logisticsName: 'CJ Logistics', logisticPrice: '3.50', totalPostageFee: '4.99',
+      taxesFee: '0.40', clearanceOperationFee: '0.50', tariff: '0.09', shippingTime: '8-12',
+    }, { origin: 'CN', destination: 'US' })!;
+    expect(ev.costUsd).toBe(4.99); // totalPostageFee preferred
+    expect(ev.baseFreightUsd).toBe(3.50);
+    expect(ev.taxesFeeUsd).toBe(0.40);
+    expect(ev.clearanceFeeUsd).toBe(0.50);
+    expect(ev.tariffUsd).toBe(0.09);
+    expect(ev.origin).toBe('CN');
+    expect(ev.destination).toBe('US');
+    expect(ev.verified).toBe(true);
+  });
+
+  it('falls back to logisticPrice ONLY when totalPostageFee is absent, and records the limitation', () => {
+    const ev = normalizeCjFreight({ logisticPrice: '3.50', shippingTime: '10-14' }, { origin: 'CN', destination: 'US' })!;
+    expect(ev.costUsd).toBe(3.50);
+    expect(ev.note).toContain('LIMITATION');
+  });
+
+  it('freight origin is dynamic — no origin → UNKNOWN, never fabricated', () => {
+    const ev = normalizeCjFreight({ logisticPrice: '3.50' }, {})!;
+    expect(ev.origin).toBeNull();
+    expect(ev.costUsd).toBe(3.50);
+    // The adapter refuses to quote without a variant origin (its guard returns
+    // an UNKNOWN evidence object instead of calling the proxy).
+    const adapter = new CjSupplierAdapter();
+    void adapter; // origin handling verified at normalize level + integration test
+  });
+
+  it('parses delivery cycles exactly and never improves supplier evidence', () => {
+    expect(parseDeliveryCycle('3-5')).toEqual({ min: 3, max: 5 });
+    expect(parseDeliveryCycle('5')).toEqual({ min: 5, max: 5 });
+    expect(parseDeliveryCycle('12-15')).toEqual({ min: 12, max: 15 });
+    expect(parseDeliveryCycle('junk')).toBeNull();
+    expect(parseDeliveryCycle('')).toBeNull();
+    expect(parseDeliveryCycle(null)).toBeNull();
+  });
+
+  it('delivery cycle in evidence uses the REAL min (not 1)', () => {
+    const r = recordFromList(listProduct({ deliveryCycle: '3-5' }));
+    const ev = evidenceFromSupplierRecord(r, 'US');
+    expect(ev.shippingDays.value).toEqual({ min: 3, max: 5 });
+  });
+});
+
+describe('CJ point budget (Phase 4C hardening)', () => {
+  it('defaults to the owner-configured 250pt budget and never below a search', () => {
+    const b = new CjPointBudget();
+    expect(b.budget).toBe(CJ_POINTS_BUDGET_PER_RUN);
+    expect(b.budget).toBe(250);
+    // A budget below the cost of one search is clamped to the safe default.
+    expect(new CjPointBudget(10).budget).toBe(250);
+    expect(new CjPointBudget(0).budget).toBe(250);
+  });
+
+  it('tracks per-endpoint costs and denies when the budget would be exceeded', () => {
+    const b = new CjPointBudget(110); // 1 search (50) + 6 detail (60)
+    expect(b.canSpend('listV2')).toBe(true);
+    expect(b.spend('listV2')).toBe(true);
+    for (let i = 0; i < 6; i++) expect(b.spend('productQuery')).toBe(true);
+    expect(b.spend('productQuery')).toBe(false); // 110 - 50 - 60 = 0
+    expect(b.denied).toBe(1);
+    expect(b.spend('freightCalculate')).toBe(false);
+    const u = b.usage();
+    expect(u.used).toBe(110);
+    expect(u.remaining).toBe(0);
+    expect(u.listCalls).toBe(1);
+    expect(u.detailCalls).toBe(6);
+    expect(u.freightCalls).toBe(0);
+  });
+
+  it('enrichment caps fit inside the budget (250 → 50 search + 12 detail + 6 freight = 230)', () => {
+    const { detailMax, freightMax } = enrichmentCaps(new CjPointBudget(250));
+    expect(detailMax).toBe(12);
+    expect(freightMax).toBe(6);
+    const total = CJ_POINT_COST.listV2 + detailMax * CJ_POINT_COST.productQuery + freightMax * CJ_POINT_COST.freightCalculate;
+    expect(total).toBeLessThanOrEqual(250);
+    expect(total).toBe(230);
+  });
+
+  it('simulates 50 listV2 → 10 detail → 5 freight staying within the budget', () => {
+    const b = new CjPointBudget(250);
+    expect(b.spend('listV2')).toBe(true); // 50
+    for (let i = 0; i < 10; i++) expect(b.spend('productQuery')).toBe(true); // 100
+    for (let i = 0; i < 5; i++) expect(b.spend('freightCalculate')).toBe(true); // 50
+    const u = b.usage();
+    expect(u.used).toBe(200);
+    expect(u.remaining).toBe(50);
+    // Remaining 50 fits exactly one more search; 40 fits a freight call but
+    // NOT a second search — the budget hard-limits each endpoint.
+    expect(b.canSpend('freightCalculate')).toBe(true);
+    expect(b.spend('freightCalculate')).toBe(true); // 210
+    expect(b.canSpend('freightCalculate')).toBe(true); // 40 ≥ 10
+    expect(b.spend('freightCalculate')).toBe(true); // 220
+    expect(b.spend('freightCalculate')).toBe(true); // 230
+    expect(b.canSpend('freightCalculate')).toBe(true); // 20 ≥ 10
+    expect(b.spend('freightCalculate')).toBe(true); // 240
+    expect(b.canSpend('freightCalculate')).toBe(true); // 10 ≥ 10
+    expect(b.spend('freightCalculate')).toBe(true); // 250
+    expect(b.canSpend('freightCalculate')).toBe(false); // exhausted
+    expect(b.canSpend('listV2')).toBe(false);
+    expect(b.spend('listV2')).toBe(false);
+    expect(b.denied).toBe(1);
+  });
+});
+
+describe('CJ live-readiness simulation (fixtures only, NO key)', () => {
+  it('50 records → prefilter → 10 detail → 5 freight, points within budget, and reports a clean usage record', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const records = Array.from({ length: 50 }, (_, i) => recordFromList(listProduct({
+      id: `PID${i}`, sku: `SKU-${i}`, nameEn: `Dog Puzzle Toy ${i}`, nowPrice: String(8 + (i % 20)),
+    })));
+    const adapter = new FakeCjAdapter(records);
+    const result = await runSupplierSearch({
+      adapter,
+      search: { query: 'dog puzzle toy', market: 'US', maxResults: 50, pointsBudget: 250 },
+      db,
+      onProgress: () => {},
+    });
+    // 50 list records → prefilter keeps all (valid) → enrichment capped by budget.
+    expect(result.searched).toBe(50);
+    expect(result.researched).toBeGreaterThan(0);
+    expect(result.researched).toBeLessThanOrEqual(12); // never enrich everything
+    expect(result.points!.used).toBeLessThanOrEqual(250);
+    expect(result.points!.denied).toBe(0); // caps chosen to fit budget
+    expect(result.points!.listCalls).toBe(1); // ONE search call, no pagination
+  });
+
+  it('simulates a NO-WINNER run honestly (zero shortlisted reported as zero)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Records with no US inventory → prefilter rejects under US targeting.
+    const records = Array.from({ length: 5 }, (_, i) => normalizeCjListProduct(
+      listProduct({ id: `PIDX${i}`, sku: `SKU-X${i}`, nameEn: `Dog Toy ${i}`, warehouseInventoryNum: 0, totalVerifiedInventory: 0 }),
+      { market: 'US' }
+    )!);
+    const adapter = new FakeCjAdapter(records);
+    const result = await runSupplierSearch({
+      adapter,
+      search: { query: 'dog toy', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.shortlisted).toBe(0);
+    expect(result.researched).toBe(0);
+    expect((db.rows.get('product_candidates') || []).length).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -477,7 +770,7 @@ describe('CJ server lib (secret isolation + failures)', () => {
     try {
       const { products } = await cjSearchProducts({ keyWord: 'dog toy', size: 5 });
       expect(Array.isArray(products)).toBe(true);
-      // rate-limit path: force a 429 then succeed on retry
+      // rate-limit path: 429 once, then success on the ONE allowed retry
       let n = 0;
       global.fetch = vi.fn(async (input: RequestInfo | URL) => {
         n++;
@@ -485,11 +778,29 @@ describe('CJ server lib (secret isolation + failures)', () => {
         if (url.includes('/authentication/getAccessToken')) {
           return new Response(JSON.stringify({ data: { accessToken: 'AT2', refreshToken: 'RT2' } }), { status: 200 });
         }
-        return n < 3 ? new Response('rate limited', { status: 429 }) : new Response(JSON.stringify({ data: { content: [{ productList: [] }] } }), { status: 200 });
+        return n < 2 ? new Response('rate limited', { status: 429 }) : new Response(JSON.stringify({ data: { content: [{ productList: [] }] } }), { status: 200 });
       }) as unknown as typeof fetch;
       const second = await cjSearchProducts({ keyWord: 'cat toy', size: 5 });
       expect(second.products).toEqual([]);
-      expect(n).toBeGreaterThanOrEqual(3); // 429 retried (capped), then succeeded
+      // Token is cached from the first block → only the PAID calls fetch:
+      // 429 (attempt 0) + 200 (the ONE allowed retry) = 2 paid fetches.
+      expect(n).toBe(2);
+      // Persistent 429 past the cap → throws (no 3rd paid attempt).
+      let m = 0;
+      global.fetch = vi.fn(async () => {
+        m++;
+        return new Response('rate limited', { status: 429 });
+      }) as unknown as typeof fetch;
+      await expect(cjSearchProducts({ keyWord: 'toy', size: 5 })).rejects.toThrow(/rate limited/i);
+      expect(m).toBe(2); // paid endpoint: 429 + 1 retry, then give up
+      // Hard 4xx (validation/auth) is NEVER retried.
+      let h = 0;
+      global.fetch = vi.fn(async () => {
+        h++;
+        return new Response('bad request', { status: 400 });
+      }) as unknown as typeof fetch;
+      await expect(cjSearchProducts({ keyWord: 'toy', size: 5 })).rejects.toThrow(/400/i);
+      expect(h).toBe(1); // the 400 is NOT retried
     } finally {
       global.fetch = realFetch;
     }

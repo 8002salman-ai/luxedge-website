@@ -126,13 +126,15 @@ export function scoreCandidate(input: ScoreInput): ScoreBreakdown {
   else breakdown.visualViral = { points: 0, max: 10, note: 'No usable images (+0)' };
 
   // 7) Competition (5) — heuristic from category popularity.
+  // Phase 4C honesty audit: "no points where evidence is unavailable" —
+  // missing competition data must NOT create free confidence.
   const competitiveCategories = /feed|bowl|leash|harness|brush|toy/i.test(title);
   if (competitiveCategories) {
     breakdown.competition = { points: 2, max: 5, note: 'Popular category — high competition assumed (+2)' };
   } else if (extract.sizes && extract.sizes.length > 0) {
     breakdown.competition = { points: 4, max: 5, note: 'Niche/multi-size product — moderate competition (+4)' };
   } else {
-    breakdown.competition = { points: 3, max: 5, note: 'No competition data — neutral (+3)' };
+    breakdown.competition = { points: 0, max: 5, note: 'No competition evidence — no points where evidence is unavailable (+0)' };
   }
 
   // 8) Upsell potential (5).
@@ -141,14 +143,27 @@ export function scoreCandidate(input: ScoreInput): ScoreBreakdown {
   } else if (extract.sizes && extract.sizes.length === 1) {
     breakdown.upsell = { points: 2, max: 5, note: 'Single size (+2)' };
   } else {
-    breakdown.upsell = { points: 1, max: 5, note: 'No variant data — neutral (+1)' };
+    breakdown.upsell = { points: 0, max: 5, note: 'No variant/upsell evidence — no points where evidence is unavailable (+0)' };
   }
 
   // 9) Return / complaint risk (5) — risk flags reduce points.
+  // Honesty audit: risk flags are DERIVED from evidence (collectRiskFlags adds
+  // a flag for every missing assessment: availability, delivery, margin,
+  // ratings), so an empty flag list means the risk dimensions were actually
+  // assessed and found clean. If nothing was assessable at all, no points.
   const riskCount = riskFlags.length;
-  if (riskCount === 0) breakdown.returnRisk = { points: 5, max: 5, note: 'No risk flags (+5)' };
-  else if (riskCount === 1) breakdown.returnRisk = { points: 3, max: 5, note: `1 risk flag: ${riskFlags[0]} (+3)` };
-  else breakdown.returnRisk = { points: 1, max: 5, note: `${riskCount} risk flags (+1)` };
+  const riskAssessed = margin.confidence === 'high' || extract.rating !== null
+    || extract.reviewCount !== null || extract.availability !== 'unknown'
+    || extract.shippingDays !== null;
+  if (riskCount === 0 && riskAssessed) {
+    breakdown.returnRisk = { points: 5, max: 5, note: 'No risk flags after evidence-based assessment (+5)' };
+  } else if (riskCount === 1) {
+    breakdown.returnRisk = { points: 3, max: 5, note: `1 risk flag: ${riskFlags[0]} (+3)` };
+  } else if (riskCount >= 2) {
+    breakdown.returnRisk = { points: 1, max: 5, note: `${riskCount} risk flags (+1)` };
+  } else {
+    breakdown.returnRisk = { points: 0, max: 5, note: 'Risk could not be assessed — no points where evidence is unavailable (+0)' };
+  }
 
   const overall = Object.entries(breakdown).reduce((sum, [, c]) => sum + c.points, 0);
   const explanation = `Score ${overall}/100 — ${isPet ? 'pet product' : 'non-pet title'}; margin ${margin.grossMarginPct !== null ? (margin.grossMarginPct * 100).toFixed(1) + '%' : 'uncomputable'}; delivery ${extract.shippingDays ? extract.shippingDays.min + '-' + extract.shippingDays.max + 'd' : 'unknown'}; images ${images.length}.`;

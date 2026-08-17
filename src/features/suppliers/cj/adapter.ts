@@ -39,10 +39,13 @@ interface CjSearchResponse {
   health: string;
   records?: SupplierProductRecord[];
   warning?: string;
+  points?: number;
 }
 
 interface CjFreightResponse {
-  quotes?: { logisticName?: string; logisticPrice?: number; logisticAging?: string }[];
+  quotes?: SupplierShippingEvidence[];
+  warning?: string;
+  points?: number;
 }
 
 /** CJ adapter for the browser — talks ONLY to the Luxedge server proxy. */
@@ -59,45 +62,67 @@ export class CjSupplierAdapter implements SupplierDiscoveryAdapter {
       records: Array.isArray(data.records) ? data.records : [],
       health: cjSafeStatusFromHealth(data.health),
       warning: data.warning,
+      points: data.points,
     };
   }
 
   async getProduct(productId: string, market = 'US'): Promise<SupplierProductRecord | null> {
-    const data = await call<{ record?: SupplierProductRecord | null }>('product', { pid: productId, market });
+    const data = await call<{ record?: SupplierProductRecord | null; points?: number }>('product', { pid: productId, market });
     return data.record ?? null;
   }
 
   async getShippingEvidence(
     _productId: string,
     variantId: string,
-    opts: { market?: string } = {}
+    opts: { market?: string; originCountry?: string | null } = {}
   ): Promise<SupplierShippingEvidence> {
     const market = opts.market || 'US';
+    // Origin comes from the SELECTED VARIANT's inventory/warehouse evidence.
+    // No origin → freight UNKNOWN (never fabricate).
+    if (!opts.originCountry) {
+      return {
+        costUsd: null, baseFreightUsd: null, taxesFeeUsd: null, clearanceFeeUsd: null, tariffUsd: null,
+        arrivalDays: null, carrier: null, origin: null, destination: market, observedAt: new Date().toISOString(),
+        verified: false,
+        note: 'Origin UNKNOWN — freight not quoted (never fabricate an origin).',
+      };
+    }
     try {
       const data = await call<CjFreightResponse>(
         'freight',
         {},
         {
           method: 'POST',
-          body: JSON.stringify({ vid: variantId, startCountryCode: 'CN', endCountryCode: market }),
+          body: JSON.stringify({ vid: variantId, startCountryCode: opts.originCountry, endCountryCode: market }),
         }
       );
       const quotes = Array.isArray(data.quotes) ? data.quotes : [];
       if (!quotes.length) {
-        return { costUsd: null, arrivalDays: null, carrier: null, verified: false, note: 'CJ returned no freight quote for this variant' };
+        return {
+          costUsd: null, baseFreightUsd: null, taxesFeeUsd: null, clearanceFeeUsd: null, tariffUsd: null,
+          arrivalDays: null, carrier: null, origin: opts.originCountry, destination: market,
+          observedAt: new Date().toISOString(), verified: false,
+          note: 'CJ returned no freight quote for this variant',
+        };
       }
-      // Cheapest verified quote — real CJ numbers, never invented.
-      const best = quotes.reduce((a, b) => ((b.logisticPrice ?? Infinity) < (a.logisticPrice ?? Infinity) ? b : a), quotes[0]);
+      // Cheapest VERIFIED quote by usable total cost (totalPostageFee-preferred,
+      // never just the headline logisticPrice). Real CJ numbers only.
+      const best = quotes.reduce((a, b) => {
+        const av = a.costUsd ?? Infinity;
+        const bv = b.costUsd ?? Infinity;
+        return bv < av ? b : a;
+      }, quotes[0]);
       return {
-        costUsd: typeof best.logisticPrice === 'number' && Number.isFinite(best.logisticPrice) ? best.logisticPrice : null,
-        arrivalDays: best.logisticAging || null,
-        carrier: best.logisticName || null,
-        verified: true,
-        note: 'Freight quote from CJ logistic/freightCalculate (cheapest option)',
+        ...best,
+        origin: best.origin || opts.originCountry,
+        destination: best.destination || market,
+        note: best.note || 'Freight quote from CJ logistic/freightCalculate (cheapest usable total)',
       };
     } catch (e) {
       return {
-        costUsd: null, arrivalDays: null, carrier: null, verified: false,
+        costUsd: null, baseFreightUsd: null, taxesFeeUsd: null, clearanceFeeUsd: null, tariffUsd: null,
+        arrivalDays: null, carrier: null, origin: opts.originCountry, destination: market,
+        observedAt: new Date().toISOString(), verified: false,
         note: `Freight unavailable: ${(e as Error).message}`,
       };
     }
