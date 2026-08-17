@@ -57,8 +57,10 @@ export default function AiControlCenter() {
   // Emergency Pause must also write the canonical pause key
   // (luxedge_scout_emergency_pause) that the runtime AI gate reads via
   // isEmergencyPaused() — writing only the control config left the gate
-  // unpaused and made the toggle an illusion. Research/read-only analysis
-  // may still continue under pause (Master Plan §14); mutations stay blocked.
+  // unpaused and made the toggle an illusion. Under pause the AI gate
+  // (aiGate) denies every AI provider call and every autonomous mutation;
+  // only deterministic read-only research/analysis continues (it makes no
+  // AI calls and performs no mutations).
   const togglePause = () => {
     const next = !cfg.emergencyPause;
     setEmergencyPause(next);
