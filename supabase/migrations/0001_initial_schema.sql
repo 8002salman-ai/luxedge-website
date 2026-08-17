@@ -53,13 +53,6 @@ create table if not exists public.collections (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.collection_products (
-  collection_id uuid not null references public.collections(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete cascade,
-  sort_order integer not null default 0,
-  primary key (collection_id, product_id)
-);
-
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   slug text unique not null,
@@ -122,6 +115,14 @@ create table if not exists public.product_images (
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
+
+create table if not exists public.collection_products (
+  collection_id uuid not null references public.collections(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  sort_order integer not null default 0,
+  primary key (collection_id, product_id)
+);
+
 
 -- ---------------------------------------------------------------------------
 -- Suppliers
@@ -260,7 +261,7 @@ create table if not exists public.payments (
   amount numeric(10,2) not null,
   currency text not null default 'USD',
   status text not null default 'pending',
-  raw jsonb,
+  raw jsonb, -- provider response metadata only: never store card numbers/CVC (PCI)
   created_at timestamptz not null default now()
 );
 
@@ -301,7 +302,7 @@ create table if not exists public.ai_providers (
   is_enabled boolean not null default true,
   is_default boolean not null default false,
   default_model text,
-  config jsonb,
+  config jsonb, -- metadata ONLY: never store API keys here (secrets live in server env vars)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -512,39 +513,43 @@ create policy "public read product variants" on public.product_variants for sele
 create policy "public read product images" on public.product_images for select using (
   exists (select 1 from public.products p where p.id = product_images.product_id and p.status = 'published')
 );
+create policy "public read collection_products" on public.collection_products for select using (
+  exists (select 1 from public.products p where p.id = collection_products.product_id and p.status = 'published')
+  and exists (select 1 from public.collections c where c.id = collection_products.collection_id and c.is_active = true)
+);
 create policy "public read approved reviews" on public.reviews for select using (status = 'approved');
 
 -- Authenticated (owner) full access — admin writes flow through service role
-create policy "owner all categories" on public.categories for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all collections" on public.collections for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all collection_products" on public.collection_products for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all products" on public.products for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all product_variants" on public.product_variants for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all product_images" on public.product_images for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all suppliers" on public.suppliers for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all supplier_products" on public.supplier_products for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all supplier_variants" on public.supplier_variants for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all supplier_shipping" on public.supplier_shipping for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all inventory" on public.inventory for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all pricing_history" on public.pricing_history for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all customers" on public.customers for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all addresses" on public.addresses for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all orders" on public.orders for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all order_items" on public.order_items for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all payments" on public.payments for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all fulfillment" on public.fulfillment for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all reviews" on public.reviews for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all ai_providers" on public.ai_providers for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all agent_jobs" on public.agent_jobs for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all agent_runs" on public.agent_runs for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all agent_logs" on public.agent_logs for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all product_candidates" on public.product_candidates for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all product_scores" on public.product_scores for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all creative_assets" on public.creative_assets for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all creative_jobs" on public.creative_jobs for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all campaigns" on public.campaigns for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all ad_creatives" on public.ad_creatives for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-create policy "owner all ad_performance" on public.ad_performance for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create policy "owner all categories" on public.categories for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all collections" on public.collections for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all collection_products" on public.collection_products for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all products" on public.products for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all product_variants" on public.product_variants for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all product_images" on public.product_images for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all suppliers" on public.suppliers for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all supplier_products" on public.supplier_products for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all supplier_variants" on public.supplier_variants for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all supplier_shipping" on public.supplier_shipping for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all inventory" on public.inventory for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all pricing_history" on public.pricing_history for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all customers" on public.customers for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all addresses" on public.addresses for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all orders" on public.orders for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all order_items" on public.order_items for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all payments" on public.payments for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all fulfillment" on public.fulfillment for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all reviews" on public.reviews for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all ai_providers" on public.ai_providers for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all agent_jobs" on public.agent_jobs for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all agent_runs" on public.agent_runs for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all agent_logs" on public.agent_logs for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all product_candidates" on public.product_candidates for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all product_scores" on public.product_scores for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all creative_assets" on public.creative_assets for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all creative_jobs" on public.creative_jobs for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all campaigns" on public.campaigns for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all ad_creatives" on public.ad_creatives for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+create policy "owner all ad_performance" on public.ad_performance for all using ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin') with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ---------------------------------------------------------------------------
 -- Indexes
