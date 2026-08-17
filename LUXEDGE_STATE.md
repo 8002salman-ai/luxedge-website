@@ -43,6 +43,16 @@ Updated after the Phase 2 storefront work (Claude). Phase 1 review fixes remain 
 ### Files touched (Phase 2)
 `src/App.tsx` (PCard, PDP, HomePage, ShopPage, CartPage, CheckoutPage, Footer, Header, RouteTitle, Toast), `src/index.css` (2 utilities). No new dependencies. No new component files.
 
+## Post-Phase-2 truthfulness fixes (pre-Phase-3)
+
+- **Ratings are verified-only.** Catalog rating/reviewCount fields are stub data and are no longer displayed as customer ratings. Stars/ratings appear only when approved user review records exist (currently 2 products). PCard, PDP rating row, PDP reviews-tab header and the shop rating filter all use verified-review averages. Product JSON-LD aggregateRating was already verified-only and remains so.
+- **Trust claims de-claimed.** "Quality Checked · Handpicked & tested by our team" (homepage trust bar, footer chip, hero floating chip, PDP trust grid) → "Thoughtfully Curated · Selected for pet owners" (no documented physical-testing process). About page "We test, compare, and reject..." → "We carefully compare and curate...".
+- **About page fabricated stats removed** ("2,000+ Happy Customers", "99% Satisfaction Rate", "24/7 Customer Support") → real policy facts (Free Shipping 0+, 30-Day Returns, 1-3 days processing, Mon–Fri support).
+- **FAQ honesty:** "256-bit SSL / PCI-DSS compliant processors" payment claim → demo-mode statement consistent with the checkout notice; "Every item is quality-checked" → "carefully selected and reviewed".
+- **Verified policies:** Free shipping 0+ matches the Shipping Policy page and checkout logic (.99 under 0, free at 0+). 30-day returns matches the Returns & Replacement Policy (30-day window) and checkout/FAQ copy.
+
+## Known issues (documented)
+
 ## Known issues (documented)
 
 - Storefront commerce data is still hard-coded demo data (`INIT_PRODUCTS`/`EXTRA_PRODUCTS`) with ratings/review-count fields that are catalog stubs, not real reviews. Phase 3 (real data layer) must replace with verified data.

@@ -763,7 +763,7 @@ function Footer() {
                 { icon: Truck, text: 'Free Shipping $50+' },
                 { icon: RotateCcw, text: '30-Day Returns' },
                 { icon: Headphones, text: 'Customer Support' },
-                { icon: Shield, text: 'Quality Checked' },
+                { icon: Shield, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
                   <b.icon size={14} className="text-luxe-gold-light" />
@@ -803,8 +803,11 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user } = useApp(); const nav = useNavigate();
+  const { addToCart, user, reviews } = useApp(); const nav = useNavigate();
   const d = product.originalPrice > product.price ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
+  // Ratings come ONLY from verified user reviews — never the catalog stub rating.
+  const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
+  const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
     <Link to={`/product/${product.id}`} className="block group focus-visible:outline-luxe-gold">
       <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
@@ -820,10 +823,12 @@ function PCard({ product }: { product: Product }) {
         <div className="px-3.5 py-3">
           <div className="flex items-center justify-between gap-2 mb-1">
             <p className="eyebrow truncate">{product.category}</p>
-            <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${product.rating.toFixed(1)} out of 5`}>
-              <Star size={10} className="text-star fill-star" aria-hidden="true" />
-              <span className="text-[10px] font-semibold text-luxe-charcoal">{product.rating.toFixed(1)}</span>
-            </div>
+            {verified.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
+                <Star size={10} className="text-star fill-star" aria-hidden="true" />
+                <span className="text-[10px] font-semibold text-luxe-charcoal">{verifiedAvg.toFixed(1)}</span>
+              </div>
+            )}
           </div>
           <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem] group-hover:text-luxe-gold-dark transition-colors">{product.name}</h3>
           <div className="flex items-baseline gap-1.5 mt-1.5">
@@ -1067,7 +1072,7 @@ function ProductDetailPage() {
   const activeOriginal = selVariant ? selVariant.price : product.originalPrice;
   const activeStock = selVariant ? selVariant.stock : product.stock;
   const discount = activeOriginal > 0 ? Math.round((1 - activePrice / activeOriginal) * 100) : 0;
-  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating;
+  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const uniqueColors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
 
@@ -1144,11 +1149,15 @@ function ProductDetailPage() {
 
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
-          {/* Rating — shown only from verified review data; falls back to catalog rating */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} review{reviews.length !== 1 ? 's' : ''})</span>
-          </div>
+          {/* Rating — shown ONLY when verified user reviews exist */}
+          {reviews.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+              <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} verified review{reviews.length !== 1 ? 's' : ''})</span>
+            </div>
+          ) : (
+            <p className="text-xs text-luxe-gray mb-4">No verified reviews yet.</p>
+          )}
 
           {/* Price */}
           <div className="rounded-2xl bg-luxe-gold-soft/70 border border-luxe-gold/25 p-5 mb-4">
@@ -1220,7 +1229,7 @@ function ProductDetailPage() {
             {[
               { icon: Truck, t: 'Free ship $50+' },
               { icon: RotateCcw, t: '30-day returns' },
-              { icon: Shield, t: 'Quality guarantee' },
+              { icon: Shield, t: 'Thoughtfully curated' },
               { icon: Lock, t: 'Secure checkout' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
@@ -1278,11 +1287,13 @@ function ProductDetailPage() {
       {/* Reviews */}
       {tab === 'reviews' && (
         <div className="max-w-3xl">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs text-gray-500">{reviews.length} reviews</span>
-          </div>
+          {reviews.length > 0 && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
+              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+              <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
+            </div>
+          )}
 
           {user ? (
             <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-luxe-gold hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
@@ -1456,8 +1467,8 @@ function HomePage() {
             <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
               <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Shield size={16} /></span>
               <div>
-                <p className="text-[11px] font-bold text-luxe-black">Quality Guarantee</p>
-                <p className="text-[10px] text-luxe-gray">Handpicked & tested</p>
+                <p className="text-[11px] font-bold text-luxe-black">Thoughtfully Curated</p>
+                <p className="text-[10px] text-luxe-gray">Selected for pet owners</p>
               </div>
             </div>
           </div>
@@ -1608,7 +1619,7 @@ function HomePage() {
           {[
             { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
             { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
-            { icon: Shield, title: 'Quality Checked', desc: 'Handpicked & tested by our team' },
+            { icon: Shield, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
             { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
@@ -1651,7 +1662,7 @@ function HomePage() {
 
 function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
-  const { products } = useApp();
+  const { products, reviews } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
 
@@ -1669,11 +1680,17 @@ function ShopPage() {
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
   useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
+  // Rating filter uses verified review averages only — catalog rating is stub data.
+  const verifiedAvgFor = (pid: string): number => {
+    const v = reviews.filter(r => r.productId === pid && r.status === 'approved');
+    return v.length ? v.reduce((s, r) => s + r.rating, 0) / v.length : 0;
+  };
+
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
     .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
-    .filter(p => minRating === 0 || p.rating >= minRating)
+    .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
     .sort((a, b) => {
       if (sort === 'price-low') return a.price - b.price;
       if (sort === 'price-high') return b.price - a.price;
@@ -2621,14 +2638,14 @@ function AboutPage() {
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
       <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
-      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We test, compare, and reject hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
+      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
       <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
       <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
-        {[{v:'2,000+',l:'Happy Customers'},{v:'500+',l:'Products Curated'},{v:'99%',l:'Satisfaction Rate'},{v:'24/7',l:'Customer Support'}].map((s,i)=>
+        {[{v:'$50+',l:'Free Shipping'},{v:'30-Day',l:'Returns & Replacements'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
         )}
       </div>
@@ -2715,12 +2732,12 @@ function FAQPage() {
     ]},
     { c: 'Payment & Security', qs: [
       { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. Online payment processing is currently in demo mode — a real provider (Stripe/PayPal) is being integrated, and card details are never stored or transmitted until then.' },
-      { q: 'Is my payment information secure?', a: 'Absolutely. We use 256-bit SSL encryption for all transactions. Your payment data is processed through PCI-DSS compliant processors. We never store your full card details on our servers.' },
+      { q: 'Is my payment information secure?', a: 'Online payments are currently in demo mode — no card details are stored or transmitted. When a real provider (Stripe/PayPal) is connected, transactions will be processed through a PCI-compliant provider.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
     { c: 'Products & Quality', qs: [
       { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
-      { q: 'Are your products authentic?', a: 'Yes. We source all products from verified manufacturers and authorized distributors. Every item is quality-checked before it\'s listed on our store.' },
+      { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
     ]},
     { c: 'Account & Support', qs: [
