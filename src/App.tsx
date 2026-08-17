@@ -1440,7 +1440,7 @@ function HomePage() {
               Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
             </h1>
             <p className="text-luxe-gray text-sm sm:text-base max-w-lg mx-auto lg:mx-0 mb-8 leading-relaxed">
-              Handpicked essentials for feeding, comfort, play, and grooming — tested by our team, loved by pets, delivered to your door.
+              Handpicked essentials for feeding, comfort, play, and grooming — thoughtfully curated for pet parents and delivered to your door.
             </p>
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">

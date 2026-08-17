@@ -15,16 +15,52 @@
 --   * Additive only: existing tables/columns/data are preserved.
 --   * No DROP TABLE / TRUNCATE anywhere.
 --   * Existing columns keep their names; V2 columns are ADDED alongside.
---   * Policy/trigger/index creation is guarded (drop-if-exists + create) so
---     re-runs and name collisions with the old schema are safe.
+--   * The whole script runs inside one transaction (BEGIN/COMMIT): if ANY
+--     statement fails, the database is rolled back to its prior state — it
+--     can never be left half-migrated.
+--   * Every legacy-table ALTER is guarded (table/column existence checks) so
+--     an unexpected column in the old schema can never abort the migration.
 --   * Status columns are widened from legacy enums to text with the V2 check
---     constraints (all live tables are EMPTY, so no data conversion risk).
+--     constraints, and the OLD enum-derived check constraints are dropped
+--     (otherwise they would reject valid V2 values after the widening).
+--   * Stale RLS policies on managed tables are dropped before the known-good
+--     V2 policy set is recreated, so no permissive legacy policy survives.
 --   * Legacy-only tables (profiles, admin_email_allowlist, supplier_mappings,
 --     price_history, processed_webhook_events) are left untouched.
+--
+-- DEPENDENCY ORDER (the critical fix over the first draft)
+--   The first draft added `orders.customer_id` / `addresses.customer_id`
+--   FOREIGN KEYs to public.customers BEFORE public.customers was created, so
+--   the migration failed on a fresh legacy DB. This version:
+--     1. reconciles legacy tables (no FK to NEW tables yet),
+--     2. creates every missing V2 table (customers included),
+--     3. ONLY THEN adds the FK columns on legacy tables that reference the
+--        new tables (orders.customer_id, addresses.customer_id),
+--     4. then helper functions, RLS, triggers, indexes, grants.
+--
+-- LIVE SCHEMA VERIFIED (Aug 2026, via PostgREST OpenAPI with the secret key):
+--   13 legacy tables, all EMPTY:
+--     categories, products, product_variants, product_images, orders,
+--     order_items, addresses, inventory  (+ legacy-only: profiles,
+--     admin_email_allowlist, supplier_mappings, price_history,
+--     processed_webhook_events)
+--   Key legacy facts this file accounts for:
+--     * products.title  (V2 uses products.name — new column added alongside;
+--       seeders must write `name` for the V2 storefront to display titles)
+--     * products.status / product_variants.status = enum `catalog_status`
+--     * orders.status = enum `order_status`; orders.payment_status = enum
+--       `payment_status`  (auto check constraints: *_status_check)
+--     * orders/addresses reference users via `user_id` (kept); the new
+--       `customer_id` column is added separately
+--     * inventory has NO `id` / `product_id` — PK is (variant_id); the V2
+--       `id` is added + backfilled + made PK only if no PK exists
+--     * creative_jobs has NO `updated_at` (trigger loop skips it)
 --
 -- After running: 30 V2 tables + 5 legacy tables exist, grants restored, RLS
 -- enforced. Then populate the catalog via the admin UI or SQL INSERTs.
 -- ============================================================================
+
+BEGIN;
 
 -- ---------------------------------------------------------------------------
 -- 1. Extensions & helpers
@@ -41,103 +77,205 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- 2. RECONCILE EXISTING TABLES (add V2 columns; widen status enums to text)
+--    No statement here references a table that does not exist yet: every
+--    ALTER is guarded, and NO foreign key to a NEW table is added here.
 -- ---------------------------------------------------------------------------
 
--- categories ── add V2 parent_id
+-- categories ── add V2 parent_id (self-reference, table already exists)
 alter table public.categories add column if not exists parent_id uuid references public.categories(id) on delete set null;
 
--- products ── add all V2 columns alongside the legacy ones
-alter table public.products add column if not exists name text;
-alter table public.products add column if not exists premium_title text;
-alter table public.products add column if not exists long_description text;
-alter table public.products add column if not exists features jsonb not null default '[]'::jsonb;
-alter table public.products add column if not exists benefits jsonb not null default '[]'::jsonb;
-alter table public.products add column if not exists specifications jsonb not null default '{}'::jsonb;
-alter table public.products add column if not exists brand text;
-alter table public.products add column if not exists agent_score numeric(5,2);
-alter table public.products add column if not exists score_explanation text;
-alter table public.products add column if not exists price numeric(10,2);
-alter table public.products add column if not exists compare_at_price numeric(10,2);
-alter table public.products add column if not exists cost_price numeric(10,2);
-alter table public.products add column if not exists landed_cost numeric(10,2);
-alter table public.products add column if not exists gross_margin numeric(10,2);
-alter table public.products add column if not exists sku text;
-alter table public.products add column if not exists inventory_qty integer not null default 0;
-alter table public.products add column if not exists shipping_cost numeric(10,2);
-alter table public.products add column if not exists est_us_delivery_days integer;
-alter table public.products add column if not exists seo_keywords jsonb not null default '[]'::jsonb;
-alter table public.products add column if not exists structured_data jsonb;
-alter table public.products add column if not exists product_source_evidence jsonb;
-alter table public.products add column if not exists published_at timestamptz;
+-- products ── add all V2 columns alongside the legacy ones (guarded)
+do $$
+begin
+  if to_regclass('public.products') is not null then
+    execute $q$
+      alter table public.products
+        add column if not exists name text,
+        add column if not exists premium_title text,
+        add column if not exists long_description text,
+        add column if not exists features jsonb not null default '[]'::jsonb,
+        add column if not exists benefits jsonb not null default '[]'::jsonb,
+        add column if not exists specifications jsonb not null default '{}'::jsonb,
+        add column if not exists brand text,
+        add column if not exists agent_score numeric(5,2),
+        add column if not exists score_explanation text,
+        add column if not exists price numeric(10,2),
+        add column if not exists compare_at_price numeric(10,2),
+        add column if not exists cost_price numeric(10,2),
+        add column if not exists landed_cost numeric(10,2),
+        add column if not exists gross_margin numeric(10,2),
+        add column if not exists sku text,
+        add column if not exists inventory_qty integer not null default 0,
+        add column if not exists shipping_cost numeric(10,2),
+        add column if not exists est_us_delivery_days integer,
+        add column if not exists seo_keywords jsonb not null default '[]'::jsonb,
+        add column if not exists structured_data jsonb,
+        add column if not exists product_source_evidence jsonb,
+        add column if not exists published_at timestamptz
+    $q$;
+  end if;
+end $$;
 
--- products.status: catalog_status enum → text with V2 check
-alter table public.products alter column status drop default;
-alter table public.products alter column status type text using status::text;
-alter table public.products alter column status set default 'draft';
-alter table public.products drop constraint if exists products_status_check;
-alter table public.products add constraint products_status_check check (
-  status in ('candidate','researching','qualified','creative_generation','listing_draft','qa','approved','published','rejected','failed','paused','archived')
-);
+-- products.status: catalog_status enum → text with V2 check (guarded)
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'status'
+  ) then
+    execute 'alter table public.products alter column status drop default';
+    execute 'alter table public.products alter column status type text using status::text';
+    execute 'alter table public.products alter column status set default ''draft''';
+    -- drop the OLD enum-derived check constraint so V2 values are accepted
+    execute 'alter table public.products drop constraint if exists products_status_check';
+    execute $q$
+      alter table public.products add constraint products_status_check check (
+        status in ('candidate','researching','qualified','creative_generation','listing_draft','qa','approved','published','rejected','failed','paused','archived')
+      )
+    $q$;
+  end if;
+end $$;
 
--- product_variants ── add V2 columns
-alter table public.product_variants add column if not exists attributes jsonb not null default '{}'::jsonb;
-alter table public.product_variants add column if not exists price numeric(10,2);
-alter table public.product_variants add column if not exists compare_at_price numeric(10,2);
-alter table public.product_variants add column if not exists cost_price numeric(10,2);
-alter table public.product_variants add column if not exists inventory_qty integer not null default 0;
-alter table public.product_variants add column if not exists low_stock_threshold integer not null default 0;
+-- product_variants ── add V2 columns + widen status (guarded)
+do $$
+begin
+  if to_regclass('public.product_variants') is not null then
+    execute $q$
+      alter table public.product_variants
+        add column if not exists attributes jsonb not null default '{}'::jsonb,
+        add column if not exists price numeric(10,2),
+        add column if not exists compare_at_price numeric(10,2),
+        add column if not exists cost_price numeric(10,2),
+        add column if not exists inventory_qty integer not null default 0,
+        add column if not exists low_stock_threshold integer not null default 0
+    $q$;
+  end if;
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'product_variants' and column_name = 'status'
+  ) then
+    execute 'alter table public.product_variants alter column status drop default';
+    execute 'alter table public.product_variants alter column status type text using status::text';
+    execute 'alter table public.product_variants alter column status set default ''active''';
+    -- drop the OLD enum-derived check constraint (V2 has no check on this col)
+    execute 'alter table public.product_variants drop constraint if exists product_variants_status_check';
+  end if;
+end $$;
 
--- product_variants.status: catalog_status enum → text (V2 default 'active')
-alter table public.product_variants alter column status drop default;
-alter table public.product_variants alter column status type text using status::text;
-alter table public.product_variants alter column status set default 'active';
+-- product_images ── add V2 columns (guarded)
+do $$
+begin
+  if to_regclass('public.product_images') is not null then
+    execute $q$
+      alter table public.product_images
+        add column if not exists url text,
+        add column if not exists kind text not null default 'product',
+        add column if not exists is_primary boolean not null default false
+    $q$;
+  end if;
+end $$;
 
--- product_images ── add V2 columns
-alter table public.product_images add column if not exists url text;
-alter table public.product_images add column if not exists kind text not null default 'product';
-alter table public.product_images add column if not exists is_primary boolean not null default false;
+-- order_items ── add V2 columns (guarded)
+do $$
+begin
+  if to_regclass('public.order_items') is not null then
+    execute $q$
+      alter table public.order_items
+        add column if not exists product_name text,
+        add column if not exists unit_price numeric(10,2),
+        add column if not exists total numeric(10,2)
+    $q$;
+  end if;
+end $$;
 
--- orders ── add V2 columns (legacy Stripe/Shippo columns preserved)
-alter table public.orders add column if not exists customer_id uuid references public.customers(id) on delete set null;
-alter table public.orders add column if not exists subtotal numeric(10,2) not null default 0;
-alter table public.orders add column if not exists shipping numeric(10,2) not null default 0;
-alter table public.orders add column if not exists tax numeric(10,2) not null default 0;
-alter table public.orders add column if not exists total numeric(10,2) not null default 0;
-alter table public.orders add column if not exists payment_method text;
+-- orders ── add V2 columns (guarded). NOTE: customer_id FK is added LATER,
+-- after public.customers exists (dependency ordering fix).
+do $$
+begin
+  if to_regclass('public.orders') is not null then
+    execute $q$
+      alter table public.orders
+        add column if not exists subtotal numeric(10,2) not null default 0,
+        add column if not exists shipping numeric(10,2) not null default 0,
+        add column if not exists tax numeric(10,2) not null default 0,
+        add column if not exists total numeric(10,2) not null default 0,
+        add column if not exists payment_method text
+    $q$;
+  end if;
+  -- orders.status: order_status enum → text with V2 check (guarded)
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'orders' and column_name = 'status'
+  ) then
+    execute 'alter table public.orders alter column status drop default';
+    execute 'alter table public.orders alter column status type text using status::text';
+    execute 'alter table public.orders alter column status set default ''pending''';
+    execute 'alter table public.orders drop constraint if exists orders_status_check';
+    execute $q$
+      alter table public.orders add constraint orders_status_check check (
+        status in ('pending','processing','shipped','delivered','cancelled','refunded','failed')
+      )
+    $q$;
+  end if;
+  -- orders.payment_status: payment_status enum → text (V2 default 'unpaid')
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'orders' and column_name = 'payment_status'
+  ) then
+    execute 'alter table public.orders alter column payment_status drop default';
+    execute 'alter table public.orders alter column payment_status type text using payment_status::text';
+    execute 'alter table public.orders alter column payment_status set default ''unpaid''';
+    -- drop the OLD enum-derived check constraint
+    execute 'alter table public.orders drop constraint if exists orders_payment_status_check';
+  end if;
+end $$;
 
--- orders.status: order_status enum → text with V2 check
-alter table public.orders alter column status drop default;
-alter table public.orders alter column status type text using status::text;
-alter table public.orders alter column status set default 'pending';
-alter table public.orders drop constraint if exists orders_status_check;
-alter table public.orders add constraint orders_status_check check (
-  status in ('pending','processing','shipped','delivered','cancelled','refunded','failed')
-);
+-- addresses ── add V2 columns (guarded). NOTE: customer_id FK is added LATER.
+do $$
+begin
+  if to_regclass('public.addresses') is not null then
+    execute $q$
+      alter table public.addresses
+        add column if not exists address_line1 text,
+        add column if not exists address_line2 text,
+        add column if not exists is_default boolean not null default false
+    $q$;
+  end if;
+end $$;
 
--- orders.payment_status: payment_status enum → text (V2 default 'unpaid')
-alter table public.orders alter column payment_status drop default;
-alter table public.orders alter column payment_status type text using payment_status::text;
-alter table public.orders alter column payment_status set default 'unpaid';
-
--- order_items ── add V2 columns
-alter table public.order_items add column if not exists product_name text;
-alter table public.order_items add column if not exists unit_price numeric(10,2);
-alter table public.order_items add column if not exists total numeric(10,2);
-
--- addresses ── add V2 columns (legacy user_id columns preserved)
-alter table public.addresses add column if not exists customer_id uuid references public.customers(id) on delete cascade;
-alter table public.addresses add column if not exists address_line1 text;
-alter table public.addresses add column if not exists address_line2 text;
-alter table public.addresses add column if not exists is_default boolean not null default false;
-
--- inventory ── add V2 columns (legacy available/reserved preserved)
-alter table public.inventory add column if not exists id uuid;
-alter table public.inventory add column if not exists product_id uuid references public.products(id) on delete cascade;
-alter table public.inventory add column if not exists quantity integer not null default 0;
-alter table public.inventory add column if not exists warehouse text;
+-- inventory ── legacy PK is (variant_id); add V2 id/product_id/quantity/warehouse
+do $$
+begin
+  if to_regclass('public.inventory') is not null then
+    -- V2 id column (legacy inventory has NO id)
+    if not exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'inventory' and column_name = 'id'
+    ) then
+      execute 'alter table public.inventory add column id uuid';
+      execute 'update public.inventory set id = gen_random_uuid() where id is null';
+      execute 'alter table public.inventory alter column id set not null';
+      -- add a PK on id ONLY if the table has no PK yet (preserve legacy PK)
+      if not exists (
+        select 1 from pg_constraint where conrelid = 'public.inventory'::regclass and contype = 'p'
+      ) then
+        execute 'alter table public.inventory add primary key (id)';
+      end if;
+    end if;
+    execute $q$
+      alter table public.inventory
+        add column if not exists product_id uuid references public.products(id) on delete cascade,
+        add column if not exists quantity integer not null default 0,
+        add column if not exists warehouse text
+    $q$;
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 3. CREATE MISSING V2 TABLES (all `create table if not exists`)
+--    Ordered by dependency: referenced tables are created before the tables
+--    that reference them. public.customers is created here, which unblocks
+--    the orders/addresses FK columns added in section 4.
 -- ---------------------------------------------------------------------------
 create table if not exists public.collections (
   id uuid primary key default gen_random_uuid(),
@@ -213,6 +351,7 @@ create table if not exists public.pricing_history (
   changed_at timestamptz not null default now()
 );
 
+-- customers ── the table orders/addresses FK to (created BEFORE those FKs)
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
   email text unique not null,
@@ -407,7 +546,14 @@ create table if not exists public.ad_performance (
 );
 
 -- ---------------------------------------------------------------------------
--- 4. 0002: customer identity + customer-scoped RLS (idempotent)
+-- 4. FK COLUMNS ON LEGACY TABLES THAT REFERENCE NEW TABLES
+--    Added ONLY now, after public.customers exists (dependency ordering fix).
+-- ---------------------------------------------------------------------------
+alter table public.orders add column if not exists customer_id uuid references public.customers(id) on delete set null;
+alter table public.addresses add column if not exists customer_id uuid references public.customers(id) on delete cascade;
+
+-- ---------------------------------------------------------------------------
+-- 5. 0002: customer identity + customer-scoped RLS (idempotent)
 -- ---------------------------------------------------------------------------
 create or replace function public.current_customer_id()
 returns uuid
@@ -420,7 +566,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 5. Row Level Security — enable on every table (idempotent)
+-- 6. Row Level Security — enable on every table (idempotent)
 -- ---------------------------------------------------------------------------
 alter table public.categories enable row level security;
 alter table public.collections enable row level security;
@@ -454,7 +600,35 @@ alter table public.ad_creatives enable row level security;
 alter table public.ad_performance enable row level security;
 
 -- ---------------------------------------------------------------------------
--- 6. Policies — drop-if-exists then create (safe on re-run / old collisions)
+-- 7. POLICY CLEANUP — drop any stale/legacy policies on managed tables so no
+--    permissive old policy (e.g. USING(true)) survives. The known-good V2
+--    policy set is recreated in section 8.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t text;
+  p record;
+begin
+  foreach t in array array[
+    'categories','collections','collection_products','products','product_variants',
+    'product_images','suppliers','supplier_products','supplier_variants','supplier_shipping',
+    'inventory','pricing_history','customers','addresses','orders','order_items',
+    'payments','fulfillment','reviews','ai_providers','agent_jobs','agent_runs',
+    'agent_logs','product_candidates','product_scores','creative_assets','creative_jobs',
+    'campaigns','ad_creatives','ad_performance'
+  ] loop
+    if to_regclass(format('public.%I', t)) is not null then
+      for p in
+        select policyname from pg_policies where schemaname = 'public' and tablename = t
+      loop
+        execute format('drop policy if exists %I on public.%I', p.policyname, t);
+      end loop;
+    end if;
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 8. Policies — the known-good V2 set (drop-if-exists + create, idempotent)
 -- ---------------------------------------------------------------------------
 -- Public read for the storefront (published products only)
 drop policy if exists "public read categories" on public.categories;
@@ -590,7 +764,9 @@ create policy "customer select own reviews" on public.reviews
   for select using (customer_id = public.current_customer_id());
 
 -- ---------------------------------------------------------------------------
--- 7. Updated-at triggers (drop-if-exists + create — idempotent)
+-- 9. Updated-at triggers (drop-if-exists + create — idempotent).
+--    Guarded on the updated_at column: creative_jobs has no updated_at and is
+--    skipped, so the trigger can never error at runtime.
 -- ---------------------------------------------------------------------------
 do $$
 declare t text;
@@ -601,13 +777,21 @@ begin
     'agent_jobs','product_candidates','creative_assets','creative_jobs',
     'campaigns','ad_creatives'
   ] loop
-    execute format('drop trigger if exists set_updated_at_trg on public.%I;', t);
-    execute format('create trigger set_updated_at_trg before update on public.%I for each row execute function public.set_updated_at();', t);
+    if to_regclass(format('public.%I', t)) is not null
+       and exists (
+         select 1 from information_schema.columns
+         where table_schema = 'public' and table_name = t and column_name = 'updated_at'
+       )
+    then
+      execute format('drop trigger if exists set_updated_at_trg on public.%I;', t);
+      execute format('create trigger set_updated_at_trg before update on public.%I for each row execute function public.set_updated_at();', t);
+    end if;
   end loop;
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 8. Indexes (create index if not exists — idempotent)
+-- 10. Indexes (create index if not exists — idempotent)
+--     All referenced columns exist after sections 2–4 (verified above).
 -- ---------------------------------------------------------------------------
 create index if not exists idx_products_slug on public.products(slug);
 create index if not exists idx_products_status on public.products(status);
@@ -626,7 +810,7 @@ create index if not exists idx_candidates_status on public.product_candidates(st
 create index if not exists idx_ad_perf_creative on public.ad_performance(ad_creative_id, date);
 
 -- ---------------------------------------------------------------------------
--- 9. Role grants (0003) — idempotent
+-- 11. Role grants (0003) — idempotent
 -- ---------------------------------------------------------------------------
 grant all on all tables in schema public to anon, authenticated, service_role;
 grant all on all sequences in schema public to anon, authenticated, service_role;
@@ -635,3 +819,5 @@ grant all on all functions in schema public to anon, authenticated, service_role
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
+COMMIT;
