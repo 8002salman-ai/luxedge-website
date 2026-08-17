@@ -16,7 +16,7 @@ import {
   type AiControlConfig, type ProviderId,
 } from '../aiControl';
 import { routerGenerate, compareProviderOutputs } from '../aiRouter';
-import { loadAutonomyConfig, saveAutonomyConfig } from '../autonomy';
+import { loadAutonomyConfig, saveAutonomyConfig, isEmergencyPaused, setEmergencyPause } from '../autonomy';
 
 function cfg(over: Partial<AiControlConfig> = {}): AiControlConfig {
   return {
@@ -348,6 +348,24 @@ describe('feature switches + pause', () => {
       generate,
     })).rejects.toThrow(/EMERGENCY PAUSE/);
     expect(calls.length).toBe(0);
+  });
+
+  it('pause must be persisted to the canonical key the runtime gate reads (Control Center regression)', () => {
+    // The AI Control Center's toggle previously wrote only the control-config
+    // flag; the gate reads the canonical pause key via isEmergencyPaused().
+    // Writing the canonical key must make a freshly loaded config gate the AI.
+    const storage = withStorage();
+    setEmergencyPause(true, storage);
+    expect(isEmergencyPaused(storage)).toBe(true);
+    // loadAiControlConfig overrides the stored flag with the canonical key.
+    const cfg2 = loadAiControlConfig(storage);
+    expect(cfg2.emergencyPause).toBe(true);
+    const g = aiGate(cfg2, 'MARKET_INTELLIGENCE');
+    expect(g.allow).toBe(false);
+    expect(g.reason).toMatch(/EMERGENCY PAUSE/);
+    setEmergencyPause(false, storage);
+    expect(isEmergencyPaused(storage)).toBe(false);
+    expect(loadAiControlConfig(storage).emergencyPause).toBe(false);
   });
 });
 

@@ -4,8 +4,8 @@
 // Never returns keys or any secret material. Admin-only (Phase 3A) — the
 // storefront never needs this; only the admin AI Hub consumes it.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { PROVIDER_ENV, PROVIDER_NAMES, isConfigured, defaultModelFor, sendJson } from '../_lib/providers';
-import { requireAdmin } from '../_lib/auth';
+import { PROVIDER_ENV, PROVIDER_NAMES, isConfigured, defaultModelFor, sendJson } from '../_lib/providers.js';
+import { requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET') {

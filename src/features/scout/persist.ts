@@ -255,13 +255,15 @@ export async function completeJob(
   jobId: string,
   status: 'completed' | 'failed',
   output: unknown,
-  error?: string
+  error?: string,
+  meta?: { provider?: string | null; model?: string | null }
 ): Promise<void> {
   await db.update<AgentJobRow>('agent_jobs', jobId, {
     status,
     output,
     error: error ?? null,
     finished_at: now(),
+    ...(meta ? { provider: meta.provider ?? null, model: meta.model ?? null } : {}),
   } as Partial<AgentJobRow>);
 }
 

@@ -32,3 +32,5 @@ Thumbs.db
 .freebuff/
 .freebuff-backup/
 ```
+.vercel
+.env*

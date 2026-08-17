@@ -25,7 +25,7 @@ import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
 import { runScoutResearch, runMarketIntelligenceJob, qaCandidate } from '../features/scout/engine';
 import type { QAOutcome } from '../features/scout/engine';
-import { createProductDraft, findCategoryId } from '../features/scout/persist';
+import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
 import type { CandidateEvidence, ScoutCandidate, AutonomyConfig, OwnerAttentionItem, ListingDraft, ListingQAResult, MarketAnalysis } from '../features/scout/types';
 import type { FetchedSourcePage } from '../features/scout/types';
@@ -482,6 +482,26 @@ export default function ProductScout() {
       if (!listing) listing = buildDeterministicListing(c);
 
       const lqa = qaListing(c, listing);
+
+      // Durable LISTING_GENERATE audit job (§15): provider/model when DeepSeek
+      // ran, otherwise deterministic — never secrets, never prompts.
+      try {
+        const listingJobId = await createJob(db, 'LISTING_GENERATE', {
+          candidateId: c.id,
+          title: c.title,
+          note: 'AI listing generation via secure router → factual QA → DRAFT ONLY',
+        });
+        await completeJob(db, listingJobId, 'completed', {
+          aiUsed,
+          title: listing.title,
+          qaPassed: lqa.passed,
+          supportedClaims: lqa.claims.filter((cl) => cl.status === 'supported').length,
+          unsupportedClaims: lqa.claims.filter((cl) => cl.status === 'unsupported').length,
+          unknownClaims: lqa.claims.filter((cl) => cl.status === 'unknown').length,
+        }, undefined, aiUsed ? { provider: 'deepseek', model: 'deepseek-chat' } : {});
+      } catch {
+        /* audit is best-effort — listing flow must not break */
+      }
 
       const decision = evaluateAutonomy({
         candidate: c,

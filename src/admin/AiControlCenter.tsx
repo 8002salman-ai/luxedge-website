@@ -24,7 +24,7 @@ import {
   takeManualControl, resumeAiControl, loadAiRouterLog, clearAiRouterLog,
   callsToday, providerHealth, type AiControlConfig, type AiTask, type ProviderId,
 } from '../features/scout/aiControl';
-import { loadAttentionItems, resolveAttentionItem } from '../features/scout/autonomy';
+import { loadAttentionItems, resolveAttentionItem, setEmergencyPause } from '../features/scout/autonomy';
 
 export default function AiControlCenter() {
   const { notify } = useApp();
@@ -52,6 +52,18 @@ export default function AiControlCenter() {
     saveAiControlConfig(next);
     setCfg(next);
     notify('AI Control settings saved');
+  };
+
+  // Emergency Pause must also write the canonical pause key
+  // (luxedge_scout_emergency_pause) that the runtime AI gate reads via
+  // isEmergencyPaused() — writing only the control config left the gate
+  // unpaused and made the toggle an illusion. Research/read-only analysis
+  // may still continue under pause (Master Plan §14); mutations stay blocked.
+  const togglePause = () => {
+    const next = !cfg.emergencyPause;
+    setEmergencyPause(next);
+    save({ ...cfg, emergencyPause: next });
+    notify(next ? 'EMERGENCY PAUSE ACTIVE — autonomous mutations blocked (research may continue)' : 'Emergency pause released');
   };
 
   const setProvider = (id: ProviderId, patch: Partial<{ enabled: boolean; dailyCallLimit: number }>) =>
@@ -134,7 +146,7 @@ export default function AiControlCenter() {
                 <p className="text-[12px] font-semibold text-gray-800">EMERGENCY PAUSE</p>
                 <p className="text-[10px] text-gray-500">Kill switch — blocks auto approvals, drafts, publishing, marketing</p>
               </div>
-              <button onClick={() => save({ ...cfg, emergencyPause: !cfg.emergencyPause })} className={toggle(cfg.emergencyPause)}>
+              <button onClick={togglePause} className={toggle(cfg.emergencyPause)}>
                 <span className={`${knob} ${cfg.emergencyPause ? 'translate-x-4 bg-red-400' : ''}`} />
               </button>
             </div>

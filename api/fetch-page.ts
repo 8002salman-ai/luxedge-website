@@ -12,9 +12,9 @@
 //    hop; non-http(s) URLs, embedded credentials and non-standard ports rejected.
 //  - Rate-limited per instance.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson, sendText, rateLimited, clientIp } from './_lib/providers';
-import { validateFetchTarget } from './_lib/ssrf';
-import { requireAdmin } from './_lib/auth';
+import { sendJson, sendText, rateLimited, clientIp } from './_lib/providers.js';
+import { validateFetchTarget } from './_lib/ssrf.js';
+import { requireAdmin } from './_lib/auth.js';
 
 const MAX_REDIRECTS = 3;
 

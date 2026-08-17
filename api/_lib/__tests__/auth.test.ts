@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { adminAuth, getBearerToken } from '../auth';
+import { adminAuth, getBearerToken } from '../auth.js';
 
 const SECRET = '0123456789abcdef0123456789abcdef';
 const originalSecret = process.env.SUPABASE_JWT_SECRET;

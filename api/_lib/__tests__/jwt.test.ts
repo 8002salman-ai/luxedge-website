@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { verifyJwtHs256, isAdminClaim } from '../jwt';
+import { verifyJwtHs256, isAdminClaim } from '../jwt.js';
 
 const SECRET = '0123456789abcdef0123456789abcdef';
 

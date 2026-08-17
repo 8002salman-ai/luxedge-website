@@ -8,8 +8,8 @@
 // 401/403. Defense in depth on top: body size cap, prompt length cap, model
 // allowlist regex, per-instance rate limit.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generate, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers';
-import { requireAdmin } from '../_lib/auth';
+import { generate, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
+import { requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {

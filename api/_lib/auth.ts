@@ -22,8 +22,8 @@
 // ============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { verifyJwtHs256, isAdminClaim, type VerifiedJwt } from './jwt';
-import { sendJson } from './providers';
+import { verifyJwtHs256, isAdminClaim, type VerifiedJwt } from './jwt.js';
+import { sendJson } from './providers.js';
 
 export interface AuthResult {
   ok: true;

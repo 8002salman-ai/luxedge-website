@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events';
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import handler from '../generate';
-import fetchPageHandler from '../../fetch-page';
+import handler from '../generate.js';
+import fetchPageHandler from '../../fetch-page.js';
 
 const SECRET = '0123456789abcdef0123456789abcdef';
 const originalSecret = process.env.SUPABASE_JWT_SECRET;

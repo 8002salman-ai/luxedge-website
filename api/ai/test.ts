@@ -4,8 +4,8 @@
 // Admin-only (Phase 3A): valid Supabase admin JWT required (401/403 otherwise).
 // Rate-limited per instance.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readJsonBody, sendJson, testProvider, rateLimited, clientIp, isValidModel } from '../_lib/providers';
-import { requireAdmin } from '../_lib/auth';
+import { readJsonBody, sendJson, testProvider, rateLimited, clientIp, isValidModel } from '../_lib/providers.js';
+import { requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {

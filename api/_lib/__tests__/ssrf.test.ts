@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isBlockedIp, isBlockedHostname, validateFetchTarget } from '../ssrf';
+import { isBlockedIp, isBlockedHostname, validateFetchTarget } from '../ssrf.js';
 
 describe('isBlockedIp', () => {
   it('blocks loopback and cloud metadata ranges', () => {

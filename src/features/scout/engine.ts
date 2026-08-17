@@ -387,7 +387,9 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     aiUsed: analysis.aiUsed,
     warning: warning || null,
     at: new Date().toISOString(),
-  });
+  }, undefined, analysis.aiUsed
+    ? { provider: 'deepseek', model: analysis.model || 'deepseek-chat' }
+    : {});
 
   return {
     jobId,
