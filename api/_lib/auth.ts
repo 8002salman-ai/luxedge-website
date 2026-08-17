@@ -7,11 +7,18 @@
 //   - No Authorization header            -> 401 Unauthorized
 //   - Invalid / expired / tampered token -> 401 Unauthorized
 //   - Valid token, role != admin         -> 403 Forbidden
-//   - SUPABASE_JWT_SECRET not configured -> 503 (fail closed — never open)
+//   - No verification configured        -> 503 (fail closed — never open)
 //
-// The role claim is read from the VERIFIED JWT (app_metadata.role), which is
-// the same trusted claim the Supabase RLS policies use. A role sent from the
-// browser in a query param / body is NEVER trusted.
+// Verification strategy (both enforce the same admin claim):
+//   1. Local HS256 verification when SUPABASE_JWT_SECRET is set (fast, no
+//      network) — preferred.
+//   2. Remote validation via GET {SUPABASE_URL}/auth/v1/user when the JWT
+//      secret is absent but VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY are
+//      configured server-side. The endpoint returns 401 for invalid tokens
+//      and the user's app_metadata.role is the same trusted claim RLS uses.
+//
+// The role claim is read from the VERIFIED token (app_metadata.role), never
+// from a browser-supplied field.
 // ============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -37,27 +44,72 @@ export function getBearerToken(req: IncomingMessage): string {
   return match ? match[1].trim() : '';
 }
 
+/**
+ * Remote admin verification against the live Supabase project. The user's
+ * access token is validated by Supabase itself; the admin role claim is read
+ * from the returned user record's app_metadata. Never exposes secrets.
+ */
+async function remoteVerifyAdmin(token: string): Promise<AuthDecision> {
+  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  if (!url || !anonKey) {
+    return { ok: false, status: 503, error: 'Authentication is not configured on this deployment. Set SUPABASE_JWT_SECRET (or VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY) — see .env.example.' };
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${url}/auth/v1/user`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return { ok: false, status: 502, error: 'Auth service is unreachable right now.' };
+  }
+  // Supabase answers 401 for missing tokens and 403 bad_jwt for malformed/
+  // invalid ones — both mean the session is not valid.
+  if (res.status === 401 || res.status === 403) {
+    return { ok: false, status: 401, error: 'Unauthorized — invalid or expired session.' };
+  }
+  if (!res.ok) {
+    return { ok: false, status: 502, error: `Auth service error (HTTP ${res.status}).` };
+  }
+  const user = (await res.json().catch(() => null)) as {
+    id?: string;
+    email?: string;
+    app_metadata?: { role?: string };
+    user_metadata?: Record<string, unknown>;
+  } | null;
+  if (!user?.id) {
+    return { ok: false, status: 502, error: 'Auth service returned an invalid response.' };
+  }
+  if (user.app_metadata?.role !== 'admin') {
+    return { ok: false, status: 403, error: 'Forbidden — admin role required.' };
+  }
+  return {
+    ok: true,
+    payload: { sub: user.id, email: user.email, app_metadata: user.app_metadata, user_metadata: user.user_metadata },
+  };
+}
+
 /** Verify the admin identity from the request. Never trusts client input. */
 export async function adminAuth(req: IncomingMessage): Promise<AuthDecision> {
-  const secret = (process.env.SUPABASE_JWT_SECRET || '').trim();
-  if (!secret) {
-    // Fail closed: without a configured JWT secret we cannot prove identity.
-    return { ok: false, status: 503, error: 'Authentication is not configured on this deployment. Set SUPABASE_JWT_SECRET (see .env.example).' };
-  }
   const token = getBearerToken(req);
   if (!token) {
     return { ok: false, status: 401, error: 'Unauthorized — sign in to the admin dashboard first.' };
   }
-  let payload: VerifiedJwt;
-  try {
-    payload = verifyJwtHs256(token, secret);
-  } catch (e) {
-    return { ok: false, status: 401, error: `Unauthorized — ${(e as Error).message}.` };
+  const secret = (process.env.SUPABASE_JWT_SECRET || '').trim();
+  if (secret) {
+    let payload: VerifiedJwt;
+    try {
+      payload = verifyJwtHs256(token, secret);
+    } catch (e) {
+      return { ok: false, status: 401, error: `Unauthorized — ${(e as Error).message}.` };
+    }
+    if (!isAdminClaim(payload)) {
+      return { ok: false, status: 403, error: 'Forbidden — admin role required.' };
+    }
+    return { ok: true, payload };
   }
-  if (!isAdminClaim(payload)) {
-    return { ok: false, status: 403, error: 'Forbidden — admin role required.' };
-  }
-  return { ok: true, payload };
+  return remoteVerifyAdmin(token);
 }
 
 /** Convenience: enforce admin auth and send the failure response if denied. */

@@ -136,14 +136,18 @@ export class SupabaseAdapter implements DbAdapter {
     return `${this.url}/rest/v1/${table}${id ? `?id=eq.${encodeURIComponent(id)}` : ''}`;
   }
 
-  private headers(method: string): Record<string, string> {
-    const bearer = this.accessToken || this.anonKey;
-    return {
+  private headers(_method: string): Record<string, string> {
+    // New-style Supabase keys: the publishable/anon key goes in the `apikey`
+    // header ONLY (sending it as a Bearer token is rejected). A signed-in
+    // user's access token is added as the Bearer token so RLS sees their
+    // role; without it the request runs as the public anon role.
+    const h: Record<string, string> = {
       apikey: this.anonKey,
-      Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
-      Prefer: method === 'POST' ? 'return=representation' : 'return=representation',
+      Prefer: 'return=representation',
     };
+    if (this.accessToken) h.Authorization = `Bearer ${this.accessToken}`;
+    return h;
   }
 
   private async handle<T>(res: Response): Promise<T> {
@@ -218,9 +222,21 @@ export class SupabaseAdapter implements DbAdapter {
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
-export function resolveDbConfig(): { url: string; anonKey: string } {
+let dbConfigOverride: { url: string; anonKey: string } | null | undefined = undefined;
+
+/**
+ * Test-only hook: override resolved config (null = unconfigured, undefined =
+ * restore real env resolution). Never called by app code.
+ */
+export function __setDbConfigForTests(config: { url: string; anonKey: string } | null | undefined): void {
+  dbConfigOverride = config;
+}
+
+export function resolveDbConfig(): { url: string; anonKey: string } | null {
+  if (dbConfigOverride !== undefined) return dbConfigOverride;
   const url = (import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || '';
   const anonKey = (import.meta as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY || '';
+  if (!url || !anonKey) return null;
   return { url, anonKey };
 }
 
@@ -229,16 +245,14 @@ let cachedAdapter: DbAdapter | null = null;
 /** Returns the active adapter. Defaults to localStorage; upgrades to Supabase when configured. */
 export function getDb(): DbAdapter {
   if (cachedAdapter) return cachedAdapter;
-  const { url, anonKey } = resolveDbConfig();
-  cachedAdapter = url && anonKey ? new SupabaseAdapter(url, anonKey) : new LocalStorageAdapter();
+  const cfg = resolveDbConfig();
+  cachedAdapter = cfg ? new SupabaseAdapter(cfg.url, cfg.anonKey) : new LocalStorageAdapter();
   return cachedAdapter;
 }
 
 /** Which persistence mode is active — used for honest UI status. */
 export function getDbMode(): DbMode {
-  const { url, anonKey } = resolveDbConfig();
-  if (url && anonKey) return 'supabase';
-  return 'local';
+  return resolveDbConfig() ? 'supabase' : 'local';
 }
 
 export function resetDbForTests(): void {

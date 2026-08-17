@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { LocalStorageAdapter, SupabaseAdapter, getDbMode, resetDbForTests } from '../db';
+import { LocalStorageAdapter, SupabaseAdapter, getDbMode, resetDbForTests, __setDbConfigForTests } from '../db';
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   const map = new Map<string, string>();
@@ -49,9 +49,14 @@ describe('LocalStorageAdapter', () => {
 });
 
 describe('getDbMode', () => {
-  beforeEach(() => resetDbForTests());
+  beforeEach(() => {
+    resetDbForTests();
+    __setDbConfigForTests(undefined);
+  });
 
   it('reports local when Supabase env vars are absent', () => {
+    // A local .env may set VITE_SUPABASE_* — force the unconfigured path.
+    __setDbConfigForTests(null);
     expect(getDbMode()).toBe('local');
   });
 });

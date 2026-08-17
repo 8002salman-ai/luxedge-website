@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { adminAuth, getBearerToken } from '../auth';
 
 const SECRET = '0123456789abcdef0123456789abcdef';
@@ -46,7 +46,10 @@ describe('adminAuth', () => {
   });
 
   it('fails closed (503) when the JWT secret is not configured', async () => {
+    // .env may provide VITE_SUPABASE_* — clear them so no remote path exists.
     delete process.env.SUPABASE_JWT_SECRET;
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.VITE_SUPABASE_ANON_KEY;
     const decision = await adminAuth(reqWithAuth(adminToken));
     expect(decision.ok).toBe(false);
     if (!decision.ok) expect(decision.status).toBe(503);
@@ -77,5 +80,78 @@ describe('adminAuth', () => {
     const decision = await adminAuth(reqWithAuth(adminToken));
     expect(decision.ok).toBe(true);
     if (decision.ok) expect(decision.payload.sub).toBe('adm-1');
+  });
+});
+
+describe('adminAuth — remote validation (no JWT secret configured)', () => {
+  const originalUrl = process.env.VITE_SUPABASE_URL;
+  const originalAnon = process.env.VITE_SUPABASE_ANON_KEY;
+
+  beforeEach(() => {
+    delete process.env.SUPABASE_JWT_SECRET;
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key');
+  });
+  afterEach(() => {
+    if (originalUrl === undefined) delete process.env.VITE_SUPABASE_URL;
+    else process.env.VITE_SUPABASE_URL = originalUrl;
+    if (originalAnon === undefined) delete process.env.VITE_SUPABASE_ANON_KEY;
+    else process.env.VITE_SUPABASE_ANON_KEY = originalAnon;
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('fails closed (503) when no Supabase env vars are configured either', async () => {
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.VITE_SUPABASE_ANON_KEY;
+    const decision = await adminAuth(reqWithAuth(adminToken));
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.status).toBe(503);
+  });
+
+  it('returns 401 when Supabase rejects the token (401)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 })));
+    const decision = await adminAuth(reqWithAuth('some-token'));
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.status).toBe(401);
+  });
+
+  it('returns 401 for a malformed token (Supabase bad_jwt 403)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 403, error_code: 'bad_jwt', msg: 'invalid JWT' }), { status: 403 })
+      )
+    );
+    const decision = await adminAuth(reqWithAuth('garbage'));
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.status).toBe(401);
+  });
+
+  it('returns 403 when the validated user is not an admin', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 'u1', email: 'buyer@x.com', app_metadata: {} }), { status: 200 })
+      )
+    );
+    const decision = await adminAuth(reqWithAuth('valid-token'));
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.status).toBe(403);
+  });
+
+  it('accepts a validated admin user', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ id: 'adm-9', email: 'admin@x.com', app_metadata: { role: 'admin' } }),
+          { status: 200 }
+        )
+      )
+    );
+    const decision = await adminAuth(reqWithAuth('valid-admin-token'));
+    expect(decision.ok).toBe(true);
+    if (decision.ok) expect(decision.payload.sub).toBe('adm-9');
   });
 });

@@ -79,7 +79,10 @@ describe('/api/ai/generate handler', () => {
   });
 
   it('returns 503 when the JWT secret is not configured (fail closed)', async () => {
+    // .env may provide VITE_SUPABASE_* — clear them so no remote path exists.
     delete process.env.SUPABASE_JWT_SECRET;
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.VITE_SUPABASE_ANON_KEY;
     const res = mockRes();
     await handler(mockReq('POST', { authorization: `Bearer ${adminToken}` }, JSON.stringify({ provider: 'openai', prompt: 'hi' })), res);
     expect(statusOf(res)).toBe(503);
