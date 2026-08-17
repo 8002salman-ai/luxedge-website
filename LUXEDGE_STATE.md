@@ -1,5 +1,10 @@
 # LUXEDGE STATE — Agent Handoff
 
+> **MANDATORY:** Before any Luxedge work, read `LUXEDGE_MASTER_PLAN.md` first.
+> `LUXEDGE_MASTER_PLAN.md` defines mission, business North Star, autonomy rules, and anti-drift architecture.
+> `LUXEDGE_STATE.md` defines current technical implementation/state.
+> If a task conflicts with the Master Plan, report the conflict instead of silently changing direction.
+
 Updated **2026-08-17** after **PHASE 4B (AI MARKET INTELLIGENCE + GUARDED AUTONOMY + ONE-PRODUCT LISTING)** on `luxedge-v2`. Phase 1 security, Phase 2 storefront, Phase 3A auth/API, Phase 3B live-database, and Phase 4A Product Scout work remain intact.
 
 ## Phase 3B FINAL STATUS = PASS (closed)
@@ -139,6 +144,11 @@ Updated **2026-08-17** after **PHASE 4B (AI MARKET INTELLIGENCE + GUARDED AUTONO
 **Security** — master/feature/provider switches are admin-UI-only (route behind `ProtectedRoute requireAdmin`); no service-role key in the bundle (scan CLEAN of secret values — only env-var *names* in the admin UI); decision log contains no prompts/outputs/secrets (scrubbed); provider calls go through the admin-JWT server proxy; autonomy limits unchanged (AI can never change credentials, RLS, budgets beyond config, pay suppliers, spend ad money, bypass hard rejection, disable pause, or promote users); credentials unchanged.
 
 **Known blockers (unchanged)** — (1) Apply `0007_market_intelligence_job_type.sql` in the SQL Editor to persist MARKET_INTELLIGENCE job rows; (2) no AI provider key configured on the server yet — deterministic paths are the live path until one is added.
+
+**Phase 4B verdicts (distinguished, per owner audit)** —
+- **AI CONTROL ARCHITECTURE = PASS** — master AI Services switch, MANUAL/ASSISTED/AUTONOMOUS control modes, per-provider ON/OFF + task routing + fallback, cost strategies, second opinion, feature switches, TAKE MANUAL CONTROL / RESUME AI CONTROL, decision log, and the AI Control Center UI are implemented, tested (177/177) and browser-verified. These are configuration/architecture — they do NOT depend on a live provider.
+- **DETERMINISTIC PIPELINE = PASS** — discovery → research → scoring → rejection → QA → supplier dedupe → one-product DRAFT-only listing all work live against the real DB with zero AI calls.
+- **LIVE AI-GROUNDED MARKET INTELLIGENCE = PENDING** — NOT marked fully live-tested. Required before it can be marked live/PASS: (a) owner confirms `0007` applied in the SQL Editor; AND (b) at least one real server-side AI provider (e.g. DeepSeek) is configured; AND (c) one grounded Market Intelligence call succeeds against real collected evidence (unsupported AI claims dropped, deterministic fallback still intact). Until then this status stays **PENDING** — the deterministic evidence layer remains the live path.
 
 ## Exact recommended next task
 
