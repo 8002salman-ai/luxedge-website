@@ -18,6 +18,14 @@ Updated after **Phase 3B (database completion attempt)** on `luxedge-v2`. Phase 
 - **Quality gate:** `npm test` ✅ 88/88 · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅ (storefront 410.45 KB / gzip 116.97 KB, admin lazy 242.37 KB).
 - **Live preview:** dev server running at http://localhost:5173 — storefront renders, hero copy verified updated, zero console errors.
 
+## Phase 3B — 0004 policy-dependency fix (2026-08-17, after first live run failed)
+
+- **Live run 1 failed** with `ERROR: cannot alter type of a column used in a policy definition — policy "Published products are public" on table products depends on column "status"`. Because 0004 is one transaction, the failed run **rolled back completely** (verified live: still exactly the 13 legacy tables, `customers` absent — safe to retry).
+- **Fix:** the POLICY CLEANUP step (drop ALL policies on all 30 managed tables via `pg_policies` + `to_regclass`, so unknown legacy names like "Published products are public" are removed automatically) is now **section 2 — the first step after helpers, before any `ALTER COLUMN TYPE`**. Postgres refuses to change the type of a column used in a policy, so this must precede the status-enum widening (`products.status`, `product_variants.status`, `orders.status`, `orders.payment_status`). RLS stays enabled; the V2 policy set is still recreated later (section 8). Sections renumbered 1–11.
+- **Re-audited mechanically:** cleanup precedes every ALTER TYPE (char 5704 < 9030); sequential section numbers; quote/`$q$` balance OK; no DROP TABLE/TRUNCATE; no forward FK refs; BEGIN/COMMIT intact.
+- **Quality gate re-run:** `npm test` ✅ 88/88 · `npx tsc --noEmit` ✅ 0 errors · `npm run build` ✅.
+- **Owner action:** re-run `supabase/migrations/0004_reconcile_live.sql` in the Dashboard → SQL Editor. It is safe to retry.
+
 ## Phase 3B Status — PASS WITH WARNINGS (DB application BLOCKED on owner)
 
 - **Date:** 2026-08-17

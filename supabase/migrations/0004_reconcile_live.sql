@@ -32,11 +32,18 @@
 --   The first draft added `orders.customer_id` / `addresses.customer_id`
 --   FOREIGN KEYs to public.customers BEFORE public.customers was created, so
 --   the migration failed on a fresh legacy DB. This version:
+--     0. POLICY CLEANUP runs FIRST (section 2): every policy on every managed
+--        table (including unknown legacy ones such as "Published products are
+--        public") is dropped. PostgreSQL refuses to ALTER COLUMN TYPE on a
+--        column used in a policy definition, so this must precede the legacy
+--        status-enum widening (products.status, product_variants.status,
+--        orders.status, orders.payment_status).
 --     1. reconciles legacy tables (no FK to NEW tables yet),
 --     2. creates every missing V2 table (customers included),
 --     3. ONLY THEN adds the FK columns on legacy tables that reference the
 --        new tables (orders.customer_id, addresses.customer_id),
---     4. then helper functions, RLS, triggers, indexes, grants.
+--     4. then RLS re-enable, the known-good V2 policy set, triggers, indexes,
+--        grants.
 --
 -- LIVE SCHEMA VERIFIED (Aug 2026, via PostgREST OpenAPI with the secret key):
 --   13 legacy tables, all EMPTY:
@@ -55,6 +62,10 @@
 --     * inventory has NO `id` / `product_id` — PK is (variant_id); the V2
 --       `id` is added + backfilled + made PK only if no PK exists
 --     * creative_jobs has NO `updated_at` (trigger loop skips it)
+--     * Legacy RLS policies (e.g. "Published products are public") depend on
+--       status columns. Section 2 drops ALL of them first so ALTER COLUMN
+--       TYPE can widen the enums — Postgres otherwise fails with "cannot
+--       alter type of a column used in a policy definition".
 --
 -- After running: 30 V2 tables + 5 legacy tables exist, grants restored, RLS
 -- enforced. Then populate the catalog via the admin UI or SQL INSERTs.
@@ -76,7 +87,41 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 2. RECONCILE EXISTING TABLES (add V2 columns; widen status enums to text)
+-- 2. POLICY CLEANUP — drop ALL existing policies (including unknown legacy
+--    ones such as "Published products are public") on every managed table
+--    BEFORE any ALTER COLUMN TYPE. PostgreSQL refuses to change the type of a
+--    column that a policy depends on, so this MUST run before the legacy
+--    status enums are widened (products.status, product_variants.status,
+--    orders.status, orders.payment_status). Uses pg_policies + to_regclass so
+--    legacy policy names are removed automatically. RLS stays enabled; the
+--    known-good V2 policy set is recreated in section 8. Everything here is
+--    inside the transaction, so any later failure rolls these drops back too.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t text;
+  p record;
+begin
+  foreach t in array array[
+    'categories','collections','collection_products','products','product_variants',
+    'product_images','suppliers','supplier_products','supplier_variants','supplier_shipping',
+    'inventory','pricing_history','customers','addresses','orders','order_items',
+    'payments','fulfillment','reviews','ai_providers','agent_jobs','agent_runs',
+    'agent_logs','product_candidates','product_scores','creative_assets','creative_jobs',
+    'campaigns','ad_creatives','ad_performance'
+  ] loop
+    if to_regclass(format('public.%I', t)) is not null then
+      for p in
+        select policyname from pg_policies where schemaname = 'public' and tablename = t
+      loop
+        execute format('drop policy if exists %I on public.%I', p.policyname, t);
+      end loop;
+    end if;
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 3. RECONCILE EXISTING TABLES (add V2 columns; widen status enums to text)
 --    No statement here references a table that does not exist yet: every
 --    ALTER is guarded, and NO foreign key to a NEW table is added here.
 -- ---------------------------------------------------------------------------
@@ -272,7 +317,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 3. CREATE MISSING V2 TABLES (all `create table if not exists`)
+-- 4. CREATE MISSING V2 TABLES (all `create table if not exists`)
 --    Ordered by dependency: referenced tables are created before the tables
 --    that reference them. public.customers is created here, which unblocks
 --    the orders/addresses FK columns added in section 4.
@@ -546,14 +591,14 @@ create table if not exists public.ad_performance (
 );
 
 -- ---------------------------------------------------------------------------
--- 4. FK COLUMNS ON LEGACY TABLES THAT REFERENCE NEW TABLES
+-- 5. FK COLUMNS ON LEGACY TABLES THAT REFERENCE NEW TABLES
 --    Added ONLY now, after public.customers exists (dependency ordering fix).
 -- ---------------------------------------------------------------------------
 alter table public.orders add column if not exists customer_id uuid references public.customers(id) on delete set null;
 alter table public.addresses add column if not exists customer_id uuid references public.customers(id) on delete cascade;
 
 -- ---------------------------------------------------------------------------
--- 5. 0002: customer identity + customer-scoped RLS (idempotent)
+-- 6. 0002: customer identity + customer-scoped RLS (idempotent)
 -- ---------------------------------------------------------------------------
 create or replace function public.current_customer_id()
 returns uuid
@@ -566,7 +611,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6. Row Level Security — enable on every table (idempotent)
+-- 7. Row Level Security — enable on every table (idempotent)
 -- ---------------------------------------------------------------------------
 alter table public.categories enable row level security;
 alter table public.collections enable row level security;
@@ -598,34 +643,6 @@ alter table public.creative_jobs enable row level security;
 alter table public.campaigns enable row level security;
 alter table public.ad_creatives enable row level security;
 alter table public.ad_performance enable row level security;
-
--- ---------------------------------------------------------------------------
--- 7. POLICY CLEANUP — drop any stale/legacy policies on managed tables so no
---    permissive old policy (e.g. USING(true)) survives. The known-good V2
---    policy set is recreated in section 8.
--- ---------------------------------------------------------------------------
-do $$
-declare
-  t text;
-  p record;
-begin
-  foreach t in array array[
-    'categories','collections','collection_products','products','product_variants',
-    'product_images','suppliers','supplier_products','supplier_variants','supplier_shipping',
-    'inventory','pricing_history','customers','addresses','orders','order_items',
-    'payments','fulfillment','reviews','ai_providers','agent_jobs','agent_runs',
-    'agent_logs','product_candidates','product_scores','creative_assets','creative_jobs',
-    'campaigns','ad_creatives','ad_performance'
-  ] loop
-    if to_regclass(format('public.%I', t)) is not null then
-      for p in
-        select policyname from pg_policies where schemaname = 'public' and tablename = t
-      loop
-        execute format('drop policy if exists %I on public.%I', p.policyname, t);
-      end loop;
-    end if;
-  end loop;
-end $$;
 
 -- ---------------------------------------------------------------------------
 -- 8. Policies — the known-good V2 set (drop-if-exists + create, idempotent)
