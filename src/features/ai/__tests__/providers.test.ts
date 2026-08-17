@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider } from '../providers';
+import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets } from '../providers';
 import type { AIProvider } from '../types';
 
 function memoryStorage(initial: Record<string, string> = {}): Pick<Storage, 'getItem' | 'setItem'> {
@@ -61,6 +61,53 @@ describe('loadAIProviders', () => {
   it('recovers from corrupt storage', () => {
     const providers = loadAIProviders(memoryStorage({ luxedge_ai_providers: '{{{not json' }));
     expect(providers.length).toBe(DEFAULT_AI_PROVIDERS.length);
+  });
+});
+
+describe('scrubLegacySecrets', () => {
+  const mem = (initial: Record<string, string>) => {
+    const map = new Map(Object.entries(initial));
+    return {
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => void map.set(k, v),
+      removeItem: (k: string) => void map.delete(k),
+    };
+  };
+
+  it('removes the standalone legacy key vault', () => {
+    const s = mem({ luxedge_api_keys: JSON.stringify({ scrapedoKey: 'tok-123', openAiKey: 'sk-secret' }) });
+    scrubLegacySecrets(s);
+    expect(s.getItem('luxedge_api_keys')).toBeNull();
+  });
+
+  it('strips apiKey from stored provider config', () => {
+    const s = mem({ luxedge_ai_providers: JSON.stringify([{ id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: true, apiKey: 'sk-leaked' }]) });
+    scrubLegacySecrets(s);
+    const stored = JSON.parse(s.getItem('luxedge_ai_providers') || '[]');
+    expect(JSON.stringify(stored)).not.toContain('sk-leaked');
+    expect('apiKey' in stored[0]).toBe(false);
+  });
+
+  it('strips legacy secret keys from the luxedge-settings store and rewrites it', () => {
+    const s = mem({
+      'luxedge-settings': JSON.stringify({ state: { apiKeys: { scrapedoKey: 'tok-1', openAiKey: 'sk-1', openRouterKey: 'sk-2', geminiApiKey: 'ai-3', supabaseUrl: 'https://x.supabase.co' }, storeConfig: { storeName: 'Luxedge' } }, version: 0 }),
+    });
+    scrubLegacySecrets(s);
+    const stored = JSON.parse(s.getItem('luxedge-settings') || '{}');
+    const apiKeys = stored.state.apiKeys;
+    expect(apiKeys.scrapedoKey).toBeUndefined();
+    expect(apiKeys.openAiKey).toBeUndefined();
+    expect(apiKeys.openRouterKey).toBeUndefined();
+    expect(apiKeys.geminiApiKey).toBeUndefined();
+    expect(apiKeys.supabaseUrl).toBe('https://x.supabase.co'); // client-safe fields survive
+    expect(JSON.stringify(stored)).not.toContain('sk-1');
+    expect(JSON.stringify(stored)).not.toContain('tok-1');
+  });
+
+  it('is a no-op when storage is empty or absent', () => {
+    const s = mem({});
+    expect(() => scrubLegacySecrets(s)).not.toThrow();
+    expect(() => scrubLegacySecrets()).not.toThrow();
   });
 });
 

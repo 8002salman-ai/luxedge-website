@@ -1975,6 +1975,8 @@ function CheckoutPage() {
       await new Promise(r => setTimeout(r, 2500));
       const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
       const oid = placeOrder(addr);
+      // Sensitive card fields are discarded immediately after the (demo) payment.
+      setF(p => ({ ...p, cardNum: '', cardExp: '', cardCvc: '', cardName: '' }));
       setOrderId(oid);
       setStep(4);
     }
@@ -2147,12 +2149,12 @@ function CheckoutPage() {
                   )}
                 </div>
 
-                {/* Security Note */}
-                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                  <Shield size={18} className="text-green-600 shrink-0" />
+                {/* Demo notice — no real payment processor is connected yet */}
+                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-green-800">Your payment is secure</p>
-                    <p className="text-xs text-green-600">256-bit SSL encryption. We never store your card details.</p>
+                    <p className="text-sm font-semibold text-amber-800">Demo checkout — no real payment is processed</p>
+                    <p className="text-xs text-amber-700">Card details are not stored, logged, or transmitted anywhere. A real payment provider (Stripe/PayPal) will be connected in a future release.</p>
                   </div>
                 </div>
 
@@ -2614,7 +2616,7 @@ function FAQPage() {
       { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. All transactions are processed securely through Stripe or PayPal.' },
+      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. Online payment processing is currently in demo mode — a real provider (Stripe/PayPal) is being integrated, and card details are never stored or transmitted until then.' },
       { q: 'Is my payment information secure?', a: 'Absolutely. We use 256-bit SSL encryption for all transactions. Your payment data is processed through PCI-DSS compliant processors. We never store your full card details on our servers.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
