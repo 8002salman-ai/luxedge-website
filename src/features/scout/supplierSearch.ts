@@ -21,7 +21,7 @@
 import type { DbAdapter } from '../../services/db';
 import type {
   SupplierDiscoveryAdapter, SupplierSearchOptions, SupplierProductRecord,
-  SupplierShippingEvidence,
+  SupplierShippingEvidence, SupplierPointUsage, MarketContext,
 } from '../suppliers/types';
 import type { ScoutCandidate, CandidateEvidence } from './types';
 import { calculateMargin } from './margin';
@@ -37,6 +37,7 @@ import { prefilterCjRecords } from '../suppliers/cj/prefilter';
 import { CjPointBudget, enrichmentCaps, CJ_POINT_COST } from '../suppliers/cj/points';
 import { parseDeliveryCycle, normalizeCountryCode } from '../suppliers/cj/normalize';
 import type { CjPointUsage } from '../suppliers/cj/points';
+import { finalOpportunityScore } from './market';
 
 export interface SupplierSearchRunOptions {
   adapter: SupplierDiscoveryAdapter;
@@ -54,6 +55,18 @@ export function petCategoryFromTitle(title: string): 'Dog' | 'Cat' | 'Pet' | nul
   return null;
 }
 
+/** One business-qualified candidate detail (Phase 4C final audit). */
+export interface BusinessQualifiedCandidate {
+  candidateId: string;
+  title: string;
+  productScore: number;
+  marketScore: number | null;
+  finalOpportunityScore: number | null;
+  landedCostConfidence: 'high' | 'low' | 'unknown';
+  usaDeliveryConfidence: 'high' | 'low' | 'unknown';
+  marginPct: number | null;
+}
+
 export interface SupplierSearchRunResult {
   jobId: string;
   scoreJobId?: string;
@@ -64,12 +77,29 @@ export interface SupplierSearchRunResult {
   prefilterRejected: number;
   researched: number;
   rejected: number;
-  shortlisted: number;
+  /** PRODUCT_SHORTLISTED: Product Score ≥75 + no hard rejection. */
+  productShortlisted: number;
+  /** PRODUCT_QA passed count (shortlisted candidates only). */
+  qaPassed: number;
+  /** BUSINESS_QUALIFIED: shortlisted + Market ≥60 + QA PASS + high landed-cost confidence + USA delivery evidence. */
+  businessQualified: number;
   failed: number;
   candidates: ScoutCandidate[];
+  /** Business-qualified candidates with their separate scores. */
+  businessQualifiedCandidates: BusinessQualifiedCandidate[];
+  /** Market gate: the grounded MI context that justified the search. */
+  marketContext?: {
+    marketAnalysisId?: string | null;
+    opportunity?: string | null;
+    marketScore: number | null;
+    evidenceFingerprint?: string | null;
+    observedAt?: string | null;
+  };
   warning?: string;
-  /** CJ point budget usage for the run (Phase 4C hardening). */
+  /** Client-side forecast budget usage (UX only). */
   points?: CjPointUsage;
+  /** Server-authoritative usage (estimated/authorized consumption). */
+  serverPoints?: SupplierPointUsage | null;
 }
 
 /**
@@ -138,10 +168,14 @@ export function evidenceFromSupplierRecord(
         : (r.warehouse ? `CJ warehouse: ${r.warehouse}` : 'CJ origin/warehouse unknown'),
     },
     category: { status: r.category ? 'verified' : 'unknown', value: r.category, source: 'CJ category' },
+    // FINAL AUDIT: a SKU/variant id is NOT size evidence, upsell evidence or
+    // competition evidence. sizes stay UNKNOWN unless real variant-option
+    // attributes (size/color/pack/model) demonstrate customer-selectable
+    // options. SKU + variant id remain in the supplier raw/variant evidence.
     sizes: {
-      status: r.selectedVariant ? 'inferred' : 'unknown',
-      value: r.selectedVariant ? [r.selectedVariant.sku] : null,
-      note: r.selectedVariant ? `Selected variant ${r.selectedVariant.variantId} (sku ${r.selectedVariant.sku})` : 'No variant data — variant UNKNOWN',
+      status: 'unknown',
+      value: null,
+      note: 'No verified variant-option semantics (size/color/pack/model) — a SKU/variant id alone is NOT size evidence.',
     },
     unknownFields,
     riskNotes: [],
@@ -190,16 +224,28 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
-  // Hard per-run CJ point budget (owner-configured default; AI cannot raise it).
+  // Per-run id + hard per-run budget (owner default; AI cannot raise it). The
+  // server clamps the requested budget to the HARD MAX — client only forecasts.
+  const runId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const budget = new CjPointBudget(search.pointsBudget);
   const caps = enrichmentCaps(budget);
+  adapter.setRunScope?.(runId, budget.budget);
+
+  // Grounded Market Intelligence context (market gate). Market score UNKNOWN
+  // unless a valid linked MI job/evidence is supplied — never invented.
+  const marketContext: MarketContext = search.marketContext ?? {};
+  const marketScore = typeof marketContext.marketScore === 'number' && Number.isFinite(marketContext.marketScore)
+    ? Math.min(100, Math.max(0, marketContext.marketScore))
+    : null;
 
   const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
     provider: adapter.provider,
     query: search.query,
-    market: search.market || null,
+    target_market: search.market || null,
     at,
+    runId,
     note: `Supplier-API discovery (CJ) → normalize → dedupe → Stage A filter/rank → Stage B enrichment (detail ≤${caps.detailMax}, freight ≤${caps.freightMax}) → persist`, // eslint-disable-line max-len
+    market: marketContext, // WHY this product was searched — the MI evidence link
   });
   await addRun(db, jobId, 'supplier-search', 'running', `Searching ${adapter.provider.toUpperCase()}: ${search.query}`);
   await addLog(db, jobId, 'info', `SUPPLIER_SEARCH(${adapter.provider}) started for "${search.query}" (budget=${budget.budget}pts, retries=0)`);
@@ -210,7 +256,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     await addLog(db, jobId, 'error', `CJ point budget ${budget.budget} exhausted before the search — run denied.`);
     await addRun(db, jobId, 'supplier-search', 'failed', 'CJ point budget exhausted before search');
     await completeJob(db, jobId, 'failed', { error: 'CJ point budget exhausted', points: budget.usage() });
-    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, shortlisted: 0, failed: 1, candidates: [], points: budget.usage() };
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: { marketScore }, points: budget.usage(), serverPoints: null };
   }
   try {
     result = await adapter.searchProducts(search);
@@ -224,7 +270,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     await addLog(db, jobId, 'error', `SUPPLIER_SEARCH failed: ${(e as Error).message} (retries=0)`);
     await addRun(db, jobId, 'supplier-search', 'failed', `Search failed: ${(e as Error).message}`);
     await completeJob(db, jobId, 'failed', { error: (e as Error).message, retries: 0, points: budget.usage() });
-    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, shortlisted: 0, failed: 1, candidates: [], points: budget.usage() };
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: { marketScore }, points: budget.usage(), serverPoints: null };
   }
   progress(`[search] ${adapter.provider.toUpperCase()} returned ${result.records.length} records (health=${result.health}, points used ${budget.used}/${budget.budget})${result.warning ? ' — ' + result.warning : ''}`);
   await addLog(db, jobId, 'info', `SUPPLIER_SEARCH: ${result.records.length} records, health=${result.health}${result.warning ? '; ' + result.warning : ''}`);
@@ -418,6 +464,12 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     failed,
     retries: 0,
     points: budget.usage(),
+    // Market link: WHY this product was searched + WHICH MI evidence.
+    market_intelligence_job_id: marketContext.marketAnalysisId ?? null,
+    market_score: marketScore,
+    market_evidence_fingerprint: marketContext.evidenceFingerprint ?? null,
+    market_observed_at: marketContext.observedAt ?? null,
+    supplier_search_query: search.query,
   });
 
   // 5) PRODUCT_SCORE (reuse the existing phase)
@@ -426,6 +478,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     candidateIds: candidates.map((c) => c.id),
     at: new Date().toISOString(),
     note: 'Margin + hard-rejection + 100-pt score (CJ supplier evidence)',
+    marketContext, // WHICH market evidence applied to these scores
   });
   await addRun(db, scoreJobId, 'supplier-search', 'running', `Scoring ${candidates.length} CJ candidates`);
   await addLog(db, scoreJobId, 'info', `PRODUCT_SCORE started for ${candidates.length} CJ candidates (retries=0)`);
@@ -447,10 +500,16 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     }
     progress(`[score] ${out.title.slice(0, 50)} — ${out.score?.overall ?? '?'}/100 (${out.status})${out.rejectionReason ? ' — REJECTED: ' + out.rejectionReason : ''}`);
   }
-  const shortlisted = scored.filter((c) => c.status === 'qualified').length;
-  await addLog(db, scoreJobId, 'info', `PRODUCT_SCORE finished: ${scored.length} scored, ${rejected} rejected, ${shortlisted} shortlisted (retries=0)`);
-  await addRun(db, scoreJobId, 'supplier-search', 'completed', `${scored.length} scored, ${shortlisted} shortlisted`);
-  await completeJob(db, scoreJobId, 'completed', { scored: scored.length, rejected, shortlisted, retries: 0 });
+
+  // PRODUCT_SHORTLISTED = Product Score ≥75 + no hard rejection. Distinct
+  // from BUSINESS_QUALIFIED (which additionally needs the market gate).
+  const productShortlisted = scored.filter((c) => c.status === 'qualified').length;
+  await addLog(db, scoreJobId, 'info', `PRODUCT_SCORE finished: ${scored.length} scored, ${rejected} rejected, ${productShortlisted} PRODUCT_SHORTLISTED (retries=0)`);
+  await addRun(db, scoreJobId, 'supplier-search', 'completed', `${scored.length} scored, ${productShortlisted} product-shortlisted`);
+  await completeJob(db, scoreJobId, 'completed', {
+    scored: scored.length, rejected, productShortlisted,
+    marketScore, retries: 0,
+  });
 
   // 6) PRODUCT_QA on shortlisted
   const qaTargets = scored.filter((c) => c.status === 'qualified');
@@ -459,12 +518,15 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     candidateIds: qaTargets.map((c) => c.id),
     at: new Date().toISOString(),
     note: 'Evidence QA on CJ shortlisted candidates',
+    marketContext,
   });
   await addRun(db, qaJobId, 'supplier-search', 'running', `QA on ${qaTargets.length} shortlisted`);
   await addLog(db, qaJobId, 'info', `PRODUCT_QA started for ${qaTargets.length} shortlisted (retries=0)`);
+  const qaResults = new Map<string, boolean>();
   let qaPassed = 0;
   for (const c of qaTargets) {
     const out = qaCandidate(c);
+    qaResults.set(c.id, out.passed);
     if (out.passed) qaPassed++;
     for (const issue of out.issues) await addLog(db, qaJobId, out.passed ? 'info' : 'warn', `[${out.title}] ${issue}`);
     progress(out.passed ? `[qa] ${out.title.slice(0, 50)} — PASS` : `[qa] ${out.title.slice(0, 50)} — FLAGGED: ${out.issues.join('; ')}`);
@@ -472,7 +534,41 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   await addRun(db, qaJobId, 'supplier-search', 'completed', `${qaPassed} passed, ${qaTargets.length - qaPassed} flagged`);
   await completeJob(db, qaJobId, 'completed', { passed: qaPassed, flagged: qaTargets.length - qaPassed, retries: 0 });
 
-  progress(`Done — searched ${result.records.length}, kept ${kept.length}, enriched ${enriched.length}, researched ${scored.length}, shortlisted ${shortlisted}, QA passed ${qaPassed}.`);
+  // 7) BUSINESS QUALIFICATION — market gate + QA + landed-cost/USA evidence.
+  // Market Score UNKNOWN (no valid linked MI context) ⇒ NOT business-qualified.
+  const MARKET_GATE = 60;
+  const businessQualifiedCandidates: BusinessQualifiedCandidate[] = [];
+  for (const c of scored) {
+    if (c.status !== 'qualified') continue; // not even product-shortlisted
+    if (qaResults.get(c.id) !== true) continue; // QA must PASS
+    if (marketScore === null || marketScore < MARKET_GATE) continue; // market gate
+    if (c.margin?.confidence !== 'high' || c.margin.landedCost === null) continue; // landed cost verified
+    if (!c.evidence.shippingDays.value) continue; // USA delivery evidence required
+    const finalScore = finalOpportunityScore(c.score!.overall, marketScore);
+    businessQualifiedCandidates.push({
+      candidateId: c.id,
+      title: c.title,
+      productScore: c.score!.overall,
+      marketScore,
+      finalOpportunityScore: finalScore.overall,
+      landedCostConfidence: c.margin.confidence,
+      usaDeliveryConfidence: c.evidence.shippingDays.value ? 'high' : 'unknown',
+      marginPct: c.margin.grossMarginPct,
+    });
+    await addLog(db, qaJobId, 'info', `[BUSINESS_QUALIFIED] ${c.title} — Product ${c.score!.overall} / Market ${marketScore} / Final ${finalScore.overall}`);
+    progress(`[qualified] ${c.title.slice(0, 50)} — BUSINESS_QUALIFIED (Product ${c.score!.overall}/Market ${marketScore}/Final ${finalScore.overall})`);
+  }
+
+  // Server-authoritative usage (estimated/authorized — every paid request incl.
+  // retries represented; CJ's exact billing not claimed unless CJ reports it).
+  let serverPoints: SupplierPointUsage | null = null;
+  try {
+    serverPoints = (await adapter.getRunUsage?.()) ?? null;
+  } catch {
+    serverPoints = null;
+  }
+
+  progress(`Done — searched ${result.records.length}, kept ${kept.length}, enriched ${enriched.length}, researched ${scored.length}, PRODUCT_SHORTLISTED ${productShortlisted}, QA passed ${qaPassed}, BUSINESS_QUALIFIED ${businessQualifiedCandidates.length}.`);
   return {
     jobId, scoreJobId, qaJobId,
     health: result.health,
@@ -481,11 +577,22 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     prefilterRejected: prefiltered.length,
     researched: scored.length,
     rejected,
-    shortlisted,
+    productShortlisted,
+    qaPassed,
+    businessQualified: businessQualifiedCandidates.length,
     failed,
     candidates: scored,
+    businessQualifiedCandidates,
+    marketContext: {
+      marketAnalysisId: marketContext.marketAnalysisId ?? null,
+      opportunity: marketContext.opportunity ?? null,
+      marketScore,
+      evidenceFingerprint: marketContext.evidenceFingerprint ?? null,
+      observedAt: marketContext.observedAt ?? null,
+    },
     warning: result.warning,
     points: budget.usage(),
+    serverPoints,
   };
 }
 

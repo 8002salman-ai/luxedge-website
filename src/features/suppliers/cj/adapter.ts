@@ -10,15 +10,28 @@
 import type {
   SupplierDiscoveryAdapter, SupplierSearchResult, SupplierSearchOptions,
   SupplierProductRecord, SupplierShippingEvidence, SupplierHealthResult,
+  SupplierPointUsage,
 } from '../types';
 import { getAccessToken } from '../../../services/supabase';
 import { cjSafeStatusFromHealth } from './health';
+import { CJ_POINTS_BUDGET_PER_RUN, CJ_POINTS_HARD_MAX } from './points';
 
 const ENDPOINT = '/api/suppliers/cj';
 
-async function call<T>(action: string, params: Record<string, string> = {}, init: RequestInit = {}): Promise<T> {
+export const CJ_POINT_BUDGET_EXHAUSTED = 'CJ_POINT_BUDGET_EXHAUSTED';
+
+async function call<T>(
+  action: string,
+  params: Record<string, string> = {},
+  init: RequestInit = {},
+  run?: { runId: string; runBudget: number }
+): Promise<T & { code?: string; usage?: SupplierPointUsage }> {
   const token = getAccessToken();
-  const qs = new URLSearchParams({ action, ...params }).toString();
+  const qs = new URLSearchParams({
+    action,
+    ...(run ? { runId: run.runId, runBudget: String(Math.min(Math.max(run.runBudget, 50), CJ_POINTS_HARD_MAX)) } : {}),
+    ...params,
+  }).toString();
   const res = await fetch(`${ENDPOINT}?${qs}`, {
     ...init,
     headers: {
@@ -31,7 +44,14 @@ async function call<T>(action: string, params: Record<string, string> = {}, init
   if (!res.ok) {
     throw new Error((body as { error?: string }).error || `Supplier API error ${res.status}`);
   }
-  return body as T;
+  return body as T & { code?: string; usage?: SupplierPointUsage };
+}
+
+/** Throw a catchable, distinguishable error when the server budget is exhausted. */
+function ensureBudgetNotExhausted(body: { code?: string }): void {
+  if (body.code === CJ_POINT_BUDGET_EXHAUSTED) {
+    throw new Error(CJ_POINT_BUDGET_EXHAUSTED);
+  }
 }
 
 interface CjSearchResponse {
@@ -51,23 +71,57 @@ interface CjFreightResponse {
 /** CJ adapter for the browser — talks ONLY to the Luxedge server proxy. */
 export class CjSupplierAdapter implements SupplierDiscoveryAdapter {
   readonly provider = 'cj' as const;
+  /** Run-scoped identifiers for server-authoritative budgeting (set by the engine). */
+  runId: string | null = null;
+  runBudget = CJ_POINTS_BUDGET_PER_RUN;
+
+  private run(): { runId: string; runBudget: number } | undefined {
+    return this.runId ? { runId: this.runId, runBudget: this.runBudget } : undefined;
+  }
+
+  /** Last server-authoritative usage seen (null until a paid call responds). */
+  lastServerUsage: SupplierPointUsage | null = null;
+
+  setRunScope(runId: string, budget: number): void {
+    this.runId = runId;
+    this.runBudget = budget;
+    this.lastServerUsage = null;
+  }
+
+  /** Fetch the authoritative run usage from the server (no points consumed). */
+  async getRunUsage(): Promise<SupplierPointUsage | null> {
+    try {
+      const data = await call<{ usage?: SupplierPointUsage }>('budget', {}, {}, this.run());
+      if (data.usage) this.lastServerUsage = data.usage;
+      return data.usage ?? this.lastServerUsage;
+    } catch {
+      return this.lastServerUsage;
+    }
+  }
 
   async searchProducts(opts: SupplierSearchOptions): Promise<SupplierSearchResult> {
     const params: Record<string, string> = { q: opts.query };
     if (opts.market) params.market = opts.market;
     if (opts.maxResults) params.size = String(opts.maxResults);
     if (opts.maxSupplierCost) params.maxCost = String(opts.maxSupplierCost);
-    const data = await call<CjSearchResponse>('search', params);
+    const data = await call<CjSearchResponse>('search', params, {}, this.run());
+    ensureBudgetNotExhausted(data);
+    if (data.usage) this.lastServerUsage = data.usage;
     return {
       records: Array.isArray(data.records) ? data.records : [],
       health: cjSafeStatusFromHealth(data.health),
       warning: data.warning,
       points: data.points,
+      usage: data.usage,
     };
   }
 
   async getProduct(productId: string, market = 'US'): Promise<SupplierProductRecord | null> {
-    const data = await call<{ record?: SupplierProductRecord | null; points?: number }>('product', { pid: productId, market });
+    const data = await call<{ record?: SupplierProductRecord | null; points?: number }>(
+      'product', { pid: productId, market }, {}, this.run()
+    );
+    ensureBudgetNotExhausted(data);
+    if (data.usage) this.lastServerUsage = data.usage;
     return data.record ?? null;
   }
 
@@ -94,8 +148,11 @@ export class CjSupplierAdapter implements SupplierDiscoveryAdapter {
         {
           method: 'POST',
           body: JSON.stringify({ vid: variantId, startCountryCode: opts.originCountry, endCountryCode: market }),
-        }
+        },
+        this.run()
       );
+      ensureBudgetNotExhausted(data);
+      if (data.usage) this.lastServerUsage = data.usage;
       const quotes = Array.isArray(data.quotes) ? data.quotes : [];
       if (!quotes.length) {
         return {

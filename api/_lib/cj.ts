@@ -1,5 +1,5 @@
 // ============================================================================
-// LUXEDGE V2 — SERVER-SIDE CJ DROPSHIPPING CLIENT (Phase 4C)
+// LUXEDGE V2 — SERVER-SIDE CJ DROPSHIPPING CLIENT (Phase 4C + final pre-key)
 //
 // Runs ONLY inside /api serverless functions — never in the browser.
 // The CJ API Key is read from the environment (CJ_API_KEY); the access and
@@ -13,12 +13,23 @@
 //   GET  /api2.0/v1/product/query    (details + variants + inventory)
 //   GET  /api2.0/v1/product/globalWarehouseList
 //   POST /api2.0/v1/logistic/freightCalculate  {startCountryCode,endCountryCode,products:[{vid,quantity}]}
+//
+// AUTHORITATIVE POINT BUDGET (final pre-key audit): the server reserves the
+// endpoint point cost BEFORE every actual paid outbound request — including
+// every paid retry. If remaining budget is insufficient the HTTP request is
+// NOT issued; the caller receives CJ_POINT_BUDGET_EXHAUSTED. The client-side
+// CjPointBudget is only UX/forecasting; server accounting is authoritative.
 // ============================================================================
+
+import { CJ_POINT_COST, CJ_POINTS_HARD_MAX } from '../../src/features/suppliers/cj/points.js';
 
 const CJ_API_BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
 
 const TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000; // access token ~15 days (safe margin)
 const FETCH_TIMEOUT_MS = 15_000;
+
+/** Returned when a paid call cannot be afforded — NO HTTP request was made. */
+export const CJ_POINT_BUDGET_EXHAUSTED = 'CJ_POINT_BUDGET_EXHAUSTED';
 
 // Endpoint-aware retry caps (Phase 4C hardening): auth/network-transient
 // endpoints may retry more; PAID data endpoints (listV2/query/freight) are
@@ -37,6 +48,72 @@ interface CjTokenBundle {
 // serverless instances are ephemeral, so this is a best-effort cache).
 let tokenCache: CjTokenBundle | null = null;
 
+// ---------------------------------------------------------------------------
+// Run-scoped authoritative point budget (server side)
+// ---------------------------------------------------------------------------
+
+export interface CjServerPointUsage {
+  /** Hard-clamped run budget (max CJ_POINTS_HARD_MAX). */
+  budget: number;
+  /** Points reserved for actual outbound paid requests (incl. retries). */
+  reserved: number;
+  remaining: number;
+  listAttempts: number;
+  detailAttempts: number;
+  freightAttempts: number;
+  paidRetries: number;
+  denied: number;
+}
+
+/**
+ * Server-side per-run budget. The SERVER is the authority: every paid call
+ * reserves its cost BEFORE the HTTP request; retries reserve again. A run
+ * can NEVER exceed its (server-clamped) budget. The requested budget is
+ * clamped to [listV2 cost, CJ_POINTS_HARD_MAX] — callers/AI cannot raise it.
+ */
+export class CjServerRunBudget {
+  readonly budget: number;
+  reserved = 0;
+  listAttempts = 0;
+  detailAttempts = 0;
+  freightAttempts = 0;
+  paidRetries = 0;
+  denied = 0;
+
+  constructor(requestedBudget: number) {
+    const req = Number.isFinite(requestedBudget) ? Math.floor(requestedBudget) : CJ_POINTS_HARD_MAX;
+    this.budget = Math.min(Math.max(req, CJ_POINT_COST.listV2), CJ_POINTS_HARD_MAX);
+  }
+
+  /** Reserve before an actual outbound request. Returns false → do NOT call. */
+  reserve(cost: number, isRetry = false): boolean {
+    if (this.reserved + cost > this.budget) {
+      this.denied++;
+      return false;
+    }
+    this.reserved += cost;
+    if (isRetry) this.paidRetries++;
+    return true;
+  }
+
+  markListAttempt(): void { this.listAttempts++; }
+  markDetailAttempt(): void { this.detailAttempts++; }
+  markFreightAttempt(): void { this.freightAttempts++; }
+
+  usage(): CjServerPointUsage {
+    return {
+      budget: this.budget,
+      reserved: this.reserved,
+      remaining: this.budget - this.reserved,
+      listAttempts: this.listAttempts,
+      detailAttempts: this.detailAttempts,
+      freightAttempts: this.freightAttempts,
+      paidRetries: this.paidRetries,
+      denied: this.denied,
+    };
+  }
+}
+
 /** CJ API Key configured on the server? */
 export function cjConfigured(): boolean {
   return !!(process.env.CJ_API_KEY || '').trim();
@@ -48,13 +125,28 @@ export function cjConfigured(): boolean {
  *              backoff but is capped so the run budget is not burned.
  *   paid:false → auth/network-transient: slightly more headroom.
  * Hard 4xx (400/401/403/404/422) and missing config are never retried.
+ *
+ * AUTHORITATIVE BUDGET: when `budget` is present and the call is paid, the
+ * endpoint point cost is RESERVED before EVERY outbound request — including
+ * every paid retry. If the budget cannot afford the attempt the HTTP request
+ * is NOT issued and CJ_POINT_BUDGET_EXHAUSTED is thrown.
  */
-async function cjFetch(path: string, init: RequestInit = {}, opts: { paid?: boolean } = {}): Promise<Response> {
+async function cjFetch(
+  path: string,
+  init: RequestInit = {},
+  opts: { paid?: boolean; budget?: CjServerRunBudget; cost?: number } = {}
+): Promise<Response> {
   const url = `${CJ_API_BASE}${path}`;
   const retries = opts.paid ? MAX_RETRIES_PAID : MAX_RETRIES_AUTH;
   let lastErr: Error | null = null;
   let lastRetryReason = '';
   for (let attempt = 0; attempt <= retries; attempt++) {
+    // Reserve BEFORE the outbound request (initial attempt AND paid retries).
+    if (opts.paid && opts.budget && opts.cost) {
+      if (!opts.budget.reserve(opts.cost, attempt > 0)) {
+        throw new Error(CJ_POINT_BUDGET_EXHAUSTED);
+      }
+    }
     try {
       const res = await fetch(url, {
         ...init,
@@ -80,6 +172,8 @@ async function cjFetch(path: string, init: RequestInit = {}, opts: { paid?: bool
       return res;
     } catch (e) {
       lastErr = e as Error;
+      // Budget exhaustion — never retried, surface immediately.
+      if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) break;
       // Hard 4xx (thrown inside try) — never retried, stop immediately.
       if (e instanceof Error && /^CJ API error [45]/.test(e.message)) break;
       // Network/transient — retry only within the endpoint cap.
@@ -155,11 +249,11 @@ export async function cjAccessToken(): Promise<string> {
   return fresh.accessToken;
 }
 
-async function cjGet(path: string, paid = true): Promise<unknown> {
+async function cjGet(path: string, opts: { paid?: boolean; budget?: CjServerRunBudget; cost?: number } = {}): Promise<unknown> {
   const token = await cjAccessToken();
   const res = await cjFetch(path, {
     headers: { 'CJ-Access-Token': token },
-  }, { paid });
+  }, opts);
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     const msg = body && body.message ? String(body.message) : `CJ API error ${res.status}`;
@@ -189,7 +283,7 @@ export interface CjSearchParams {
 }
 
 /** CJ product/listV2 — the official keyword search with filters. */
-export async function cjSearchProducts(p: CjSearchParams): Promise<{ products: unknown[]; total: number }> {
+export async function cjSearchProducts(p: CjSearchParams, budget?: CjServerRunBudget): Promise<{ products: unknown[]; total: number }> {
   const params = new URLSearchParams();
   if (p.keyWord) params.set('keyWord', p.keyWord);
   params.set('page', String(p.page ?? 1));
@@ -199,7 +293,8 @@ export async function cjSearchProducts(p: CjSearchParams): Promise<{ products: u
   if (p.endSellPrice !== undefined) params.set('endSellPrice', String(p.endSellPrice));
   if (p.verifiedWarehouse !== undefined) params.set('verifiedWarehouse', String(p.verifiedWarehouse));
   params.set('features', 'enable_category,enable_description');
-  const body = (await cjGet(`/product/listV2?${params.toString()}`, true)) as {
+  budget?.markListAttempt();
+  const body = (await cjGet(`/product/listV2?${params.toString()}`, { paid: true, budget, cost: CJ_POINT_COST.listV2 })) as {
     data?: { content?: { productList?: unknown[] }[]; totalRecords?: number };
   };
   const content = body?.data?.content?.[0];
@@ -208,17 +303,18 @@ export async function cjSearchProducts(p: CjSearchParams): Promise<{ products: u
 }
 
 /** CJ product/query — details, variants, per-country inventory. */
-export async function cjProductQuery(pid: string, countryCode?: string): Promise<unknown> {
+export async function cjProductQuery(pid: string, countryCode?: string, budget?: CjServerRunBudget): Promise<unknown> {
   const params = new URLSearchParams({ pid });
   if (countryCode) params.set('countryCode', countryCode);
   params.set('features', 'enable_video');
-  const body = (await cjGet(`/product/query?${params.toString()}`, true)) as { data?: unknown };
+  budget?.markDetailAttempt();
+  const body = (await cjGet(`/product/query?${params.toString()}`, { paid: true, budget, cost: CJ_POINT_COST.productQuery })) as { data?: unknown };
   return body?.data;
 }
 
 /** CJ globalWarehouseList — warehouse country evidence. */
 export async function cjGlobalWarehouses(): Promise<unknown[]> {
-  const body = (await cjGet('/product/globalWarehouseList', false)) as { data?: unknown[] };
+  const body = (await cjGet('/product/globalWarehouseList', { paid: false })) as { data?: unknown[] };
   return Array.isArray(body?.data) ? body.data : [];
 }
 
@@ -228,8 +324,9 @@ export async function cjFreightCalculate(opts: {
   endCountryCode: string;
   vid: string;
   quantity?: number;
-}): Promise<unknown[]> {
+}, budget?: CjServerRunBudget): Promise<unknown[]> {
   const token = await cjAccessToken();
+  budget?.markFreightAttempt();
   const res = await cjFetch('/logistic/freightCalculate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
@@ -238,7 +335,7 @@ export async function cjFreightCalculate(opts: {
       endCountryCode: opts.endCountryCode,
       products: [{ vid: opts.vid, quantity: opts.quantity ?? 1 }],
     }),
-  }, { paid: true });
+  }, { paid: true, budget, cost: CJ_POINT_COST.freightCalculate });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error('CJ freight calculation failed');
   return Array.isArray(body?.data) ? body.data : [];

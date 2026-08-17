@@ -122,6 +122,25 @@ export interface SupplierShippingEvidence {
   note: string;
 }
 
+/**
+ * Grounded Market Intelligence context for a supplier search (Phase 4C final
+ * audit). Links the CJ run to the EXACT MI evidence that generated the query.
+ * Never invented: when no valid MI context exists, marketScore stays UNKNOWN
+ * (null) and BUSINESS_QUALIFIED is false.
+ */
+export interface MarketContext {
+  /** MARKET_INTELLIGENCE job id (agent_jobs) that produced the hypothesis. */
+  marketAnalysisId?: string | null;
+  /** Opportunity/category the search targets. */
+  opportunity?: string | null;
+  /** Market Opportunity Score /100 — UNKNOWN when null/absent. */
+  marketScore?: number | null;
+  /** Evidence fingerprint of the MI signals. */
+  evidenceFingerprint?: string | null;
+  /** When the MI analysis was observed. */
+  observedAt?: string | null;
+}
+
 export interface SupplierSearchOptions {
   query: string;
   /** Target market, e.g. "US" / "USA". */
@@ -134,11 +153,32 @@ export interface SupplierSearchOptions {
   minSupplierCost?: number;
   maxSupplierCost?: number;
   /**
-   * Hard per-run CJ point budget (Phase 4C hardening). Defaults to the
-   * owner-configured CJ_POINTS_BUDGET_PER_RUN (250). AI can never raise it —
-   * only the owner may supply a different value.
+   * Requested per-run CJ point budget. The SERVER clamps this to the HARD
+   * SERVER MAX (250) — a caller/AI may request less but NEVER more; client
+   * "owner" flags are not trusted.
    */
   pointsBudget?: number;
+  /** Grounded Market Intelligence context (market gate). */
+  marketContext?: MarketContext;
+}
+
+/**
+ * Server-authoritative CJ point usage for a run (Phase 4C final audit).
+ * Labeled honestly: this is the estimated/authorized point consumption —
+ * every actual outbound paid request (incl. paid retries) is represented;
+ * CJ's exact supplier billing is not claimed unless CJ itself reports it.
+ */
+export interface SupplierPointUsage {
+  /** Hard-clamped run budget (max CJ_POINTS_HARD_MAX). */
+  budget: number;
+  /** Points reserved for actual outbound paid requests (incl. retries). */
+  reserved: number;
+  remaining: number;
+  listAttempts: number;
+  detailAttempts: number;
+  freightAttempts: number;
+  paidRetries: number;
+  denied: number;
 }
 
 export interface SupplierSearchResult {
@@ -147,6 +187,8 @@ export interface SupplierSearchResult {
   warning?: string;
   /** Estimated/actual CJ points consumed by the search call, when known. */
   points?: number;
+  /** Server-authoritative run usage, when the server reports it. */
+  usage?: SupplierPointUsage;
 }
 
 export interface SupplierHealthResult {
@@ -169,4 +211,11 @@ export interface SupplierDiscoveryAdapter {
     opts?: { market?: string; originCountry?: string | null }
   ): Promise<SupplierShippingEvidence>;
   healthCheck(): Promise<SupplierHealthResult>;
+  /**
+   * Optional run-scope wiring for SERVER-authoritative point budgeting.
+   * When present, the engine sets a per-run id + requested budget (the
+   * server clamps to the hard max) and reads back authoritative usage.
+   */
+  setRunScope?(runId: string, budget: number): void;
+  getRunUsage?(): Promise<SupplierPointUsage | null>;
 }

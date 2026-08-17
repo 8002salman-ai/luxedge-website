@@ -302,9 +302,9 @@ export default function ProductScout() {
         db,
         onProgress,
       });
-      setCjNote(`CJ search complete — ${result.searched} searched, ${result.shortlisted} shortlisted (health=${result.health})${result.warning ? ' · ' + result.warning : ''}`);
+      setCjNote(`CJ search complete — ${result.searched} searched, ${result.productShortlisted} PRODUCT_SHORTLISTED, ${result.businessQualified} BUSINESS_QUALIFIED (health=${result.health})${result.warning ? ' · ' + result.warning : ''}`);
       setCjHealth(result.health as SupplierHealth);
-      notify(`CJ search complete — ${result.shortlisted} shortlisted`);
+      notify(`CJ search complete — ${result.productShortlisted} shortlisted, ${result.businessQualified} business-qualified`);
       await load();
     } catch (e) {
       log.push(`✗ ${(e as Error).message}`);

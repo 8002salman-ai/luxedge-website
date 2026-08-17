@@ -24,6 +24,14 @@ export const CJ_POINT_COST: Record<CjPointAction, number> = {
 /** Owner-configured safe per-run budget. AI must NOT raise it. */
 export const CJ_POINTS_BUDGET_PER_RUN = 250;
 
+/**
+ * HARD SERVER MAX per run — the server clamps ANY requested budget to this.
+ * A normal browser/scout/AI call may request LESS, but NEVER MORE.
+ * Client "owner" flags are not trusted; a future owner-only override must be
+ * a separate authenticated server-side policy.
+ */
+export const CJ_POINTS_HARD_MAX = 250;
+
 export interface CjPointUsage {
   budget: number;
   used: number;
@@ -50,9 +58,11 @@ export class CjPointBudget {
   denied = 0;
 
   constructor(budget: number = CJ_POINTS_BUDGET_PER_RUN) {
-    // Guard: never allow a run budget below the cost of a single list call
-    // (a run must be able to search). Also never allow 0/negative.
-    this.budget = Number.isFinite(budget) && budget >= CJ_POINT_COST.listV2 ? Math.floor(budget) : CJ_POINTS_BUDGET_PER_RUN;
+    // Clamp: never below the cost of one search (a run must be able to
+    // search) and NEVER above the HARD SERVER MAX (250). Client-side
+    // forecasting mirrors the server's authoritative clamp.
+    const req = Number.isFinite(budget) ? Math.floor(budget) : CJ_POINTS_BUDGET_PER_RUN;
+    this.budget = Math.min(Math.max(req, CJ_POINT_COST.listV2), CJ_POINTS_HARD_MAX);
   }
 
   cost(action: CjPointAction): number {

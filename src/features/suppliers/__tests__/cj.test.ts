@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
 import type {
   SupplierDiscoveryAdapter, SupplierProductRecord, SupplierSearchResult,
-  SupplierShippingEvidence, SupplierHealthResult,
+  SupplierShippingEvidence, SupplierHealthResult, SupplierPointUsage,
 } from '../types';
 import {
   normalizeCjListProduct, normalizeCjProductDetail, normalizeCjFreight,
@@ -32,9 +32,9 @@ import { calculateMargin } from '../../scout/margin';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from '../../scout/score';
 import { extractPageFacts } from '../../scout/extract';
 import type { FetchedSourcePage, ScoutCandidate, CandidateEvidence } from '../../scout/types';
-import { cjConfigured, cjSafeError, cjSearchProducts } from '../../../../api/_lib/cj';
+import { cjConfigured, cjSafeError, cjSearchProducts, CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED } from '../../../../api/_lib/cj';
 import {
-  CjPointBudget, CJ_POINTS_BUDGET_PER_RUN, enrichmentCaps, CJ_POINT_COST,
+  CjPointBudget, CJ_POINTS_BUDGET_PER_RUN, CJ_POINTS_HARD_MAX, enrichmentCaps, CJ_POINT_COST,
 } from '../cj/points';
 
 // ---------------------------------------------------------------------------
@@ -149,19 +149,23 @@ function adminToken(): string {
 class FakeCjAdapter implements SupplierDiscoveryAdapter {
   readonly provider = 'cj' as const;
   records: SupplierProductRecord[];
+  /** Simulated server-authoritative usage, set per test. */
+  serverUsage: SupplierPointUsage | null = null;
+  /** Freight quote returned by getShippingEvidence (per-test configurable). */
+  freight: SupplierShippingEvidence = {
+    costUsd: 3.99, baseFreightUsd: 3.50, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0.49,
+    arrivalDays: '8-12', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
+    observedAt: new Date().toISOString(), verified: true, note: 'freight quote (totalPostageFee)'
+  };
   constructor(records: SupplierProductRecord[]) { this.records = records; }
   async searchProducts(): Promise<SupplierSearchResult> {
-    return { records: this.records, health: 'online' };
+    return { records: this.records, health: 'online', usage: this.serverUsage ?? undefined };
   }
   async getProduct(): Promise<SupplierProductRecord | null> { return this.records[0] ?? null; }
-  async getShippingEvidence(): Promise<SupplierShippingEvidence> {
-    return {
-      costUsd: 3.99, baseFreightUsd: 3.50, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0.49,
-      arrivalDays: '8-12', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
-      observedAt: new Date().toISOString(), verified: true, note: 'freight quote (totalPostageFee)'
-    };
-  }
+  async getShippingEvidence(): Promise<SupplierShippingEvidence> { return this.freight; }
   async healthCheck(): Promise<SupplierHealthResult> { return { provider: 'cj', health: 'online' }; }
+  setRunScope(): void { /* fake — no server budget */ }
+  async getRunUsage(): Promise<SupplierPointUsage | null> { return this.serverUsage; }
 }
 
 function recordFromList(p: CjListProduct): SupplierProductRecord {
@@ -427,7 +431,8 @@ describe('CJ → Product Scout integration', () => {
     expect(result.duplicates).toBe(0);
     expect(result.prefilterRejected).toBe(0);
     expect(result.researched).toBe(1);
-    expect(result.shortlisted).toBe(0); // below 75 — honest, no inflation
+    expect(result.productShortlisted).toBe(0); // below 75 — honest, no inflation
+    expect(result.businessQualified).toBe(0); // market gate not even applied
 
     const jobs = (db.rows.get('agent_jobs') || []).map((j) => j.type);
     expect(jobs).toContain('PRODUCT_RESEARCH');
@@ -566,6 +571,39 @@ describe('CJ pre-live hardening — manufacturer + score honesty', () => {
     expect(score.breakdown.competition.points).toBe(0);
     expect(score.breakdown.upsell.points).toBe(0);
   });
+
+  it('FINAL AUDIT: a selected-variant SKU alone is NOT size evidence — no size/upsell bonus', () => {
+    // Enriched record: real product, real price, US inventory, ONE selected
+    // SKU/variant with NO variant-option semantics (no size/color/pack).
+    const d: CjProductDetail = {
+      ...listProduct(),
+      productImageSet: ['https://img.cjdropshipping.com/pid123456.jpg'],
+      variants: [{
+        vid: 'VID-1', variantSku: 'SKU-1', variantSellPrice: '12.99',
+        inventories: [{ countryCode: 'US', totalInventory: 30, verifiedWarehouse: 1 }],
+      }],
+    };
+    const r = normalizeCjProductDetail(d, { market: 'US' })!;
+    expect(r.selectedVariant?.sku).toBe('SKU-1');
+    const ev = evidenceFromSupplierRecord(r, 'US', null);
+    // SKU must NOT populate sizes — sizes stay UNKNOWN.
+    expect(ev.sizes.status).toBe('unknown');
+    expect(ev.sizes.value).toBeNull();
+    // Scoring with sizes UNKNOWN → NO size-derived competition/upsell points.
+    const candidate: ScoutCandidate = {
+      id: 'c1', title: r.title, source: 'CJ Dropshipping', sourceUrl: r.sourceUrl,
+      supplierSlug: 'cj-dropshipping', images: r.images, evidence: ev,
+      margin: calculateMargin({ supplierPrice: r.sellPrice, shippingCost: null }),
+      score: null, status: 'researching', createdAt: new Date().toISOString(),
+    };
+    const out = scoreSupplierCandidate(candidate, 2.5);
+    const sizesInExtract = (ev.sizes.value as string[] | null) ?? null;
+    void sizesInExtract;
+    // Competition: the title contains "Toy" → popular-category +2 is fine, but
+    // NO size-derived +4. Upsell: NO size-derived points (0 unless real options).
+    expect(out.score?.breakdown.competition.points).toBeLessThanOrEqual(2);
+    expect(out.score?.breakdown.upsell.points).toBe(0);
+  });
 });
 
 describe('CJ pre-live hardening — freight', () => {
@@ -617,13 +655,24 @@ describe('CJ pre-live hardening — freight', () => {
 });
 
 describe('CJ point budget (Phase 4C hardening)', () => {
-  it('defaults to the owner-configured 250pt budget and never below a search', () => {
+  it('defaults to the owner-configured 250pt budget and clamps to [50, HARD MAX]', () => {
     const b = new CjPointBudget();
     expect(b.budget).toBe(CJ_POINTS_BUDGET_PER_RUN);
     expect(b.budget).toBe(250);
-    // A budget below the cost of one search is clamped to the safe default.
-    expect(new CjPointBudget(10).budget).toBe(250);
-    expect(new CjPointBudget(0).budget).toBe(250);
+    // Never below the cost of one search (a run must be able to search).
+    expect(new CjPointBudget(10).budget).toBe(50);
+    expect(new CjPointBudget(0).budget).toBe(50);
+    // NEVER above the HARD SERVER MAX — callers/AI cannot raise it.
+    expect(new CjPointBudget(1000).budget).toBe(250);
+    expect(new CjPointBudget(500).budget).toBe(250);
+  });
+
+  it('the HARD SERVER MAX is 250 — a requested 1000 clamps to 250', () => {
+    expect(CJ_POINTS_HARD_MAX).toBe(250);
+    expect(new CjPointBudget(100).budget).toBe(100); // less is allowed
+    expect(new CjPointBudget(250).budget).toBe(250); // exactly max allowed
+    expect(new CjPointBudget(500).budget).toBe(250); // more is clamped
+    expect(new CjPointBudget(1000).budget).toBe(250);
   });
 
   it('tracks per-endpoint costs and denies when the budget would be exceeded', () => {
@@ -715,7 +764,8 @@ describe('CJ live-readiness simulation (fixtures only, NO key)', () => {
       db,
       onProgress: () => {},
     });
-    expect(result.shortlisted).toBe(0);
+    expect(result.productShortlisted).toBe(0);
+    expect(result.businessQualified).toBe(0);
     expect(result.researched).toBe(0);
     expect((db.rows.get('product_candidates') || []).length).toBe(0);
   });
@@ -834,5 +884,171 @@ describe('CJ server lib (secret isolation + failures)', () => {
       global.fetch = realFetch;
       vi.resetModules();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C FINAL PRE-KEY AUDIT — server-authoritative budget + market gate
+// ---------------------------------------------------------------------------
+
+describe('FINAL AUDIT — server point budget (authoritative)', () => {
+  it('clamps ANY requested budget to the HARD SERVER MAX of 250', () => {
+    expect(new CjServerRunBudget(100).budget).toBe(100); // less allowed
+    expect(new CjServerRunBudget(250).budget).toBe(250);
+    expect(new CjServerRunBudget(500).budget).toBe(250); // clamped
+    expect(new CjServerRunBudget(1000).budget).toBe(250); // clamped
+    expect(new CjServerRunBudget(NaN).budget).toBe(250); // invalid → default max
+  });
+
+  it('reserves points BEFORE every paid request — including paid retries', () => {
+    const b = new CjServerRunBudget(250);
+    // One listV2 (50) then a productQuery with one paid retry: 50 + 10 + 10.
+    expect(b.reserve(CJ_POINT_COST.listV2)).toBe(true);
+    b.markListAttempt();
+    expect(b.reserve(CJ_POINT_COST.productQuery)).toBe(true);
+    b.markDetailAttempt();
+    expect(b.reserve(CJ_POINT_COST.productQuery, true)).toBe(true); // paid retry
+    b.markDetailAttempt();
+    const u = b.usage();
+    expect(u.reserved).toBe(70); // 50 + 10 + 10 — retries ARE counted
+    expect(u.paidRetries).toBe(1);
+    expect(u.detailAttempts).toBe(2);
+  });
+
+  it('refuses the HTTP request when remaining budget cannot afford it (denied, no call)', () => {
+    const b = new CjServerRunBudget(60); // search 50 + one 10 left
+    expect(b.reserve(CJ_POINT_COST.listV2)).toBe(true);
+    expect(b.reserve(CJ_POINT_COST.productQuery)).toBe(true);
+    // 5 points left? impossible with these costs — simulate with a freight
+    // request when only a partial amount remains.
+    const b2 = new CjServerRunBudget(55);
+    expect(b2.reserve(CJ_POINT_COST.listV2)).toBe(true); // 50
+    // Remaining 5 < any paid endpoint cost → the request is NOT issued.
+    expect(b2.reserve(CJ_POINT_COST.freightCalculate)).toBe(false);
+    expect(b2.usage().denied).toBe(1);
+    expect(b2.usage().remaining).toBe(5);
+    // A second product/query also cannot run.
+    expect(b2.reserve(CJ_POINT_COST.productQuery)).toBe(false);
+  });
+
+  it('CJ_POINT_BUDGET_EXHAUSTED is the safe client-visible signal', () => {
+    expect(CJ_POINT_BUDGET_EXHAUSTED).toBe('CJ_POINT_BUDGET_EXHAUSTED');
+  });
+});
+
+describe('FINAL AUDIT — market business gate (two qualification levels)', () => {
+  // A genuinely strong, fully-enriched CJ candidate. IMPORTANT honesty note:
+  // after the SKU→sizes fix, a CJ-only candidate (no customer ratings, no
+  // real variant-option semantics) has a TRUTHFUL ceiling of 75/100 — exactly
+  // the shortlist threshold, never inflated above the evidence. That is the
+  // point: CJ supplier data alone cannot earn ratings/upsell points.
+  function strongDetail(): CjProductDetail {
+    return {
+      ...listProduct({ nameEn: 'Interactive Dog Toy for Large Dogs' }),
+      productImageSet: [
+        'https://img.cjdropshipping.com/pid123456.jpg',
+        'https://img.cjdropshipping.com/pid123456-2.jpg',
+        'https://img.cjdropshipping.com/pid123456-3.jpg',
+        'https://img.cjdropshipping.com/pid123456-4.jpg',
+        'https://img.cjdropshipping.com/pid123456-5.jpg',
+        'https://img.cjdropshipping.com/pid123456-6.jpg',
+      ],
+      productWeight: '0.35',
+      variants: [{
+        vid: 'VID-1', variantSku: 'SKU-1', variantSellPrice: '20.00',
+        inventories: [{ countryCode: 'US', totalInventory: 40, verifiedWarehouse: 1 }],
+      }],
+    };
+  }
+
+  function strongAdapter(): FakeCjAdapter {
+    const adapter = new FakeCjAdapter([normalizeCjProductDetail(strongDetail(), { market: 'US' })!]);
+    // Free-shipping quote (totalPostageFee 0) → margin HIGH + free-shipping
+    // delivery points. Landing on exactly 75 is honest: demand 20 + supplier
+    // 10 + delivery 15 + margin 15 + visual 10 + competition 2 (toy keyword)
+    // + return-risk 3 (1 flag: no ratings) + ratings 0 + upsell 0 = 75.
+    adapter.freight = {
+      costUsd: 0, baseFreightUsd: 0, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0,
+      arrivalDays: '3-5', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
+      observedAt: new Date().toISOString(), verified: true, note: 'free shipping (totalPostageFee 0)',
+    };
+    return adapter;
+  }
+
+  it('Product 75 / Market 55 → PRODUCT_SHORTLISTED YES, BUSINESS_QUALIFIED NO', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'mi-1', marketScore: 55, evidenceFingerprint: 'fp-1', observedAt: new Date().toISOString() },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.productShortlisted).toBe(1); // honest 75 ≥ 75
+    expect(result.businessQualified).toBe(0); // market 55 < 60 gate
+    expect(result.businessQualifiedCandidates).toHaveLength(0);
+  });
+
+  it('Product 75 / Market 65 → BUSINESS_QUALIFIED YES (landed cost HIGH + USA evidence)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'mi-2', marketScore: 65, evidenceFingerprint: 'fp-2', observedAt: new Date().toISOString() },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.productShortlisted).toBe(1);
+    expect(result.businessQualified).toBe(1);
+    expect(result.businessQualifiedCandidates[0]).toMatchObject({
+      productScore: 75, marketScore: 65,
+      landedCostConfidence: 'high', usaDeliveryConfidence: 'high',
+    });
+    // Final Opportunity Score formula: 0.7×75 + 0.3×65 = 72 (documented).
+    expect(result.businessQualifiedCandidates[0].finalOpportunityScore).toBe(72);
+    // Market link persisted on the RESEARCH job output.
+    const researchJob = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
+    expect(researchJob?.output).toMatchObject({ market_score: 65, supplier_search_query: 'orthopedic dog bed' });
+  });
+
+  it('Product 75 / Market UNKNOWN → BUSINESS_QUALIFIED NO (never invented)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: { query: 'orthopedic dog bed', market: 'US', maxResults: 10, marketContext: {} },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.productShortlisted).toBe(1);
+    expect(result.businessQualified).toBe(0); // market UNKNOWN → not qualified
+    expect(result.marketContext?.marketScore).toBeNull();
+  });
+
+  it('server-authoritative usage is surfaced on the result when the adapter reports it', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const adapter = strongAdapter();
+    adapter.serverUsage = {
+      budget: 250, reserved: 70, remaining: 180,
+      listAttempts: 1, detailAttempts: 2, freightAttempts: 1, paidRetries: 1, denied: 0,
+    };
+    const result = await runSupplierSearch({
+      adapter,
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: { marketScore: 65 },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.serverPoints?.reserved).toBe(70);
+    expect(result.serverPoints?.paidRetries).toBe(1);
   });
 });

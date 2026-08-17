@@ -6,10 +6,18 @@
 //
 // Actions (query param `action`):
 //   health   → { provider:'cj', health, detail }  (no CJ call when unconfigured)
-//   search   → ?action=search&q=...&market=US&size=30&maxCost=40
+//   search   → ?action=search&q=...&market=US&size=30&maxCost=40&runId=...&runBudget=250
 //              returns normalized SupplierProductRecord[] (admin-only)
-//   product  → ?action=product&pid=...&market=US  detail+variants+inventory
-//   freight  → POST { productId, vid, startCountryCode, endCountryCode }
+//   product  → ?action=product&pid=...&market=US&runId=...&runBudget=250
+//   freight  → POST { productId, vid, startCountryCode, endCountryCode } (+ runId/runBudget)
+//
+// AUTHORITATIVE POINT BUDGET: the client supplies a runId + requested budget
+// for paid actions. The SERVER maintains the run-scoped budget and clamps the
+// requested value to [listV2 cost, 250] — callers/AI can never raise it. Every
+// actual paid outbound request (incl. retries) reserves its cost; when the
+// budget cannot afford an attempt NO HTTP request is issued and the client
+// receives { code: 'CJ_POINT_BUDGET_EXHAUSTED', usage }. The in-memory run map
+// is per warm instance (honest limitation, like the token cache).
 //
 // SECURITY: admin JWT required; rate-limited; timeouts + capped retries;
 // errors scrubbed of any credential-like strings. READ/RESEARCH ONLY — this
@@ -19,13 +27,42 @@ import { sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
 import {
   cjConfigured, cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
+  CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED, type CjServerPointUsage,
 } from '../_lib/cj.js';
 import {
   normalizeCjListProduct, normalizeCjProductDetail, normalizeCountryCode, normalizeCjFreight,
 } from '../../src/features/suppliers/cj/normalize.js';
-import { CJ_POINT_COST } from '../../src/features/suppliers/cj/points.js';
+import { CJ_POINT_COST, CJ_POINTS_BUDGET_PER_RUN } from '../../src/features/suppliers/cj/points.js';
 
 const MAX_SEARCH_SIZE = 100;
+
+// Run-scoped budgets keyed by runId (per warm serverless instance). Capped in
+// size to avoid unbounded growth; entries are best-effort per instance.
+const RUN_BUDGETS = new Map<string, CjServerRunBudget>();
+const MAX_RUN_BUDGETS = 200;
+
+function runBudgetFor(req: IncomingMessage): CjServerRunBudget | null {
+  const url = new URL(req.url || '/', 'http://localhost');
+  const runId = (url.searchParams.get('runId') || '').trim();
+  if (!runId) return null;
+  let b = RUN_BUDGETS.get(runId);
+  if (!b) {
+    const requested = parseInt(url.searchParams.get('runBudget') || String(CJ_POINTS_BUDGET_PER_RUN), 10);
+    b = new CjServerRunBudget(requested); // server clamps to ≤ 250
+    if (RUN_BUDGETS.size >= MAX_RUN_BUDGETS) {
+      // Simple eviction of the oldest entry to bound memory.
+      const first = RUN_BUDGETS.keys().next().value;
+      if (first) RUN_BUDGETS.delete(first);
+    }
+    RUN_BUDGETS.set(runId, b);
+  }
+  return b;
+}
+
+/** Attach usage to a response for a run. */
+function usageOf(budget: CjServerRunBudget | null): CjServerPointUsage | undefined {
+  return budget ? budget.usage() : undefined;
+}
 
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   let raw = '';
@@ -84,6 +121,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  // ---------------- budget (authoritative run usage) ----------------
+  if (action === 'budget') {
+    const budget = runBudgetFor(req);
+    sendJson(res, 200, { provider: 'cj', health: 'online', usage: usageOf(budget) });
+    return;
+  }
+
   // ---------------- search ----------------
   if (action === 'search') {
     const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
@@ -97,6 +141,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const maxCostRaw = parseFloat(url.searchParams.get('maxCost') || '');
     const maxCost = Number.isFinite(maxCostRaw) && maxCostRaw > 0 ? maxCostRaw : undefined;
     const country = normalizeCountryCode(market);
+    const budget = runBudgetFor(req);
 
     try {
       const { products, total } = await cjSearchProducts({
@@ -105,20 +150,31 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         countryCode: country ?? undefined,
         verifiedWarehouse: 1, // verified inventory preferred
         endSellPrice: maxCost,
-      });
+      }, budget ?? undefined);
       const records = products
         .map((p) => normalizeCjListProduct(p as never, { market: country ?? undefined }))
         .filter((r): r is NonNullable<typeof r> => r !== null);
       sendJson(res, 200, {
         provider: 'cj', health: 'online', records, total, query: q,
         points: CJ_POINT_COST.listV2,
+        usage: usageOf(budget),
       });
     } catch (e) {
+      if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
+        sendJson(res, 200, {
+          provider: 'cj', health: 'offline', records: [],
+          code: CJ_POINT_BUDGET_EXHAUSTED,
+          warning: 'CJ point budget exhausted — no further paid requests issued.',
+          usage: usageOf(budget),
+        });
+        return;
+      }
       sendJson(res, 200, {
         provider: 'cj',
         health: /rate limited/i.test(String(e)) ? 'rate_limited' : 'offline',
         records: [],
         warning: cjSafeError(e),
+        usage: usageOf(budget),
       });
     }
     return;
@@ -133,16 +189,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     const market = (url.searchParams.get('market') || 'US').trim();
     const country = normalizeCountryCode(market);
+    const budget = runBudgetFor(req);
     try {
-      const detail = await cjProductQuery(pid, country ?? undefined);
+      const detail = await cjProductQuery(pid, country ?? undefined, budget ?? undefined);
       const record = normalizeCjProductDetail(detail as never, { market: country ?? undefined });
       if (!record) {
         sendJson(res, 404, { error: 'CJ product not found or unverifiable' });
         return;
       }
-      sendJson(res, 200, { provider: 'cj', health: 'online', record, points: CJ_POINT_COST.productQuery });
+      sendJson(res, 200, { provider: 'cj', health: 'online', record, points: CJ_POINT_COST.productQuery, usage: usageOf(budget) });
     } catch (e) {
-      sendJson(res, 200, { provider: 'cj', health: 'offline', record: null, warning: cjSafeError(e) });
+      if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
+        sendJson(res, 200, {
+          provider: 'cj', health: 'offline', record: null,
+          code: CJ_POINT_BUDGET_EXHAUSTED,
+          warning: 'CJ point budget exhausted — no further paid requests issued.',
+          usage: usageOf(budget),
+        });
+        return;
+      }
+      sendJson(res, 200, { provider: 'cj', health: 'offline', record: null, warning: cjSafeError(e), usage: usageOf(budget) });
     }
     return;
   }
@@ -167,14 +233,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
       return;
     }
+    const budget = runBudgetFor(req);
     try {
-      const quotes = await cjFreightCalculate({ startCountryCode, endCountryCode, vid });
+      const quotes = await cjFreightCalculate({ startCountryCode, endCountryCode, vid }, budget ?? undefined);
       const normalized = (Array.isArray(quotes) ? quotes : [])
         .map((q) => normalizeCjFreight(q as never, { origin: startCountryCode, destination: endCountryCode }))
         .filter((q): q is NonNullable<typeof q> => q !== null);
-      sendJson(res, 200, { provider: 'cj', health: 'online', quotes: normalized, points: CJ_POINT_COST.freightCalculate });
+      sendJson(res, 200, { provider: 'cj', health: 'online', quotes: normalized, points: CJ_POINT_COST.freightCalculate, usage: usageOf(budget) });
     } catch (e) {
-      sendJson(res, 200, { provider: 'cj', health: 'offline', quotes: [], warning: cjSafeError(e) });
+      if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
+        sendJson(res, 200, {
+          provider: 'cj', health: 'offline', quotes: [],
+          code: CJ_POINT_BUDGET_EXHAUSTED,
+          warning: 'CJ point budget exhausted — no further paid requests issued.',
+          usage: usageOf(budget),
+        });
+        return;
+      }
+      sendJson(res, 200, { provider: 'cj', health: 'offline', quotes: [], warning: cjSafeError(e), usage: usageOf(budget) });
     }
     return;
   }
