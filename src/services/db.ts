@@ -15,6 +15,12 @@
 
 export type DbMode = 'local' | 'supabase' | 'unconfigured';
 
+export interface DbConnectionResult {
+  ok: boolean;
+  mode: DbMode;
+  detail?: string;
+}
+
 export interface DbAdapter {
   mode: DbMode;
   list<T>(table: string, opts?: { orderBy?: string; limit?: number }): Promise<T[]>;
@@ -22,6 +28,8 @@ export interface DbAdapter {
   insert<T extends { id: string }>(table: string, row: T): Promise<T>;
   update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null>;
   remove(table: string, id: string): Promise<void>;
+  /** Honest connectivity check — never claims success it cannot prove. */
+  testConnection(): Promise<DbConnectionResult>;
 }
 
 const KEY_PREFIX = 'luxedge_db_v2';
@@ -85,6 +93,10 @@ export class LocalStorageAdapter implements DbAdapter {
     const rows = this.readTable<{ id: string }>(table);
     this.writeTable(table, rows.filter((r) => r.id !== id));
   }
+
+  async testConnection(): Promise<DbConnectionResult> {
+    return { ok: true, mode: 'local', detail: 'localStorage adapter (active)' };
+  }
 }
 
 const nullStorage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = {
@@ -100,10 +112,24 @@ export class SupabaseAdapter implements DbAdapter {
   readonly mode: DbMode = 'supabase';
   private url: string;
   private anonKey: string;
+  /** Signed-in user's access token — used (when present) instead of the anon key. */
+  private accessToken: string | null = null;
 
   constructor(url: string, anonKey: string) {
     this.url = url.replace(/\/$/, '');
     this.anonKey = anonKey;
+  }
+
+  /**
+   * Use the signed-in user's JWT for requests (RLS then sees their role).
+   * The token is the caller's own session token, never a secret we mint.
+   */
+  setAccessToken(token: string | null): void {
+    this.accessToken = token;
+  }
+
+  getAccessToken(): string | null {
+    return this.accessToken;
   }
 
   private endpoint(table: string, id?: string): string {
@@ -111,9 +137,10 @@ export class SupabaseAdapter implements DbAdapter {
   }
 
   private headers(method: string): Record<string, string> {
+    const bearer = this.accessToken || this.anonKey;
     return {
       apikey: this.anonKey,
-      Authorization: `Bearer ${this.anonKey}`,
+      Authorization: `Bearer ${bearer}`,
       'Content-Type': 'application/json',
       Prefer: method === 'POST' ? 'return=representation' : 'return=representation',
     };
@@ -164,6 +191,27 @@ export class SupabaseAdapter implements DbAdapter {
 
   async remove(table: string, id: string): Promise<void> {
     await fetch(this.endpoint(table, id), { method: 'DELETE', headers: this.headers('DELETE') });
+  }
+
+  /**
+   * Real connectivity probe: reads one published category through the anon
+   * key exactly like the storefront does. Returns ok:false (no silent
+   * fallback to localStorage) when Supabase is configured but unreachable.
+   */
+  async testConnection(): Promise<DbConnectionResult> {
+    try {
+      const res = await fetch(this.endpoint('categories') + '?limit=1', {
+        headers: this.headers('GET'),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        return { ok: false, mode: 'supabase', detail: `Supabase HTTP ${res.status}: ${text.slice(0, 120)}` };
+      }
+      return { ok: true, mode: 'supabase', detail: 'Supabase reachable (anon read OK)' };
+    } catch (e) {
+      return { ok: false, mode: 'supabase', detail: (e as Error).message || 'Supabase unreachable' };
+    }
   }
 }
 

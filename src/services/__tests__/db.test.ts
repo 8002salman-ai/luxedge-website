@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { LocalStorageAdapter, getDbMode, resetDbForTests } from '../db';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { LocalStorageAdapter, SupabaseAdapter, getDbMode, resetDbForTests } from '../db';
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   const map = new Map<string, string>();
@@ -53,5 +53,40 @@ describe('getDbMode', () => {
 
   it('reports local when Supabase env vars are absent', () => {
     expect(getDbMode()).toBe('local');
+  });
+});
+
+describe('SupabaseAdapter failure behavior (no silent fallback)', () => {
+  it('throws on a failed insert — never falls back to localStorage', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('forbidden', { status: 403 })));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    await expect(adapter.insert('products', { id: 'p1' })).rejects.toThrow(/403/);
+  });
+
+  it('throws on a failed list', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('boom', { status: 500 })));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    await expect(adapter.list('products')).rejects.toThrow(/500/);
+  });
+
+  it('testConnection reports ok only when Supabase actually answers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('[]', { status: 200 })));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    const ok = await adapter.testConnection();
+    expect(ok.ok).toBe(true);
+    expect(ok.mode).toBe('supabase');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 502 })));
+    const bad = await adapter.testConnection();
+    expect(bad.ok).toBe(false);
+    expect(bad.mode).toBe('supabase');
+  });
+
+  it('testConnection returns ok:false (not a throw) when the network fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    const res = await adapter.testConnection();
+    expect(res.ok).toBe(false);
+    expect(res.detail).toContain('ECONNREFUSED');
   });
 });
