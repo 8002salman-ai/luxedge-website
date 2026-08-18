@@ -9,7 +9,7 @@
 // threshold lowering).
 // ============================================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
 import type {
   SupplierDiscoveryAdapter, SupplierProductRecord, SupplierSearchResult,
@@ -27,12 +27,16 @@ import {
 import { prefilterCjRecord, prefilterCjRecords } from '../cj/prefilter';
 import { cjSafeStatusFromHealth } from '../cj/health';
 import { CjSupplierAdapter } from '../cj/adapter';
-import { evidenceFromSupplierRecord, petCategoryFromTitle, scoreSupplierCandidate, runSupplierSearch } from '../../scout/supplierSearch';
+import { evidenceFromSupplierRecord, petCategoryFromTitle, scoreSupplierCandidate, runSupplierSearch, evidenceCompletionGaps } from '../../scout/supplierSearch';
 import { calculateMargin } from '../../scout/margin';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from '../../scout/score';
 import { extractPageFacts } from '../../scout/extract';
 import type { FetchedSourcePage, ScoutCandidate, CandidateEvidence } from '../../scout/types';
-import { cjConfigured, cjSafeError, cjSearchProducts, CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED } from '../../../../api/_lib/cj';
+import {
+  cjConfigured, cjSafeError, cjSearchProducts, CjServerRunBudget, CjDurableRunLedger,
+  CjDurableRunContext, CJ_POINT_BUDGET_EXHAUSTED,
+} from '../../../../api/_lib/cj';
+import { verifyMarketIntelligenceJob } from '../../scout/marketProvenance';
 import {
   CjPointBudget, CJ_POINTS_BUDGET_PER_RUN, CJ_POINTS_HARD_MAX, enrichmentCaps, CJ_POINT_COST,
 } from '../cj/points';
@@ -145,6 +149,74 @@ function adminToken(): string {
   return `header.${payload}.sig`;
 }
 
+/** Seed a REAL persisted MARKET_INTELLIGENCE job row (source of truth). */
+function seedMiJob(
+  db: FakeDb,
+  id: string,
+  marketScore: number,
+  fingerprint: string,
+  over: Partial<Record<string, unknown>> = {}
+): { id: string } {
+  const at = new Date().toISOString();
+  const row = {
+    id,
+    type: 'MARKET_INTELLIGENCE',
+    status: 'completed',
+    input: { query: 'dog toys' },
+    output: { marketScore, evidenceFingerprint: fingerprint, at },
+    error: null,
+    provider: null,
+    model: null,
+    token_cost: null,
+    retries: 0,
+    max_retries: 3,
+    created_at: at,
+    started_at: at,
+    finished_at: at,
+    ...over,
+  };
+  db.rows.get('agent_jobs')?.push(row);
+  return { id };
+}
+
+// A genuinely strong, fully-enriched CJ candidate fixture. IMPORTANT honesty
+// note: after the SKU→sizes fix, a CJ-only candidate (no customer ratings, no
+// real variant-option semantics) has a TRUTHFUL ceiling of 75/100 — exactly
+// the shortlist threshold, never inflated above the evidence. That is the
+// point: CJ supplier data alone cannot earn ratings/upsell points.
+function strongDetail(): CjProductDetail {
+  return {
+    ...listProduct({ nameEn: 'Interactive Dog Toy for Large Dogs' }),
+    productImageSet: [
+      'https://img.cjdropshipping.com/pid123456.jpg',
+      'https://img.cjdropshipping.com/pid123456-2.jpg',
+      'https://img.cjdropshipping.com/pid123456-3.jpg',
+      'https://img.cjdropshipping.com/pid123456-4.jpg',
+      'https://img.cjdropshipping.com/pid123456-5.jpg',
+      'https://img.cjdropshipping.com/pid123456-6.jpg',
+    ],
+    productWeight: '0.35',
+    variants: [{
+      vid: 'VID-1', variantSku: 'SKU-1', variantSellPrice: '20.00',
+      inventories: [{ countryCode: 'US', totalInventory: 40, verifiedWarehouse: 1 }],
+    }],
+  };
+}
+
+function strongAdapter(): FakeCjAdapter {
+  const adapter = new FakeCjAdapter([normalizeCjProductDetail(strongDetail(), { market: 'US' })!]);
+  // Free-shipping quote (totalPostageFee 0) → margin HIGH + free-shipping
+  // delivery points. Landing on exactly 75 is honest: demand 20 + supplier
+  // 10 + delivery 15 + margin 15 + visual 10 + competition 2 (toy keyword)
+  // + return-risk 3 (1 flag: no ratings) + ratings 0 + upsell 0 = 75.
+  adapter.freight = {
+    costUsd: 0, baseFreightUsd: 0, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0,
+    arrivalDays: '3-5', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
+    observedAt: new Date().toISOString(), verified: true, note: 'free shipping (totalPostageFee 0)',
+  };
+  return adapter;
+}
+
 /** Deterministic fake adapter returning fixed CJ records (no network). */
 class FakeCjAdapter implements SupplierDiscoveryAdapter {
   readonly provider = 'cj' as const;
@@ -166,6 +238,14 @@ class FakeCjAdapter implements SupplierDiscoveryAdapter {
   async healthCheck(): Promise<SupplierHealthResult> { return { provider: 'cj', health: 'online' }; }
   setRunScope(): void { /* fake — no server budget */ }
   async getRunUsage(): Promise<SupplierPointUsage | null> { return this.serverUsage; }
+  /** Fake durable run — the engine exercises the start→reserve→finish flow. */
+  async startRun(requestedBudget?: number): Promise<{ runId: string; hardBudget: number } | null> {
+    return { runId: 'run-fake', hardBudget: requestedBudget ?? 250 };
+  }
+  finishedStatus: string | null = null;
+  async finishRun(status: 'completed' | 'failed' | 'exhausted'): Promise<void> {
+    this.finishedStatus = status;
+  }
 }
 
 function recordFromList(p: CjListProduct): SupplierProductRecord {
@@ -903,12 +983,12 @@ describe('FINAL AUDIT — server point budget (authoritative)', () => {
   it('reserves points BEFORE every paid request — including paid retries', () => {
     const b = new CjServerRunBudget(250);
     // One listV2 (50) then a productQuery with one paid retry: 50 + 10 + 10.
-    expect(b.reserve(CJ_POINT_COST.listV2)).toBe(true);
-    b.markListAttempt();
-    expect(b.reserve(CJ_POINT_COST.productQuery)).toBe(true);
-    b.markDetailAttempt();
-    expect(b.reserve(CJ_POINT_COST.productQuery, true)).toBe(true); // paid retry
-    b.markDetailAttempt();
+    expect(b.reserve('listV2')).toBe(true);
+    b.markAttempt('listV2');
+    expect(b.reserve('productQuery')).toBe(true);
+    b.markAttempt('productQuery');
+    expect(b.reserve('productQuery', true)).toBe(true); // paid retry
+    b.markAttempt('productQuery');
     const u = b.usage();
     expect(u.reserved).toBe(70); // 50 + 10 + 10 — retries ARE counted
     expect(u.paidRetries).toBe(1);
@@ -917,18 +997,18 @@ describe('FINAL AUDIT — server point budget (authoritative)', () => {
 
   it('refuses the HTTP request when remaining budget cannot afford it (denied, no call)', () => {
     const b = new CjServerRunBudget(60); // search 50 + one 10 left
-    expect(b.reserve(CJ_POINT_COST.listV2)).toBe(true);
-    expect(b.reserve(CJ_POINT_COST.productQuery)).toBe(true);
+    expect(b.reserve('listV2')).toBe(true);
+    expect(b.reserve('productQuery')).toBe(true);
     // 5 points left? impossible with these costs — simulate with a freight
     // request when only a partial amount remains.
     const b2 = new CjServerRunBudget(55);
-    expect(b2.reserve(CJ_POINT_COST.listV2)).toBe(true); // 50
+    expect(b2.reserve('listV2')).toBe(true); // 50
     // Remaining 5 < any paid endpoint cost → the request is NOT issued.
-    expect(b2.reserve(CJ_POINT_COST.freightCalculate)).toBe(false);
+    expect(b2.reserve('freightCalculate')).toBe(false);
     expect(b2.usage().denied).toBe(1);
     expect(b2.usage().remaining).toBe(5);
     // A second product/query also cannot run.
-    expect(b2.reserve(CJ_POINT_COST.productQuery)).toBe(false);
+    expect(b2.reserve('productQuery')).toBe(false);
   });
 
   it('CJ_POINT_BUDGET_EXHAUSTED is the safe client-visible signal', () => {
@@ -942,64 +1022,36 @@ describe('FINAL AUDIT — market business gate (two qualification levels)', () =
   // real variant-option semantics) has a TRUTHFUL ceiling of 75/100 — exactly
   // the shortlist threshold, never inflated above the evidence. That is the
   // point: CJ supplier data alone cannot earn ratings/upsell points.
-  function strongDetail(): CjProductDetail {
-    return {
-      ...listProduct({ nameEn: 'Interactive Dog Toy for Large Dogs' }),
-      productImageSet: [
-        'https://img.cjdropshipping.com/pid123456.jpg',
-        'https://img.cjdropshipping.com/pid123456-2.jpg',
-        'https://img.cjdropshipping.com/pid123456-3.jpg',
-        'https://img.cjdropshipping.com/pid123456-4.jpg',
-        'https://img.cjdropshipping.com/pid123456-5.jpg',
-        'https://img.cjdropshipping.com/pid123456-6.jpg',
-      ],
-      productWeight: '0.35',
-      variants: [{
-        vid: 'VID-1', variantSku: 'SKU-1', variantSellPrice: '20.00',
-        inventories: [{ countryCode: 'US', totalInventory: 40, verifiedWarehouse: 1 }],
-      }],
-    };
-  }
-
-  function strongAdapter(): FakeCjAdapter {
-    const adapter = new FakeCjAdapter([normalizeCjProductDetail(strongDetail(), { market: 'US' })!]);
-    // Free-shipping quote (totalPostageFee 0) → margin HIGH + free-shipping
-    // delivery points. Landing on exactly 75 is honest: demand 20 + supplier
-    // 10 + delivery 15 + margin 15 + visual 10 + competition 2 (toy keyword)
-    // + return-risk 3 (1 flag: no ratings) + ratings 0 + upsell 0 = 75.
-    adapter.freight = {
-      costUsd: 0, baseFreightUsd: 0, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0,
-      arrivalDays: '3-5', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
-      observedAt: new Date().toISOString(), verified: true, note: 'free shipping (totalPostageFee 0)',
-    };
-    return adapter;
-  }
-
   it('Product 75 / Market 55 → PRODUCT_SHORTLISTED YES, BUSINESS_QUALIFIED NO', async () => {
     const db = new FakeDb();
     db.token = adminToken();
+    seedMiJob(db, 'mi-1', 55, 'fp-1');
     const result = await runSupplierSearch({
       adapter: strongAdapter(),
       search: {
         query: 'orthopedic dog bed', market: 'US', maxResults: 10,
-        marketContext: { marketAnalysisId: 'mi-1', marketScore: 55, evidenceFingerprint: 'fp-1', observedAt: new Date().toISOString() },
+        marketContext: { marketAnalysisId: 'mi-1', marketScore: 90, evidenceFingerprint: 'fp-1', observedAt: new Date().toISOString() },
       },
       db,
       onProgress: () => {},
     });
     expect(result.productShortlisted).toBe(1); // honest 75 ≥ 75
-    expect(result.businessQualified).toBe(0); // market 55 < 60 gate
+    expect(result.businessQualified).toBe(0); // verified market 55 < 60 gate
     expect(result.businessQualifiedCandidates).toHaveLength(0);
+    // The DB job is the source of truth — a client claim of 90 is ignored.
+    expect(result.marketContext?.marketScore).toBe(55);
+    expect(result.marketContext?.verified).toBe(true);
   });
 
   it('Product 75 / Market 65 → BUSINESS_QUALIFIED YES (landed cost HIGH + USA evidence)', async () => {
     const db = new FakeDb();
     db.token = adminToken();
+    seedMiJob(db, 'mi-2', 65, 'fp-2');
     const result = await runSupplierSearch({
       adapter: strongAdapter(),
       search: {
         query: 'orthopedic dog bed', market: 'US', maxResults: 10,
-        marketContext: { marketAnalysisId: 'mi-2', marketScore: 65, evidenceFingerprint: 'fp-2', observedAt: new Date().toISOString() },
+        marketContext: { marketAnalysisId: 'mi-2', marketScore: 90, evidenceFingerprint: 'fp-2', observedAt: new Date().toISOString() },
       },
       db,
       onProgress: () => {},
@@ -1012,9 +1064,13 @@ describe('FINAL AUDIT — market business gate (two qualification levels)', () =
     });
     // Final Opportunity Score formula: 0.7×75 + 0.3×65 = 72 (documented).
     expect(result.businessQualifiedCandidates[0].finalOpportunityScore).toBe(72);
-    // Market link persisted on the RESEARCH job output.
+    // Market link persisted on the RESEARCH job output (verified values).
     const researchJob = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
-    expect(researchJob?.output).toMatchObject({ market_score: 65, supplier_search_query: 'orthopedic dog bed' });
+    expect(researchJob?.output).toMatchObject({
+      market_intelligence_job_id: 'mi-2', market_score: 65,
+      market_evidence_fingerprint: 'fp-2', market_verified: true,
+      supplier_search_query: 'orthopedic dog bed',
+    });
   });
 
   it('Product 75 / Market UNKNOWN → BUSINESS_QUALIFIED NO (never invented)', async () => {
@@ -1029,6 +1085,7 @@ describe('FINAL AUDIT — market business gate (two qualification levels)', () =
     expect(result.productShortlisted).toBe(1);
     expect(result.businessQualified).toBe(0); // market UNKNOWN → not qualified
     expect(result.marketContext?.marketScore).toBeNull();
+    expect(result.marketContext?.verified).toBe(false);
   });
 
   it('server-authoritative usage is surfaced on the result when the adapter reports it', async () => {
@@ -1050,5 +1107,351 @@ describe('FINAL AUDIT — market business gate (two qualification levels)', () =
     });
     expect(result.serverPoints?.reserved).toBe(70);
     expect(result.serverPoints?.paidRetries).toBe(1);
+  });
+
+  it('closes the durable run with a status (completed when budget remains)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const adapter = strongAdapter();
+    await runSupplierSearch({
+      adapter,
+      search: { query: 'orthopedic dog bed', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    expect(adapter.finishedStatus).toBe('completed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C LIVE-READINESS — durable point ledger (migration 0008)
+// ---------------------------------------------------------------------------
+
+interface MockRunRow {
+  id: string;
+  status: string;
+  hard_budget: number;
+  reserved_points: number;
+  list_attempts: number;
+  detail_attempts: number;
+  freight_attempts: number;
+  paid_retries: number;
+  denied_attempts: number;
+  [k: string]: unknown;
+}
+
+/**
+ * A tiny in-memory emulation of the 0008 migration backend (supplier_api_runs
+ * table + atomic reserve RPC) shared across ledger instances, mirroring the
+ * DB row lock + re-evaluated WHERE semantics. Admin JWT required.
+ */
+function mockSupabaseLedger(state: Map<string, MockRunRow>) {
+  const ok = (rows: unknown[], status = 200) => new Response(JSON.stringify(rows), { status });
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method || 'GET').toUpperCase();
+    const headers = (init?.headers || {}) as Record<string, string>;
+    const auth = String(headers.Authorization || '');
+    // Mirror the migration's ADMIN-ONLY guard: a non-admin bearer is refused.
+    if (!/Bearer .*admin/i.test(auth)) return new Response(JSON.stringify({ message: 'permission denied' }), { status: 403 });
+
+    if (url.includes('/rest/v1/rpc/reserve_supplier_api_points')) {
+      const body = JSON.parse(String(init?.body || '{}')) as {
+        run_id: string; action: string; cost: number; is_retry: boolean;
+      };
+      const row = state.get(body.run_id);
+      const afford = !!row && row.status === 'running' && (row.reserved_points + body.cost) <= row.hard_budget;
+      if (!afford) {
+        if (row) row.denied_attempts = (row.denied_attempts || 0) + 1;
+        return ok([{
+          approved: false, run_id: body.run_id, provider: 'cj', status: row?.status ?? 'missing',
+          hard_budget: row?.hard_budget ?? 0, reserved_points: row?.reserved_points ?? 0,
+          remaining: (row?.hard_budget ?? 0) - (row?.reserved_points ?? 0),
+          list_attempts: row?.list_attempts ?? 0, detail_attempts: row?.detail_attempts ?? 0,
+          freight_attempts: row?.freight_attempts ?? 0, paid_retries: row?.paid_retries ?? 0,
+          denied_attempts: row?.denied_attempts ?? 0,
+        }]);
+      }
+      row.reserved_points += body.cost;
+      if (body.action === 'list') row.list_attempts = (row.list_attempts || 0) + 1;
+      if (body.action === 'detail') row.detail_attempts = (row.detail_attempts || 0) + 1;
+      if (body.action === 'freight') row.freight_attempts = (row.freight_attempts || 0) + 1;
+      if (body.is_retry) row.paid_retries = (row.paid_retries || 0) + 1;
+      return ok([{ approved: true, run_id: body.run_id, provider: 'cj', ...row }]);
+    }
+
+    if (url.includes('/rest/v1/supplier_api_runs')) {
+      if (method === 'POST') {
+        const body = JSON.parse(String(init?.body || '{}')) as Partial<MockRunRow>;
+        const row = {
+          id: `run-${Math.random().toString(36).slice(2, 10)}`,
+          status: 'running', reserved_points: 0, list_attempts: 0, detail_attempts: 0,
+          freight_attempts: 0, paid_retries: 0, denied_attempts: 0, ...body,
+        } as MockRunRow;
+        state.set(row.id, row);
+        return ok([row], 201);
+      }
+      const id = /id=eq\.([^&]+)/.exec(url)?.[1];
+      const row = id ? state.get(decodeURIComponent(id)) : null;
+      if (method === 'GET') return ok(row ? [row] : []);
+      if (method === 'PATCH' && row) {
+        Object.assign(row, JSON.parse(String(init?.body || '{}')));
+        return ok([row]);
+      }
+    }
+    return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
+  });
+}
+
+describe('DURABLE POINT LEDGER — cross-instance, atomic, cold-start safe (migration 0008)', () => {
+  const state = new Map<string, MockRunRow>();
+  let realFetch: typeof fetch;
+  let env: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    state.clear();
+    realFetch = global.fetch;
+    env = {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+    process.env.VITE_SUPABASE_URL = 'https://proj.supabase.co';
+    process.env.VITE_SUPABASE_ANON_KEY = 'anon-key';
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    global.fetch = mockSupabaseLedger(state) as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = realFetch;
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('A) two independent server contexts share ONE durable run budget', async () => {
+    const l1 = new CjDurableRunLedger('admin.jwt');
+    const l2 = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await l1.start('cj', 250);
+    const a = await l1.reserve(runId, 'listV2', false); // 50
+    const b = await l2.reserve(runId, 'productQuery', false); // 10 — different instance
+    expect(a.approved).toBe(true);
+    expect(b.approved).toBe(true);
+    const usage = await l1.usage(runId);
+    expect(usage?.budget).toBe(250);
+    expect(usage?.reserved).toBe(60);
+    expect(usage?.remaining).toBe(190);
+  });
+
+  it('B) cold start does NOT reset reserved points (durable, not memory)', async () => {
+    const l1 = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await l1.start('cj', 250);
+    await l1.reserve(runId, 'listV2', false); // 50
+    // A brand-new ledger instance (cold serverless start) has NO in-memory
+    // state — it must still see the 50 already reserved in the DB.
+    const l2 = new CjDurableRunLedger('admin.jwt');
+    expect((await l2.usage(runId))?.reserved).toBe(50);
+    const r = await l2.reserve(runId, 'productQuery', false);
+    expect(r.approved).toBe(true);
+    expect((await l2.usage(runId))?.reserved).toBe(60);
+  });
+
+  it('C) DENIED budget → the paid CJ HTTP request is never issued', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 50); // budget = exactly one search
+    await ledger.reserve(runId, 'listV2', false); // 50 used → 0 left
+    const supabaseMock = global.fetch;
+    let cjListCalls = 0;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(input);
+      if (u.includes('cjdropshipping')) {
+        if (u.includes('/product/listV2')) cjListCalls++;
+        if (u.includes('/authentication/getAccessToken')) {
+          return new Response(JSON.stringify({ data: { accessToken: 'AT', refreshToken: 'RT' } }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ data: { content: [{ productList: [] }], totalRecords: 0 } }), { status: 200 });
+      }
+      return supabaseMock(input, init);
+    }) as unknown as typeof fetch;
+    const ctx = new CjDurableRunContext(ledger, runId, 50);
+    await expect(cjSearchProducts({ keyWord: 'dog toy', size: 5 }, ctx)).rejects.toThrow(CJ_POINT_BUDGET_EXHAUSTED);
+    expect(cjListCalls).toBe(0); // NO paid CJ HTTP request was issued
+    // The denial is recorded durably.
+    expect((await ledger.usage(runId))?.denied).toBe(1);
+  });
+
+  it('D) two concurrent 10-pt reservations with only 10 remaining → exactly ONE succeeds', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    await ledger.reserve(runId, 'listV2', false); // 50
+    for (let i = 0; i < 19; i++) await ledger.reserve(runId, 'productQuery', false); // 190 → 240
+    const [a, b] = await Promise.all([
+      ledger.reserve(runId, 'freightCalculate', false),
+      ledger.reserve(runId, 'freightCalculate', false),
+    ]);
+    expect([a.approved, b.approved].filter(Boolean)).toHaveLength(1);
+    expect((await ledger.usage(runId))?.reserved).toBe(250);
+    expect((await ledger.usage(runId))?.denied).toBe(1);
+  });
+
+  it('server clamps ANY requested budget to the HARD MAX (1000 → 250)', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { usage } = await ledger.start('cj', 1000);
+    expect(usage.budget).toBe(250);
+    const lower = await new CjDurableRunLedger('admin.jwt').start('cj', 100);
+    expect(lower.usage.budget).toBe(100); // less than max is allowed
+  });
+
+  it('a NON-ADMIN caller is rejected by the ledger (fail closed)', async () => {
+    const ledger = new CjDurableRunLedger('customer.jwt');
+    await expect(ledger.start('cj', 250)).rejects.toThrow(/403|permission denied/i);
+  });
+
+  it('paid retries reserve their own points durably (retry counted, cap enforced)', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    const r1 = await ledger.reserve(runId, 'productQuery', false); // 10
+    const r2 = await ledger.reserve(runId, 'productQuery', true); // retry +10
+    expect(r1.approved).toBe(true);
+    expect(r2.approved).toBe(true);
+    const usage = await ledger.usage(runId);
+    expect(usage?.reserved).toBe(20);
+    expect(usage?.paidRetries).toBe(1);
+    expect(usage?.detailAttempts).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C LIVE-READINESS — market provenance (DB job is the source of truth)
+// ---------------------------------------------------------------------------
+
+describe('MARKET PROVENANCE — persisted MI job verification', () => {
+  it('G) valid MI job + matching claimed fingerprint → verified market context', () => {
+    const at = new Date().toISOString();
+    const job = {
+      id: 'mi-real', type: 'MARKET_INTELLIGENCE', status: 'completed',
+      output: { marketScore: 65, evidenceFingerprint: 'fp-real', at }, finished_at: at, created_at: at,
+    };
+    const v = verifyMarketIntelligenceJob(job, { marketAnalysisId: 'mi-real', evidenceFingerprint: 'fp-real' });
+    expect(v).not.toBeNull();
+    expect(v?.marketScore).toBe(65);
+    expect(v?.evidenceFingerprint).toBe('fp-real');
+    expect(v?.marketAnalysisId).toBe('mi-real');
+  });
+
+  it('fingerprint mismatch → NOT verified (fail closed)', () => {
+    const at = new Date().toISOString();
+    const job = {
+      id: 'mi-real', type: 'MARKET_INTELLIGENCE', status: 'completed',
+      output: { marketScore: 65, evidenceFingerprint: 'fp-real', at }, finished_at: at, created_at: at,
+    };
+    expect(verifyMarketIntelligenceJob(job, { evidenceFingerprint: 'fp-WRONG' })).toBeNull();
+  });
+
+  it('wrong type / not completed / missing score / missing fingerprint → null', () => {
+    const at = new Date().toISOString();
+    const base = { id: 'x', type: 'MARKET_INTELLIGENCE', status: 'completed', output: { marketScore: 65, evidenceFingerprint: 'fp', at }, finished_at: at, created_at: at };
+    expect(verifyMarketIntelligenceJob({ ...base, type: 'PRODUCT_RESEARCH' })).toBeNull();
+    expect(verifyMarketIntelligenceJob({ ...base, status: 'failed' })).toBeNull();
+    expect(verifyMarketIntelligenceJob({ ...base, output: { evidenceFingerprint: 'fp', at } })).toBeNull();
+    expect(verifyMarketIntelligenceJob({ ...base, output: { marketScore: 65, at } })).toBeNull();
+    expect(verifyMarketIntelligenceJob(null)).toBeNull();
+  });
+});
+
+describe('MARKET PROVENANCE — supplier-search market gate', () => {
+  it('E) client supplies marketScore=90 but the DB MI job score is 55 → effective 55', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    seedMiJob(db, 'mi-real', 55, 'fp-real');
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'mi-real', marketScore: 90, evidenceFingerprint: 'fp-real' },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.marketContext?.marketScore).toBe(55); // DB wins, client claim ignored
+    expect(result.marketContext?.verified).toBe(true);
+  });
+
+  it('F) fake/nonexistent MI job id → Market UNKNOWN, BUSINESS_QUALIFIED false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'does-not-exist', marketScore: 90 },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.productShortlisted).toBe(1); // shortlist still allowed
+    expect(result.marketContext?.marketScore).toBeNull();
+    expect(result.marketContext?.verified).toBe(false);
+    expect(result.businessQualified).toBe(0);
+  });
+
+  it('H) manual CJ query (no linked MI job) → PRODUCT_SHORTLISTED allowed, BUSINESS_QUALIFIED false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: { query: 'orthopedic dog bed', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.productShortlisted).toBe(1);
+    expect(result.marketContext?.marketScore).toBeNull();
+    expect(result.businessQualified).toBe(0);
+  });
+
+  it('I) Product Scout market-grounded flow passes the REAL MI job id (not a React-state score)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // This is exactly what the UI does after a Market Intelligence run: it
+    // holds the persisted job id + a chosen hypothesis and passes BOTH to the
+    // CJ run. The engine re-loads the job from the DB — it never trusts a
+    // number from React state (a score field is not even sent).
+    const miJob = seedMiJob(db, 'mi-ui', 65, 'fp-ui');
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: {
+          marketAnalysisId: miJob.id,
+          opportunity: 'orthopedic dog beds',
+          hypothesis: 'orthopedic dog bed',
+        },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.marketContext?.marketAnalysisId).toBe(miJob.id);
+    expect(result.marketContext?.marketScore).toBe(65); // derived from the DB job
+    expect(result.marketContext?.verified).toBe(true);
+    expect(result.businessQualified).toBe(1);
+    const researchJob = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
+    expect(researchJob?.output).toMatchObject({
+      market_intelligence_job_id: miJob.id,
+      market_score: 65,
+      market_evidence_fingerprint: 'fp-ui',
+      market_verified: true,
+    });
+  });
+});
+
+describe('EVIDENCE-COMPLETION HOOK (strongest 3–6 only, deterministic, no extra calls)', () => {
+  it('lists honest gaps for a CJ-only record (ratings/variants never invented)', () => {
+    const r = normalizeCjProductDetail(detailProduct(), { market: 'US' })!;
+    const gaps = evidenceCompletionGaps(r);
+    expect(gaps).toContain('verified customer ratings/reviews (CJ returns none — external demand evidence, identity-matched)');
+    expect(gaps).toContain('real customer-selectable variant options (size/color/pack) for upsell evidence');
+    // With a consistent US-stock variant + origin, those gaps are NOT claimed.
+    expect(gaps).not.toContain('internally-consistent selected variant');
+    expect(gaps).not.toContain('origin/warehouse evidence');
   });
 });

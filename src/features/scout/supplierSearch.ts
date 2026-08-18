@@ -34,10 +34,11 @@ import {
 } from './persist';
 import { cjProductKey, cjSkuKey } from '../suppliers/cj/dedupe';
 import { prefilterCjRecords } from '../suppliers/cj/prefilter';
-import { CjPointBudget, enrichmentCaps, CJ_POINT_COST } from '../suppliers/cj/points';
+import { CjPointBudget, enrichmentCaps, CJ_POINT_COST, CJ_POINTS_BUDGET_PER_RUN } from '../suppliers/cj/points';
 import { parseDeliveryCycle, normalizeCountryCode } from '../suppliers/cj/normalize';
 import type { CjPointUsage } from '../suppliers/cj/points';
 import { finalOpportunityScore } from './market';
+import { verifyMarketIntelligenceJob, type VerifiedMarketContext } from './marketProvenance';
 
 export interface SupplierSearchRunOptions {
   adapter: SupplierDiscoveryAdapter;
@@ -87,13 +88,15 @@ export interface SupplierSearchRunResult {
   candidates: ScoutCandidate[];
   /** Business-qualified candidates with their separate scores. */
   businessQualifiedCandidates: BusinessQualifiedCandidate[];
-  /** Market gate: the grounded MI context that justified the search. */
+  /** Market gate: the verified MI context that justified the search (DB-derived). */
   marketContext?: {
     marketAnalysisId?: string | null;
     opportunity?: string | null;
     marketScore: number | null;
     evidenceFingerprint?: string | null;
     observedAt?: string | null;
+    /** True only when the persisted MARKET_INTELLIGENCE job verified the context. */
+    verified?: boolean;
   };
   warning?: string;
   /** Client-side forecast budget usage (UX only). */
@@ -184,6 +187,25 @@ export function evidenceFromSupplierRecord(
 
 
 /**
+ * Evidence-completion hook (Phase 4C live-readiness, §11). For the strongest
+ * 3–6 candidates ONLY, list which evidence categories are still missing so a
+ * future owner-approved enrichment pass can target them (identity match
+ * required — never transfer ratings/reviews from a merely similar product).
+ * Pure/deterministic: no extra web or AI calls in this pre-key phase.
+ */
+export function evidenceCompletionGaps(r: SupplierProductRecord): string[] {
+  const gaps: string[] = [];
+  if (!r.selectedVariant) gaps.push('internally-consistent selected variant');
+  if (!r.selectedVariant?.originCountry) gaps.push('origin/warehouse evidence');
+  if (r.selectedVariant && !r.selectedVariant.usInventoryInCountry) gaps.push('verified US inventory for the selected variant');
+  if (r.weightGrams === null) gaps.push('weight/dimensions');
+  if (r.deliveryCycle === null) gaps.push('delivery window');
+  gaps.push('verified customer ratings/reviews (CJ returns none — external demand evidence, identity-matched)');
+  gaps.push('real customer-selectable variant options (size/color/pack) for upsell evidence');
+  return gaps;
+}
+
+/**
  * Free local ranking of a listV2 record (Stage A). Uses ONLY listV2 data —
  * no paid calls. Ranks what is worth a paid product/query enrichment:
  * US inventory signal, verified warehouse, viable price, image, delivery
@@ -224,19 +246,62 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
-  // Per-run id + hard per-run budget (owner default; AI cannot raise it). The
-  // server clamps the requested budget to the HARD MAX — client only forecasts.
-  const runId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const budget = new CjPointBudget(search.pointsBudget);
+  // Per-run DURABLE point ledger (Phase 4C live-readiness): the SERVER creates
+  // the run (supplier_api_runs row — migration 0008), clamps the requested
+  // budget to the HARD MAX, and reserves points atomically before every paid
+  // CJ request. Client-side CjPointBudget stays UX forecast only.
+  let runId: string | null = null;
+  let hardBudget = CJ_POINTS_BUDGET_PER_RUN;
+  let ledgerWarn = '';
+  try {
+    const started = await adapter.startRun?.(search.pointsBudget);
+    if (started?.runId) {
+      runId = started.runId;
+      hardBudget = started.hardBudget;
+    }
+  } catch (e) {
+    ledgerWarn = `server point ledger unavailable — client forecast only (${(e as Error).message})`;
+    progress(`[warn] ${ledgerWarn}`);
+  }
+  const budget = new CjPointBudget(hardBudget);
   const caps = enrichmentCaps(budget);
-  adapter.setRunScope?.(runId, budget.budget);
+  if (runId) adapter.setRunScope?.(runId, hardBudget);
+  const finishRun = (status: 'completed' | 'failed' | 'exhausted') => {
+    if (!runId) return Promise.resolve();
+    return adapter.finishRun?.(status).catch(() => {});
+  };
 
-  // Grounded Market Intelligence context (market gate). Market score UNKNOWN
-  // unless a valid linked MI job/evidence is supplied — never invented.
-  const marketContext: MarketContext = search.marketContext ?? {};
-  const marketScore = typeof marketContext.marketScore === 'number' && Number.isFinite(marketContext.marketScore)
-    ? Math.min(100, Math.max(0, marketContext.marketScore))
-    : null;
+  // Grounded Market Intelligence context (market gate). The persisted
+  // MARKET_INTELLIGENCE job is the SOURCE OF TRUTH: the client may CLAIM a
+  // marketAnalysisId + fingerprint, but the score/fingerprint/observed_at are
+  // derived ONLY from the verified DB job. No valid job ⇒ Market Score
+  // UNKNOWN ⇒ BUSINESS_QUALIFIED impossible. Never trust the client score.
+  const claimed: MarketContext = search.marketContext ?? {};
+  let verifiedMarket: VerifiedMarketContext | null = null;
+  if (claimed.marketAnalysisId) {
+    try {
+      const job = await db.get<Record<string, unknown>>('agent_jobs', claimed.marketAnalysisId);
+      verifiedMarket = verifyMarketIntelligenceJob(job, claimed);
+    } catch (e) {
+      progress(`[market] failed to load MI job ${claimed.marketAnalysisId}: ${(e as Error).message}`);
+    }
+    if (verifiedMarket) {
+      progress(`[market] verified MARKET_INTELLIGENCE ${verifiedMarket.marketAnalysisId}: score ${verifiedMarket.marketScore}/100 (fingerprint ${verifiedMarket.evidenceFingerprint})`);
+    } else {
+      progress(`[market] market context NOT verified (job ${claimed.marketAnalysisId} missing/not completed/fingerprint mismatch) — Market Score UNKNOWN, BUSINESS_QUALIFIED impossible`);
+    }
+  } else {
+    progress('[market] no linked Market Intelligence job — manual supplier search; Market Score UNKNOWN, BUSINESS_QUALIFIED impossible');
+  }
+  const marketScore = verifiedMarket?.marketScore ?? null;
+  const marketOut = (): NonNullable<SupplierSearchRunResult['marketContext']> => ({
+    marketAnalysisId: verifiedMarket?.marketAnalysisId ?? null,
+    opportunity: claimed.opportunity ?? null,
+    marketScore,
+    evidenceFingerprint: verifiedMarket?.evidenceFingerprint ?? null,
+    observedAt: verifiedMarket?.observedAt ?? null,
+    verified: !!verifiedMarket,
+  });
 
   const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
     provider: adapter.provider,
@@ -245,7 +310,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     at,
     runId,
     note: `Supplier-API discovery (CJ) → normalize → dedupe → Stage A filter/rank → Stage B enrichment (detail ≤${caps.detailMax}, freight ≤${caps.freightMax}) → persist`, // eslint-disable-line max-len
-    market: marketContext, // WHY this product was searched — the MI evidence link
+    market: claimed, // WHY this product was searched — the CLAIMED MI link (verified in the output)
   });
   await addRun(db, jobId, 'supplier-search', 'running', `Searching ${adapter.provider.toUpperCase()}: ${search.query}`);
   await addLog(db, jobId, 'info', `SUPPLIER_SEARCH(${adapter.provider}) started for "${search.query}" (budget=${budget.budget}pts, retries=0)`);
@@ -256,7 +321,8 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     await addLog(db, jobId, 'error', `CJ point budget ${budget.budget} exhausted before the search — run denied.`);
     await addRun(db, jobId, 'supplier-search', 'failed', 'CJ point budget exhausted before search');
     await completeJob(db, jobId, 'failed', { error: 'CJ point budget exhausted', points: budget.usage() });
-    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: { marketScore }, points: budget.usage(), serverPoints: null };
+    await finishRun('failed');
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: marketOut(), points: budget.usage(), serverPoints: null };
   }
   try {
     result = await adapter.searchProducts(search);
@@ -270,7 +336,8 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     await addLog(db, jobId, 'error', `SUPPLIER_SEARCH failed: ${(e as Error).message} (retries=0)`);
     await addRun(db, jobId, 'supplier-search', 'failed', `Search failed: ${(e as Error).message}`);
     await completeJob(db, jobId, 'failed', { error: (e as Error).message, retries: 0, points: budget.usage() });
-    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: { marketScore }, points: budget.usage(), serverPoints: null };
+    await finishRun('failed');
+    return { jobId, health: 'offline', searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0, productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1, candidates: [], businessQualifiedCandidates: [], marketContext: marketOut(), points: budget.usage(), serverPoints: null };
   }
   progress(`[search] ${adapter.provider.toUpperCase()} returned ${result.records.length} records (health=${result.health}, points used ${budget.used}/${budget.budget})${result.warning ? ' — ' + result.warning : ''}`);
   await addLog(db, jobId, 'info', `SUPPLIER_SEARCH: ${result.records.length} records, health=${result.health}${result.warning ? '; ' + result.warning : ''}`);
@@ -375,6 +442,14 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     }
   }
 
+  // Evidence-completion hook (§11): for the strongest subset only, list the
+  // evidence gaps a future identity-matched enrichment pass should fill. No
+  // extra web/AI calls — deterministic and free.
+  for (const e of freightTargets.slice(0, 3)) {
+    const gaps = evidenceCompletionGaps(e.record);
+    if (gaps.length) progress(`[evidence] ${e.record.title.slice(0, 50)} — completion gaps: ${gaps.join('; ')}`);
+  }
+
   // 5) PERSIST candidates (researching) — admin JWT, RLS. Only enriched
   //    records become candidates (we never persist every search result).
   const candidates: ScoutCandidate[] = [];
@@ -464,11 +539,15 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     failed,
     retries: 0,
     points: budget.usage(),
-    // Market link: WHY this product was searched + WHICH MI evidence.
-    market_intelligence_job_id: marketContext.marketAnalysisId ?? null,
+    // Market link (VERIFIED): WHY this product was searched + WHICH MI
+    // evidence justified it — derived from the persisted DB job, never the
+    // client-supplied score.
+    market_intelligence_job_id: verifiedMarket?.marketAnalysisId ?? null,
     market_score: marketScore,
-    market_evidence_fingerprint: marketContext.evidenceFingerprint ?? null,
-    market_observed_at: marketContext.observedAt ?? null,
+    market_evidence_fingerprint: verifiedMarket?.evidenceFingerprint ?? null,
+    market_observed_at: verifiedMarket?.observedAt ?? null,
+    market_verified: !!verifiedMarket,
+    market_hypothesis: verifiedMarket?.hypothesis ?? claimed.hypothesis ?? null,
     supplier_search_query: search.query,
   });
 
@@ -478,7 +557,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     candidateIds: candidates.map((c) => c.id),
     at: new Date().toISOString(),
     note: 'Margin + hard-rejection + 100-pt score (CJ supplier evidence)',
-    marketContext, // WHICH market evidence applied to these scores
+    market: claimed, // WHICH market evidence applied to these scores
   });
   await addRun(db, scoreJobId, 'supplier-search', 'running', `Scoring ${candidates.length} CJ candidates`);
   await addLog(db, scoreJobId, 'info', `PRODUCT_SCORE started for ${candidates.length} CJ candidates (retries=0)`);
@@ -518,7 +597,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     candidateIds: qaTargets.map((c) => c.id),
     at: new Date().toISOString(),
     note: 'Evidence QA on CJ shortlisted candidates',
-    marketContext,
+    market: claimed,
   });
   await addRun(db, qaJobId, 'supplier-search', 'running', `QA on ${qaTargets.length} shortlisted`);
   await addLog(db, qaJobId, 'info', `PRODUCT_QA started for ${qaTargets.length} shortlisted (retries=0)`);
@@ -568,6 +647,11 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     serverPoints = null;
   }
 
+  // Close the DURABLE run: exhausted when the budget is spent/denied,
+  // otherwise completed. Never called with 'failed' here (search succeeded).
+  const finishStatus = budget.remaining() <= 0 || budget.denied > 0 ? 'exhausted' : 'completed';
+  await finishRun(finishStatus);
+
   progress(`Done — searched ${result.records.length}, kept ${kept.length}, enriched ${enriched.length}, researched ${scored.length}, PRODUCT_SHORTLISTED ${productShortlisted}, QA passed ${qaPassed}, BUSINESS_QUALIFIED ${businessQualifiedCandidates.length}.`);
   return {
     jobId, scoreJobId, qaJobId,
@@ -583,14 +667,8 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     failed,
     candidates: scored,
     businessQualifiedCandidates,
-    marketContext: {
-      marketAnalysisId: marketContext.marketAnalysisId ?? null,
-      opportunity: marketContext.opportunity ?? null,
-      marketScore,
-      evidenceFingerprint: marketContext.evidenceFingerprint ?? null,
-      observedAt: marketContext.observedAt ?? null,
-    },
-    warning: result.warning,
+    marketContext: marketOut(),
+    warning: [result.warning, ledgerWarn].filter(Boolean).join(' · ') || undefined,
     points: budget.usage(),
     serverPoints,
   };

@@ -6,28 +6,35 @@
 //
 // Actions (query param `action`):
 //   health   → { provider:'cj', health, detail }  (no CJ call when unconfigured)
-//   search   → ?action=search&q=...&market=US&size=30&maxCost=40&runId=...&runBudget=250
-//              returns normalized SupplierProductRecord[] (admin-only)
-//   product  → ?action=product&pid=...&market=US&runId=...&runBudget=250
-//   freight  → POST { productId, vid, startCountryCode, endCountryCode } (+ runId/runBudget)
+//   start    → POST { provider, requestedBudget } — creates the DURABLE run
+//              ledger row (migration 0008) and returns { runId, hardBudget }.
+//              The server clamps the budget to the HARD MAX (250).
+//   search   → ?action=search&q=...&market=US&size=30&maxCost=40&runId=...
+//   product  → ?action=product&pid=...&market=US&runId=...
+//   freight  → POST { productId, vid, startCountryCode, endCountryCode, runId }
+//   budget   → ?action=budget&runId=... — authoritative durable usage.
+//   finish   → POST { runId, status: completed|failed|exhausted }
 //
-// AUTHORITATIVE POINT BUDGET: the client supplies a runId + requested budget
-// for paid actions. The SERVER maintains the run-scoped budget and clamps the
-// requested value to [listV2 cost, 250] — callers/AI can never raise it. Every
-// actual paid outbound request (incl. retries) reserves its cost; when the
-// budget cannot afford an attempt NO HTTP request is issued and the client
-// receives { code: 'CJ_POINT_BUDGET_EXHAUSTED', usage }. The in-memory run map
-// is per warm instance (honest limitation, like the token cache).
+// AUTHORITATIVE POINT BUDGET (live-readiness fix): the durable ledger in
+// Supabase (supplier_api_runs + reserve_supplier_api_points — migration 0008)
+// is the source of truth. Every actual paid outbound CJ request (incl. every
+// paid retry) reserves its cost ATOMICALLY in the DB before the HTTP request;
+// when the budget cannot afford it NO HTTP request is issued and the client
+// receives { code: 'CJ_POINT_BUDGET_EXHAUSTED', usage }. The ledger is shared
+// across Vercel instances, cold starts and concurrent requests — the old
+// per-warm-instance in-memory Map is NOT the authority anymore.
 //
-// SECURITY: admin JWT required; rate-limited; timeouts + capped retries;
-// errors scrubbed of any credential-like strings. READ/RESEARCH ONLY — this
-// endpoint can never place an order or trigger a payment.
+// SECURITY: admin JWT required (forwarded to the ledger RPC, which refuses
+// non-admin callers); rate-limited; timeouts + capped retries; errors scrubbed
+// of any credential-like strings. READ/RESEARCH ONLY — this endpoint can never
+// place an order or trigger a payment.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, rateLimited, clientIp } from '../_lib/providers.js';
-import { requireAdmin } from '../_lib/auth.js';
+import { requireAdmin, getBearerToken } from '../_lib/auth.js';
 import {
   cjConfigured, cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
-  CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED, type CjServerPointUsage,
+  CjDurableRunLedger, CjDurableRunContext, CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED,
+  type CjRunContext, type CjServerPointUsage,
 } from '../_lib/cj.js';
 import {
   normalizeCjListProduct, normalizeCjProductDetail, normalizeCountryCode, normalizeCjFreight,
@@ -36,32 +43,29 @@ import { CJ_POINT_COST, CJ_POINTS_BUDGET_PER_RUN } from '../../src/features/supp
 
 const MAX_SEARCH_SIZE = 100;
 
-// Run-scoped budgets keyed by runId (per warm serverless instance). Capped in
-// size to avoid unbounded growth; entries are best-effort per instance.
-const RUN_BUDGETS = new Map<string, CjServerRunBudget>();
-const MAX_RUN_BUDGETS = 200;
-
-function runBudgetFor(req: IncomingMessage): CjServerRunBudget | null {
+/**
+ * Build the run context for a paid action.
+ *  - runId present → DURABLE ledger context (authoritative). The run row must
+ *    exist (created by action=start); missing → error, no paid calls.
+ *  - runId absent → local in-memory forecast only (manual probe path) — never
+ *    authoritative across instances.
+ */
+async function runContextFor(req: IncomingMessage): Promise<{ run: CjRunContext | null; error?: string }> {
   const url = new URL(req.url || '/', 'http://localhost');
   const runId = (url.searchParams.get('runId') || '').trim();
-  if (!runId) return null;
-  let b = RUN_BUDGETS.get(runId);
-  if (!b) {
+  if (!runId) {
     const requested = parseInt(url.searchParams.get('runBudget') || String(CJ_POINTS_BUDGET_PER_RUN), 10);
-    b = new CjServerRunBudget(requested); // server clamps to ≤ 250
-    if (RUN_BUDGETS.size >= MAX_RUN_BUDGETS) {
-      // Simple eviction of the oldest entry to bound memory.
-      const first = RUN_BUDGETS.keys().next().value;
-      if (first) RUN_BUDGETS.delete(first);
-    }
-    RUN_BUDGETS.set(runId, b);
+    return { run: new CjServerRunBudget(requested) };
   }
-  return b;
-}
-
-/** Attach usage to a response for a run. */
-function usageOf(budget: CjServerRunBudget | null): CjServerPointUsage | undefined {
-  return budget ? budget.usage() : undefined;
+  const ledger = new CjDurableRunLedger(getBearerToken(req));
+  let row: CjServerPointUsage | null = null;
+  try {
+    row = await ledger.usage(runId);
+  } catch {
+    row = null;
+  }
+  if (!row) return { run: null, error: 'Supplier run not found — call action=start first.' };
+  return { run: new CjDurableRunContext(ledger, runId, row.budget) };
 }
 
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -121,10 +125,56 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // ---------------- budget (authoritative run usage) ----------------
+  // ---------------- start (create the DURABLE run) ----------------
+  if (action === 'start' && req.method === 'POST') {
+    const body = await readBody(req);
+    const provider = String(body.provider || 'cj').slice(0, 40);
+    const raw = body.requestedBudget;
+    const requested = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : CJ_POINTS_BUDGET_PER_RUN;
+    try {
+      const ledger = new CjDurableRunLedger(getBearerToken(req));
+      const started = await ledger.start(provider, Number.isFinite(requested) ? requested : CJ_POINTS_BUDGET_PER_RUN);
+      sendJson(res, 200, { provider, runId: started.runId, hardBudget: started.usage.budget, usage: started.usage });
+    } catch (e) {
+      sendJson(res, 200, {
+        provider, runId: null, health: 'offline',
+        warning: `Supplier run could not be started — ${cjSafeError(e)}`,
+      });
+    }
+    return;
+  }
+
+  // ---------------- budget (authoritative durable usage) ----------------
   if (action === 'budget') {
-    const budget = runBudgetFor(req);
-    sendJson(res, 200, { provider: 'cj', health: 'online', usage: usageOf(budget) });
+    const runId = (url.searchParams.get('runId') || '').trim();
+    if (!runId) {
+      sendJson(res, 400, { error: 'runId is required' });
+      return;
+    }
+    try {
+      const usage = await new CjDurableRunLedger(getBearerToken(req)).usage(runId);
+      sendJson(res, 200, { provider: 'cj', health: usage ? 'online' : 'offline', usage });
+    } catch (e) {
+      sendJson(res, 200, { provider: 'cj', health: 'offline', warning: cjSafeError(e) });
+    }
+    return;
+  }
+
+  // ---------------- finish (mark the run completed/failed/exhausted) ----------------
+  if (action === 'finish' && req.method === 'POST') {
+    const body = await readBody(req);
+    const runId = String(body.runId || '').trim();
+    const status = ['completed', 'failed', 'exhausted'].includes(String(body.status)) ? String(body.status) : 'completed';
+    if (!runId) {
+      sendJson(res, 400, { error: 'runId is required' });
+      return;
+    }
+    try {
+      await new CjDurableRunLedger(getBearerToken(req)).finish(runId, status as 'completed' | 'failed' | 'exhausted');
+      sendJson(res, 200, { provider: 'cj', runId, status });
+    } catch (e) {
+      sendJson(res, 200, { provider: 'cj', runId, status: 'unknown', warning: cjSafeError(e) });
+    }
     return;
   }
 
@@ -141,7 +191,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const maxCostRaw = parseFloat(url.searchParams.get('maxCost') || '');
     const maxCost = Number.isFinite(maxCostRaw) && maxCostRaw > 0 ? maxCostRaw : undefined;
     const country = normalizeCountryCode(market);
-    const budget = runBudgetFor(req);
+    const ctx = await runContextFor(req);
+    if (ctx.error) {
+      sendJson(res, 400, { error: ctx.error });
+      return;
+    }
+    const run = ctx.run;
 
     try {
       const { products, total } = await cjSearchProducts({
@@ -150,14 +205,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         countryCode: country ?? undefined,
         verifiedWarehouse: 1, // verified inventory preferred
         endSellPrice: maxCost,
-      }, budget ?? undefined);
+      }, run ?? undefined);
       const records = products
         .map((p) => normalizeCjListProduct(p as never, { market: country ?? undefined }))
         .filter((r): r is NonNullable<typeof r> => r !== null);
       sendJson(res, 200, {
         provider: 'cj', health: 'online', records, total, query: q,
         points: CJ_POINT_COST.listV2,
-        usage: usageOf(budget),
+        usage: run?.usage() ?? undefined,
       });
     } catch (e) {
       if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
@@ -165,7 +220,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           provider: 'cj', health: 'offline', records: [],
           code: CJ_POINT_BUDGET_EXHAUSTED,
           warning: 'CJ point budget exhausted — no further paid requests issued.',
-          usage: usageOf(budget),
+          usage: run?.usage() ?? undefined,
         });
         return;
       }
@@ -174,7 +229,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         health: /rate limited/i.test(String(e)) ? 'rate_limited' : 'offline',
         records: [],
         warning: cjSafeError(e),
-        usage: usageOf(budget),
+        usage: run?.usage() ?? undefined,
       });
     }
     return;
@@ -189,26 +244,31 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     const market = (url.searchParams.get('market') || 'US').trim();
     const country = normalizeCountryCode(market);
-    const budget = runBudgetFor(req);
+    const ctx = await runContextFor(req);
+    if (ctx.error) {
+      sendJson(res, 400, { error: ctx.error });
+      return;
+    }
+    const run = ctx.run;
     try {
-      const detail = await cjProductQuery(pid, country ?? undefined, budget ?? undefined);
+      const detail = await cjProductQuery(pid, country ?? undefined, run ?? undefined);
       const record = normalizeCjProductDetail(detail as never, { market: country ?? undefined });
       if (!record) {
         sendJson(res, 404, { error: 'CJ product not found or unverifiable' });
         return;
       }
-      sendJson(res, 200, { provider: 'cj', health: 'online', record, points: CJ_POINT_COST.productQuery, usage: usageOf(budget) });
+      sendJson(res, 200, { provider: 'cj', health: 'online', record, points: CJ_POINT_COST.productQuery, usage: run?.usage() ?? undefined });
     } catch (e) {
       if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
         sendJson(res, 200, {
           provider: 'cj', health: 'offline', record: null,
           code: CJ_POINT_BUDGET_EXHAUSTED,
           warning: 'CJ point budget exhausted — no further paid requests issued.',
-          usage: usageOf(budget),
+          usage: run?.usage() ?? undefined,
         });
         return;
       }
-      sendJson(res, 200, { provider: 'cj', health: 'offline', record: null, warning: cjSafeError(e), usage: usageOf(budget) });
+      sendJson(res, 200, { provider: 'cj', health: 'offline', record: null, warning: cjSafeError(e), usage: run?.usage() ?? undefined });
     }
     return;
   }
@@ -233,24 +293,29 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
       return;
     }
-    const budget = runBudgetFor(req);
+    const ctx = await runContextFor(req);
+    if (ctx.error) {
+      sendJson(res, 400, { error: ctx.error });
+      return;
+    }
+    const run = ctx.run;
     try {
-      const quotes = await cjFreightCalculate({ startCountryCode, endCountryCode, vid }, budget ?? undefined);
+      const quotes = await cjFreightCalculate({ startCountryCode, endCountryCode, vid }, run ?? undefined);
       const normalized = (Array.isArray(quotes) ? quotes : [])
         .map((q) => normalizeCjFreight(q as never, { origin: startCountryCode, destination: endCountryCode }))
         .filter((q): q is NonNullable<typeof q> => q !== null);
-      sendJson(res, 200, { provider: 'cj', health: 'online', quotes: normalized, points: CJ_POINT_COST.freightCalculate, usage: usageOf(budget) });
+      sendJson(res, 200, { provider: 'cj', health: 'online', quotes: normalized, points: CJ_POINT_COST.freightCalculate, usage: run?.usage() ?? undefined });
     } catch (e) {
       if (e instanceof Error && e.message === CJ_POINT_BUDGET_EXHAUSTED) {
         sendJson(res, 200, {
           provider: 'cj', health: 'offline', quotes: [],
           code: CJ_POINT_BUDGET_EXHAUSTED,
           warning: 'CJ point budget exhausted — no further paid requests issued.',
-          usage: usageOf(budget),
+          usage: run?.usage() ?? undefined,
         });
         return;
       }
-      sendJson(res, 200, { provider: 'cj', health: 'offline', quotes: [], warning: cjSafeError(e), usage: usageOf(budget) });
+      sendJson(res, 200, { provider: 'cj', health: 'offline', quotes: [], warning: cjSafeError(e), usage: run?.usage() ?? undefined });
     }
     return;
   }

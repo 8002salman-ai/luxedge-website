@@ -27,6 +27,7 @@ import { calculateMargin } from './margin';
 import { applyRejectFilters, collectRiskFlags } from './reject';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from './score';
 import { signalsFromDiscovery, signalsFromExtracts, scoreMarketOpportunity, runMarketIntelligence } from './market';
+import { evidenceFingerprint } from './aiCost';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
   createJob, completeJob, addRun, addLog,
@@ -323,6 +324,8 @@ export interface MarketIntelligenceResult {
   marketScore: number | null;
   aiUsed: boolean;
   analysis: MarketAnalysis | null;
+  /** Fingerprint of the collected signals — persisted on the durable job. */
+  evidenceFingerprint: string | null;
 }
 
 /**
@@ -377,6 +380,13 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     progress(`[ai] ${analysis.unsupportedClaims[0] || 'Market Intelligence AI not configured — deterministic analysis used'}`);
   }
 
+  // Evidence fingerprint of THIS analysis — persisted on the durable job so a
+  // later supplier search can PROVE it is grounded in this exact evidence
+  // (Phase 4C live-readiness: the DB job is the market-gate source of truth).
+  const fp = evidenceFingerprint([
+    query, market || '',
+    ...signals.map((s) => `${s.signalType}:${s.summary}`),
+  ]);
   await addLog(db, jobId, 'info',
     `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}${warning ? '; ' + warning : ''} (retries=0)`);
   await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'}`);
@@ -386,6 +396,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     marketScore: analysis.marketOpportunityScore,
     aiUsed: analysis.aiUsed,
     warning: warning || null,
+    evidenceFingerprint: fp,
     at: new Date().toISOString(),
   }, undefined, analysis.aiUsed
     ? { provider: 'deepseek', model: analysis.model || 'deepseek-chat' }
@@ -398,6 +409,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     marketScore: analysis.marketOpportunityScore,
     aiUsed: analysis.aiUsed,
     analysis,
+    evidenceFingerprint: fp,
   };
 }
 

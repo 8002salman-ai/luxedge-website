@@ -88,6 +88,41 @@ export class CjSupplierAdapter implements SupplierDiscoveryAdapter {
     this.lastServerUsage = null;
   }
 
+  /**
+   * Start a DURABLE supplier run on the server: the server creates the
+   * supplier_api_runs ledger row (migration 0008), clamps the requested
+   * budget to the HARD MAX, and returns the authoritative run id. Every
+   * subsequent paid call reserves points against THAT persisted run.
+   */
+  async startRun(requestedBudget?: number): Promise<{ runId: string; hardBudget: number } | null> {
+    const data = await call<{ runId?: string | null; hardBudget?: number }>(
+      'start',
+      {},
+      {
+        method: 'POST',
+        body: JSON.stringify({ provider: 'cj', requestedBudget: requestedBudget ?? CJ_POINTS_BUDGET_PER_RUN }),
+      }
+    );
+    if (!data.runId) return null;
+    this.runId = data.runId;
+    this.runBudget = data.hardBudget ?? CJ_POINTS_HARD_MAX;
+    this.lastServerUsage = data.usage ?? null;
+    return { runId: data.runId, hardBudget: this.runBudget };
+  }
+
+  /** Mark the durable run finished on the server (best-effort). */
+  async finishRun(status: 'completed' | 'failed' | 'exhausted'): Promise<void> {
+    if (!this.runId) return;
+    try {
+      await call('finish', {}, {
+        method: 'POST',
+        body: JSON.stringify({ runId: this.runId, status }),
+      }, this.run());
+    } catch {
+      /* best-effort — a failed finish must not break the run */
+    }
+  }
+
   /** Fetch the authoritative run usage from the server (no points consumed). */
   async getRunUsage(): Promise<SupplierPointUsage | null> {
     try {

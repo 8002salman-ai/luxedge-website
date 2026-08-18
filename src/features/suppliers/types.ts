@@ -133,12 +133,18 @@ export interface MarketContext {
   marketAnalysisId?: string | null;
   /** Opportunity/category the search targets. */
   opportunity?: string | null;
-  /** Market Opportunity Score /100 — UNKNOWN when null/absent. */
+  /**
+   * Market Opportunity Score /100 — NEVER trusted from the client. The engine
+   * loads the persisted MARKET_INTELLIGENCE job and derives the score from
+   * the DB (source of truth); this field is ignored for qualification.
+   */
   marketScore?: number | null;
-  /** Evidence fingerprint of the MI signals. */
+  /** Evidence fingerprint of the MI signals (verified against the DB job). */
   evidenceFingerprint?: string | null;
   /** When the MI analysis was observed. */
   observedAt?: string | null;
+  /** The MI-recommended search hypothesis this supplier query follows. */
+  hypothesis?: string | null;
 }
 
 export interface SupplierSearchOptions {
@@ -218,4 +224,12 @@ export interface SupplierDiscoveryAdapter {
    */
   setRunScope?(runId: string, budget: number): void;
   getRunUsage?(): Promise<SupplierPointUsage | null>;
+  /**
+   * Start a DURABLE supplier run on the server (source of truth). The server
+   * creates the ledger row (migration 0008), clamps the requested budget to
+   * the HARD MAX and returns the run id. Returns null when unsupported.
+   */
+  startRun?(requestedBudget?: number): Promise<{ runId: string; hardBudget: number } | null>;
+  /** Mark the durable run finished (completed / failed / exhausted). */
+  finishRun?(status: 'completed' | 'failed' | 'exhausted'): Promise<void>;
 }

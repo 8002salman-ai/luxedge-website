@@ -154,6 +154,16 @@ export default function ProductScout() {
   const [cjLog, setCjLog] = useState<string[]>([]);
   const [cjNote, setCjNote] = useState('');
 
+  // Market-grounded CJ mode (Phase 4C live-readiness): after a Market
+  // Intelligence run, the owner can pick one of its recommended search
+  // hypotheses; the CJ run then carries the REAL persisted MI job id. The
+  // engine re-verifies the job from the DB — the score is never taken from
+  // React state.
+  const [miJobId, setMiJobId] = useState<string | null>(null);
+  const [miHypotheses, setMiHypotheses] = useState<string[]>([]);
+  const [cjMarketGrounded, setCjMarketGrounded] = useState(false);
+  const [cjHypothesis, setCjHypothesis] = useState('');
+
   // Filters
   const [fStatus, setFStatus] = useState('all');
   const [fMinScore, setFMinScore] = useState('');
@@ -296,9 +306,27 @@ export default function ProductScout() {
     const onProgress = (m: string) => { log.push(m); setCjLog([...log]); };
     try {
       const adapter = new CjSupplierAdapter();
+      const search: Parameters<typeof runSupplierSearch>[0]['search'] = {
+        query: q,
+        market: 'US',
+        maxResults: Math.min(100, Math.max(1, parseInt(cjMax || '30', 10) || 30)),
+        ...(cjMarketGrounded && miJobId
+          ? {
+              // Link the run to the REAL persisted MI job. The engine loads
+              // the job from the DB and derives market score / fingerprint /
+              // observed_at from it — the score in React state is never
+              // trusted for qualification.
+              marketContext: {
+                marketAnalysisId: miJobId,
+                opportunity: miQuery.trim() || null,
+                hypothesis: cjHypothesis || q,
+              },
+            }
+          : {}),
+      };
       const result = await runSupplierSearch({
         adapter,
-        search: { query: q, market: 'US', maxResults: Math.min(100, Math.max(1, parseInt(cjMax || '30', 10) || 30)) },
+        search,
         db,
         onProgress,
       });
@@ -460,6 +488,16 @@ export default function ProductScout() {
       log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore}/100, ai=${result.aiUsed}`);
       setMiLog([...log]);
       setMiResult({ signals: result.signals, marketScore: result.marketScore, aiUsed: result.aiUsed, analysis: result.analysis });
+      // Remember the durable MI job + its recommended search hypotheses so a
+      // CJ run can be linked to THIS exact evidence (DB job = source of truth).
+      setMiJobId(result.jobId);
+      const hypotheses = result.analysis?.recommendedSearchQueries ?? [];
+      setMiHypotheses(hypotheses);
+      if (hypotheses.length > 0) {
+        setCjHypothesis(hypotheses[0]);
+        setCjMarketGrounded(true);
+        setCjQuery(hypotheses[0]);
+      }
       notify(`Market Intelligence complete — score ${result.marketScore}/100${result.aiUsed ? ' (DeepSeek)' : ' (deterministic — AI not configured)'}`);
     } catch (e) {
       log.push(`✗ ${(e as Error).message}`);
@@ -1126,6 +1164,31 @@ export default function ProductScout() {
                 {cjRunning ? <Loader2 size={15} className="animate-spin" /> : <Package size={15} />} {cjRunning ? 'Searching CJ…' : 'Search CJ'}
               </button>
             </div>
+            {/* Market-grounded mode: link the CJ run to a REAL persisted MI job */}
+            {miJobId && (
+              <div className="flex flex-wrap items-center gap-2 bg-white border border-indigo-200 rounded-lg px-3 py-2">
+                <label className="flex items-center gap-2 text-xs text-indigo-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cjMarketGrounded}
+                    onChange={(e) => setCjMarketGrounded(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="font-semibold">Market-grounded</span>
+                  <span className="font-normal text-indigo-500">(MI job {miJobId.slice(0, 8)}… — verified from DB, not React state)</span>
+                </label>
+                {cjMarketGrounded && miHypotheses.length > 0 && (
+                  <select
+                    value={cjHypothesis}
+                    onChange={(e) => { setCjHypothesis(e.target.value); setCjQuery(e.target.value); }}
+                    disabled={cjRunning}
+                    className="flex-1 min-w-[200px] px-2 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
+                  >
+                    {miHypotheses.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
             {cjNote && <p className="text-xs text-indigo-700">{cjNote}</p>}
             {cjLog.length > 0 && (
               <div className="bg-gray-900 rounded-lg p-3 max-h-40 overflow-y-auto">

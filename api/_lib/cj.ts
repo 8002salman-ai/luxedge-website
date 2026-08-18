@@ -14,14 +14,18 @@
 //   GET  /api2.0/v1/product/globalWarehouseList
 //   POST /api2.0/v1/logistic/freightCalculate  {startCountryCode,endCountryCode,products:[{vid,quantity}]}
 //
-// AUTHORITATIVE POINT BUDGET (final pre-key audit): the server reserves the
-// endpoint point cost BEFORE every actual paid outbound request — including
-// every paid retry. If remaining budget is insufficient the HTTP request is
-// NOT issued; the caller receives CJ_POINT_BUDGET_EXHAUSTED. The client-side
-// CjPointBudget is only UX/forecasting; server accounting is authoritative.
+// AUTHORITATIVE POINT BUDGET (Phase 4C final pre-key audit → live-readiness):
+//   The authoritative hard cap is a DURABLE ledger in Supabase
+//   (supplier_api_runs + reserve_supplier_api_points — migration 0008), NOT
+//   process memory. The server reserves the endpoint point cost BEFORE every
+//   actual paid outbound request — including every paid retry — via the
+//   atomic RPC. If remaining budget is insufficient the HTTP request is NOT
+//   issued and CJ_POINT_BUDGET_EXHAUSTED is returned. The ledger is
+//   cross-instance, cold-start and concurrency safe. CjServerRunBudget below
+//   remains only as a local forecast/fallback; it is never the authority.
 // ============================================================================
 
-import { CJ_POINT_COST, CJ_POINTS_HARD_MAX } from '../../src/features/suppliers/cj/points.js';
+import { CJ_POINT_COST, CJ_POINTS_HARD_MAX, type CjPointAction } from '../../src/features/suppliers/cj/points.js';
 
 const CJ_API_BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
 
@@ -34,7 +38,8 @@ export const CJ_POINT_BUDGET_EXHAUSTED = 'CJ_POINT_BUDGET_EXHAUSTED';
 // Endpoint-aware retry caps (Phase 4C hardening): auth/network-transient
 // endpoints may retry more; PAID data endpoints (listV2/query/freight) are
 // tightly capped so a run never pays 3× for one result. Hard 4xx, validation
-// and auth-configuration errors are NEVER retried.
+// and auth-configuration errors are NEVER retried. Paid retries reserve their
+// own points (durable ledger).
 const MAX_RETRIES_AUTH = 2;   // getAccessToken / refreshAccessToken
 const MAX_RETRIES_PAID = 1;   // product/listV2, product/query, freightCalculate
 
@@ -66,12 +71,29 @@ export interface CjServerPointUsage {
 }
 
 /**
- * Server-side per-run budget. The SERVER is the authority: every paid call
- * reserves its cost BEFORE the HTTP request; retries reserve again. A run
- * can NEVER exceed its (server-clamped) budget. The requested budget is
- * clamped to [listV2 cost, CJ_POINTS_HARD_MAX] — callers/AI cannot raise it.
+ * A run context for paid CJ calls. `reserve` is called BEFORE every actual
+ * outbound paid request (initial attempt AND every paid retry); when it
+ * returns false the HTTP request MUST NOT be issued. Implementations:
+ *   - CjServerRunBudget  — local forecast/fallback (NOT authoritative).
+ *   - CjDurableRunContext — durable Supabase ledger (authoritative).
  */
-export class CjServerRunBudget {
+export interface CjRunContext {
+  readonly runId: string;
+  readonly budget: number;
+  reserve(action: CjPointAction, isRetry?: boolean): boolean | Promise<boolean>;
+  /** Record an attempt counter (durable ledger already counts atomically). */
+  markAttempt(action: CjPointAction): void;
+  usage(): CjServerPointUsage | null;
+}
+
+/**
+ * Local per-run budget forecast. The DURABLE ledger is the authority (migration
+ * 0008); this class mirrors the same clamping rules for UX/fallback and is
+ * never trusted across instances. The requested budget is clamped to
+ * [listV2 cost, CJ_POINTS_HARD_MAX] — callers/AI cannot raise it.
+ */
+export class CjServerRunBudget implements CjRunContext {
+  readonly runId = '';
   readonly budget: number;
   reserved = 0;
   listAttempts = 0;
@@ -86,7 +108,8 @@ export class CjServerRunBudget {
   }
 
   /** Reserve before an actual outbound request. Returns false → do NOT call. */
-  reserve(cost: number, isRetry = false): boolean {
+  reserve(action: CjPointAction, isRetry = false): boolean {
+    const cost = CJ_POINT_COST[action];
     if (this.reserved + cost > this.budget) {
       this.denied++;
       return false;
@@ -96,9 +119,11 @@ export class CjServerRunBudget {
     return true;
   }
 
-  markListAttempt(): void { this.listAttempts++; }
-  markDetailAttempt(): void { this.detailAttempts++; }
-  markFreightAttempt(): void { this.freightAttempts++; }
+  markAttempt(action: CjPointAction): void {
+    if (action === 'listV2') this.listAttempts++;
+    else if (action === 'productQuery') this.detailAttempts++;
+    else this.freightAttempts++;
+  }
 
   usage(): CjServerPointUsage {
     return {
@@ -114,6 +139,175 @@ export class CjServerRunBudget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// DURABLE LEDGER — Supabase-backed (migration 0008). Cross-instance, atomic,
+// cold-start safe. The proxy forwards the ADMIN JWT so the RPC's admin check
+// (and RLS) apply; a non-admin caller is rejected by the database itself.
+// ---------------------------------------------------------------------------
+
+interface SupplierApiRunRow {
+  id: string;
+  provider: string;
+  status: string;
+  requested_budget: number;
+  hard_budget: number;
+  reserved_points: number;
+  list_attempts: number;
+  detail_attempts: number;
+  freight_attempts: number;
+  paid_retries: number;
+  denied_attempts: number;
+  [k: string]: unknown;
+}
+
+function usageFromRow(r: SupplierApiRunRow): CjServerPointUsage {
+  const budget = Number(r.hard_budget ?? 250);
+  const reserved = Number(r.reserved_points ?? 0);
+  return {
+    budget,
+    reserved,
+    remaining: budget - reserved,
+    listAttempts: Number(r.list_attempts ?? 0),
+    detailAttempts: Number(r.detail_attempts ?? 0),
+    freightAttempts: Number(r.freight_attempts ?? 0),
+    paidRetries: Number(r.paid_retries ?? 0),
+    denied: Number(r.denied_attempts ?? 0),
+  };
+}
+
+/** Server policy: HARD MAX 250/run. Requested 50–250 accepted; >250 clamped. */
+function clampBudget(requested: number): number {
+  return new CjServerRunBudget(requested).budget;
+}
+
+/**
+ * Talks to the durable Supabase ledger (supplier_api_runs +
+ * reserve_supplier_api_points) using the admin JWT from the CJ proxy request.
+ * The server never holds a service key for this path — the migration's RPC
+ * and RLS both verify the admin claim from the forwarded JWT.
+ */
+export class CjDurableRunLedger {
+  constructor(private readonly adminToken: string) {}
+
+  private rest(): { url: string; headers: Record<string, string> } {
+    const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+    if (!url || !anonKey) {
+      throw new Error('CJ point ledger: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY not configured on the server');
+    }
+    if (!this.adminToken) {
+      throw new Error('CJ point ledger: no admin session token to authorize the reservation');
+    }
+    return {
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: `Bearer ${this.adminToken}`,
+        Prefer: 'return=representation',
+      },
+    };
+  }
+
+  private async read(res: Response): Promise<SupplierApiRunRow[]> {
+    const rows = (await res.json().catch(() => null)) as SupplierApiRunRow[] | null;
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /** POST /rest/v1/supplier_api_runs — create the durable run (hard budget stored). */
+  async start(provider: string, requestedBudget: number): Promise<{ runId: string; usage: CjServerPointUsage }> {
+    const hard = clampBudget(requestedBudget);
+    const { url, headers } = this.rest();
+    const res = await fetch(`${url}/rest/v1/supplier_api_runs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ provider, requested_budget: hard, hard_budget: hard, status: 'running' }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const rows = await this.read(res);
+    if (!res.ok || !rows[0]?.id) throw new Error(`CJ point ledger start failed (HTTP ${res.status})`);
+    return { runId: String(rows[0].id), usage: usageFromRow(rows[0]) };
+  }
+
+  /**
+   * POST /rest/v1/rpc/reserve_supplier_api_points — ATOMIC reservation for
+   * one actual paid outbound request (initial or retry). Denied ⇒ the CJ
+   * HTTP request must not occur.
+   */
+  async reserve(runId: string, action: CjPointAction, isRetry: boolean): Promise<{ approved: boolean; usage: CjServerPointUsage | null }> {
+    const { url, headers } = this.rest();
+    const rpcAction = action === 'listV2' ? 'list' : action === 'productQuery' ? 'detail' : 'freight';
+    const res = await fetch(`${url}/rest/v1/rpc/reserve_supplier_api_points`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        run_id: runId,
+        provider: 'cj',
+        action: rpcAction,
+        cost: CJ_POINT_COST[action],
+        is_retry: isRetry,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const rows = await this.read(res);
+    if (!res.ok) throw new Error(`CJ point ledger reserve failed (HTTP ${res.status})`);
+    if (!rows[0]) return { approved: false, usage: null };
+    return { approved: !!rows[0].approved, usage: usageFromRow(rows[0]) };
+  }
+
+  /** Read the current durable usage for a run (no points consumed). */
+  async usage(runId: string): Promise<CjServerPointUsage | null> {
+    const { url, headers } = this.rest();
+    const res = await fetch(`${url}/rest/v1/supplier_api_runs?id=eq.${encodeURIComponent(runId)}`, {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    });
+    const rows = await this.read(res);
+    return rows[0] ? usageFromRow(rows[0]) : null;
+  }
+
+  /** Mark the run finished (completed / failed / exhausted). */
+  async finish(runId: string, status: 'completed' | 'failed' | 'exhausted'): Promise<void> {
+    const { url, headers } = this.rest();
+    await fetch(`${url}/rest/v1/supplier_api_runs?id=eq.${encodeURIComponent(runId)}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ status, finished_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  }
+}
+
+/**
+ * Run context backed by the durable ledger. Each `reserve` hits the atomic
+ * RPC; every paid attempt (incl. retries) is durably represented. `markAttempt`
+ * is a no-op — the RPC increments the counters atomically with the reservation.
+ */
+export class CjDurableRunContext implements CjRunContext {
+  readonly runId: string;
+  readonly budget: number;
+  private last: CjServerPointUsage | null = null;
+
+  constructor(private readonly ledger: CjDurableRunLedger, runId: string, hardBudget: number) {
+    this.runId = runId;
+    this.budget = hardBudget;
+  }
+
+  async reserve(action: CjPointAction, isRetry = false): Promise<boolean> {
+    const r = await this.ledger.reserve(this.runId, action, isRetry);
+    if (r.usage) this.last = r.usage;
+    return r.approved;
+  }
+
+  markAttempt(): void {
+    /* counters are incremented atomically by the RPC */
+  }
+
+  usage(): CjServerPointUsage | null {
+    return this.last;
+  }
+}
+
 /** CJ API Key configured on the server? */
 export function cjConfigured(): boolean {
   return !!(process.env.CJ_API_KEY || '').trim();
@@ -126,15 +320,16 @@ export function cjConfigured(): boolean {
  *   paid:false → auth/network-transient: slightly more headroom.
  * Hard 4xx (400/401/403/404/422) and missing config are never retried.
  *
- * AUTHORITATIVE BUDGET: when `budget` is present and the call is paid, the
- * endpoint point cost is RESERVED before EVERY outbound request — including
- * every paid retry. If the budget cannot afford the attempt the HTTP request
- * is NOT issued and CJ_POINT_BUDGET_EXHAUSTED is thrown.
+ * AUTHORITATIVE BUDGET: when `run` is present and the call is paid, the
+ * endpoint point cost is RESERVED via the durable ledger BEFORE every outbound
+ * request — including every paid retry. If the budget cannot afford the
+ * attempt the HTTP request is NOT issued and CJ_POINT_BUDGET_EXHAUSTED is
+ * thrown.
  */
 async function cjFetch(
   path: string,
   init: RequestInit = {},
-  opts: { paid?: boolean; budget?: CjServerRunBudget; cost?: number } = {}
+  opts: { paid?: boolean; run?: CjRunContext; action?: CjPointAction } = {}
 ): Promise<Response> {
   const url = `${CJ_API_BASE}${path}`;
   const retries = opts.paid ? MAX_RETRIES_PAID : MAX_RETRIES_AUTH;
@@ -142,10 +337,9 @@ async function cjFetch(
   let lastRetryReason = '';
   for (let attempt = 0; attempt <= retries; attempt++) {
     // Reserve BEFORE the outbound request (initial attempt AND paid retries).
-    if (opts.paid && opts.budget && opts.cost) {
-      if (!opts.budget.reserve(opts.cost, attempt > 0)) {
-        throw new Error(CJ_POINT_BUDGET_EXHAUSTED);
-      }
+    if (opts.paid && opts.run && opts.action) {
+      const ok = await opts.run.reserve(opts.action, attempt > 0);
+      if (!ok) throw new Error(CJ_POINT_BUDGET_EXHAUSTED);
     }
     try {
       const res = await fetch(url, {
@@ -249,7 +443,7 @@ export async function cjAccessToken(): Promise<string> {
   return fresh.accessToken;
 }
 
-async function cjGet(path: string, opts: { paid?: boolean; budget?: CjServerRunBudget; cost?: number } = {}): Promise<unknown> {
+async function cjGet(path: string, opts: { paid?: boolean; run?: CjRunContext; action?: CjPointAction } = {}): Promise<unknown> {
   const token = await cjAccessToken();
   const res = await cjFetch(path, {
     headers: { 'CJ-Access-Token': token },
@@ -283,7 +477,7 @@ export interface CjSearchParams {
 }
 
 /** CJ product/listV2 — the official keyword search with filters. */
-export async function cjSearchProducts(p: CjSearchParams, budget?: CjServerRunBudget): Promise<{ products: unknown[]; total: number }> {
+export async function cjSearchProducts(p: CjSearchParams, run?: CjRunContext): Promise<{ products: unknown[]; total: number }> {
   const params = new URLSearchParams();
   if (p.keyWord) params.set('keyWord', p.keyWord);
   params.set('page', String(p.page ?? 1));
@@ -293,8 +487,8 @@ export async function cjSearchProducts(p: CjSearchParams, budget?: CjServerRunBu
   if (p.endSellPrice !== undefined) params.set('endSellPrice', String(p.endSellPrice));
   if (p.verifiedWarehouse !== undefined) params.set('verifiedWarehouse', String(p.verifiedWarehouse));
   params.set('features', 'enable_category,enable_description');
-  budget?.markListAttempt();
-  const body = (await cjGet(`/product/listV2?${params.toString()}`, { paid: true, budget, cost: CJ_POINT_COST.listV2 })) as {
+  run?.markAttempt('listV2');
+  const body = (await cjGet(`/product/listV2?${params.toString()}`, { paid: true, run, action: 'listV2' })) as {
     data?: { content?: { productList?: unknown[] }[]; totalRecords?: number };
   };
   const content = body?.data?.content?.[0];
@@ -303,12 +497,12 @@ export async function cjSearchProducts(p: CjSearchParams, budget?: CjServerRunBu
 }
 
 /** CJ product/query — details, variants, per-country inventory. */
-export async function cjProductQuery(pid: string, countryCode?: string, budget?: CjServerRunBudget): Promise<unknown> {
+export async function cjProductQuery(pid: string, countryCode?: string, run?: CjRunContext): Promise<unknown> {
   const params = new URLSearchParams({ pid });
   if (countryCode) params.set('countryCode', countryCode);
   params.set('features', 'enable_video');
-  budget?.markDetailAttempt();
-  const body = (await cjGet(`/product/query?${params.toString()}`, { paid: true, budget, cost: CJ_POINT_COST.productQuery })) as { data?: unknown };
+  run?.markAttempt('productQuery');
+  const body = (await cjGet(`/product/query?${params.toString()}`, { paid: true, run, action: 'productQuery' })) as { data?: unknown };
   return body?.data;
 }
 
@@ -324,9 +518,9 @@ export async function cjFreightCalculate(opts: {
   endCountryCode: string;
   vid: string;
   quantity?: number;
-}, budget?: CjServerRunBudget): Promise<unknown[]> {
+}, run?: CjRunContext): Promise<unknown[]> {
   const token = await cjAccessToken();
-  budget?.markFreightAttempt();
+  run?.markAttempt('freightCalculate');
   const res = await cjFetch('/logistic/freightCalculate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
@@ -335,7 +529,7 @@ export async function cjFreightCalculate(opts: {
       endCountryCode: opts.endCountryCode,
       products: [{ vid: opts.vid, quantity: opts.quantity ?? 1 }],
     }),
-  }, { paid: true, budget, cost: CJ_POINT_COST.freightCalculate });
+  }, { paid: true, run, action: 'freightCalculate' });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error('CJ freight calculation failed');
   return Array.isArray(body?.data) ? body.data : [];
