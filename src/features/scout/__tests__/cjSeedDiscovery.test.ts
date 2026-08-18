@@ -299,6 +299,38 @@ describe('Phase 4F — seed record truth + concept clustering (Part B)', () => {
     expect(q.split(' ').length).toBeLessThanOrEqual(7);
     expect(q).not.toMatch(/\d/); // no invented sizes/quantities in the query
   });
+
+  it('F2) long SEO-style CJ titles (elevated dog sofa bed) are still a CLEAR, RESEARCHABLE concept', () => {
+    // A real Phase 4F CJ title: >120 chars, SEO-verbose — a clear single
+    // product despite the length. Raw-length clarity + the old 2–7 token
+    // researchability band wrongly dropped it from selection.
+    const records = [
+      seedRecord({ id: 'P1', sku: 'S1', nameEn: 'Elegant Rectangular Pet Bed For Small And Medium-sized Dogs, Durable Elevated Dog Sofa Bed, Comfortable Dog Sofa, Modern And Fashionable Linen Fabric Dog Sofa-Black', sellPrice: '111.29', bigImage: 'https://img.cjdropshipping.com/bed1.jpg', warehouseInventoryNum: 39 }),
+      seedRecord({ id: 'P2', sku: 'S2', nameEn: 'Elegant Rectangular Pet Bed For Small And Medium-sized Dogs, Durable Elevated Dog Sofa Bed, Comfortable Dog Sofa, Modern And Fashionable Linen Fabric Dog Sofa-Light Grey', sellPrice: '111.29', bigImage: 'https://img.cjdropshipping.com/bed2.jpg', warehouseInventoryNum: 29 }),
+      seedRecord({ id: 'P3', sku: 'S3', nameEn: 'Soft And Comfortable Pet Bed For Big And Oversized Dogs, Durable Elevated Dog Sofa Bed, Comfortable Dog Sofa, Modern And Fashionable Linen Fabric Dog Sofa-OLIVE GREEN', sellPrice: '152.72', bigImage: 'https://img.cjdropshipping.com/bed3.jpg', warehouseInventoryNum: 135 }),
+    ];
+    const clusters = clusterCjSeedConcepts(records);
+    const bed = clusters.find((c) => /sofa/i.test(c.label));
+    expect(bed).toBeDefined();
+    // All 3 color variants group into ONE concept.
+    expect(bed!.memberPids).toEqual(expect.arrayContaining(['P1', 'P2', 'P3']));
+    // Clarity + researchability are NOT lost to the long title.
+    expect(bed!.suitabilityReasons.join(' ')).toContain('clear single-product title (+2)');
+    expect(bed!.suitabilityReasons.join(' ')).toContain('researchable concept vocabulary');
+    expect(bed!.suitabilityScore).toBeGreaterThanOrEqual(13);
+  });
+
+  it('F3) plural variants ("single door" / "two doors") cluster into ONE concept', () => {
+    const records = [
+      seedRecord({ id: 'P1', sku: 'S1', nameEn: '24-30 Inch Single Door Dog Cage', sellPrice: '29.10', bigImage: 'https://img.cjdropshipping.com/c1.jpg', warehouseInventoryNum: 8338 }),
+      seedRecord({ id: 'P2', sku: 'S2', nameEn: 'A Dog Cage With Two Doors', sellPrice: '24.84', bigImage: 'https://img.cjdropshipping.com/c2.jpg', warehouseInventoryNum: 6864 }),
+    ];
+    const clusters = clusterCjSeedConcepts(records);
+    const cage = clusters.find((c) => /cage/i.test(c.label));
+    expect(cage).toBeDefined();
+    expect(cage!.memberPids).toEqual(expect.arrayContaining(['P1', 'P2']));
+    expect(clusters.length).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

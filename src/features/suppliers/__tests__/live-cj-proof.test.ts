@@ -27,7 +27,8 @@ import type {
 } from '../types';
 import { SupabaseAdapter } from '../../../services/db';
 import { runMarketIntelligenceJob, MARKET_QUALIFICATION_GATE } from '../../scout/engine';
-import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDecision } from '../../scout/cjSeedDiscovery';
+import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDecision, clusterCjSeedConcepts, type CjSeedRecord } from '../../scout/cjSeedDiscovery';
+import type { AgentJobRow } from '../../scout/persist';
 import { runSupplierSearch } from '../../scout/supplierSearch';
 import { parseHtmlPage, isProxyErrorText } from '../../ai/importer';
 
@@ -353,6 +354,178 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         seed: { runId: seed.runId, hardBudget: seed.hardBudget, recordsReturned: seed.recordsReturned, seeds: seed.seeds.length, pointsReserved: seed.pointsReserved, listCalls: seed.listCalls, detailCalls: seed.detailCalls, freightCalls: seed.freightCalls, concepts: seed.concepts.map((c) => ({ label: c.label, pids: c.memberPids.length, suitability: c.suitabilityScore })) },
         market: { marketScore: decision.marketScore, miJobId: decision.marketAnalysisId, hypothesis: decision.hypothesis, evidence: mi.evidence },
         cjRun: { jobId: run.jobId, searched: run.searched, duplicates: run.duplicates, prefilterRejected: run.prefilterRejected, researched: run.researched, productShortlisted: run.productShortlisted, qaPassed: run.qaPassed, businessQualified: run.businessQualified, businessQualifiedCandidates: run.businessQualifiedCandidates, marketContext: run.marketContext, points: run.points, serverPoints: run.serverPoints },
+      }, null, 2)}`);
+    } finally {
+      if (tempUserId) {
+        const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
+        console.log(`[cleanup] temp admin user deleted (HTTP ${del.status})`);
+      }
+    }
+  }, 600_000);
+
+  it('runs a market-evidence-only pass for the CJ-seeded elevated dog sofa bed concept (NO new CJ calls until the market gate authorizes the qualification stage)', async () => {
+    const env = loadEnv('.env');
+    const base = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const serviceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const preview = (env.VERCEL_PREVIEW_API || process.env.VERCEL_PREVIEW_API || '').trim().replace(/\/$/, '');
+    const bypass = (env.VERCEL_PREVIEW_BYPASS || process.env.VERCEL_PREVIEW_BYPASS || '').trim();
+    if (!base || !serviceKey || !anonKey || !preview) {
+      throw new Error('LIVE PROOF needs VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_ANON_KEY / VERCEL_PREVIEW_API in .env');
+    }
+
+    const email = `sofabed-proof-${Date.now()}@luxedge.us`;
+    const password = `Pw-${Date.now()}-x7q2`;
+    const created = await gotrue(base, serviceKey, '/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'admin' } }),
+    });
+    expect([200, 201]).toContain(created.status);
+    const tempUserId = String(created.body.id || '');
+    if (!tempUserId) throw new Error(`temp admin creation failed: ${JSON.stringify(created.body).slice(0, 200)}`);
+    let adminJwt = '';
+    try {
+      const token = await gotrue(base, serviceKey, '/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      expect(token.status).toBe(200);
+      adminJwt = String(token.body.access_token || '');
+      if (!adminJwt) throw new Error('no access_token from temp admin sign-in');
+
+      const db = new SupabaseAdapter(base, anonKey);
+      db.setAccessToken(adminJwt);
+      const adapter = new LiveCjAdapter(preview, adminJwt, bypass);
+
+      // 0) NO CJ calls in this pass — the concept vocabulary comes from the
+      //    ALREADY-PERSISTED Phase 4F CJ seed run (durable agent_jobs row).
+      //    Read the most recent CJ_SEED_DISCOVERY job and re-cluster its
+      //    persisted factual seeds deterministically (same code path as the
+      //    original run — no re-seed, no new CJ spend).
+      const jobs = await db.list<AgentJobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 100 });
+      const seedJob = jobs.find((j) => {
+        const o = j.output as Record<string, unknown> | null;
+        return j.type === 'PRODUCT_RESEARCH'
+          && o?.mode === 'CJ_SEED_DISCOVERY'
+          && Array.isArray(o?.seeds)
+          && (o?.seeds as unknown[]).length > 0;
+      });
+      expect(seedJob).toBeTruthy();
+      const seedOutput = (seedJob!.output as Record<string, unknown>) ?? {};
+      const persistedSeeds = (seedOutput.seeds as CjSeedRecord[]).filter((s) => s && typeof s.title === 'string');
+      console.log(`[seed-source] job ${seedJob!.id} (${seedJob!.status}) · ${persistedSeeds.length} persisted CJ seed records from the Phase 4F run (mode CJ_SEED_DISCOVERY) — NO new CJ calls`);
+      expect(persistedSeeds.length).toBeGreaterThan(0);
+
+      // Re-cluster from the persisted seeds (deterministic — identical to the
+      // original run's clustering). The concept is selected EXPLICITLY by
+      // owner priority: the elevated dog sofa bed (Phase 4F concept #1, 3 real
+      // CJ records). Owner priority overrides the suitability ranking for
+      // which concept to research — it is not score-fishing.
+      const concepts = clusterCjSeedConcepts(persistedSeeds);
+      console.log(`[concepts] re-clustered (${concepts.length}): ${concepts.slice(0, 8).map((c) => `"${c.label.slice(0, 44)}" (${c.memberPids.length} records, suitability ${c.suitabilityScore})`).join(' | ')}`);
+      const sofaBed = concepts.find((c) => /sofa/i.test(c.label))
+        ?? concepts.find((c) => /\belevated\b/i.test(c.label))
+        ?? concepts[0];
+      console.log(`[concept] owner-priority selection: "${sofaBed.label}" — ${sofaBed.memberPids.length} CJ record(s), suitability ${sofaBed.suitabilityScore} (${sofaBed.suitabilityReasons.join('; ')})`);
+      expect(sofaBed.memberPids.length).toBeGreaterThan(0);
+      const query = seedConceptSearchQuery(sofaBed);
+      console.log(`[query] targeted market-search vocabulary from CJ titles: "${query}"`);
+
+      // 1) ONE serious market-evidence pass for this concept — real
+      //    retailer/manufacturer exact PDPs only. Google Ads demand adapter is
+      //    NOT wired (DEFERRED — billing) ⇒ demand status not_configured,
+      //    zero external demand calls. DeepSeek runs ONLY if the evidence
+      //    gate passes (exactly ONE grounded call).
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      let pageFetches = 0;
+      const fetchPage = async (url: string) => {
+        pageFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
+      const aiCall = async (prompt: string, model?: string) => {
+        const res = await fetch(`${preview}/api/ai/generate`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!res.ok) throw new Error(`AI proxy HTTP ${res.status}`);
+        const body = await res.json() as { text?: string };
+        if (!body.text) throw new Error('AI proxy returned no text');
+        return body.text;
+      };
+
+      const mi = await runMarketIntelligenceJob({
+        query,
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      const ev = mi.evidence;
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+      console.log(`[mi] evidence pack: discovered ${ev.discoveredUrls} URLs · selected ${ev.selectedUrls.length} · extracts ok ${ev.successfulExtracts} · failed ${ev.failedExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · reviews ${ev.reviewCountEvidenceCount} pages (${ev.totalObservedReviews} total)`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+      if (ev.rejectedUrls.length) {
+        console.log(`[mi] rejected pages (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url} → ${r.reason}`).join(' | ')}`);
+      }
+
+      // 2) GATES UNCHANGED (fail-closed): Market Score >= 60 + sufficient
+      //    evidence + persisted recommendation BEFORE any CJ research point.
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (!decision.run) {
+        console.log(`NOT QUALIFIED — ${decision.reason}. No CJ product calls, no research points. (Google Ads live demand = DEFERRED, zero calls.)`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE',
+          concept: { label: sofaBed.label, pids: sofaBed.memberPids.length, suitability: sofaBed.suitabilityScore },
+          query,
+          seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
+          market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: ev.evidenceQuality, evidence: ev, miJobId: mi.jobId },
+          conditionalRun: decision,
+          googleAds: { liveDemand: 'DEFERRED', calls: 0 },
+          cjResearchPointsConsumed: 0,
+        }, null, 2)}`);
+        return;
+      }
+
+      // 3) MARKET GATE PASSED — authorize ONLY the existing market-grounded
+      //    path toward the controlled CJ qualification stage: a NEW durable
+      //    250-pt run whose actual query must match the persisted MI
+      //    recommendation (marketProvenance verifies from the DB).
+      console.log(`MARKET-GROUNDED CJ QUALIFICATION RUN ALLOWED — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}".`);
+      const run = await runSupplierSearch({
+        adapter,
+        db,
+        search: {
+          query: decision.query,
+          market: 'US',
+          maxResults: 40,
+          pointsBudget: 250,
+          marketContext: { marketAnalysisId: decision.marketAnalysisId, hypothesis: decision.hypothesis, evidenceFingerprint: mi.evidenceFingerprint ?? undefined },
+        },
+        onProgress: (m) => console.log(`[cj] ${m}`),
+      });
+      console.log(`[cj] run ${run.jobId} · searched ${run.searched} · duplicates ${run.duplicates} · prefilterRejected ${run.prefilterRejected} · researched ${run.researched} · rejected ${run.rejected} · PRODUCT_SHORTLISTED ${run.productShortlisted} · QA passed ${run.qaPassed} · BUSINESS_QUALIFIED ${run.businessQualified}`);
+      console.log(`[cj] server usage ${JSON.stringify(run.serverPoints)}`);
+      console.log(`[result] ${JSON.stringify({
+        winner: run.businessQualified > 0 ? 'QUALIFIED' : 'NONE',
+        concept: { label: sofaBed.label, pids: sofaBed.memberPids.length, suitability: sofaBed.suitabilityScore },
+        query,
+        seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
+        market: { marketScore: decision.marketScore, miJobId: decision.marketAnalysisId, hypothesis: decision.hypothesis, evidence: ev },
+        cjRun: { jobId: run.jobId, searched: run.searched, duplicates: run.duplicates, prefilterRejected: run.prefilterRejected, researched: run.researched, productShortlisted: run.productShortlisted, qaPassed: run.qaPassed, businessQualified: run.businessQualified, businessQualifiedCandidates: run.businessQualifiedCandidates, marketContext: run.marketContext, points: run.points, serverPoints: run.serverPoints },
+        googleAds: { liveDemand: 'DEFERRED', calls: 0 },
       }, null, 2)}`);
     } finally {
       if (tempUserId) {

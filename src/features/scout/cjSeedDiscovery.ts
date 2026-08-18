@@ -113,7 +113,14 @@ export function conceptKey(title: string): string {
   t = t.replace(SIZE_TOKENS, ' ');
   t = t.replace(DIMENSION_RE, ' ');
   t = t.replace(/\b\d+\b/g, ' ');
-  const words = t.split(/\s+/).filter((w) => w && !STOP_WORDS.has(w));
+  const words = t.split(/\s+/)
+    .filter((w) => w && !STOP_WORDS.has(w))
+    // Plural normalization — "door"/"doors", "bag"/"bags", "cage"/"cages"
+    // are the SAME concept token. Deterministic; without it real variant
+    // clusters fragment (e.g. "Single Door Dog Cage" vs "Dog Cage With Two
+    // Doors"). Guards words ending in double-s so "class" stays "class".
+    .map((w) => (w.length >= 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+    .filter(Boolean);
   return words.join(' ');
 }
 
@@ -234,8 +241,14 @@ export function assessConceptSuitability(records: CjSeedRecord[]): { score: numb
   else if (/\bpet\b/.test(title)) petPts = 1;
   reasons.push(petPts ? `pet-relevant title (+${petPts})` : 'no clear pet keyword in title');
 
-  // 2) Clear product concept (0–2) — a real single-product title.
-  const clarity = rep.title.length >= 12 && rep.title.length <= 120;
+  // 2) Clear product concept (0–2) — a real single-product title. Uses the
+  //    NORMALIZED concept-token count, not raw title length: CJ titles are
+  //    SEO-verbose ("Elegant Rectangular Pet Bed For Small And Medium-sized
+  //    Dogs, Durable Elevated Dog Sofa Bed, …" is a perfectly clear single
+  //    product yet >120 chars). A clean single-product phrase is 2–24
+  //    distinct normalized tokens; a keyword-stuffed blob exceeds that.
+  const clarityTokens = conceptTokens(rep.title);
+  const clarity = clarityTokens.length >= 2 && clarityTokens.length <= 24;
   reasons.push(clarity ? 'clear single-product title (+2)' : 'title not a clean single-product concept');
 
   // 3) Verified supplier price (0–2) — presence, not count.
@@ -278,9 +291,12 @@ export function assessConceptSuitability(records: CjSeedRecord[]): { score: numb
       ? `only ${safe}/${records.length} members pass basic safety filters (+1)`
       : 'no member passes basic safety filters');
 
-  // 8) Researchability (0–2) — concept tokens in a researchable band.
+  // 8) Researchability (0–2) — the concept must carry enough vocabulary to
+  //    build a search query. seedConceptSearchQuery caps the query at 7
+  //    tokens, so a longer normalized vocabulary remains perfectly
+  //    researchable — only a degenerate 0/1-token concept is not.
   const tokens = conceptTokens(rep.title);
-  const researchable = tokens.length >= 2 && tokens.length <= 7;
+  const researchable = tokens.length >= 2;
   reasons.push(researchable ? `researchable concept vocabulary (${tokens.length} tokens) (+2)` : `concept vocabulary not researchable (${tokens.length} tokens)`);
 
   const score = petPts
