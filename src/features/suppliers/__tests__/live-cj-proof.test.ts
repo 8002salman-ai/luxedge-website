@@ -26,7 +26,9 @@ import type {
   SupplierPointUsage,
 } from '../types';
 import { SupabaseAdapter } from '../../../services/db';
-import { runMarketIntelligenceJob } from '../../scout/engine';
+import { runMarketIntelligenceJob, MARKET_QUALIFICATION_GATE } from '../../scout/engine';
+import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDecision } from '../../scout/cjSeedDiscovery';
+import { runSupplierSearch } from '../../scout/supplierSearch';
 import { parseHtmlPage, isProxyErrorText } from '../../ai/importer';
 
 const ENABLED = process.env.RUN_LIVE_CJ_PROOF === '1';
@@ -224,14 +226,32 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
       expect(health?.health).toBe('online');
       console.log(`[health] CJ Supplier API = ${health?.health}${health?.detail ? ` — ${health.detail}` : ''}`);
 
-      // 3) ONE controlled Phase 4D Market Intelligence pass with the MARKET
-      //    EVIDENCE PACK: discovery → select exact product pages → fetch via
-      //    the REAL preview /api/fetch-page → extract → quality gate →
-      //    DeepSeek only if the gate passes. No CJ product points are spent.
+      // 3) PHASE 4F — CJ SEED DISCOVERY: ONE controlled listV2 call on a
+      //    durable 50-point run. Supplier data is NOT market demand — seeds
+      //    only surface real product concepts for targeted USA research.
+      const seed = await runCjSeedDiscovery({
+        adapter,
+        db,
+        query: 'dog travel accessories',
+        market: 'US',
+        maxResults: 40,
+        onProgress: (m) => console.log(`[seed] ${m}`),
+      });
+      console.log(`[seed] job ${seed.jobId} · run ${seed.runId} · budget ${seed.hardBudget} · records ${seed.recordsReturned} · seeds ${seed.seeds.length} (dups ${seed.duplicates}) · points ${seed.pointsReserved} · listCalls ${seed.listCalls} · detailCalls ${seed.detailCalls} · freightCalls ${seed.freightCalls}`);
+      console.log(`[seed] concepts (max 2): ${seed.concepts.map((c) => `"${c.label.slice(0, 48)}" (${c.memberPids.length} records, suitability ${c.suitabilityScore})`).join(' | ') || 'NONE'}`);
+      if (!seed.runId || seed.seeds.length === 0) {
+        console.log(`CJ SEED DISCOVERY FAILED — no seed records. CJ detail/freight = 0, market research skipped.`);
+        console.log(`[result] ${JSON.stringify({ winner: 'NONE', seed: { runId: seed.runId, recordsReturned: seed.recordsReturned, seeds: seed.seeds.length, warning: seed.warning } }, null, 2)}`);
+        return;
+      }
+
+      // 4) TARGETED MARKET EVIDENCE — for each selected concept (max 2):
+      //    build targeted web searches using the ACTUAL concept/title
+      //    vocabulary learned from CJ (not fixed retailer queries), fetch real
+      //    exact PDPs, run the fail-closed evidence gate, and only then allow
+      //    ONE grounded DeepSeek analysis.
       const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
       let pageFetches = 0;
-      // Mirrors the real client path (scoutFetchPage → fetchViaServerProxy →
-      // parseHtmlPage): /api/fetch-page returns PLAIN text, not JSON.
       const fetchPage = async (url: string) => {
         pageFetches++;
         const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
@@ -240,9 +260,6 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         });
         if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
         const raw = await res.text();
-        // A proxy error page (Jina "Warning: … URL returned error 429…") is NOT
-        // a page — a rate-limited Target/Walmart page must never count as
-        // product evidence (Phase 4E honesty fix).
         if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
         const parsed = parseHtmlPage(raw);
         if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
@@ -261,61 +278,81 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         return body.text;
       };
 
-      const mi = await runMarketIntelligenceJob({
-        query: 'dog travel accessories',
-        market: 'US',
+      // Try concept #1; if its evidence pack is insufficient, try concept #2
+      // ONCE, then STOP (no category looping, no third concept, no score fishing).
+      let mi: Awaited<ReturnType<typeof runMarketIntelligenceJob>> | null = null;
+      let attemptedConcepts = 0;
+      for (const concept of seed.concepts.slice(0, 2)) {
+        attemptedConcepts++;
+        const query = seedConceptSearchQuery(concept);
+        console.log(`[mi] concept #${attemptedConcepts} — query "${query}" (from CJ seed vocabulary)`);
+        mi = await runMarketIntelligenceJob({
+          query,
+          market: 'US',
+          db,
+          fetchPage,
+          aiCall,
+          // Phase 4F: NOT restricted to Target/Chewy/Walmart — targeted search
+          // across reputable retailers/manufacturers using the CJ vocabulary.
+          onProgress: (m) => console.log(`[mi] ${m}`),
+        });
+        const ev = mi.evidence;
+        console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+        console.log(`[mi] evidence pack: discovered ${ev.discoveredUrls} URLs · selected ${ev.selectedUrls.length} · extracts ok ${ev.successfulExtracts} · failed ${ev.failedExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · reviews ${ev.reviewCountEvidenceCount} pages (${ev.totalObservedReviews} total)`);
+        console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+        if (ev.rejectedUrls.length) {
+          console.log(`[mi] rejected pages (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url} → ${r.reason}`).join(' | ')}`);
+        }
+        if (mi.evidence.evidenceQuality === 'sufficient') break; // gate passed — no need for concept #2
+      }
+      if (!mi) {
+        console.log(`NO CONCEPT RESEARCHED — no concepts from the seed run.`);
+        console.log(`[result] ${JSON.stringify({ winner: 'NONE', seedConcepts: 0 }, null, 2)}`);
+        return;
+      }
+
+      // 5) PART D — EVIDENCE GATE + MARKET DECISION (fail-closed):
+      //    insufficient evidence → marketScore NULL, DeepSeek 0 (gate saved the
+      //    credits); Market < 60 → STOP; only Market >= 60 with a PERSISTED
+      //    recommendation unlocks the conditional qualified CJ run (Part E).
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (!decision.run) {
+        console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH — reason ${decision.reason}. CJ detail/freight NOT run (0 points spent on research).`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE',
+          seed: { runId: seed.runId, hardBudget: seed.hardBudget, recordsReturned: seed.recordsReturned, seeds: seed.seeds.length, pointsReserved: seed.pointsReserved, listCalls: seed.listCalls, detailCalls: seed.detailCalls, freightCalls: seed.freightCalls, concepts: seed.concepts.map((c) => ({ label: c.label, pids: c.memberPids.length, suitability: c.suitabilityScore })) },
+          market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: mi.evidence.evidenceQuality, evidence: mi.evidence, miJobId: mi.jobId },
+          conditionalRun: decision,
+          cjResearchPointsConsumed: 0,
+        }, null, 2)}`);
+        return;
+      }
+
+      // 6) PART E — MARKET-GROUNDED CJ QUALIFICATION RUN (ONLY after the gate):
+      //    a NEW durable 250-pt run; the ACTUAL query must match the persisted
+      //    MI recommendation so marketProvenance verifies it from the DB.
+      console.log(`MARKET-GROUNDED CJ QUALIFICATION RUN ALLOWED — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}".`);
+      const run = await runSupplierSearch({
+        adapter,
         db,
-        fetchPage,
-        aiCall,
-        // Phase 4E: site-restricted retailer discovery — exact product pages
-        // from Chewy/Target/Walmart feed the evidence pack (market evidence
-        // only; no CJ supplier points).
-        retailDomains: ['chewy.com', 'target.com', 'walmart.com'],
-        onProgress: (m) => console.log(`[mi] ${m}`),
+        search: {
+          query: decision.query,
+          market: 'US',
+          maxResults: 40,
+          pointsBudget: 250,
+          marketContext: { marketAnalysisId: decision.marketAnalysisId, hypothesis: decision.hypothesis, evidenceFingerprint: mi.evidenceFingerprint ?? undefined },
+        },
+        onProgress: (m) => console.log(`[cj] ${m}`),
       });
-      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
-      const ev = mi.evidence;
-      console.log(`[mi] evidence pack: discovered ${ev.discoveredUrls} URLs · selected ${ev.selectedUrls.length} · extracts ok ${ev.successfulExtracts} · failed ${ev.failedExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · reviews ${ev.reviewCountEvidenceCount} pages (${ev.totalObservedReviews} total)`);
-      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
-      if (ev.retail) {
-        console.log(`[mi] retail discovery: ${ev.retail.searchRequests} search requests · domains attempted ${ev.retail.domainsAttempted.join(',')} · with results ${ev.retail.domainsWithResults.join(',') || 'NONE'}`);
-        console.log(`[mi] retail navigation (Phase 4E.2): ${ev.retail.listingSources} listing/search pages used as NAVIGATION sources only · ${ev.retail.navigationPdpExtracted} exact PDP URLs extracted from listing pages`);
-      }
-      if (ev.rejectedUrls.length) {
-        console.log(`[mi] rejected pages (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url} → ${r.reason}`).join(' | ')}`);
-      }
-
-      const job = await db.get<Record<string, unknown>>('agent_jobs', mi.jobId);
-      const out = (job && job.output && typeof job.output === 'object' ? job.output : {}) as Record<string, unknown>;
-      const recs = Array.isArray(out.recommendedSearchQueries)
-        ? (out.recommendedSearchQueries as string[]).filter((r) => typeof r === 'string' && r.trim())
-        : [];
-
-      // 4) MARKET GATE (Phase 4E spec §12/§13): if the EVIDENCE QUALITY gate
-      //    failed, STOP (DeepSeek was already skipped — credits saved).
-      if (mi.evidence.evidenceQuality === 'insufficient') {
-        console.log(`MARKET EVIDENCE INSUFFICIENT — CJ search NOT run, DeepSeek NOT called.`);
-        console.log(`[result] ${JSON.stringify({ winner: 'NONE', evidenceQuality: 'insufficient', marketScore: mi.marketScore, reason: mi.evidence.evidenceQualityReasons.join('; '), miJobId: mi.jobId, evidence: mi.evidence })}`);
-        return;
-      }
-
-      // 5) Evidence sufficient → the engine already ran ONE grounded DeepSeek
-      //    call (aiUsed=true). If the Market Score >= 60: STOP and report
-      //    MARKET-GROUNDED CJ SEARCH READY — do NOT run CJ in Phase 4E.
-      if (mi.marketScore === null || mi.marketScore < 60 || recs.length === 0) {
-        console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH (score=${mi.marketScore ?? 'UNKNOWN'}) — CJ search NOT run.`);
-        console.log(`[result] ${JSON.stringify({ winner: 'NONE', marketScore: mi.marketScore, reason: 'market gate not met', miJobId: mi.jobId, evidence: mi.evidence })}`);
-        return;
-      }
-
-      console.log(`MARKET-GROUNDED CJ SEARCH READY — score ${mi.marketScore} >= 60 with sufficient evidence. CJ NOT run in Phase 4E (owner/next phase authorizes the first paid supplier run).`);
+      console.log(`[cj] run ${run.jobId} · searched ${run.searched} · duplicates ${run.duplicates} · prefilterRejected ${run.prefilterRejected} · researched ${run.researched} · rejected ${run.rejected} · PRODUCT_SHORTLISTED ${run.productShortlisted} · QA passed ${run.qaPassed} · BUSINESS_QUALIFIED ${run.businessQualified}`);
+      console.log(`[cj] points (client forecast) ${JSON.stringify(run.points)}`);
+      console.log(`[cj] server usage ${JSON.stringify(run.serverPoints)}`);
       console.log(`[result] ${JSON.stringify({
-        winner: 'NONE',
-        marketScore: mi.marketScore,
-        miJobId: mi.jobId,
-        evidence: mi.evidence,
-        cjSearchRun: 'NOT RUN (Phase 4E gate)' ,
-        cjProductPointsConsumed: 0,
+        winner: run.businessQualified > 0 ? 'QUALIFIED' : 'NONE',
+        seed: { runId: seed.runId, hardBudget: seed.hardBudget, recordsReturned: seed.recordsReturned, seeds: seed.seeds.length, pointsReserved: seed.pointsReserved, listCalls: seed.listCalls, detailCalls: seed.detailCalls, freightCalls: seed.freightCalls, concepts: seed.concepts.map((c) => ({ label: c.label, pids: c.memberPids.length, suitability: c.suitabilityScore })) },
+        market: { marketScore: decision.marketScore, miJobId: decision.marketAnalysisId, hypothesis: decision.hypothesis, evidence: mi.evidence },
+        cjRun: { jobId: run.jobId, searched: run.searched, duplicates: run.duplicates, prefilterRejected: run.prefilterRejected, researched: run.researched, productShortlisted: run.productShortlisted, qaPassed: run.qaPassed, businessQualified: run.businessQualified, businessQualifiedCandidates: run.businessQualifiedCandidates, marketContext: run.marketContext, points: run.points, serverPoints: run.serverPoints },
       }, null, 2)}`);
     } finally {
       if (tempUserId) {
