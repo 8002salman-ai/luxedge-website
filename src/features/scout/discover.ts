@@ -211,9 +211,19 @@ export function buildQueries(opts: DiscoverOptions): string[] {
   // concept like "single door dog cage") must NEVER be replaced by unrelated
   // generic QUERY_EXPANSIONS — the original query is the authoritative search
   // term. The noun list covers the concrete pet-product vocabulary actually
-  // used by the Phase 4F CJ seed concepts (cage, playpen, mat, blanket, ramp,
-  // sofa, bag, backpack, trailer, seat belt, clothes, shoe, fence, saucer, …).
-  if (/\b(?:kong|chuckit|west paw|frisco|nylabone|barkbox|petfusion|outward hound)\b|\b(?:toy|bed|harness|collar|leash|brush|carrier|fountain|dispenser|scratch|tunnel|bowl|kennel|crate|cage|playpen|pen|mat|blanket|ramp|sofa|bag|backpack|trailer|seat ?belt|clothes|clothing|shirt|sweater|shoe|shoes|fence|stroller|bottle|saucer|ball|puzzle|treat|supplement|shampoo|clipper|groomer|towel|pad|house|igloo|jacket|boots|necklace|feeder|perch)\b/i.test(q)) {
+  // used by the CJ seed concepts (cage, playpen, mat, blanket, ramp, sofa, bag,
+  // backpack, trailer, seat belt, clothes, shoe, fence, saucer, tub, …).
+  if (/\b(?:kong|chuckit|west paw|frisco|nylabone|barkbox|petfusion|outward hound)\b|\b(?:toy|bed|harness|collar|leash|brush|carrier|fountain|dispenser|scratch|tunnel|bowl|kennel|crate|cage|playpen|pen|mat|blanket|ramp|sofa|bag|backpack|trailer|seat ?belt|clothes|clothing|shirt|sweater|shoe|shoes|fence|stroller|bottle|tub|bath|saucer|ball|puzzle|treat|supplement|shampoo|clipper|groomer|towel|pad|house|igloo|jacket|boots|necklace|feeder|perch)\b/i.test(q)) {
+    return [mk(q)];
+  }
+  // STRUCTURAL GUARANTEE (Phase 4J/4K): a query that names a pet AND carries
+  // enough concrete phrase (>= 3 significant tokens) is a specific product
+  // query, NOT a generic category — even when its product noun is not in the
+  // list above (e.g. "dog grooming bath tub stainless steel"). Only genuinely
+  // generic category phrases ("pet accessories", "dog toys") get expanded.
+  const PET = /\b(?:dog|cat|pet|puppy|kitten|canine|feline)\b/i;
+  const tokens = q.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3);
+  if (PET.test(q) && tokens.length >= 3) {
     return [mk(q)];
   }
   // Generic category query → expand into concrete product types.

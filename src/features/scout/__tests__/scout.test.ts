@@ -369,6 +369,32 @@ describe('discovery (autonomous mode)', () => {
     }
   });
 
+  it('PHASE 4K — structural guarantee: pet + >=3 significant tokens is a specific query even without a listed noun', () => {
+    // The Phase 4K fresh pool proved the noun-list approach is whack-a-mole:
+    // "dog grooming bath tub stainless steel" (no listed noun at the time)
+    // was expanded into dog-toy/cat-toy searches. The guarantee must be
+    // STRUCTURAL: a pet keyword + a concrete phrase is never generic.
+    for (const q of [
+      'dog grooming bath tub stainless steel',
+      '2 in 1 pet nail clipper with led light',
+      'dog grooming supplies',
+      'luxury small dog bed hidden storage',
+    ]) {
+      const queries = buildQueries({ query: q });
+      expect(queries.length).toBe(1);
+      expect(queries[0]).toBe(q);
+      expect(q).not.toMatch(/dog toy/);
+      expect(q).not.toMatch(/cat toy/);
+    }
+  });
+
+  it('PHASE 4K — short generic phrases still expand (pet accessories / dog toys / pet supplies)', () => {
+    // A 1-2 token pet phrase is a generic category, not a specific product.
+    expect(buildQueries({ query: 'pet accessories' })).toEqual(expect.arrayContaining(['dog toy', 'cat toy', 'dog bed']));
+    expect(buildQueries({ query: 'dog toys' })).toEqual(expect.arrayContaining(['dog toy', 'cat toy']));
+    expect(buildQueries({ query: 'pet supplies' })).toEqual(expect.arrayContaining(['dog toy', 'cat toy']));
+  });
+
   it('PHASE 4J — a genuinely generic category query still expands (no regression)', () => {
     expect(buildQueries({ query: 'pet accessories' })).toEqual(
       expect.arrayContaining(['dog toy', 'cat toy', 'dog bed'])
