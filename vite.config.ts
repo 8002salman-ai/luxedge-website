@@ -46,6 +46,7 @@ export default defineConfig(({ mode }) => {
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
           icons: ["@phosphor-icons/react"],
+          storefrontIcons: ["@untitledui/icons"],
         },
       },
     },

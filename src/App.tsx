@@ -9,15 +9,15 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
 import { loadStorefrontCatalog, type CatalogProduct, type CatalogCategory } from './services/catalog';
 import {
-  ShoppingBagOpen, List, X, MagnifyingGlass, User as UserIcon, SignOut, Package,
-  ShieldCheck, Star, Truck, ArrowCounterClockwise, Lightning, ArrowRight, Envelope, Phone,
-  MapPin, Plus, Minus, Trash, Lock, SpinnerGap, CheckCircle, CreditCard,
-  SquaresFour, Warning, Eye,
-  CaretDown, CaretRight, ArrowLeft, UploadSimple,
-  Globe, Clock, PaperPlaneRight, Headphones, Sparkle,
-  PencilSimpleLine, Calendar, Tag, BookOpen, EyeSlash,
-  Moon, SlidersHorizontal,
-} from '@phosphor-icons/react';
+  ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
+  ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
+  MarkerPin01, Plus, Minus, Trash01, Lock01, Loading01, CheckCircle, CreditCard01,
+  LayoutGrid01, AlertTriangle, Eye,
+  ChevronDown, ChevronRight, ArrowLeft, Upload01,
+  Globe01, Clock, Send01, Headphones01, Stars01,
+  PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
+  Moon01, Sliders01,
+} from '@untitledui/icons';
 
 // ============================================================================
 // TYPES
@@ -472,7 +472,7 @@ function AppProvider({ children }: { children: ReactNode }) {
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
+function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle strokeWidth={1.5} size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
@@ -482,7 +482,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X strokeWidth={1.5} size={20} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -559,17 +559,17 @@ function Header() {
   return (<>
     {/* ── Top utility bar ── */}
     <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
-      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Free Shipping $50+</span>
+      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck01 strokeWidth={1.5} size={12} /> Free Shipping $50+</span>
       <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><ArrowCounterClockwise size={12} /> Easy 30-Day Returns</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RefreshCcw01 strokeWidth={1.5} size={12} /> Easy 30-Day Returns</span>
       <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer Support</span>
+      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones01 strokeWidth={1.5} size={12} /> Customer Support</span>
     </div>
 
     {/* ── Main header ── */}
     <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_10px_34px_-14px_rgba(16,26,46,0.22)]' : 'bg-white/95 backdrop-blur-md'} border-b border-luxe-silver/70`}>
       <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
-        <button onClick={() => setMob(!mob)} aria-label="List" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X size={20} /> : <List size={20} />}</button>
+        <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
         <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
           <img src="/luxedge-mark.svg" alt="" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
@@ -578,14 +578,14 @@ function Header() {
           </span>
         </Link>
 
-        {/* MagnifyingGlass — refined pill */}
+        {/* Search — refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
           <div className="flex items-center w-full bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-4 focus-within:ring-luxe-gold/10 transition-all">
-            <MagnifyingGlass size={15} className="ml-4 text-luxe-gray shrink-0" />
-            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="MagnifyingGlass beds, toys, grooming & more" aria-label="MagnifyingGlass products"
+            <SearchMd strokeWidth={1.5} size={18} className="ml-4 text-luxe-gray shrink-0" />
+            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
               className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
             <button type="submit" className="m-1 px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors">
-              MagnifyingGlass
+              Search
             </button>
           </div>
         </form>
@@ -599,18 +599,18 @@ function Header() {
               </button>
               {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
                 <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><SquaresFour size={14} className="text-luxe-gold" />Admin Panel</Link>}
-                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package size={14} className="text-luxe-gray" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><SignOut size={14} />Log Out</button>
+                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutGrid01 strokeWidth={1.5} size={14} className="text-luxe-gold" />Admin Panel</Link>}
+                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package strokeWidth={1.5} size={14} className="text-luxe-gray" />My Orders</Link>
+                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut01 strokeWidth={1.5} size={14} />Log Out</button>
               </div></>}
             </div>
           ) : (
             <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-              <UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
+              <UserIcon strokeWidth={1.5} size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
             </Link>
           )}
           <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBagOpen size={19} />
+            <ShoppingBag01 strokeWidth={1.5} size={19} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
           </button>
         </div>
@@ -622,7 +622,7 @@ function Header() {
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
               <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                <span aria-hidden="true">{m.icon}</span>{m.label}<CaretDown size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
+                <span aria-hidden="true">{m.icon}</span>{m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
                 <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
@@ -647,15 +647,15 @@ function Header() {
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
             <Link key={c.l} to={c.to} className="nav-underline px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Lightning size={13} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={13} /> Deals</Link>
         </div>
       </nav>
 
       {/* ── Mobile menu ── */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
         <form onSubmit={submitSearch} role="search" className="flex items-center bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden mb-2">
-          <MagnifyingGlass size={15} className="ml-3 text-luxe-gray shrink-0" />
-          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="MagnifyingGlass products..." aria-label="MagnifyingGlass products"
+          <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
+          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
@@ -755,19 +755,19 @@ function Footer() {
             <h4 className={COLT}>Contact</h4>
             <div className="space-y-2.5">
               <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Envelope size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Mail01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
               <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Phone size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Phone strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <MapPin size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Irving, TX 75038, USA
               </div>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <Clock size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Clock strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
@@ -793,13 +793,13 @@ function Footer() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-5">
               {[
-                { icon: Truck, text: 'Free Shipping $50+' },
-                { icon: ArrowCounterClockwise, text: '30-Day Returns' },
-                { icon: Headphones, text: 'Customer Support' },
-                { icon: ShieldCheck, text: 'Thoughtfully Curated' },
+                { icon: Truck01, text: 'Free Shipping $50+' },
+                { icon: RefreshCcw01, text: '30-Day Returns' },
+                { icon: Headphones01, text: 'Customer Support' },
+                { icon: ShieldTick, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
-                  <b.icon size={14} className="text-luxe-gold-light" />
+                  <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold-light" />
                   <span>{b.text}</span>
                 </div>
               ))}
@@ -826,7 +826,7 @@ function Footer() {
               <Link to="/shop" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-luxe-white/50">
-              <Globe size={12} className="text-luxe-gold-light" /> USD ($) · English
+              <Globe01 strokeWidth={1.5} size={12} className="text-luxe-gold-light" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -854,7 +854,7 @@ function PCard({ product }: { product: Product }) {
           {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
             className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBagOpen size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+            <ShoppingBag01 strokeWidth={1.5} size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
         <div className="px-3.5 py-3">
@@ -862,7 +862,7 @@ function PCard({ product }: { product: Product }) {
             <p className="eyebrow truncate">{product.category}</p>
             {verified.length > 0 && (
               <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
-                <Star size={10} weight="fill" className="text-star" aria-hidden="true" />
+                <Star01 strokeWidth={1.5} size={10} fill="currentColor" className="text-star" aria-hidden="true" />
                 <span className="text-[10px] font-semibold text-luxe-charcoal">{verifiedAvg.toFixed(1)}</span>
               </div>
             )}
@@ -1153,11 +1153,11 @@ function ProductDetailPage() {
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
         <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
-        <CaretRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
-        <CaretRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
-        <CaretRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
@@ -1232,7 +1232,7 @@ function ProductDetailPage() {
           {/* Rating — shown ONLY when verified user reviews exist */}
           {reviews.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} weight={i < Math.round(avgRating) ? 'fill' : 'regular'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
+              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={14} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
               <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} verified review{reviews.length !== 1 ? 's' : ''})</span>
             </div>
           ) : (
@@ -1251,11 +1251,11 @@ function ProductDetailPage() {
 
           {/* Stock + Shipping */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
-            {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><Warning size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
-            {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
-            {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
-            <span className="text-gray-500"><ArrowCounterClockwise size={13} className="inline mr-1" />30-day easy returns</span>
+            {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />In Stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
+            {product.freeShipping && <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>}
+            <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
           </div>
 
           {/* Short Desc */}
@@ -1290,13 +1290,13 @@ function ProductDetailPage() {
           {/* Buttons */}
           <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
             <div className="flex items-center border-2 border-gray-200 rounded-xl">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus size={14} /></button>
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
               <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
-              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
+              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus strokeWidth={1.5} size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
               className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
-              <ShoppingBagOpen size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+              <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
               className="flex-1 py-3 bg-luxe-black hover:bg-luxe-charcoal disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray text-white text-sm font-bold rounded-xl transition-colors">
@@ -1307,13 +1307,13 @@ function ProductDetailPage() {
           {/* Trust */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
-              { icon: Truck, t: 'Free ship $50+' },
-              { icon: ArrowCounterClockwise, t: '30-day returns' },
-              { icon: ShieldCheck, t: 'Thoughtfully curated' },
-              { icon: Lock, t: 'Secure checkout' },
+              { icon: Truck01, t: 'Free ship $50+' },
+              { icon: RefreshCcw01, t: '30-day returns' },
+              { icon: ShieldTick, t: 'Thoughtfully curated' },
+              { icon: Lock01, t: 'Secure checkout' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
-                <b.icon size={14} className="text-luxe-gold shrink-0" />
+                <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />
                 <span className="text-[10px] sm:text-[11px] text-luxe-gray font-medium leading-tight">{b.t}</span>
               </div>
             ))}
@@ -1370,7 +1370,7 @@ function ProductDetailPage() {
           {reviews.length > 0 && (
             <div className="flex items-center gap-3 mb-4">
               <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} weight={i < Math.round(avgRating) ? 'fill' : 'regular'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
+              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={16} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
               <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
             </div>
           )}
@@ -1385,7 +1385,7 @@ function ProductDetailPage() {
             <form onSubmit={submitReview} className="bg-luxe-cream rounded-xl p-4 mb-5 space-y-3 border border-luxe-silver/70">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={18} weight={s <= revForm.rating ? 'fill' : 'regular'} className={s <= revForm.rating ? 'text-star' : 'text-gray-300'} />
+                  <Star01 strokeWidth={1.5} size={18} fill={s <= revForm.rating ? 'currentColor' : 'none'} className={s <= revForm.rating ? 'text-star' : 'text-gray-300'} />
                 </button>
               ))}</div>
               <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
@@ -1398,7 +1398,7 @@ function ProductDetailPage() {
               <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} weight={i < r.rating ? 'fill' : 'regular'} className={i < r.rating ? 'text-star' : 'text-gray-200'} />)}</div>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={11} fill={i < r.rating ? 'currentColor' : 'none'} className={i < r.rating ? 'text-star' : 'text-gray-200'} />)}</div>
                   <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-gray-600">{r.comment}</p>
@@ -1425,7 +1425,7 @@ function ProductDetailPage() {
           </div>
           <button onClick={handleAddToCart} disabled={activeStock === 0}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold">
-            <ShoppingBagOpen size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+            <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
           </button>
         </div>
       </div>
@@ -1468,7 +1468,7 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
         <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
       </div>
       {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1.5 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
-        {linkLabel} <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+        {linkLabel} <ArrowRight strokeWidth={1.5} size={14} className="transition-transform group-hover:translate-x-0.5" />
       </Link>}
     </div>
   );
@@ -1497,7 +1497,7 @@ function HomePage() {
           {/* Copy */}
           <div className="hero-stagger text-center lg:text-left">
             <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-luxe-gold/10 border border-luxe-gold/25 text-luxe-gold-dark text-[11px] font-bold uppercase tracking-[0.16em]">
-              <Sparkle size={12} /> Curated for Quality, Priced for Value
+              <Stars01 strokeWidth={1.5} size={12} /> Curated for Quality, Priced for Value
             </span>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mt-6 mb-5 text-luxe-black">
               Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
@@ -1507,7 +1507,7 @@ function HomePage() {
             </p>
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">
-                Shop Pet Essentials <ArrowRight size={16} />
+                Shop Pet Essentials <ArrowRight strokeWidth={1.5} size={16} />
               </Link>
               <Link to="/shop?q=deal" className="inline-flex items-center gap-2 px-7 py-3.5 border border-luxe-silver text-luxe-charcoal font-semibold rounded-full text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all bg-white/70">
                 Explore Deals
@@ -1515,9 +1515,9 @@ function HomePage() {
             </div>
             {/* Trust row — factual store policies only, no invented stats */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ArrowCounterClockwise size={14} className="text-luxe-gold" /> 30-day easy returns</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones size={14} className="text-luxe-gold" /> Real customer support</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Free shipping over $50</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Real customer support</div>
             </div>
           </div>
 
@@ -1538,14 +1538,14 @@ function HomePage() {
             </div>
             {/* Floating trust chips */}
             <div className="absolute -left-3 sm:-left-6 top-6 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl animate-float">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck size={16} /></span>
+              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck01 strokeWidth={1.5} size={16} /></span>
               <div>
                 <p className="text-[11px] font-bold text-luxe-black">Free Shipping</p>
                 <p className="text-[10px] text-luxe-gray">On orders $50+</p>
               </div>
             </div>
             <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><ShieldCheck size={16} /></span>
+              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><ShieldTick strokeWidth={1.5} size={16} /></span>
               <div>
                 <p className="text-[11px] font-bold text-luxe-black">Thoughtfully Curated</p>
                 <p className="text-[10px] text-luxe-gray">Selected for pet owners</p>
@@ -1580,7 +1580,7 @@ function HomePage() {
                     <span className="text-3xl block mb-1.5">{p.emoji}</span>
                     <span className="font-serif text-2xl font-bold text-luxe-white block">{p.label}</span>
                     <span className="text-xs text-luxe-white/75">{p.desc}</span>
-                    <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight size={12} /></span>
+                    <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
                   </div>
                 </Link>
               </Reveal>
@@ -1620,22 +1620,22 @@ function HomePage() {
       <section className="py-14 sm:py-18 bg-white">
         <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
           <Reveal><Link to="/shop?max=30" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Lightning size={11} /> Deal</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap strokeWidth={1.5} size={11} /> Deal</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
             <p className="text-xs text-luxe-gray mb-4">Everyday essentials under $30 — handpicked and priced fairly.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight size={12} /></span>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
           </Link></Reveal>
           <Reveal delay={70}><Link to="/category/pet-beds" className="group relative block rounded-3xl overflow-hidden bg-luxe-gold-soft border border-luxe-gold/25 p-7 hover:shadow-xl hover:shadow-luxe-gold/15 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-4"><Moon size={11} /> Comfort</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-4"><Moon01 strokeWidth={1.5} size={11} /> Comfort</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Better Sleep for Your Pet</h3>
             <p className="text-xs text-luxe-gray mb-4">Orthopedic beds & cozy caves for deep rest.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
           </Link></Reveal>
           <Reveal delay={140}><Link to="/category/pet-toys" className="group relative block rounded-3xl overflow-hidden bg-luxe-cream border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Sparkle size={11} /> Play</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Stars01 strokeWidth={1.5} size={11} /> Play</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Playtime Essentials</h3>
             <p className="text-xs text-luxe-gray mb-4">Interactive toys & enrichment for happy pets.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
+            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
           </Link></Reveal>
         </div>
       </section>
@@ -1647,13 +1647,13 @@ function HomePage() {
       {featured.length === 0 ? (
         <section className="py-16 sm:py-20 bg-luxe-cream">
           <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkle size={22} className="text-luxe-gold" /></div>
+            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
             <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ArrowCounterClockwise size={14} className="text-luxe-gold" /> 30-day easy returns</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldCheck size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Free shipping over $50</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
             </div>
           </div>
         </section>
@@ -1719,13 +1719,13 @@ function HomePage() {
       <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
-            { icon: ArrowCounterClockwise, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
-            { icon: ShieldCheck, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
-            { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
+            { icon: Truck01, title: 'Free Shipping $50+', desc: 'On every order over $50' },
+            { icon: RefreshCcw01, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
+            { icon: ShieldTick, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
+            { icon: Headphones01, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
-              <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
+              <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon strokeWidth={1.5} size={20} /></span>
               <div>
                 <p className="text-sm font-bold text-luxe-black">{t.title}</p>
                 <p className="text-[11px] text-luxe-gray">{t.desc}</p>
@@ -1848,7 +1848,7 @@ function ShopPage() {
                 minRating === r ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               {r === 0 ? 'Any rating' : (
-                <span className="flex items-center gap-1"><Star size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
+                <span className="flex items-center gap-1"><Star01 strokeWidth={1.5} size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
               )}
             </button>
           ))}
@@ -1876,11 +1876,11 @@ function ShopPage() {
         <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
             className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
-            <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
+            <Sliders01 strokeWidth={1.5} size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
           </button>
           <div className="relative flex-1 min-w-0">
-            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
-            <input placeholder="MagnifyingGlass products..." value={q} onChange={e => setQ(e.target.value)} aria-label="MagnifyingGlass products"
+            <SearchMd strokeWidth={1.5} size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
+            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
               className="w-full pl-9 pr-3 py-2 border border-luxe-silver rounded-lg text-[13px] focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-luxe-cream/60" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
@@ -1902,7 +1902,7 @@ function ShopPage() {
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-luxe-silver/70">
               <h2 className="font-serif text-base font-bold text-luxe-black">Filters</h2>
               <button onClick={() => setDrawerOpen(false)} aria-label="Close filters"
-                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X size={16} /></button>
+                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X strokeWidth={1.5} size={16} /></button>
             </div>
             <div className="p-4">
               <FilterBlock />
@@ -1934,14 +1934,14 @@ function ShopPage() {
               /* Phase 4E.1 — genuinely empty catalog (no published DB products):
                  premium curation notice, never fake cards or fake counts. */
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkle size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
                 <p className="text-sm text-luxe-gray mb-5">Every product is verified before it reaches your door. Please check back soon.</p>
                 <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
               </div>
             ) : (
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><MagnifyingGlass size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><SearchMd strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products found</p>
                 <p className="text-sm text-luxe-gray mb-5">Try adjusting your search or filters.</p>
                 <button onClick={clearAll} className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
@@ -1995,17 +1995,17 @@ function CartDrawer() {
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <ShoppingBagOpen size={20} className="text-luxe-gold" />
+              <ShoppingBag01 strokeWidth={1.5} size={20} className="text-luxe-gold" />
               <h2 className="text-lg font-semibold text-luxe-black">Your Cart ({cart.length})</h2>
             </div>
             <button onClick={closeCart} aria-label="Close cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X size={18} />
+              <X strokeWidth={1.5} size={18} />
             </button>
           </div>
 
           {cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBagOpen size={28} className="text-luxe-gold" /></div>
+              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
               <p className="text-luxe-black text-sm font-semibold">Your cart is empty</p>
               <p className="text-luxe-gray text-xs">Add some handpicked essentials to get started.</p>
               <button onClick={() => { closeCart(); nav('/shop'); }} className="mt-2 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">
@@ -2025,7 +2025,7 @@ function CartDrawer() {
                   </div>
                 ) : (
                   <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600 shrink-0" />
+                    <CheckCircle strokeWidth={1.5} size={14} className="text-green-600 shrink-0" />
                     <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
                   </div>
                 )}
@@ -2039,11 +2039,11 @@ function CartDrawer() {
                       <p className="text-sm font-bold text-luxe-gold mt-0.5">${item.product.price.toFixed(2)}</p>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
-                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={12} /></button>
+                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={12} /></button>
                           <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={12} /></button>
+                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={12} /></button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash size={14} /></button>
+                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={14} /></button>
                       </div>
                     </div>
                     <p className="text-sm font-bold text-luxe-black shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
@@ -2059,7 +2059,7 @@ function CartDrawer() {
                   <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
                 </div>
                 <button onClick={checkout} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-gold">
-                  <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+                  <Lock01 strokeWidth={1.5} size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
                 </button>
                 <button onClick={() => { closeCart(); nav('/cart'); }} className="w-full py-2.5 text-xs text-gray-500 hover:text-luxe-black transition-colors">
                   View Full Cart
@@ -2081,7 +2081,7 @@ function CartPage() {
   if (cart.length === 0) return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBagOpen size={28} className="text-luxe-gold" /></div>
+        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
         <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
         <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
         <Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
@@ -2105,11 +2105,11 @@ function CartPage() {
                   <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
                   <div className="flex items-center gap-3 mt-3">
                     <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">
-                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={13} /></button>
+                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={13} /></button>
                       <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
-                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={13} /></button>
+                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={13} /></button>
                     </div>
-                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash size={15} /></button>
+                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash01 strokeWidth={1.5} size={15} /></button>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -2137,7 +2137,7 @@ function CartPage() {
               <div className="flex justify-between text-lg font-bold pt-3 border-t border-luxe-silver/70"><span className="text-luxe-black">Total</span><span className="text-luxe-black">${tot.toFixed(2)}</span></div>
             </div>
             <button onClick={() => nav(user ? '/checkout' : '/login')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
-              <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+              <Lock01 strokeWidth={1.5} size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
             </button>
             <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
           </div>
@@ -2223,7 +2223,7 @@ function CheckoutPage() {
   if (step === 4) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle size={40} className="text-green-500" /></div>
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle strokeWidth={1.5} size={40} className="text-green-500" /></div>
         <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
         <p className="text-gray-500 mb-1">Order <span className="font-mono font-semibold text-gray-700">#{orderId}</span></p>
         <p className="text-sm text-gray-400 mb-6">Confirmation sent to {f.email}</p>
@@ -2246,7 +2246,7 @@ function CheckoutPage() {
   if (step === 3) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
-        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><SpinnerGap size={36} className="text-luxe-gold animate-spin" /></div>
+        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><Loading01 strokeWidth={1.5} size={36} className="text-luxe-gold animate-spin" /></div>
         <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
         <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
       </div>
@@ -2285,7 +2285,7 @@ function CheckoutPage() {
               <>
                 {/* Contact */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-luxe-gold" /> Contact Information</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
                     <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
@@ -2296,7 +2296,7 @@ function CheckoutPage() {
 
                 {/* Shipping Address */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-luxe-gold" /> Shipping Address</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
                     <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
@@ -2309,7 +2309,7 @@ function CheckoutPage() {
 
                 {/* Shipping Method */}
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-luxe-gold" /> Shipping Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Method</h2>
                   <div className="space-y-3">
                     {[
                       { id: 'standard' as const, label: 'Standard Shipping', time: '7-12 business days', price: sub >= 50 ? 'FREE' : '$4.99', badge: sub >= 50 ? '🎉 Free!' : '' },
@@ -2331,7 +2331,7 @@ function CheckoutPage() {
                 </div>
 
                 <button onClick={handleNext} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-gold">
-                  Continue to Payment <ArrowRight size={16} />
+                  Continue to Payment <ArrowRight strokeWidth={1.5} size={16} />
                 </button>
               </>
             )}
@@ -2339,10 +2339,10 @@ function CheckoutPage() {
             {/* Step 2: Payment */}
             {step === 2 && (
               <>
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
+                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-2"><ArrowLeft strokeWidth={1.5} size={14} /> Back to Information</button>
 
                 <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-luxe-gold" /> Payment Method</h2>
+                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Payment Method</h2>
 
                   {/* Method Toggle */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -2379,7 +2379,7 @@ function CheckoutPage() {
 
                 {/* Demo notice — no real payment processor is connected yet */}
                 <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <Warning size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-amber-800">Demo checkout — no real payment is processed</p>
                     <p className="text-xs text-amber-700">Card details are not stored, logged, or transmitted anywhere. A real payment provider (Stripe/PayPal) will be connected in a future release.</p>
@@ -2387,7 +2387,7 @@ function CheckoutPage() {
                 </div>
 
                 <button onClick={handlePay} className="w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
-                  <Lock size={16} />
+                  <Lock01 strokeWidth={1.5} size={16} />
                   {payMethod === 'paypal' ? `Pay with PayPal · $${total.toFixed(2)}` : `Complete Purchase · $${total.toFixed(2)}`}
                 </button>
               </>
@@ -2434,12 +2434,12 @@ function CheckoutPage() {
               {/* Trust Badges */}
               <div className="mt-6 pt-5 border-t space-y-2.5">
                 {[
-                  { i: Truck, t: `${shipMethod === 'express' ? 'Express 2-4 days' : 'Standard 7-12 days'}` },
-                  { i: ArrowCounterClockwise, t: '30-day hassle-free returns' },
-                  { i: ShieldCheck, t: 'Secure SSL checkout' },
+                  { i: Truck01, t: `${shipMethod === 'express' ? 'Express 2-4 days' : 'Standard 7-12 days'}` },
+                  { i: RefreshCcw01, t: '30-day hassle-free returns' },
+                  { i: ShieldTick, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
-                    <b.i size={14} className="text-luxe-gold shrink-0" />{b.t}
+                    <b.i strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />{b.t}
                   </div>
                 ))}
               </div>
@@ -2457,7 +2457,7 @@ function CheckoutPage() {
 }
 
 function OrdersPage() { const { orders, user } = useApp(); const nav = useNavigate(); useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
+  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
   return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-luxe-gold">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
 }
 
@@ -2510,16 +2510,16 @@ function LoginPage() {
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <Envelope size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
             </div>
 
@@ -2533,7 +2533,7 @@ function LoginPage() {
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <SpinnerGap size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
+              {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
 
@@ -2547,7 +2547,7 @@ function LoginPage() {
           {/* Guest Login */}
           <button onClick={asGuest}
             className="w-full py-3.5 border border-luxe-silver hover:border-luxe-gold/60 bg-luxe-cream hover:bg-luxe-light text-luxe-black font-semibold rounded-xl transition-all flex flex-wrap items-center justify-center gap-2 group">
-            <UserIcon size={16} className="text-luxe-gold" />
+            <UserIcon strokeWidth={1.5} size={16} className="text-luxe-gold" />
             Continue as Guest
             <span className="text-[10px] uppercase tracking-wider text-gray-400 group-hover:text-luxe-gold transition-colors">No account needed</span>
           </button>
@@ -2560,16 +2560,16 @@ function LoginPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBagOpen size={15} className="text-luxe-gold" />
+            <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><ArrowCounterClockwise size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
 
         {/* Admin link */}
@@ -2629,27 +2629,27 @@ function SignupPage() {
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <UserIcon strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" required value={n} onChange={ev => setN(ev.target.value)} placeholder="Full Name"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Envelope size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
             </div>
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <SpinnerGap size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
+              {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
 
@@ -2661,16 +2661,16 @@ function SignupPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBagOpen size={15} className="text-luxe-gold" />
+            <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><ArrowCounterClockwise size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
       </div>
     </div>
@@ -2700,7 +2700,7 @@ function AdminLoginPage() {
     <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <ShieldCheck className="text-luxe-gold" size={28} />
+          <ShieldTick strokeWidth={1.5} className="text-luxe-gold" size={28} />
           <span className="text-xl font-bold">Admin Login</span>
         </div>
         <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
@@ -2713,7 +2713,7 @@ function AdminLoginPage() {
 
         {err && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-            <Warning size={16} />{err}
+            <AlertTriangle strokeWidth={1.5} size={16} />{err}
           </div>
         )}
 
@@ -2727,12 +2727,12 @@ function AdminLoginPage() {
             <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
           <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
-            {loading ? <SpinnerGap size={16} className="animate-spin" /> : <Lock size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
+            {loading ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
           </button>
         </form>
 
         <div className="mt-6 flex items-center gap-2 text-xs text-gray-400 justify-center">
-          <ShieldCheck size={12} /> Protected admin area
+          <ShieldTick strokeWidth={1.5} size={12} /> Protected admin area
         </div>
 
         <Link to="/" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-700">← Back to Store</Link>
@@ -2789,7 +2789,7 @@ function PrivacyPage() {
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.</p></LS>
       <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment information (processed securely through our payment providers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Save billing and shipping information for faster future purchases.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
-      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>PaperPlaneRight promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
+      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payment Security"><p>Payments are processed securely through trusted third-party payment processors. Luxedge does not store your complete credit or debit card information on our servers.</p></LS>
       <LS t="Cookies"><p>Our website uses cookies to remember your preferences, improve website performance, analyze website traffic, and enhance your shopping experience. When you first visit our site, we ask for your consent to use advertising and analytics cookies. You may change your choice or disable cookies through your browser settings at any time, although some website features may not function properly.</p></LS>
       <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
@@ -2883,7 +2883,7 @@ function FAQPage() {
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><CaretRight size={16} className="text-luxe-gold" />{section.c}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight strokeWidth={1.5} size={16} className="text-luxe-gold" />{section.c}</h2>
             <div className="space-y-2">
               {section.qs.map(faq => {
                 const key = faq.q;
@@ -2892,7 +2892,7 @@ function FAQPage() {
                   <div key={key} className="bg-white rounded-xl border overflow-hidden">
                     <button onClick={() => setOpen(isOpen ? null : key)} className="w-full flex items-center justify-between px-5 py-4 text-left">
                       <span className="text-sm font-medium text-gray-900 pr-4">{faq.q}</span>
-                      <CaretDown size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDown strokeWidth={1.5} size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {isOpen && <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t pt-3">{faq.a}</div>}
                   </div>
@@ -2903,7 +2903,7 @@ function FAQPage() {
         ))}
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Envelope size={16} />Contact Support</Link>
+          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail01 strokeWidth={1.5} size={16} />Contact Support</Link>
         </div>
       </div>
     </div>
@@ -2922,13 +2922,13 @@ function ContactPage() {
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
-            { i: Envelope, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
+            { i: Mail01, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
             { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Mon-Fri, 9AM-6PM CT' },
-            { i: MapPin, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
+            { i: MarkerPin01, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
-              <x.i className="mx-auto mb-2 text-luxe-gold" size={22} />
+              <x.i strokeWidth={1.5} className="mx-auto mb-2 text-luxe-gold" size={22} />
               <p className="text-[10px] text-luxe-gold font-semibold uppercase tracking-wider">{x.l}</p>
               <p className="font-semibold text-sm mt-1">{x.v}</p>
               <p className="text-xs text-gray-500">{x.s}</p>
@@ -2939,13 +2939,13 @@ function ContactPage() {
         <div className="max-w-2xl mx-auto">
           {ok ? (
             <div className="text-center py-16 bg-green-50 rounded-2xl border border-green-200">
-              <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
+              <CheckCircle strokeWidth={1.5} className="mx-auto text-green-500 mb-4" size={48} />
               <h2 className="text-xl font-bold mb-2">Message Received!</h2>
               <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you within 24 hours.</p>
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><PaperPlaneRight size={18} className="text-luxe-gold" /> PaperPlaneRight Us a Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Send Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
@@ -2954,7 +2954,7 @@ function ContactPage() {
                 <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><PaperPlaneRight size={16} />PaperPlaneRight Message</button>
+              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send01 strokeWidth={1.5} size={16} />Send Message</button>
             </form>
           )}
         </div>
@@ -3016,9 +3016,9 @@ function CareersPage() {
           </div>
 
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
-          <p className="text-gray-600 leading-relaxed mb-4">PaperPlaneRight your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
+          <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
           <Link to="/contact" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors">
-            <Envelope size={16} /> Get in Touch
+            <Mail01 strokeWidth={1.5} size={16} /> Get in Touch
           </Link>
         </div>
       </div>
@@ -3049,7 +3049,7 @@ function BlogListPage() {
           {user && (
             <div className="flex justify-end mb-6">
               <Link to="/blog/write" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
-                <PencilSimpleLine size={16} /> Write a Post
+                <PencilLine strokeWidth={1.5} size={16} /> Write a Post
               </Link>
             </div>
           )}
@@ -3063,7 +3063,7 @@ function BlogListPage() {
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar size={12} />{new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar strokeWidth={1.5} size={12} />{new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                       <span className="text-gray-200">·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
@@ -3071,7 +3071,7 @@ function BlogListPage() {
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{post.excerpt}</p>
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">#{t}</span>)}</div>
-                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
+                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight strokeWidth={1.5} size={14} /></span>
                     </div>
                   </div>
                 </Link>
@@ -3079,7 +3079,7 @@ function BlogListPage() {
             </div>
           ) : (
             <div className="text-center py-20 bg-white rounded-xl border">
-              <BookOpen size={48} className="mx-auto text-gray-200 mb-4" />
+              <BookOpen01 strokeWidth={1.5} size={48} className="mx-auto text-gray-200 mb-4" />
               <p className="text-lg font-semibold text-gray-700 mb-2">No posts yet</p>
               <p className="text-sm text-gray-500">Check back soon for new content!</p>
             </div>
@@ -3131,8 +3131,8 @@ function BlogDetailPage() {
         <div className="bg-white rounded-2xl shadow-xl border p-6 sm:p-10 mb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-            <Link to="/" className="hover:text-luxe-gold">Home</Link><CaretRight size={12} />
-            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><CaretRight size={12} />
+            <Link to="/" className="hover:text-luxe-gold">Home</Link><ChevronRight strokeWidth={1.5} size={12} />
+            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><ChevronRight strokeWidth={1.5} size={12} />
             <span className="text-gray-600 truncate max-w-[200px]">{post.title}</span>
           </nav>
 
@@ -3147,7 +3147,7 @@ function BlogDetailPage() {
             <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{post.authorName.charAt(0)}</span></div>
             <div>
               <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
-              <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar strokeWidth={1.5} size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
           </div>
 
@@ -3190,7 +3190,7 @@ function BlogDetailPage() {
 
         {/* Back link */}
         <div className="text-center mb-12">
-          <Link to="/blog" className="text-luxe-gold font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
+          <Link to="/blog" className="text-luxe-gold font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft strokeWidth={1.5} size={16} /> Back to All Posts</Link>
         </div>
       </div>
     </div>
@@ -3248,8 +3248,8 @@ function BlogWritePage() {
   return (
     <div className="py-10 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4">
-        <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
-        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PencilSimpleLine size={22} className="text-luxe-gold" />Write a Blog Post</h1>
+        <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft strokeWidth={1.5} size={14} />Back to Blog</Link>
+        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PencilLine strokeWidth={1.5} size={22} className="text-luxe-gold" />Write a Blog Post</h1>
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
@@ -3262,8 +3262,8 @@ function BlogWritePage() {
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold hover:bg-luxe-gold-soft/30 transition-all">
-                <UploadSimple size={28} className="text-gray-400 mb-2" />
-                <span className="text-sm font-medium text-gray-600">UploadSimple cover image</span>
+                <Upload01 strokeWidth={1.5} size={28} className="text-gray-400 mb-2" />
+                <span className="text-sm font-medium text-gray-600">Upload cover image</span>
                 <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
                 <input type="file" accept="image/*" onChange={handleCover} className="hidden" />
               </label>
@@ -3286,20 +3286,20 @@ function BlogWritePage() {
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
-            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><UploadSimple size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
+            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload01 strokeWidth={1.5} size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
+            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag01 strokeWidth={1.5} size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
           </div>
 
-          {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
+          {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye strokeWidth={1.5} size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><PaperPlaneRight size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send01 strokeWidth={1.5} size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
             <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
           </div>
         </form>
@@ -3316,7 +3316,7 @@ function AdminFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-luxe-cream">
       <div className="flex flex-col items-center gap-3 text-gray-400">
-        <SpinnerGap size={28} className="animate-spin text-luxe-gold" />
+        <Loading01 strokeWidth={1.5} size={28} className="animate-spin text-luxe-gold" />
         <span className="text-sm font-medium">Loading admin…</span>
       </div>
     </div>
