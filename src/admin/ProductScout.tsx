@@ -125,7 +125,7 @@ export default function ProductScout() {
   const [miMarket, setMiMarket] = useState('USA');
   const [miRunning, setMiRunning] = useState(false);
   const [miLog, setMiLog] = useState<string[]>([]);
-  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null } | null>(null);
+  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number } } | null>(null);
   const [autonomyCfg, setAutonomyCfg] = useState<AutonomyConfig>(() => loadAutonomyConfig());
   const [attention, setAttention] = useState<OwnerAttentionItem[]>(() => loadAttentionItems());
   const [scanning, setScanning] = useState(false);
@@ -483,11 +483,16 @@ export default function ProductScout() {
         query: q,
         market: miMarket.trim() || undefined,
         db,
+        // Phase 4D: build the market evidence pack (discovery → select 6-8
+        // exact product pages → fetch → extract) so price/rating/availability
+        // signals participate; DeepSeek runs only after the quality gate.
+        fetchPage: scoutFetchPage,
         onProgress,
       });
-      log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore}/100, ai=${result.aiUsed}`);
+      const ev = result.evidence;
+      log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore}/100, ai=${result.aiUsed}, evidence=${ev.evidenceQuality} (${ev.successfulExtracts} extracts, ${ev.independentDomains} domains, ${ev.priceEvidenceCount} prices, ${ev.availabilityEvidenceCount} available)`);
       setMiLog([...log]);
-      setMiResult({ signals: result.signals, marketScore: result.marketScore, aiUsed: result.aiUsed, analysis: result.analysis });
+      setMiResult({ signals: result.signals, marketScore: result.marketScore, aiUsed: result.aiUsed, analysis: result.analysis, evidence: { evidenceQuality: result.evidence.evidenceQuality, missing: result.evidence.evidenceQuality === 'insufficient' ? result.evidence.evidenceQualityReasons : [], successfulExtracts: result.evidence.successfulExtracts, independentDomains: result.evidence.independentDomains, priceEvidenceCount: result.evidence.priceEvidenceCount } });
       // Remember the durable MI job + its recommended search hypotheses so a
       // CJ run can be linked to THIS exact evidence (DB job = source of truth).
       setMiJobId(result.jobId);
@@ -1259,7 +1264,13 @@ export default function ProductScout() {
           {miResult && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
               <p className="text-sm font-bold text-indigo-800">Market Opportunity Score: <span className="text-xl">{miResult.marketScore}</span>/100</p>
-              <p className="text-xs text-indigo-700">{miResult.signals} evidence signals collected · {miResult.aiUsed ? 'DeepSeek analysis used' : 'DeepSeek not configured — deterministic evidence analysis used'}</p>
+              {miResult.evidence && (
+                <p className={`text-xs font-semibold ${miResult.evidence.evidenceQuality === 'sufficient' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  Evidence quality: {miResult.evidence.evidenceQuality.toUpperCase()} — {miResult.evidence.successfulExtracts} exact product pages, {miResult.evidence.independentDomains} domains, {miResult.evidence.priceEvidenceCount} prices
+                  {miResult.evidence.missing.length > 0 && <span> · missing: {miResult.evidence.missing.join('; ')}</span>}
+                </p>
+              )}
+              <p className="text-xs text-indigo-700">{miResult.signals} evidence signals collected · {miResult.aiUsed ? 'DeepSeek analysis used' : 'deterministic evidence analysis used'}{miResult.evidence && miResult.evidence.evidenceQuality === 'insufficient' ? ' (DeepSeek skipped — MARKET EVIDENCE INSUFFICIENT)' : ''}</p>
               {miResult.analysis && (
                 <div className="space-y-1 text-xs text-indigo-800">
                   {miResult.analysis.trendConfidence && <p><span className="font-semibold">Trend confidence:</span> {miResult.analysis.trendConfidence}</p>}

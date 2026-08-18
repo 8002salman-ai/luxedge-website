@@ -28,6 +28,7 @@ import type {
 import { SupabaseAdapter } from '../../../services/db';
 import { runMarketIntelligenceJob } from '../../scout/engine';
 import { runSupplierSearch } from '../../scout/supplierSearch';
+import { parseHtmlPage } from '../../ai/importer';
 
 const ENABLED = process.env.RUN_LIVE_CJ_PROOF === '1';
 
@@ -224,12 +225,30 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
       expect(health?.health).toBe('online');
       console.log(`[health] CJ Supplier API = ${health?.health}${health?.detail ? ` — ${health.detail}` : ''}`);
 
-      // 3) Fresh grounded Market Intelligence pass(es) (DeepSeek via the real
-      //    proxy). At most TWO materially different opportunities — never loop.
+      // 3) ONE controlled Phase 4D Market Intelligence pass with the MARKET
+      //    EVIDENCE PACK: discovery → select exact product pages → fetch via
+      //    the REAL preview /api/fetch-page → extract → quality gate →
+      //    DeepSeek only if the gate passes. No CJ product points are spent.
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      let pageFetches = 0;
+      // Mirrors the real client path (scoutFetchPage → fetchViaServerProxy →
+      // parseHtmlPage): /api/fetch-page returns PLAIN text, not JSON.
+      const fetchPage = async (url: string) => {
+        pageFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
       const aiCall = async (prompt: string, model?: string) => {
         const res = await fetch(`${preview}/api/ai/generate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          headers: authHeaders,
           body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
           signal: AbortSignal.timeout(120_000),
         });
@@ -239,18 +258,17 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         return body.text;
       };
 
-      const attempts = ['pet enrichment', 'dog travel accessories'];
-      let mi: Awaited<ReturnType<typeof runMarketIntelligenceJob>> | null = null;
-      for (const attempt of attempts) {
-        mi = await runMarketIntelligenceJob({ query: attempt, market: 'US', db, aiCall, onProgress: (m) => console.log(`[mi] ${m}`) });
-        console.log(`[mi] job ${mi.jobId} · query "${attempt}" · signals ${mi.signals} · market score ${mi.marketScore} · ai=${mi.aiUsed}`);
-        const j = await db.get<Record<string, unknown>>('agent_jobs', mi.jobId);
-        const o = (j && j.output && typeof j.output === 'object' ? j.output : {}) as Record<string, unknown>;
-        const r = Array.isArray(o.recommendedSearchQueries) ? (o.recommendedSearchQueries as string[]).filter((x) => typeof x === 'string' && x.trim()) : [];
-        if (mi.marketScore !== null && mi.marketScore >= 60 && r.length > 0) break;
-        console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH for "${attempt}" (score=${mi.marketScore ?? 'UNKNOWN'}) — CJ search NOT run for it.`);
-      }
-      if (!mi) throw new Error('no MI attempt ran');
+      const mi = await runMarketIntelligenceJob({
+        query: 'dog travel accessories',
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+      console.log(`[mi] evidence pack: discovered ${mi.evidence.discoveredUrls} URLs · selected ${mi.evidence.selectedUrls.length} · extracts ok ${mi.evidence.successfulExtracts} · failed ${mi.evidence.failedExtracts} · domains ${mi.evidence.independentDomains} · prices ${mi.evidence.priceEvidenceCount} · ratings ${mi.evidence.ratingEvidenceCount} · availability ${mi.evidence.availabilityEvidenceCount}`);
+      console.log(`[mi] evidence quality: ${mi.evidence.evidenceQuality.toUpperCase()} — ${mi.evidence.evidenceQualityReasons.join('; ')}`);
 
       const job = await db.get<Record<string, unknown>>('agent_jobs', mi.jobId);
       const out = (job && job.output && typeof job.output === 'object' ? job.output : {}) as Record<string, unknown>;
@@ -258,11 +276,11 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         ? (out.recommendedSearchQueries as string[]).filter((r) => typeof r === 'string' && r.trim())
         : [];
 
-      // 4) MARKET GATE — if the grounded score < 60 after the attempts, do NOT
-      //    run CJ (report winner NONE honestly).
+      // 4) MARKET GATE — if the grounded score < 60, do NOT run CJ (report
+      //    winner NONE honestly; no category looping).
       if (mi.marketScore === null || mi.marketScore < 60 || recs.length === 0) {
-        console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH after attempts (best score=${mi.marketScore ?? 'UNKNOWN'}) — CJ search NOT run.`);
-        console.log(`[result] ${JSON.stringify({ winner: 'NONE', marketScore: mi.marketScore, reason: 'market gate not met after at most 2 attempts', miJobId: mi.jobId })}`);
+        console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH (score=${mi.marketScore ?? 'UNKNOWN'}) — CJ search NOT run.`);
+        console.log(`[result] ${JSON.stringify({ winner: 'NONE', marketScore: mi.marketScore, reason: 'market gate not met', miJobId: mi.jobId, evidence: mi.evidence })}`);
         return;
       }
 

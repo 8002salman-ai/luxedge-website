@@ -29,6 +29,11 @@ import { scoreCandidate, SHORTLIST_THRESHOLD } from './score';
 import { signalsFromDiscovery, signalsFromExtracts, scoreMarketOpportunity, runMarketIntelligence } from './market';
 import { evidenceFingerprint } from './aiCost';
 import {
+  buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence,
+  type EvidenceQualityThresholds,
+} from './marketEvidence';
+import { collectDemandSignals, type MarketDemandAdapter } from './marketDemand';
+import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
   createJob, completeJob, addRun, addLog,
 } from './persist';
@@ -312,9 +317,37 @@ export interface MarketIntelligenceOptions {
   discover?: (q: { query: string; market?: string; maxResults?: number }) => Promise<DiscoverResult>;
   /** Injectable AI call (defaults to DeepSeek via secure server proxy). */
   aiCall?: (prompt: string, model?: string) => Promise<string>;
-  /** Candidate extracts to fold into signals (from a previous research run). */
+  /**
+   * Candidate extracts to fold into signals (from a previous research run).
+   * When absent AND fetchPage is provided, the engine builds the evidence pack
+   * itself: discovery → select 6-8 exact product pages → fetch → extract.
+   */
   extracts?: { title: string; extract: PageExtract }[];
+  /**
+   * Secure page fetcher (the app's /api/fetch-page path). REQUIRED for the
+   * Phase 4D evidence-pack flow — without it MI stays discovery-only (weak).
+   */
+  fetchPage?: (url: string) => Promise<FetchedSourcePage>;
+  /** Max exact product pages to research for the evidence pack (default 8). */
+  maxEvidencePages?: number;
+  /** Evidence-quality gate thresholds (conservative configurable defaults). */
+  evidenceThresholds?: EvidenceQualityThresholds;
+  /** Optional future demand-data adapter (no credentials needed in Phase 4D). */
+  demand?: MarketDemandAdapter;
   onProgress?: (msg: string) => void;
+}
+
+export interface MarketEvidenceSummary {
+  discoveredUrls: number;
+  selectedUrls: string[];
+  successfulExtracts: number;
+  failedExtracts: number;
+  independentDomains: number;
+  priceEvidenceCount: number;
+  ratingEvidenceCount: number;
+  availabilityEvidenceCount: number;
+  evidenceQuality: 'sufficient' | 'insufficient' | 'not-assessed';
+  evidenceQualityReasons: string[];
 }
 
 export interface MarketIntelligenceResult {
@@ -326,6 +359,8 @@ export interface MarketIntelligenceResult {
   analysis: MarketAnalysis | null;
   /** Fingerprint of the collected signals — persisted on the durable job. */
   evidenceFingerprint: string | null;
+  /** Phase 4D evidence pack summary (what the score was grounded on). */
+  evidence: MarketEvidenceSummary;
 }
 
 /**
@@ -334,7 +369,7 @@ export interface MarketIntelligenceResult {
  * Deterministic fallback keeps it working with no AI keys configured.
  */
 export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions): Promise<MarketIntelligenceResult> {
-  const { query, market, db, extracts, onProgress } = opts;
+  const { query, market, db, extracts, onProgress, fetchPage, maxEvidencePages, evidenceThresholds, demand } = opts;
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
@@ -342,17 +377,19 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     query,
     market: market || null,
     at,
-    note: 'Collect market signals → market opportunity score → (DeepSeek when configured)',
+    note: 'Discovery → market evidence pack (select/fetch/extract) → quality gate → score → (DeepSeek only when evidence is sufficient)',
   });
   await addRun(db, jobId, 'market-intelligence', 'running', `Analyzing market: ${query}`);
   await addLog(db, jobId, 'info', `MARKET_INTELLIGENCE started for "${query}" (retries=0)`);
 
   let signals = [] as Awaited<ReturnType<typeof signalsFromDiscovery>>;
   let warning = '';
+  let discoveredUrls: string[] = [];
   try {
     const result = opts.discover
       ? await opts.discover({ query, market, maxResults: 12 })
       : await import('./discover').then((m) => m.discoverUrls({ query, market, maxResults: 12 }));
+    discoveredUrls = result.urls;
     signals = signalsFromDiscovery({ query, market, maxResults: 12 }, result, at);
     if (result.warning) warning = result.warning;
     progress(`[signals] ${query}: ${result.urls.length} product URLs discovered`);
@@ -361,9 +398,43 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     progress(`[warn] ${warning}`);
   }
 
-  if (extracts?.length) {
-    signals = [...signals, ...signalsFromExtracts(extracts, at)];
+  // Phase 4D — build the MARKET EVIDENCE PACK: when no extracts were supplied
+  // and a secure fetcher is available, the engine itself does
+  //   discovery → select 6-8 exact product pages → fetch → extract
+  // so price/rating/availability signals can participate in the score. When
+  // extracts ARE supplied (previous research run), they are the pack.
+  let pack: Awaited<ReturnType<typeof buildMarketEvidencePack>> | null = null;
+  if (extracts && extracts.length > 0) {
+    pack = {
+      selectedUrls: [],
+      extracts,
+      failedUrls: [],
+      independentDomains: 0, // not derivable from extracts without source URLs
+      counts: { ...countExtractEvidence(extracts), independentDomains: 0 },
+    };
+  } else if (fetchPage) {
+    progress('[evidence] building market evidence pack (select → fetch → extract)');
+    try {
+      pack = await buildMarketEvidencePack({
+        urls: discoveredUrls,
+        fetchPage,
+        maxPages: maxEvidencePages ?? 8,
+        onProgress,
+      });
+    } catch (e) {
+      warning = `${warning ? warning + '; ' : ''}evidence pack failed: ${(e as Error).message}`;
+      progress(`[warn] evidence pack failed: ${(e as Error).message}`);
+    }
+  } else {
+    progress('[warn] no extracts and no fetchPage — Market Intelligence is discovery-only (weak evidence, see Phase 4D)');
   }
+  if (pack && pack.extracts.length) {
+    signals = [...signals, ...signalsFromExtracts(pack.extracts, at)];
+  }
+
+  // Optional future demand-data adapter (no credentials in Phase 4D — no-op).
+  const demandSignals = await collectDemandSignals(demand, { query, market });
+  if (demandSignals.length) signals = [...signals, ...demandSignals];
 
   const category = query.toLowerCase().includes('cat')
     ? 'Cat' : query.toLowerCase().includes('dog') || query.toLowerCase().includes('puppy')
@@ -373,11 +444,33 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   const det = scoreMarketOpportunity({ signals, category });
   progress(`[market] ${query}: deterministic market score ${det.score}/100`);
 
-  const analysis = await runMarketIntelligence({ signals, category }, det, opts.aiCall);
+  // EVIDENCE QUALITY GATE — before any DeepSeek spend. A thin pack means
+  // DEEPSEEK CALL = NO and MARKET EVIDENCE INSUFFICIENT is reported with the
+  // exact missing evidence. The gate is conservative + configurable.
+  const gate = pack
+    ? assessEvidenceQuality(pack.counts, evidenceThresholds)
+    : assessEvidenceQuality(
+        { usablePages: 0, attemptedPages: 0, successfulExtracts: 0, failedExtracts: 0, independentDomains: 0, priceEvidenceCount: 0, ratingEvidenceCount: 0, availabilityEvidenceCount: 0 },
+        evidenceThresholds
+      );
+  if (!gate.pass) {
+    progress(`[evidence] MARKET EVIDENCE INSUFFICIENT — missing: ${gate.missing.join('; ')}`);
+  } else {
+    progress(`[evidence] market evidence sufficient: ${gate.reasons.join('; ')}`);
+  }
+
+  // DeepSeek only after the quality gate passes; otherwise the throwing
+  // aiCall routes through the existing deterministic fallback (aiUsed=false).
+  const aiUsed = gate.pass;
+  const analysis = await runMarketIntelligence({ signals, category }, det, aiUsed
+    ? opts.aiCall
+    : async () => { throw new Error('DEEPSEEK CALL SKIPPED — MARKET EVIDENCE INSUFFICIENT'); });
   if (analysis.aiUsed) {
     progress(`[ai] DeepSeek market analysis used (model ${analysis.model || 'deepseek-chat'})`);
-  } else {
+  } else if (gate.pass) {
     progress(`[ai] ${analysis.unsupportedClaims[0] || 'Market Intelligence AI not configured — deterministic analysis used'}`);
+  } else {
+    progress(`[ai] DeepSeek skipped (evidence gate) — deterministic analysis used`);
   }
 
   // Evidence fingerprint of THIS analysis — persisted on the durable job so a
@@ -388,11 +481,13 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     ...signals.map((s) => `${s.signalType}:${s.summary}`),
   ]);
   await addLog(db, jobId, 'info',
-    `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}${warning ? '; ' + warning : ''} (retries=0)`);
-  await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'}`);
+    `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}, evidence_quality=${gate.pass ? 'sufficient' : 'insufficient'}${warning ? '; ' + warning : ''} (retries=0)`);
+  await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'} · evidence ${gate.pass ? 'OK' : 'INSUFFICIENT'}`);
   // Persist the recommended search hypotheses + opportunity/category on the
   // durable job output (Phase 4C migration-security revision, §9) so a later
-  // supplier search can PROVE the query it ran follows THIS analysis.
+  // supplier search can PROVE the query it ran follows THIS analysis. Phase 4D
+  // additionally persists the evidence-pack provenance (what grounded the
+  // score) — never any credentials.
   await completeJob(db, jobId, 'completed', {
     query,
     signals: signals.length,
@@ -402,10 +497,33 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     evidenceFingerprint: fp,
     recommendedSearchQueries: analysis.recommendedSearchQueries,
     opportunity: category,
+    discoveredUrls: discoveredUrls.length,
+    selectedUrls: pack?.selectedUrls ?? [],
+    successfulExtracts: pack?.counts.successfulExtracts ?? 0,
+    failedExtracts: pack?.counts.failedExtracts ?? 0,
+    independentDomains: pack?.independentDomains ?? 0,
+    priceEvidenceCount: pack?.counts.priceEvidenceCount ?? 0,
+    ratingEvidenceCount: pack?.counts.ratingEvidenceCount ?? 0,
+    availabilityEvidenceCount: pack?.counts.availabilityEvidenceCount ?? 0,
+    evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
+    evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     at: new Date().toISOString(),
   }, undefined, analysis.aiUsed
     ? { provider: 'deepseek', model: analysis.model || 'deepseek-chat' }
     : {});
+
+  const evidence: MarketEvidenceSummary = {
+    discoveredUrls: discoveredUrls.length,
+    selectedUrls: pack?.selectedUrls ?? [],
+    successfulExtracts: pack?.counts.successfulExtracts ?? 0,
+    failedExtracts: pack?.counts.failedExtracts ?? 0,
+    independentDomains: pack?.independentDomains ?? 0,
+    priceEvidenceCount: pack?.counts.priceEvidenceCount ?? 0,
+    ratingEvidenceCount: pack?.counts.ratingEvidenceCount ?? 0,
+    availabilityEvidenceCount: pack?.counts.availabilityEvidenceCount ?? 0,
+    evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
+    evidenceQualityReasons: [...gate.missing, ...gate.reasons],
+  };
 
   return {
     jobId,
@@ -415,6 +533,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     aiUsed: analysis.aiUsed,
     analysis,
     evidenceFingerprint: fp,
+    evidence,
   };
 }
 

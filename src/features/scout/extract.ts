@@ -16,7 +16,7 @@ const SHIP_DAYS_RE = /(?:ships|delivery|arrives|shipping)\s+(?:within\s+|in\s+)?
 const ORIGIN_RE = /\bmade in\s+([A-Za-z][A-Za-z\s-]{1,20})/i;
 const SIZES_RE = /\bsizes?:?\s*([A-Za-z0-9][A-Za-z0-9,\s\/\-]{0,60})/i;
 
-/** Pull the title from common page markers, falling back to the first line. */
+/** Pull the title from STRONG page markers only (no fabrication from prose). */
 function extractTitle(text: string): string | null {
   const og = text.match(/og:title[:\s]+([^\n]{5,160})/i);
   if (og && og[1]) return normalizeTitle(og[1]);
@@ -30,7 +30,17 @@ function extractTitle(text: string): string | null {
     const t = normalizeTitle(jinaTitle[1]);
     if (t.length >= 5 && t.length <= 160 && !/^(http|url source)/i.test(t)) return t;
   }
-  // First meaningful line of body text (skip proxy artifacts).
+  return null;
+}
+
+/**
+ * Weak fallback: the first meaningful line of body text, accepted ONLY when
+ * the page carries at least one real product signal (price, availability,
+ * rating, reviews, shipping, origin, sizes, images). A bare prose line is
+ * never fabricated into a title — that would count non-product pages as
+ * usable evidence.
+ */
+function weakFirstLine(text: string): string | null {
   for (const line of text.split('\n')) {
     const t = normalizeTitle(line.replace(/^Title:\s*/i, ''));
     if (t.length >= 8 && t.length <= 160 && !t.startsWith('http') && !/^(url source|markdown content)/i.test(t)) return t;
@@ -54,7 +64,6 @@ function extractSizes(text: string): string[] | null {
  */
 export function extractPageFacts(page: FetchedSourcePage): PageExtract {
   const text = page.text || '';
-  const title = extractTitle(text);
   const price = parsePrice(text);
 
   let availability: PageExtract['availability'] = 'unknown';
@@ -73,18 +82,39 @@ export function extractPageFacts(page: FetchedSourcePage): PageExtract {
 
   const originMatch = text.match(ORIGIN_RE);
   const origin = originMatch && originMatch[1] ? originMatch[1].trim() : null;
+  const rating = parseRating(text);
+  const reviewCount = parseReviewCount(text);
+  const sizes = extractSizes(text);
+  const images = page.images || [];
+
+  // Weak fallback title is accepted ONLY when the page shows a real product
+  // signal — never fabricated from bare prose (honesty rule).
+  let title = extractTitle(text);
+  if (!title) {
+    const hasProductSignal =
+      price !== null ||
+      availability !== 'unknown' ||
+      rating !== null ||
+      reviewCount !== null ||
+      shippingDays !== null ||
+      origin !== null ||
+      sizes !== null ||
+      images.length > 0 ||
+      FREE_SHIP_RE.test(text);
+    if (hasProductSignal) title = weakFirstLine(text);
+  }
 
   return {
     title,
     price,
-    images: page.images || [],
+    images,
     availability,
     shippingDays,
     freeShipping: FREE_SHIP_RE.test(text),
-    rating: parseRating(text),
-    reviewCount: parseReviewCount(text),
+    rating,
+    reviewCount,
     origin,
-    sizes: extractSizes(text),
+    sizes,
   };
 }
 
