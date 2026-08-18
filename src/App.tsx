@@ -7,7 +7,7 @@ import CookieConsent from './components/CookieConsent';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
-import { loadStorefrontCatalog, type CatalogProduct, type CatalogCategory } from './services/catalog';
+import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -29,11 +29,16 @@ export interface ProductVariant {
 export interface Product {
   id: string; name: string; shortDesc: string; description: string; price: number;
   originalPrice: number; category: string; stock: number;
-  images: string[]; rating: number; reviews: number; isActive: boolean;
+  images: string[]; imageAlts: string[]; rating: number; reviews: number; isActive: boolean;
   brand: string; condition: string; tags: string[];
   weight: string; dimensions: string; origin: string;
   freeShipping: boolean; shippingCost: string;
   variants: ProductVariant[];
+  // Catalog Launch Phase — real merchandising data from the DB (never fake).
+  featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
+  stockStatus?: string; usInventory?: boolean;
+  seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
+  supplierSource?: string;
 }
 interface CartItem { product: Product; quantity: number; }
 interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
@@ -107,7 +112,7 @@ export {
 // ============================================================================
 // DATA
 // ============================================================================
-const DP: Omit<Product,'id'|'name'|'description'|'price'|'originalPrice'|'category'|'stock'|'images'|'rating'|'reviews'|'isActive'> = { shortDesc:'', brand:'Luxedge', condition:'New', tags:[], weight:'', dimensions:'', origin:'China', freeShipping:true, shippingCost:'0', variants:[] };
+const DP: Omit<Product,'id'|'name'|'description'|'price'|'originalPrice'|'category'|'stock'|'images'|'rating'|'reviews'|'isActive'> = { shortDesc:'', brand:'Luxedge', condition:'New', tags:[], weight:'', dimensions:'', origin:'China', freeShipping:true, shippingCost:'0', variants:[], imageAlts:[] };
 const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'1', name:'Orthopedic Memory Foam Dog Bed', shortDesc:'Joint-supporting dog bed', description:'Orthopedic memory foam dog bed with a washable, removable cover. Supports joints and relieves pressure points so your dog sleeps deeply and wakes up refreshed.', price:49.99, originalPrice:89.99, category:'Pet Beds', stock:64, images:['https://upload.wikimedia.org/wikipedia/commons/f/f4/Dog_sleeping_in_a_dog_bed.JPG'], rating:4.9, reviews:1123, isActive:true, brand:'LuxePaws', weight:'4.2 lbs', tags:['dog bed','memory foam','orthopedic'], variants:[{id:'v1',color:'Gray',size:'Medium',price:49.99,salePrice:49.99,stock:30,sku:'PB-M-GY'},{id:'v2',color:'Gray',size:'Large',price:62.99,salePrice:62.99,stock:34,sku:'PB-L-GY'}] },
   { ...DP, id:'2', name:'Interactive Cat Feather Toy', shortDesc:'Motion-activated cat teaser', description:'Motion-activated interactive feather toy that mimics prey movement. Keeps indoor cats active, entertained, and mentally stimulated for hours.', price:24.99, originalPrice:44.99, category:'Pet Toys', stock:132, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg'], rating:4.7, reviews:876, isActive:true, brand:'WhiskerWand', weight:'0.6 lbs', tags:['cat toy','interactive','feather'] },
@@ -135,56 +140,7 @@ const INIT_PRODUCTS: Product[] = [
   { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:false, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
 ];
 
-// ═══════════ 120-Product Catalog — extends the 12 featured products to a full store ═══════════
-const EXTRA_IMGS = [
-  'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg/960px-Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg',
-  'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Maltipoo_with_rope_toy_%2895554%29.jpg/960px-Maltipoo_with_rope_toy_%2895554%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg',
-];
-
-const EXTRA_PRODUCT_NAMES: Record<string, string[]> = {
-  'Dog Supplies': ['No-Pull Dog Harness', 'Reflective Dog Leash', 'Comfort Dog Collar', 'Dog Training Treat Pouch', 'Dog Raincoat Waterproof', 'Cooling Dog Vest', 'Dog Boots Anti-Slip', 'Dog Car Seat Belt', 'Dog Paw Cleaner Cup', 'Dog Whistle Trainer', 'Dog Poop Bag Holder', 'Elevated Dog Bowl Stand', 'Dog First Aid Kit', 'Dog Dental Chew Set', 'GPS Dog Tracker Collar', 'Dog Agility Tunnel'],
-  'Cat Supplies': ['Cat Tree Tower', 'Cat Window Perch', 'Cat Tunnel Play Tube', 'Cat Litter Mat', 'Cat Collar with Bell', 'Cat Grooming Glove', 'Cat Nail Clipper Kit', 'Cat Carrier Backpack', 'Catnip Toy Variety Pack', 'Cat Scratching Board', 'Cat Food Puzzle Feeder', 'Cat Water Fountain Filter', 'Cat Bed Cave Plush', 'Cat Harness Escape-Proof', 'Cat Grass Growing Kit', 'Cat Laser Pointer Toy'],
-  'Pet Beds': ['Heated Dog Bed', 'Elevated Cot Dog Bed', 'Donut Cuddler Cat Bed', 'Waterproof Outdoor Dog Bed', 'Cave Den Dog Bed', 'Pet Sofa Bed Large', 'Memory Foam Puppy Bed', 'Travel Folding Pet Bed', 'Cooling Gel Dog Bed', 'Bolster Dog Bed', 'Orthopedic Cooling Bed', 'Nest Calming Cat Bed', 'Washable Plush Pet Bed', 'Cozy Fur Lined Dog Bed', 'Fleece Cat Bed Round'],
-  'Pet Toys': ['Squeaky Plush Dog Toys', 'Rubber Chew Bone Toy', 'Tennis Ball Launcher', 'Frisbee Flying Disc', 'Cat Feather Wand Toy', 'Dog Snuffle Mat', 'Cat Laser Pointer', 'Interactive Treat Ball', 'Tug Rope Toy with Handle', 'Dog Puzzle Hide Toy', 'Cat Spring Toy Pack', 'Plush Squeaky Chicken', 'Ball Pit Cat Playpen', 'Dog Bite Ring Toy', 'Cat Toy Mouse Pack', 'Puppy Teething Toys'],
-  'Feeding & Water': ['Ceramic Pet Bowl Set', 'Non-Slip Silicone Bowl Mat', 'Collapsible Travel Pet Bowl', 'Pet Water Bottle Dispenser', 'Elevated Feeding Station', 'Smart Feeder with Camera', 'Double Stainless Bowl', 'Pet Food Storage Bin', 'Gravity Water Dispenser', 'Anti-Skid Puppy Bowl', 'Fountain Replacement Pump', 'Insulated Pet Water Bottle', 'Cascade Cat Water Fountain', 'Slow Feed Puzzle Mat', 'Stainless Pet Food Bowl', 'Portable Pet Feeder Set'],
-  'Grooming': ['Low Noise Pet Hair Dryer', 'Cordless Dog Clipper Kit', 'Pet Nail Grinder', 'Deshedding Undercoat Rake', 'Pet Shampoo Brush', 'Detangling Spray for Pets', 'Dog Toothbrush Kit', 'Pet Fur Remover Roller', 'Cat Shedding Comb', 'Grooming Scissors Set', 'Pet Cologne Freshener', 'Electric Pet Trimmer', 'Pet Bathing Massager Brush', 'Dog Ear Cleaner Kit', 'Pet Hair Catcher Towel'],
-  'Pet Accessories': ['LED Dog Collar Light', 'Custom Pet ID Tag', 'Pet Stroller', 'Pet Backpack Carrier', 'Waterproof Pet Blanket', 'Dog Seat Belt Clip', 'Pet Steps for Bed', 'Pet Car Ramp', 'Pet Safety Vest', 'Pet Fountain Travel Bowl', 'Dog Bandana Set', 'Pet GPS Tracker', 'Pet Hammock Car Seat', 'Pet Window Sill Bed'],
-};
-
-const EXTRA_BRANDS = ['LuxePaws', 'WhiskerWand', 'AquaPure', 'TrailMate', 'FurFresh', 'CatHaven', 'BowlWell', 'TravelPaw', 'PlayBone', 'SnugglePet', 'SmartFeed', 'RoadDog', 'PawPerfect', 'ZenPet', 'HappyTails', 'PetPro'];
-
-let __pid = 1000;
-const EXTRA_PRODUCTS: Product[] = Object.entries(EXTRA_PRODUCT_NAMES).flatMap(([cat, names]) =>
-  names.map((nm, i) => {
-    __pid++;
-    const base = 9.99 + ((i * 7 + cat.length * 3) % 40);
-    const price = +(base + 0.99).toFixed(2);
-    const originalPrice = +(price * (1.35 + ((i * 13) % 40) / 100)).toFixed(2);
-    return {
-      ...DP, id: String(__pid), name: nm,
-      shortDesc: `${cat} essential`, description: `${nm} — handpicked premium pet essentials from Luxedge. Quality you can trust, priced honestly, delivered to your door.`,
-      price, originalPrice, category: cat, stock: 20 + ((i * 17) % 180),
-      images: [EXTRA_IMGS[(i + cat.length) % EXTRA_IMGS.length]],
-      rating: +(4.2 + ((i * 3) % 8) / 10).toFixed(1), reviews: 20 + ((i * 29) % 420),
-      isActive: true, brand: EXTRA_BRANDS[(i + cat.length) % EXTRA_BRANDS.length],
-      weight: `${(0.4 + ((i * 5) % 25) / 10).toFixed(1)} lbs`, tags: [cat.toLowerCase(), 'premium', 'luxedge'],
-    };
-  })
-);
-
-const ALL_PRODUCTS: Product[] = [...INIT_PRODUCTS, ...EXTRA_PRODUCTS];
+// (demo catalog constants removed — the storefront is DB-driven only; INIT_PRODUCTS stays as an admin/dev fixture)
 
 // (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
 
@@ -201,7 +157,8 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     originalPrice: p.originalPrice,
     category: p.category || 'Pet Supplies',
     stock: p.stock,
-    images: p.images.length ? p.images : ['https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600'],
+    images: p.images.length ? p.images : [],
+    imageAlts: p.imageAlts || [],
     rating: 0,
     reviews: 0,
     isActive: p.isActive,
@@ -211,9 +168,27 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     weight: '',
     dimensions: '',
     origin: '',
-    freeShipping: false,
+    freeShipping: p.freeShipping,
     shippingCost: '',
-    variants: [],
+    featured: p.featured,
+    newArrival: p.newArrival,
+    saleEnabled: p.saleEnabled,
+    stockStatus: p.stockStatus,
+    usInventory: p.usInventory,
+    seoTitle: p.seoTitle,
+    seoDescription: p.seoDescription,
+    seoKeywords: p.seoKeywords,
+    supplierSource: p.supplierSource,
+    variants: (p.variants || []).map((v) => ({
+      id: v.id,
+      color: v.attributes?.color || '',
+      size: v.attributes?.size || 'One Size',
+      price: v.price ?? p.price,
+      salePrice: v.price ?? p.price,
+      stock: v.inventoryQty,
+      sku: v.sku,
+      image: v.image || undefined,
+    })),
   };
 }
 
@@ -302,6 +277,12 @@ interface Ctx {
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
   cartOpen: boolean; openCart: () => void; closeCart: () => void;
   notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
+  // Catalog Launch Phase — coupons + free-shipping strategy from the store.
+  coupon: StoreCoupon | null;
+  applyCoupon: (code: string) => string | null;
+  removeCoupon: () => void;
+  freeShippingEnabled: boolean;
+  freeShippingThreshold: number;
 }
 const AC = createContext<Ctx | null>(null);
 export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
@@ -374,7 +355,7 @@ function AppProvider({ children }: { children: ReactNode }) {
 
   // Phase 3B: load the real storefront catalog from Supabase when it is
   // configured and populated. On any failure (unconfigured, unreachable,
-  // empty DB) the demo catalog stays — the storefront never renders empty.
+  // empty DB) the catalog stays EMPTY — never demo/fallback products.
   useEffect(() => {
     let cancelled = false;
     void loadStorefrontCatalog().then((cat) => {
@@ -384,6 +365,36 @@ function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, []);
+
+  // Catalog Launch Phase — load store promotions (coupons + free-shipping
+  // strategy). Safe defaults when unavailable (no coupons, free shipping off).
+  const [promotions, setPromotions] = useState<{ coupons: StoreCoupon[]; freeShippingEnabled: boolean; freeShippingThreshold: number }>({
+    coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50,
+  });
+  const [coupon, setCoupon] = useState<StoreCoupon | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadStorefrontPromotions().then((pro) => { if (!cancelled) setPromotions(pro); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const applyCoupon = (code: string): string | null => {
+    const found = promotions.coupons.find((c) => c.code === code.trim().toUpperCase());
+    if (!found) return 'Coupon not found';
+    if (found.usageLimit != null && found.usedCount >= found.usageLimit) return 'This coupon has reached its usage limit';
+    if (found.endAt && new Date(found.endAt) < new Date()) return 'This coupon has expired';
+    setCoupon(found);
+    return null;
+  };
+  const removeCoupon = () => setCoupon(null);
+
+  // Coupon discount on the current cart (percent or fixed, min-cart respected).
+  const cartSubtotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const couponDiscount = coupon && coupon.minCartValue <= cartSubtotal
+    ? (coupon.discountType === 'percent'
+        ? Math.round(cartSubtotal * (coupon.discountValue / 100) * 100) / 100
+        : Math.min(cartSubtotal, coupon.discountValue))
+    : 0;
 
   // Persist the cart so items survive a page refresh.
   useEffect(() => {
@@ -464,9 +475,29 @@ function AppProvider({ children }: { children: ReactNode }) {
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); clearCart(); return oid; };
+  const placeOrder = (addr: string) => {
+    // Hotfix safety (Phase 4E.2A): never place an order containing a product
+    // that is not in the current customer-visible catalog. Empty/stale carts
+    // are rejected and cleared — no fake success, no purchase conversion.
+    if (cart.length === 0 || !cart.every((i) => products.some((p) => p.id === i.product.id))) {
+      clearCart();
+      removeCoupon();
+      notify('Your cart is empty or contains items that are no longer available.', 'error');
+      return '';
+    }
+    const oid = `ORD-${Date.now()}`;
+    const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+    const t = Math.max(0, Math.round((sub - couponDiscount) * 100) / 100);
+    setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]);
+    trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+    clearCart();
+    removeCoupon();
+    return oid;
+  };
+  const freeShippingEnabled = promotions.freeShippingEnabled;
+  const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -887,6 +918,7 @@ function PCardPremium({ product }: { product: Product }) {
 // Per-route document title + meta description + canonical for SEO
 function RouteTitle() {
   const { pathname } = useLocation();
+  const { products } = useApp();
   useEffect(() => {
     const brand = "Luxedge";
     const segs = pathname.split("/").filter(Boolean);
@@ -911,13 +943,14 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
-    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming. Free shipping over $50, 30-day easy returns."); }
+    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
-      const p = ALL_PRODUCTS.find((x) => x.id === decodeURIComponent(segs[1] || ""));
-      set(p ? p.name : "Product");
-      if (p) desc(p.shortDesc || p.description.slice(0, 155));
+      // Real catalog product (never the demo ALL_PRODUCTS fixture).
+      const p = products.find((x) => x.id === decodeURIComponent(segs[1] || ""));
+      set(p ? (p.seoTitle || p.name) : "Product");
+      if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
     else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — free shipping on orders over $50."); }
     else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
@@ -1475,12 +1508,19 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
 }
 
 function HomePage() {
-  const { products } = useApp();
+  const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
+  // Catalog Launch Phase — every section is REAL catalog data (no hard-coded
+  // product arrays, no fake counts). Merchandising flags are admin decisions.
   const featured = products.filter(p => p.isActive);
+  const topPicks = featured.filter(p => p.featured);
+  const newArrivals = featured.filter(p => p.newArrival);
   const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
-  const hero = featured.slice(0, 4);
+  const dogEssentials = featured.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
+  const catEssentials = featured.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
+  const hero = (topPicks.length >= 4 ? topPicks : featured).slice(0, 4);
+  const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
 
   return (
     <div className="bg-white">
@@ -1515,8 +1555,8 @@ function HomePage() {
             </div>
             {/* Trust row — factual store policies only, no invented stats */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Real customer support</div>
             </div>
           </div>
@@ -1541,7 +1581,7 @@ function HomePage() {
               <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck01 strokeWidth={1.5} size={16} /></span>
               <div>
                 <p className="text-[11px] font-bold text-luxe-black">Free Shipping</p>
-                <p className="text-[10px] text-luxe-gray">On orders $50+</p>
+                <p className="text-[10px] text-luxe-gray">{freeShippingEnabled ? `On orders $${freeShippingThreshold}+` : 'Available on select items'}</p>
               </div>
             </div>
             <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
@@ -1651,27 +1691,72 @@ function HomePage() {
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
             <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
             </div>
           </div>
         </section>
       ) : (
         <>
-          <section className="py-14 sm:py-18 bg-luxe-cream">
-            <div className="max-w-7xl mx-auto px-4">
-              <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
-              <Reveal delay={60}>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-                </div>
-              </Reveal>
-            </div>
-          </section>
+          {/* New Arrivals — real newArrival flag, admin-set */}
+          {newArrivals.length > 0 && (
+            <section className="py-14 sm:py-18 bg-luxe-cream">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {newArrivals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* Top Picks — real featured flag (admin merchandising decision) */}
+          {topPicks.length > 0 && (
+            <section className="py-14 sm:py-18 bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {topPicks.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
 
           {/* ════════ Ad: Between Product Sections ════════ */}
           <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+
+          {/* Dog Essentials — real category data */}
+          {dogEssentials.length > 0 && (
+            <section className="py-14 sm:py-18 bg-luxe-cream">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {dogEssentials.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* Cat Essentials — real category data */}
+          {catEssentials.length > 0 && (
+            <section className="py-14 sm:py-18 bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {catEssentials.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
         </>
       )}
 
@@ -1701,11 +1786,11 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ PET PARENT FAVORITES (only when the catalog has products) ════════ */}
-      {featured.length > 0 && (
+      {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
+      {deals.length > 0 && (
         <section className="py-14 sm:py-18 bg-luxe-cream">
           <div className="max-w-7xl mx-auto px-4">
-            <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
+            <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
             <Reveal delay={60}>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
@@ -1715,14 +1800,14 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ TRUST BAR ════════ */}
+      {/* ════════ TRUST BAR — truthful store policies only ════════ */}
       <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { icon: Truck01, title: 'Free Shipping $50+', desc: 'On every order over $50' },
-            { icon: RefreshCcw01, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
+            { icon: Truck01, title: freeShippingEnabled ? `Free Shipping $${freeShippingThreshold}+` : 'Fair Shipping', desc: freeShippingEnabled ? `On orders over $${freeShippingThreshold}` : 'Shipping calculated at checkout' },
+            { icon: RefreshCcw01, title: 'Returns & Support', desc: 'Help when you need it' },
             { icon: ShieldTick, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
-            { icon: Headphones01, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
+            { icon: Headphones01, title: 'Customer Support', desc: 'Real people, by email' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
               <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon strokeWidth={1.5} size={20} /></span>
@@ -1774,6 +1859,9 @@ function ShopPage() {
   const [sort, setSort] = useState('featured');
   const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
   const [minRating, setMinRating] = useState(0); // 0 = any
+  const [onlyInStock, setOnlyInStock] = useState(false);
+  const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isDeals = q.toLowerCase() === 'deal';
 
@@ -1793,11 +1881,14 @@ function ShopPage() {
     .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
     .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
+    .filter(p => !onlyInStock || p.stock > 0)
+    .filter(p => !onlyFreeShipping || p.freeShipping)
+    .filter(p => !onlyNew || p.newArrival)
     .sort((a, b) => {
       if (sort === 'price-low') return a.price - b.price;
       if (sort === 'price-high') return b.price - a.price;
-      if (sort === 'rating') return b.rating - a.rating;
-      if (sort === 'best-sellers') return (b.reviews || 0) - (a.reviews || 0);
+      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+      if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
       return 0;
     });
 
@@ -1808,9 +1899,9 @@ function ShopPage() {
 
   const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
   const pageDesc = isDeals ? 'Products with compare-at savings, updated as new deals land.' : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
-  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0);
+  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
 
-  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); nav('/shop'); };
+  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
 
   // Reusable sidebar filter block (desktop sidebar + mobile drawer)
   const FilterBlock = () => (
@@ -1840,7 +1931,20 @@ function ShopPage() {
         </select>
       </div>
       <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Rating</h3>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Availability</h3>
+        <div className="space-y-1">
+          {[['in-stock', 'In stock', onlyInStock, setOnlyInStock] as const, ['free-shipping', 'Free shipping', onlyFreeShipping, setOnlyFreeShipping] as const, ['new', 'New arrivals', onlyNew, setOnlyNew] as const].map(([id, label, active, setter]) => (
+            <button key={id} onClick={() => setter(!active)}
+              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
+                active ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
+              }`}>
+              <span className="flex items-center gap-1"><CheckCircle strokeWidth={1.5} size={12} className={active ? 'text-luxe-gold' : 'text-gray-300'} /> {label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Verified rating</h3>
         <div className="space-y-1">
           {[4.5, 4, 0].map(r => (
             <button key={r} onClick={() => setMinRating(r)}
@@ -1886,10 +1990,9 @@ function ShopPage() {
           <select value={sort} onChange={e => setSort(e.target.value)}
             className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
             <option value="featured">Featured</option>
-            <option value="best-sellers">Best Sellers</option>
+            <option value="newest">Newest</option>
             <option value="price-low">Price: Low→High</option>
             <option value="price-high">Price: High→Low</option>
-            <option value="rating">Top Rated</option>
           </select>
         </div>
       </div>
@@ -1957,17 +2060,23 @@ function ShopPage() {
 }
 
 function CartDrawer() {
-  const { cart, cartOpen, closeCart, updateQty, removeFromCart, user } = useApp();
+  const { cart, cartOpen, closeCart, updateQty, removeFromCart, user, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, notify } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
+  const [codeInput, setCodeInput] = useState('');
 
   // Close the drawer whenever the route changes (e.g. Proceed to Checkout).
   useEffect(() => { closeCart(); }, [loc.pathname, closeCart]);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const sh = sub >= 50 ? 0 : 4.99;
-  const tot = sub + sh;
-  const remaining = 50 - sub;
+  const sh = freeShippingEnabled && sub >= freeShippingThreshold ? 0 : 4.99;
+  const discount = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
+  const tot = Math.max(0, sub - discount) + sh;
+  const remaining = freeShippingEnabled ? freeShippingThreshold - sub : 0;
+  const applyCode = () => {
+    const err = applyCoupon(codeInput);
+    if (err) notify(err, 'error'); else { notify('Coupon applied'); setCodeInput(''); }
+  };
 
   const checkout = () => {
     closeCart();
@@ -2016,11 +2125,11 @@ function CartDrawer() {
             <>
               {/* Items */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                {sub < 50 ? (
+                {freeShippingEnabled ? (sub < freeShippingThreshold ? (
                   <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
                     <p className="text-[11px] text-gray-600">You're <span className="font-bold text-luxe-gold">${remaining.toFixed(2)}</span> away from free shipping</p>
                     <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
+                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / freeShippingThreshold) * 100)}%` }} />
                     </div>
                   </div>
                 ) : (
@@ -2028,7 +2137,24 @@ function CartDrawer() {
                     <CheckCircle strokeWidth={1.5} size={14} className="text-green-600 shrink-0" />
                     <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
                   </div>
-                )}
+                )) : null}
+
+                {/* Coupon (real active store coupons only) */}
+                <div className="rounded-lg border border-luxe-silver px-3 py-2.5">
+                  {coupon ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-green-700"><CheckCircle strokeWidth={1.5} size={12} className="inline mr-1" />{coupon.code} applied (−${discount.toFixed(2)})</span>
+                      <button onClick={removeCoupon} className="text-[11px] text-gray-400 hover:text-red-500">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} placeholder="Coupon code" aria-label="Coupon code"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-luxe-gold"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }} />
+                      <button onClick={applyCode} className="px-3 py-2 bg-luxe-black hover:bg-luxe-gold text-white text-xs font-semibold rounded-lg transition-colors">Apply</button>
+                    </div>
+                  )}
+                </div>
 
                 {cart.map(item => (
                   <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
@@ -2055,6 +2181,7 @@ function CartDrawer() {
               <div className="border-t border-gray-100 px-5 py-4 space-y-3">
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
+                  {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">−${discount.toFixed(2)}</span></div>}
                   <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-semibold ${sh === 0 ? 'text-green-600' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
                   <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
                 </div>
@@ -2148,7 +2275,7 @@ function CartPage() {
 }
 
 function CheckoutPage() {
-  const { cart, placeOrder, user } = useApp();
+  const { cart, placeOrder, user, coupon, freeShippingEnabled, freeShippingThreshold } = useApp();
   const nav = useNavigate();
 
   const [step, setStep] = useState(1); // 1=info, 2=payment, 3=processing, 4=done
@@ -2163,9 +2290,11 @@ function CheckoutPage() {
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const shipCost = shipMethod === 'express' ? 9.99 : (sub >= 50 ? 0 : 4.99);
-  const tax = +(sub * 0.0825).toFixed(2); // TX 8.25%
-  const total = +(sub + shipCost + tax).toFixed(2);
+  const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
+  const discountedSub = Math.max(0, sub - couponDisc);
+  const shipCost = shipMethod === 'express' ? 9.99 : (freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99);
+  const tax = +(discountedSub * 0.0825).toFixed(2); // TX 8.25% (demo — real tax in a later payment phase)
+  const total = +(discountedSub + shipCost + tax).toFixed(2);
 
   const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
   const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
@@ -2419,9 +2548,11 @@ function CheckoutPage() {
               {/* Totals */}
               <div className="border-t pt-4 space-y-2.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
+                {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">−${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {shipCost > 0 && sub < 50 && <p className="text-xs text-luxe-gold">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
+                {freeShippingEnabled && shipCost > 0 && discountedSub < freeShippingThreshold && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">

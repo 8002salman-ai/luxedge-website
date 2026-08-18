@@ -9,6 +9,7 @@ import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtract
 import { useAuthStore } from '../store/authStore';
 import ProductScout from './ProductScout';
 import AiControlCenter from './AiControlCenter';
+import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
@@ -93,6 +94,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
   const links = [
     { to: '/admin', icon: SquaresFour, label: 'Dashboard' },
     { to: '/admin/products', icon: Package, label: 'Products' },
+    { to: '/admin/promotions', icon: Tag, label: 'Promotions' },
     { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
     { to: '/admin/users', icon: UsersIcon, label: 'Users' },
     { to: '/admin/categories', icon: TreeStructure, label: 'Categories' },
@@ -300,7 +302,7 @@ function ADashboard() {
   </div>;
 }
 
-function AProducts() {
+export function _AProducts() { // superseded by CatalogAdmin.CatalogProductsPage (DB-backed)
   const { products, setProducts, notify } = useApp();
   const nav = useNavigate();
   const [delId, setDelId] = useState<string | null>(null);
@@ -329,9 +331,9 @@ function AProducts() {
 // ============================================================================
 // ADVANCED PRODUCT EDITOR (eBay-style)
 // ============================================================================
-const EMPTY_PRODUCT: Product = { id:'',name:'',shortDesc:'',description:'',price:0,originalPrice:0,category:'Dog Supplies',stock:0,images:[],rating:0,reviews:0,isActive:true,brand:'',condition:'New',tags:[],weight:'',dimensions:'',origin:'China',freeShipping:true,shippingCost:'0',variants:[] };
+const EMPTY_PRODUCT: Product = { id:'',name:'',shortDesc:'',description:'',price:0,originalPrice:0,category:'Dog Supplies',stock:0,images:[],imageAlts:[],rating:0,reviews:0,isActive:true,brand:'',condition:'New',tags:[],weight:'',dimensions:'',origin:'China',freeShipping:true,shippingCost:'0',variants:[] };
 
-function AProductEdit() {
+export function _AProductEdit() { // superseded by CatalogAdmin.CatalogProductEditor (DB-backed)
   const { id: paramId } = useParams<{ id: string }>();
   const isNew = !paramId;
   const { products, setProducts, notify } = useApp();
@@ -746,7 +748,7 @@ function ASettings() {
     serverProviderStatus().then(setEnvStatus).catch(() => setEnvStatus({ backend: 'missing', providers: [] }));
   }, []);
 
-const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false });
+const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false, integrations: false });
   const toggle = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }));
 
   const [profName, setProfName] = useState(user?.name || '');
@@ -860,6 +862,27 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
             <div><label className={L}>Confirm New Password *</label><input type="password" value={confPass} onChange={e => setConfPass(e.target.value)} className={I} placeholder="Re-enter new password" required minLength={6} /></div>
             <button type="submit" className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"><Lock size={16} />Update Password</button>
           </form>
+        </div>
+      </Accordion>
+
+      {/* Integrations — optional external assistance (Hermes / Salman OS) */}
+      <Accordion id="integrations" title="Integrations" icon={<ShareNetwork size={18} className="text-purple-500" />} open={open} toggle={toggle}>
+        <div className="pt-5 space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl border border-purple-100 bg-purple-50/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><Robot size={20} className="text-purple-600" /></div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Hermes / Salman OS</p>
+                <p className="text-xs text-gray-500">Future external research assistance — optional, completely disconnected now.</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-200 text-gray-600">DISCONNECTED · OPTIONAL</span>
+          </div>
+          <ul className="text-xs text-gray-500 space-y-1 list-disc pl-5">
+            <li>Purpose: future external research assistance only.</li>
+            <li>Cannot write Luxedge data, control publishing, block the catalog, or access the repository through this feature.</li>
+            <li>Connection requires a future owner-approved setup — nothing to configure yet.</li>
+          </ul>
         </div>
       </Accordion>
     </div>
@@ -4620,9 +4643,10 @@ export default function AdminSection() {
     {/* Nested Routes match RELATIVE to the parent /admin/* route (v6). */}
     <Routes>
       <Route path="" element={<AdminLayout><ADashboard /></AdminLayout>} />
-      <Route path="products" element={<AdminLayout><AProducts /></AdminLayout>} />
-      <Route path="products/new" element={<AdminLayout><AProductEdit /></AdminLayout>} />
-      <Route path="products/edit/:id" element={<AdminLayout><AProductEdit /></AdminLayout>} />
+      <Route path="products" element={<AdminLayout><CatalogProductsPage /></AdminLayout>} />
+      <Route path="products/new" element={<AdminLayout><CatalogProductEditor /></AdminLayout>} />
+      <Route path="products/edit/:id" element={<AdminLayout><CatalogProductEditor /></AdminLayout>} />
+      <Route path="promotions" element={<AdminLayout><CatalogPromotionsPage /></AdminLayout>} />
       <Route path="orders" element={<AdminLayout><AOrders /></AdminLayout>} />
       <Route path="users" element={<AdminLayout><AUsers /></AdminLayout>} />
       <Route path="categories" element={<AdminLayout><ACategories /></AdminLayout>} />

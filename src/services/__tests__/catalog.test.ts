@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { loadStorefrontCatalog } from '../catalog';
+import { loadStorefrontCatalog, loadStorefrontPromotions } from '../catalog';
 import { resetDbForTests, __setDbConfigForTests } from '../db';
 
 const URL = 'https://project.supabase.co';
@@ -102,5 +102,69 @@ describe('loadStorefrontCatalog', () => {
     const cat = await loadStorefrontCatalog();
     expect(cat).not.toBeNull();
     expect(cat!.products[0].name).toBe('Bed');
+  });
+
+  it('Catalog Launch: ACTIVE products are storefront-visible (status IN published/active)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'p1', name: 'Active Bed', status: 'active', price: 39.99, featured: true, new_arrival: true, free_shipping: true, sale_enabled: true, discount_type: 'percent', discount_value: 10, price_amount: 3999 },
+          { id: 'p2', name: 'Published Legacy', status: 'published', price: 19.99 },
+          { id: 'p3', name: 'Draft Item', status: 'draft', price: 9.99 },
+          { id: 'p4', name: 'Inactive Item', status: 'inactive', price: 8.99 },
+        ]));
+      }
+      if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/product_variants')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const cat = await loadStorefrontCatalog();
+    expect(cat!.products.map((p) => p.id).sort()).toEqual(['p1', 'p2']);
+    const active = cat!.products.find((p) => p.id === 'p1')!;
+    expect(active.featured).toBe(true);
+    expect(active.newArrival).toBe(true);
+    expect(active.freeShipping).toBe(true);
+    // percent sale applied to the storefront price
+    expect(active.price).toBeCloseTo(35.99, 5);
+  });
+});
+
+describe('loadStorefrontPromotions', () => {
+  beforeEach(() => {
+    resetDbForTests();
+    __setDbConfigForTests({ url: URL, anonKey: ANON });
+  });
+  afterEach(() => {
+    __setDbConfigForTests(undefined);
+    resetDbForTests();
+    vi.unstubAllGlobals();
+  });
+
+  it('loads active coupons + free-shipping settings', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/coupons')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'c1', code: 'WELCOME10', discount_type: 'percent', discount_value: 10, min_cart_value: 25, eligible_product_ids: [], eligible_category_ids: [], end_at: null, usage_limit: 100, used_count: 3, is_active: true },
+        ]));
+      }
+      if (url.includes('/store_settings')) {
+        return Promise.resolve(jsonResponse([{ key: 'free_shipping', value: { freeShippingEnabled: true, freeShippingThreshold: 75 } }]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const p = await loadStorefrontPromotions();
+    expect(p.coupons.length).toBe(1);
+    expect(p.coupons[0].code).toBe('WELCOME10');
+    expect(p.coupons[0].discountValue).toBe(10);
+    expect(p.freeShippingEnabled).toBe(true);
+    expect(p.freeShippingThreshold).toBe(75);
+  });
+
+  it('degrades to safe defaults when promotions are unavailable (no fake coupons/shipping)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('unreachable')));
+    const p = await loadStorefrontPromotions();
+    expect(p.coupons).toEqual([]);
+    expect(p.freeShippingEnabled).toBe(false);
   });
 });
