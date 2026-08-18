@@ -159,7 +159,9 @@ export class CjServerRunBudget implements CjRunContext {
 // ---------------------------------------------------------------------------
 
 interface SupplierApiRunRow {
-  id: string;
+  /** RPC/table PK column is `id`; the start RPC returns it as `run_id`. */
+  id?: string;
+  run_id?: string;
   provider: string;
   status: string;
   requested_budget: number;
@@ -237,8 +239,11 @@ export class CjDurableRunLedger {
       signal: AbortSignal.timeout(10_000),
     });
     const rows = await this.read(res);
-    if (!res.ok || !rows[0]?.id) throw ledgerUnavailable(`start RPC failed (HTTP ${res.status})`);
-    return { runId: String(rows[0].id), usage: usageFromRow(rows[0]) };
+    // The start RPC returns the PK as `run_id` (snake_case per the migration's
+    // returns table(...)); direct table reads use `id`. Accept both.
+    const runId = rows[0]?.run_id ?? rows[0]?.id;
+    if (!res.ok || !runId) throw ledgerUnavailable(`start RPC failed (HTTP ${res.status})`);
+    return { runId: String(runId), usage: usageFromRow(rows[0]) };
   }
 
   /**

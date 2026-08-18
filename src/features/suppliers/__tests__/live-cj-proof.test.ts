@@ -27,8 +27,7 @@ import type {
 } from '../types';
 import { SupabaseAdapter } from '../../../services/db';
 import { runMarketIntelligenceJob } from '../../scout/engine';
-import { runSupplierSearch } from '../../scout/supplierSearch';
-import { parseHtmlPage } from '../../ai/importer';
+import { parseHtmlPage, isProxyErrorText } from '../../ai/importer';
 
 const ENABLED = process.env.RUN_LIVE_CJ_PROOF === '1';
 
@@ -241,6 +240,10 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         });
         if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
         const raw = await res.text();
+        // A proxy error page (Jina "Warning: … URL returned error 429…") is NOT
+        // a page — a rate-limited Target/Walmart page must never count as
+        // product evidence (Phase 4E honesty fix).
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
         const parsed = parseHtmlPage(raw);
         if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
         return { text: parsed.text, images: parsed.images || [] };
@@ -264,11 +267,22 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         db,
         fetchPage,
         aiCall,
+        // Phase 4E: site-restricted retailer discovery — exact product pages
+        // from Chewy/Target/Walmart feed the evidence pack (market evidence
+        // only; no CJ supplier points).
+        retailDomains: ['chewy.com', 'target.com', 'walmart.com'],
         onProgress: (m) => console.log(`[mi] ${m}`),
       });
       console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
-      console.log(`[mi] evidence pack: discovered ${mi.evidence.discoveredUrls} URLs · selected ${mi.evidence.selectedUrls.length} · extracts ok ${mi.evidence.successfulExtracts} · failed ${mi.evidence.failedExtracts} · domains ${mi.evidence.independentDomains} · prices ${mi.evidence.priceEvidenceCount} · ratings ${mi.evidence.ratingEvidenceCount} · availability ${mi.evidence.availabilityEvidenceCount}`);
-      console.log(`[mi] evidence quality: ${mi.evidence.evidenceQuality.toUpperCase()} — ${mi.evidence.evidenceQualityReasons.join('; ')}`);
+      const ev = mi.evidence;
+      console.log(`[mi] evidence pack: discovered ${ev.discoveredUrls} URLs · selected ${ev.selectedUrls.length} · extracts ok ${ev.successfulExtracts} · failed ${ev.failedExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · reviews ${ev.reviewCountEvidenceCount} pages (${ev.totalObservedReviews} total)`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+      if (ev.retail) {
+        console.log(`[mi] retail discovery: ${ev.retail.searchRequests} search requests · domains attempted ${ev.retail.domainsAttempted.join(',')} · with results ${ev.retail.domainsWithResults.join(',') || 'NONE'}`);
+      }
+      if (ev.rejectedUrls.length) {
+        console.log(`[mi] rejected pages (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url} → ${r.reason}`).join(' | ')}`);
+      }
 
       const job = await db.get<Record<string, unknown>>('agent_jobs', mi.jobId);
       const out = (job && job.output && typeof job.output === 'object' ? job.output : {}) as Record<string, unknown>;
@@ -276,57 +290,32 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         ? (out.recommendedSearchQueries as string[]).filter((r) => typeof r === 'string' && r.trim())
         : [];
 
-      // 4) MARKET GATE — if the grounded score < 60, do NOT run CJ (report
-      //    winner NONE honestly; no category looping).
+      // 4) MARKET GATE (Phase 4E spec §12/§13): if the EVIDENCE QUALITY gate
+      //    failed, STOP (DeepSeek was already skipped — credits saved).
+      if (mi.evidence.evidenceQuality === 'insufficient') {
+        console.log(`MARKET EVIDENCE INSUFFICIENT — CJ search NOT run, DeepSeek NOT called.`);
+        console.log(`[result] ${JSON.stringify({ winner: 'NONE', evidenceQuality: 'insufficient', marketScore: mi.marketScore, reason: mi.evidence.evidenceQualityReasons.join('; '), miJobId: mi.jobId, evidence: mi.evidence })}`);
+        return;
+      }
+
+      // 5) Evidence sufficient → the engine already ran ONE grounded DeepSeek
+      //    call (aiUsed=true). If the Market Score >= 60: STOP and report
+      //    MARKET-GROUNDED CJ SEARCH READY — do NOT run CJ in Phase 4E.
       if (mi.marketScore === null || mi.marketScore < 60 || recs.length === 0) {
         console.log(`MARKET OPPORTUNITY NOT STRONG ENOUGH (score=${mi.marketScore ?? 'UNKNOWN'}) — CJ search NOT run.`);
         console.log(`[result] ${JSON.stringify({ winner: 'NONE', marketScore: mi.marketScore, reason: 'market gate not met', miJobId: mi.jobId, evidence: mi.evidence })}`);
         return;
       }
 
-      const query = recs[0];
-      console.log(`[mi] selected persisted hypothesis: "${query}" (of ${recs.length} recommendations)`);
-
-      // 5) ONE controlled market-grounded CJ search (durable 250-pt ledger).
-      const result = await runSupplierSearch({
-        adapter,
-        search: {
-          query,
-          market: 'US',
-          maxResults: 40,
-          marketContext: { marketAnalysisId: mi.jobId, hypothesis: query, opportunity: String(out.opportunity ?? '') },
-        },
-        db,
-        onProgress: (m) => console.log(`[cj] ${m}`),
-      });
-
-      const usage = await adapter.getRunUsage();
+      console.log(`MARKET-GROUNDED CJ SEARCH READY — score ${mi.marketScore} >= 60 with sufficient evidence. CJ NOT run in Phase 4E (owner/next phase authorizes the first paid supplier run).`);
       console.log(`[result] ${JSON.stringify({
+        winner: 'NONE',
+        marketScore: mi.marketScore,
         miJobId: mi.jobId,
-        marketScore: result.marketContext?.marketScore,
-        queryProvenance: result.marketContext?.queryProvenance,
-        searched: result.searched,
-        duplicates: result.duplicates,
-        prefilterRejected: result.prefilterRejected,
-        researched: result.researched,
-        rejected: result.rejected,
-        productShortlisted: result.productShortlisted,
-        qaPassed: result.qaPassed,
-        businessQualified: result.businessQualified,
-        health: result.health,
-        code: result.code ?? null,
-        warning: result.warning ?? null,
-        runUsage: usage,
-        winner: result.businessQualified > 0 ? 'YES' : 'NONE',
-        topCandidates: result.businessQualifiedCandidates.slice(0, 5).map((c) => ({
-          title: c.title, productScore: c.productScore, marketScore: c.marketScore,
-          finalOpportunityScore: c.finalOpportunityScore, landedCostConfidence: c.landedCostConfidence,
-          usaDeliveryConfidence: c.usaDeliveryConfidence, marginPct: c.marginPct,
-        })),
+        evidence: mi.evidence,
+        cjSearchRun: 'NOT RUN (Phase 4E gate)' ,
+        cjProductPointsConsumed: 0,
       }, null, 2)}`);
-
-      // Assertions are informational for the live proof; the run must not throw.
-      expect(result.code).toBeUndefined();
     } finally {
       if (tempUserId) {
         const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });

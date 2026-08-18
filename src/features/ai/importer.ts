@@ -18,6 +18,19 @@ function looksLikeBotPage(raw: string): boolean {
   );
 }
 
+/**
+ * Jina Reader returns "Warning: <host> URL returned error <code>: ..." when
+ * the target page failed (429/403/404/…). That text is NOT a page and must
+ * never be counted as product evidence (Phase 4E live finding: a 429
+ * "Warning:" text was being marked as availability evidence).
+ */
+const JINA_ERROR_RE = /^Warning:\s+.+?\bURL returned error\s+\d{3}\b/im;
+
+/** True when fetched text is a proxy error page, not a real page. */
+export function isProxyErrorText(text: string): boolean {
+  return JINA_ERROR_RE.test(text) || looksLikeBotPage(text);
+}
+
 interface FetchedPage {
   text: string;
   images: string[];
@@ -45,6 +58,8 @@ async function fetchViaServerProxy(url: string): Promise<string | null> {
     if (/<!doctype html/i.test(text)) return null;
     // Guard against the dev server leaking local source files (import statements).
     if (/^import\s+\{/.test(text.trim())) return null;
+    // A Jina/bot error page is NOT the requested page — treat as a proxy failure.
+    if (isProxyErrorText(text)) return null;
     return text;
   } catch {
     return null;
@@ -78,7 +93,7 @@ export async function fetchPageContent(url: string): Promise<string> {
       if (r.ok) {
         const raw = await r.text();
         if (raw.length < 200) { lastErr = `${label}: empty response`; continue; }
-        if (looksLikeBotPage(raw)) { lastErr = `${label}: bot check`; continue; }
+        if (isProxyErrorText(raw)) { lastErr = `${label}: proxy error/bot page`; continue; }
         if (label === 'corsproxy' && raw.toLowerCase().includes('fix cors errors')) { lastErr = `${label}: proxy homepage`; continue; }
         const parsed = parseHtmlPage(raw);
         if (isAli && label === 'Jina Reader') {

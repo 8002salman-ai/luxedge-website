@@ -27,6 +27,7 @@ import { runScoutResearch, runMarketIntelligenceJob, qaCandidate } from '../feat
 import type { QAOutcome } from '../features/scout/engine';
 import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
+import { RETAIL_EVIDENCE_DOMAINS } from '../features/scout/retailDiscovery';
 import { runSupplierSearch } from '../features/scout/supplierSearch';
 import { CjSupplierAdapter } from '../features/suppliers/cj/adapter';
 import type { SupplierHealth } from '../features/suppliers/types';
@@ -124,6 +125,8 @@ export default function ProductScout() {
   const [miQuery, setMiQuery] = useState('dog toys');
   const [miMarket, setMiMarket] = useState('USA');
   const [miRunning, setMiRunning] = useState(false);
+  // Phase 4E — retailer-restricted evidence discovery (site:chewy/target/walmart).
+  const [miRetail, setMiRetail] = useState(true);
   const [miLog, setMiLog] = useState<string[]>([]);
   const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number } } | null>(null);
   const [autonomyCfg, setAutonomyCfg] = useState<AutonomyConfig>(() => loadAutonomyConfig());
@@ -487,6 +490,9 @@ export default function ProductScout() {
         // exact product pages → fetch → extract) so price/rating/availability
         // signals participate; DeepSeek runs only after the quality gate.
         fetchPage: scoutFetchPage,
+        // Phase 4E: site-restricted retailer discovery by default so the pack
+        // gets exact product pages (market evidence only).
+        retailDomains: miRetail ? RETAIL_EVIDENCE_DOMAINS : undefined,
         onProgress,
       });
       const ev = result.evidence;
@@ -1261,6 +1267,10 @@ export default function ProductScout() {
               {miRunning ? <Loader2 size={15} className="animate-spin" /> : <Brain size={15} />} {miRunning ? 'Analyzing…' : 'Run Analysis'}
             </button>
           </div>
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            <input type="checkbox" checked={miRetail} onChange={(e) => setMiRetail(e.target.checked)} disabled={miRunning} className="rounded" />
+            Retailer-restricted discovery (Chewy · Target · Walmart) — exact product pages for the evidence pack
+          </label>
           {miResult && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
               <p className="text-sm font-bold text-indigo-800">Market Opportunity Score: <span className="text-xl">{miResult.marketScore}</span>/100</p>

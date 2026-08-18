@@ -59,6 +59,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         lastErr = `${label}: too little content`;
         continue;
       }
+      // Jina Reader returns "Warning: <host> URL returned error <code>: ..."
+      // for failed pages (429/403/404/…). That is NOT a page — it must never
+      // be returned as successful content (Phase 4E honesty fix).
+      if (/^Warning:\s+.+?\bURL returned error\s+\d{3}\b/im.test(text)) {
+        lastErr = `${label}: proxy error page (target returned an error)`;
+        continue;
+      }
       sendText(res, 200, text);
       return;
     } catch (e) {

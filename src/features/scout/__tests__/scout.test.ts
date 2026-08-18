@@ -629,9 +629,11 @@ describe('market intelligence (Phase 4B)', () => {
   it('normalizes discovery results into durable market signals with statuses', () => {
     const s = signalsFromDiscovery({ query: 'dog toys', market: 'USA', maxResults: 20 }, { query: 'dog toys', rawLinks: [], urls: ['https://a.com/p1', 'https://b.com/p2'], duplicates: 2, filtered: 3 }, 't');
     expect(s.length).toBeGreaterThanOrEqual(2);
-    const pattern = s.find((x) => x.signalType === 'search_pattern');
+    // Phase 4E: search-breadth signal is honest market-supply visibility.
+    const pattern = s.find((x) => x.signalType === 'search_breadth');
     expect(pattern?.confidence).toBe('verified');
     expect(pattern?.summary).toContain('2 product-page URLs');
+    expect(pattern?.summary).toContain('NOT sales or demand');
     expect(pattern?.limitations.length).toBeGreaterThan(0);
   });
 

@@ -39,16 +39,18 @@ export interface CollectSignalsOptions {
 export function signalsFromDiscovery(q: { query: string; market?: string; maxResults?: number }, result: DiscoverResult, at: string): MarketSignal[] {
   const signals: MarketSignal[] = [];
 
-  // Search pattern signal — how many product pages surfaced for this query.
+  // Search-breadth signal — how many product pages surfaced for this query.
+  // Phase 4E honesty: this is search-result breadth / market-supply
+  // visibility, NOT sales, orders, search volume, or consumer demand.
   signals.push({
     id: newId(),
-    signalType: 'search_pattern',
+    signalType: 'search_breadth',
     source: 'DuckDuckGo HTML search',
     sourceUrl: `https://html.duckduckgo.com/html/?q=${encodeURIComponent([q.query, q.market].filter(Boolean).join(' '))}`,
     observedAt: at,
-    summary: `Query "${q.query}"${q.market ? ` (${q.market})` : ''} surfaced ${result.urls.length} product-page URLs (${result.duplicates} duplicates dropped, ${result.filtered} non-product pages filtered).`,
+    summary: `Query "${q.query}"${q.market ? ` (${q.market})` : ''} surfaced ${result.urls.length} product-page URLs (${result.duplicates} duplicates dropped, ${result.filtered} non-product pages filtered) — search-result breadth / market-supply visibility, NOT sales or demand.`,
     confidence: result.warning ? 'inferred' : 'verified',
-    limitations: 'Search results are a snapshot at collection time; search engines personalize and may include ads/bias.',
+    limitations: 'Search results are a snapshot at collection time; search engines personalize and may include ads/bias. URL counts are NOT literal consumer demand (no sales/orders/search-volume data).',
   });
 
   // Competition signal from raw link diversity.
@@ -75,13 +77,21 @@ export function signalsFromExtracts(items: { title: string; extract: PageExtract
   const signals: MarketSignal[] = [];
   const prices: number[] = [];
   let rated = 0;
+  let reviewed = 0;
+  let totalReviews = 0;
   let available = 0;
+  let availabilityKnown = 0;
 
   for (const item of items) {
     const extract = item.extract;
     if (extract.price !== null) prices.push(extract.price);
     if (extract.rating !== null || extract.reviewCount !== null) rated++;
+    if (extract.reviewCount !== null) {
+      reviewed++;
+      if (extract.reviewCount > 0) totalReviews += extract.reviewCount;
+    }
     if (extract.availability === 'available') available++;
+    if (extract.availability === 'available' || extract.availability === 'unavailable') availabilityKnown++;
   }
 
   if (prices.length) {
@@ -106,7 +116,7 @@ export function signalsFromExtracts(items: { title: string; extract: PageExtract
     source: 'Researched product pages',
     sourceUrl: '',
     observedAt: at,
-    summary: `${rated} of ${items.length} researched pages carried rating/review evidence.`,
+    summary: `${rated} of ${items.length} researched pages carried rating/review evidence${reviewed ? `; ${reviewed} pages with review counts (${totalReviews} total observed — never republished as Luxedge reviews)` : ''}.`,
     confidence: items.length ? 'verified' : 'unknown',
     limitations: 'Ratings on source pages are the suppliers\' own; Luxedge never republishes them as customer reviews.',
   });
@@ -117,9 +127,9 @@ export function signalsFromExtracts(items: { title: string; extract: PageExtract
     source: 'Researched product pages',
     sourceUrl: '',
     observedAt: at,
-    summary: `${available} of ${items.length} researched pages showed positive availability.`,
+    summary: `${available} of ${items.length} researched pages showed positive availability (${availabilityKnown} pages with explicit availability evidence).`,
     confidence: items.length ? 'verified' : 'unknown',
-    limitations: 'Availability is a point-in-time observation.',
+    limitations: 'Availability is a point-in-time observation; explicit unavailable/out-of-stock is also evidence of the state observed.',
   });
 
   return signals;
@@ -144,14 +154,15 @@ export function scoreMarketOpportunity(input: MarketScoreInput): { score: number
   const { signals, category } = input;
   const breakdown: Record<string, { points: number; max: number; note: string }> = {};
 
-  // Demand breadth (30): how many distinct product concepts surfaced.
-  const pattern = signals.find((s) => s.signalType === 'search_pattern');
+  // Market-supply breadth (30): how many distinct product pages surfaced.
+  // Phase 4E honesty: URL counts are market-supply visibility, NOT demand.
+  const pattern = signals.find((s) => s.signalType === 'search_breadth') || signals.find((s) => s.signalType === 'search_pattern');
   const urlCount = pattern ? parseInt((pattern.summary.match(/surfaced (\d+) product-page/) || [])[1] || '0', 10) : 0;
-  const demand = Math.min(30, urlCount >= 15 ? 30 : urlCount >= 8 ? 22 : urlCount >= 4 ? 14 : urlCount >= 1 ? 6 : 0);
+  const supply = Math.min(30, urlCount >= 15 ? 30 : urlCount >= 8 ? 22 : urlCount >= 4 ? 14 : urlCount >= 1 ? 6 : 0);
   breakdown.demand = {
-    points: demand,
+    points: supply,
     max: 30,
-    note: `${urlCount} product URLs surfaced (search evidence)`,
+    note: `${urlCount} product URLs surfaced (market-supply visibility, not sales/search volume)`,
   };
 
   // Price-band viability (20): verified price range inside a sellable band.
@@ -299,7 +310,7 @@ export async function runMarketIntelligence(
   const base: Omit<MarketAnalysis, 'aiUsed' | 'model' | 'analyzedAt'> = {
     marketOpportunityScore: deterministic.score,
     trendConfidence: deterministic.score >= 60 ? 'inferred' : 'unknown',
-    demandEvidence: input.signals.find((s) => s.signalType === 'search_pattern')?.summary || '',
+    demandEvidence: (input.signals.find((s) => s.signalType === 'search_breadth') || input.signals.find((s) => s.signalType === 'search_pattern'))?.summary || '',
     competitionLevel: (() => {
       const c = input.signals.find((s) => s.signalType === 'competition');
       const n = c ? parseInt((c.summary.match(/(\d+) distinct/) || [])[1] || '0', 10) : 0;
@@ -323,7 +334,7 @@ export async function runMarketIntelligence(
     const evidenceText = input.signals
       .map((s) => `- [${s.confidence}] ${s.signalType}: ${s.summary} (source: ${s.sourceUrl || s.source})`)
       .join('\n');
-    const prompt = `You are Luxedge's USA pet-market analyst. Reason ONLY over the evidence below — never invent facts.\n\nEVIDENCE:\n${evidenceText}\n\nCategory signal: ${input.category || 'unknown'}\n\nReturn STRICT JSON (no markdown):\n{\n  "marketOpportunityScore": 0-100,\n  "trendConfidence": "verified|inferred|unknown",\n  "demandEvidence": "short summary of what the evidence supports",\n  "competitionLevel": "low|medium|high|unknown",\n  "customerPainPoint": "string or null",\n  "priceBand": {"min": number, "max": number} or null,\n  "risks": ["..."],\n  "recommendedSearchQueries": ["..."],\n  "reasoningSummary": "concise — no chain of thought"\n}`;
+    const prompt = `You are Luxedge's USA pet-market analyst. Reason ONLY over the evidence below — never invent facts.\n\nIMPORTANT LIMITATION: URL counts and page counts in the evidence are search-result breadth / market-supply visibility snapshots — they are NOT sales, orders, search volume, or consumer demand. Do not present them as demand. If real demand evidence (ratings/reviews/availability across pages) is missing, say so and keep the score honest.\n\nEVIDENCE:\n${evidenceText}\n\nCategory signal: ${input.category || 'unknown'}\n\nReturn STRICT JSON (no markdown):\n{\n  "marketOpportunityScore": 0-100,\n  "trendConfidence": "verified|inferred|unknown",\n  "demandEvidence": "short summary of what the evidence supports",\n  "competitionLevel": "low|medium|high|unknown",\n  "customerPainPoint": "string or null",\n  "priceBand": {"min": number, "max": number} or null,\n  "risks": ["..."],\n  "recommendedSearchQueries": ["..."],\n  "reasoningSummary": "concise — no chain of thought"\n}`;
     const raw = await aiCall(prompt, input.model);
     const parsed = parseMarketAnalysis(raw);
     if (parsed) {

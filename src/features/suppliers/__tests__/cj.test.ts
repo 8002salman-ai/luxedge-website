@@ -1209,7 +1209,17 @@ function mockSupabaseLedger(state: Map<string, MockRunRow>) {
         paid_retries: 0, denied_attempts: 0,
       };
       state.set(row.id, row);
-      return ok([row]);
+      // Mirror the REAL migration: the start RPC returns the PK as `run_id`
+      // (snake_case) — there is NO `id` column in its return table. The server
+      // ledger must read run_id (Phase 4E live finding: a genuine bug where
+      // the server read .id and the proxy failed with HTTP 200 + no runId).
+      return ok([{
+        run_id: row.id, provider: row.provider, status: row.status,
+        requested_budget: row.requested_budget, hard_budget: row.hard_budget,
+        reserved_points: row.reserved_points, list_attempts: row.list_attempts,
+        detail_attempts: row.detail_attempts, freight_attempts: row.freight_attempts,
+        paid_retries: row.paid_retries, denied_attempts: row.denied_attempts,
+      }]);
     }
 
     // ---------------- reserve RPC: DB derives cost; caller NEVER supplies it ----------------

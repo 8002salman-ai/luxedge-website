@@ -13,7 +13,8 @@ import type { DbAdapter } from '../../../services/db';
 import type { FetchedSourcePage, PageExtract } from '../types';
 import { extractPageFacts } from '../extract';
 import {
-  selectEvidencePages, buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence,
+  selectEvidencePages, selectEvidencePagesDetailed, buildMarketEvidencePack,
+  assessEvidenceQuality, countExtractEvidence, validateExactProduct,
   DEFAULT_EVIDENCE_QUALITY, type EvidenceCounts,
 } from '../marketEvidence';
 import { NoopMarketDemandAdapter, collectDemandSignals } from '../marketDemand';
@@ -148,6 +149,91 @@ describe('selectEvidencePages (Phase 4D)', () => {
     // Canonical duplicates removed.
     expect(selected.filter((u) => u.includes('/product/a')).length).toBe(1);
   });
+
+  it('round-robins across domains: one strong URL per domain first (Phase 4E test A)', () => {
+    const urls = [
+      'https://www.chewy.com/chewy-1/dp/1', 'https://www.chewy.com/chewy-2/dp/2',
+      'https://www.chewy.com/chewy-3/dp/3', 'https://www.chewy.com/chewy-4/dp/4',
+      'https://www.chewy.com/chewy-5/dp/5',
+      'https://www.target.com/p/target-1/-/A-1', 'https://www.target.com/p/target-2/-/A-2',
+      'https://www.walmart.com/ip/walmart-1/1', 'https://www.walmart.com/ip/walmart-2/2',
+    ];
+    const selected = selectEvidencePages(urls, 6);
+    const hosts = selected.map((u) => new URL(u).hostname.replace(/^www\./, '').toLowerCase());
+    // maxPages=6 with 3 domains ⇒ exactly 2 per domain, >=3 domains present.
+    expect(new Set(hosts).size).toBeGreaterThanOrEqual(3);
+    expect(selected).toHaveLength(6);
+    const count = (h: string) => hosts.filter((x) => x === h).length;
+    expect(count('chewy.com')).toBe(2);
+    expect(count('target.com')).toBe(2);
+    expect(count('walmart.com')).toBe(2);
+  });
+
+  it('enforces maxPerDomain so one retailer cannot occupy the whole pack (Phase 4E test B)', () => {
+    const urls = [
+      'https://www.chewy.com/c1/dp/1', 'https://www.chewy.com/c2/dp/2', 'https://www.chewy.com/c3/dp/3',
+      'https://www.chewy.com/c4/dp/4', 'https://www.chewy.com/c5/dp/5',
+      'https://www.target.com/p/t1/-/A-1', 'https://www.target.com/p/t2/-/A-2', 'https://www.target.com/p/t3/-/A-3',
+    ];
+    const { selected, rejected } = selectEvidencePagesDetailed(urls, 8, 2);
+    const hosts = selected.map((u) => new URL(u).hostname.replace(/^www\./, '').toLowerCase());
+    expect(hosts.filter((h) => h === 'chewy.com').length).toBeLessThanOrEqual(2);
+    expect(hosts.filter((h) => h === 'target.com').length).toBeLessThanOrEqual(2);
+    // Excess Chewy URLs are rejected with the exact quota reason.
+    expect(rejected.some((r) => r.reason.includes('domain quota reached'))).toBe(true);
+    expect(selected).toHaveLength(4); // 2 chewy + 2 target (walmart absent)
+  });
+
+  it('returns exact rejection reasons for category/search/listicle URLs (Phase 4E test H)', () => {
+    const { selected, rejected } = selectEvidencePagesDetailed([
+      'https://www.chewy.com/b/toys-315',                            // browse
+      'https://www.target.com/c/dog-toys-supplies-pets/-/N-5xt3f',   // browse
+      'https://allamerican.org/lists/cat-toys',                      // listicle
+      'https://retailer.com/product/real-thing',                     // product
+    ], 8);
+    expect(selected).toEqual(['https://retailer.com/product/real-thing']);
+    expect(rejected.map((r) => r.reason)).toEqual(expect.arrayContaining([
+      'retailer browse/search URL',
+      'listicle/collection/guide URL',
+    ]));
+  });
+
+  it('rejects the host-specific collection/search URLs found in the live proof (Phase 4E test H2)', () => {
+    const { selected, rejected } = selectEvidencePagesDetailed([
+      'https://www.chewy.com/deals/dog-travel-accessories-and-gear-3419374', // Chewy deals page
+      'https://www.chewy.com/f/mobile-dog-gear-dog-carriers-travel_c371_f1v262866', // Chewy filter page
+      'https://www.target.com/s/dog+travel',                                  // Target search
+      'https://www.walmart.com/c/kp/dog-travel-accessories',                  // Walmart category
+      'https://www.target.com/p/petami-dog-travel-bag/-/A-91561719',          // exact product
+    ], 8);
+    expect(selected).toEqual(['https://www.target.com/p/petami-dog-travel-bag/-/A-91561719']);
+    expect(rejected.map((r) => r.reason)).toEqual(expect.arrayContaining([
+      'retailer browse/search URL',
+      'retailer collection/filter URL (chewy /f/)',
+      'retailer search URL (target /s/)',
+      'retailer category URL (walmart /c/kp/)',
+    ]));
+  });
+
+  it('exact-product validation: listicle with a price string is NOT usable (Phase 4E test E)', () => {
+    // A URL that passes URL-level selection but whose CONTENT is a roundup:
+    // title + a single price-like string, no other product signals.
+    const check = validateExactProduct({
+      title: 'Best Cat Toys 2024', price: 19.99, images: [], availability: 'unknown',
+      shippingDays: null, freeShipping: false, rating: null, reviewCount: null, origin: null, sizes: null,
+    });
+    expect(check.usable).toBe(false);
+    expect(check.reason).toContain('1 of 2 required product signals');
+  });
+
+  it('exact-product validation: title + price + availability is usable (Phase 4E test F)', () => {
+    const check = validateExactProduct({
+      title: 'KONG Classic Dog Toy', price: 11.96, images: ['https://img/1.jpg'], availability: 'available',
+      shippingDays: { min: 3, max: 5 }, freeShipping: false, rating: 4.8, reviewCount: 1200, origin: 'USA', sizes: ['L'],
+    });
+    expect(check.usable).toBe(true);
+    expect(check.reason).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -199,8 +285,23 @@ describe('buildMarketEvidencePack (Phase 4D)', () => {
     const c = countExtractEvidence(extracts);
     expect(c.priceEvidenceCount).toBe(2);
     expect(c.ratingEvidenceCount).toBe(1);
-    expect(c.availabilityEvidenceCount).toBe(2);
+    // Phase 4E: availabilityEvidenceCount = EXPLICIT availability (available OR
+    // unavailable); availableCount = positive availability only.
+    expect(c.availabilityEvidenceCount).toBe(3);
+    expect(c.availableCount).toBe(2);
+    expect(c.unavailableCount).toBe(1);
     expect(c.usablePages).toBe(3);
+  });
+
+  it('UNKNOWN availability increments neither count (Phase 4E semantics)', () => {
+    const extracts = [
+      { title: 'A', extract: { ...extractPageFacts(page('A', 12.99, 'available')), availability: 'unknown' as const } },
+      { title: 'B', extract: extractPageFacts(page('B', 9.99, 'available')) },
+    ];
+    const c = countExtractEvidence(extracts);
+    expect(c.availabilityEvidenceCount).toBe(1); // only B has explicit availability
+    expect(c.availableCount).toBe(1);
+    expect(c.unavailableCount).toBe(0);
   });
 });
 
@@ -208,10 +309,12 @@ describe('buildMarketEvidencePack (Phase 4D)', () => {
 // Evidence-quality gate
 // ---------------------------------------------------------------------------
 
-describe('assessEvidenceQuality (Phase 4D)', () => {
+describe('assessEvidenceQuality (Phase 4D + 4E)', () => {
   const good: EvidenceCounts = {
     usablePages: 6, attemptedPages: 8, successfulExtracts: 6, failedExtracts: 2,
-    independentDomains: 4, priceEvidenceCount: 5, ratingEvidenceCount: 3, availabilityEvidenceCount: 5,
+    independentDomains: 4, priceEvidenceCount: 5, ratingEvidenceCount: 3,
+    reviewCountEvidenceCount: 2, totalObservedReviews: 340,
+    availabilityEvidenceCount: 5, availableCount: 4, unavailableCount: 1,
   };
 
   it('passes with sufficient evidence and reports the pack contents', () => {
@@ -238,6 +341,28 @@ describe('assessEvidenceQuality (Phase 4D)', () => {
     const loose = assessEvidenceQuality({ ...good, usablePages: 4, independentDomains: 3, priceEvidenceCount: 3, availabilityEvidenceCount: 3, ratingEvidenceCount: 0 });
     expect(loose.pass).toBe(true); // DEFAULT thresholds exactly met
     expect(DEFAULT_EVIDENCE_QUALITY).toEqual({ minPages: 4, minDomains: 3, minPriceEvidence: 3, minAvailabilityEvidence: 3, minRatingEvidence: 0 });
+  });
+
+  it('evidence gate passes with exactly 4 pages / 3 domains / 3 prices / 3 known availability (Phase 4E test I)', () => {
+    const counts: EvidenceCounts = {
+      usablePages: 4, attemptedPages: 4, successfulExtracts: 4, failedExtracts: 0,
+      independentDomains: 3, priceEvidenceCount: 3, ratingEvidenceCount: 1,
+      reviewCountEvidenceCount: 0, totalObservedReviews: 0,
+      availabilityEvidenceCount: 3, availableCount: 2, unavailableCount: 1,
+    };
+    const a = assessEvidenceQuality(counts);
+    expect(a.pass).toBe(true);
+    expect(a.missing).toHaveLength(0);
+  });
+
+  it('pack records fetched-but-not-exact-product pages in rejectedUrls with reason (Phase 4E test E2)', async () => {
+    const fetchPage = vi.fn(async () => ({ text: 'og:title Best Cat Toys 2024 Roundup\nPrice: $19.99', images: [] }));
+    const pack = await buildMarketEvidencePack({
+      urls: ['https://retailer1.com/product/listicle-content'],
+      fetchPage,
+    });
+    expect(pack.extracts).toHaveLength(0);
+    expect(pack.rejectedUrls.some((r) => r.reason.includes('required product signals'))).toBe(true);
   });
 });
 

@@ -28,10 +28,12 @@ import { applyRejectFilters, collectRiskFlags } from './reject';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from './score';
 import { signalsFromDiscovery, signalsFromExtracts, scoreMarketOpportunity, runMarketIntelligence } from './market';
 import { evidenceFingerprint } from './aiCost';
+import { newId } from './persist';
 import {
-  buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence,
+  buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence, emptyEvidenceCounts,
   type EvidenceQualityThresholds,
 } from './marketEvidence';
+import { DuckDuckGoRetailDiscoveryAdapter, type RetailEvidenceSearchResult } from './retailDiscovery';
 import { collectDemandSignals, type MarketDemandAdapter } from './marketDemand';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
@@ -315,6 +317,12 @@ export interface MarketIntelligenceOptions {
   db: DbAdapter;
   /** Injectable discovery (defaults to real DuckDuckGo path). */
   discover?: (q: { query: string; market?: string; maxResults?: number }) => Promise<DiscoverResult>;
+  /**
+   * Phase 4E: when set, discovery uses SITE-RESTRICTED retailer search
+   * (Chewy/Target/Walmart, …) instead of one generic query — exact product
+   * pages with real prices/availability. Market evidence only.
+   */
+  retailDomains?: string[];
   /** Injectable AI call (defaults to DeepSeek via secure server proxy). */
   aiCall?: (prompt: string, model?: string) => Promise<string>;
   /**
@@ -345,9 +353,16 @@ export interface MarketEvidenceSummary {
   independentDomains: number;
   priceEvidenceCount: number;
   ratingEvidenceCount: number;
+  reviewCountEvidenceCount: number;
+  totalObservedReviews: number;
   availabilityEvidenceCount: number;
+  availableCount: number;
+  unavailableCount: number;
+  rejectedUrls: { url: string; reason: string }[];
   evidenceQuality: 'sufficient' | 'insufficient' | 'not-assessed';
   evidenceQualityReasons: string[];
+  /** Phase 4E retailer-restricted discovery report (when used). */
+  retail: { searchRequests: number; domainsAttempted: string[]; domainsWithResults: string[]; rejected: { url: string; reason: string }[] } | null;
 }
 
 export interface MarketIntelligenceResult {
@@ -385,14 +400,41 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   let signals = [] as Awaited<ReturnType<typeof signalsFromDiscovery>>;
   let warning = '';
   let discoveredUrls: string[] = [];
+  let retailReport: RetailEvidenceSearchResult | null = null;
   try {
-    const result = opts.discover
-      ? await opts.discover({ query, market, maxResults: 12 })
-      : await import('./discover').then((m) => m.discoverUrls({ query, market, maxResults: 12 }));
-    discoveredUrls = result.urls;
-    signals = signalsFromDiscovery({ query, market, maxResults: 12 }, result, at);
-    if (result.warning) warning = result.warning;
-    progress(`[signals] ${query}: ${result.urls.length} product URLs discovered`);
+    if (opts.retailDomains && opts.retailDomains.length > 0) {
+      // Phase 4E — retailer-restricted discovery: site:<domain> searches so
+      // the evidence pack gets EXACT retailer product pages (market evidence
+      // only; not supplier sourcing, not CJ research).
+      const adapter = new DuckDuckGoRetailDiscoveryAdapter();
+      retailReport = await adapter.searchExactProducts({ query, market, domains: opts.retailDomains, maxPerDomain: 2, maxTotal: 8 });
+      discoveredUrls = retailReport.candidates.map((c) => c.url);
+      signals = signalsFromDiscovery(
+        { query, market, maxResults: 12 },
+        { query, rawLinks: discoveredUrls, urls: discoveredUrls, filtered: 0, duplicates: 0, warning: retailReport.warning },
+        at
+      );
+      signals.push({
+        id: newId(),
+        signalType: 'retail_coverage',
+        source: 'Site-restricted retailer search (DuckDuckGo HTML)',
+        sourceUrl: '',
+        observedAt: at,
+        summary: `Retailer-restricted search: ${retailReport.candidates.length} exact product URLs across ${retailReport.domainsWithResults.length} of ${retailReport.domainsAttempted.length} attempted retailer domains (${retailReport.searchRequests} search requests) — market-supply visibility, NOT sales or demand.`,
+        confidence: retailReport.domainsWithResults.length ? 'verified' : 'inferred',
+        limitations: 'Retailer domain coverage varies; a URL list is not consumer demand evidence.',
+      });
+      progress(`[signals] ${query}: retailer-restricted — ${retailReport.candidates.length} exact product URLs, ${retailReport.domainsWithResults.length}/${retailReport.domainsAttempted.length} domains with results`);
+      if (retailReport.warning) warning = retailReport.warning;
+    } else {
+      const result = opts.discover
+        ? await opts.discover({ query, market, maxResults: 12 })
+        : await import('./discover').then((m) => m.discoverUrls({ query, market, maxResults: 12 }));
+      discoveredUrls = result.urls;
+      signals = signalsFromDiscovery({ query, market, maxResults: 12 }, result, at);
+      if (result.warning) warning = result.warning;
+      progress(`[signals] ${query}: ${result.urls.length} product URLs discovered`);
+    }
   } catch (e) {
     warning = `Discovery failed: ${(e as Error).message}`;
     progress(`[warn] ${warning}`);
@@ -407,8 +449,9 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   if (extracts && extracts.length > 0) {
     pack = {
       selectedUrls: [],
-      extracts,
+      extracts: extracts.map((x) => ({ url: '', ...x })),
       failedUrls: [],
+      rejectedUrls: [],
       independentDomains: 0, // not derivable from extracts without source URLs
       counts: { ...countExtractEvidence(extracts), independentDomains: 0 },
     };
@@ -449,10 +492,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   // exact missing evidence. The gate is conservative + configurable.
   const gate = pack
     ? assessEvidenceQuality(pack.counts, evidenceThresholds)
-    : assessEvidenceQuality(
-        { usablePages: 0, attemptedPages: 0, successfulExtracts: 0, failedExtracts: 0, independentDomains: 0, priceEvidenceCount: 0, ratingEvidenceCount: 0, availabilityEvidenceCount: 0 },
-        evidenceThresholds
-      );
+    : assessEvidenceQuality(emptyEvidenceCounts(), evidenceThresholds);
   if (!gate.pass) {
     progress(`[evidence] MARKET EVIDENCE INSUFFICIENT — missing: ${gate.missing.join('; ')}`);
   } else {
@@ -504,7 +544,16 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     independentDomains: pack?.independentDomains ?? 0,
     priceEvidenceCount: pack?.counts.priceEvidenceCount ?? 0,
     ratingEvidenceCount: pack?.counts.ratingEvidenceCount ?? 0,
+    reviewCountEvidenceCount: pack?.counts.reviewCountEvidenceCount ?? 0,
+    totalObservedReviews: pack?.counts.totalObservedReviews ?? 0,
     availabilityEvidenceCount: pack?.counts.availabilityEvidenceCount ?? 0,
+    availableCount: pack?.counts.availableCount ?? 0,
+    unavailableCount: pack?.counts.unavailableCount ?? 0,
+    rejectedUrls: pack?.rejectedUrls ?? [],
+    retailSearchRequests: retailReport?.searchRequests ?? 0,
+    retailDomainsAttempted: retailReport?.domainsAttempted ?? [],
+    retailDomainsWithResults: retailReport?.domainsWithResults ?? [],
+    retailRejectedUrls: retailReport?.rejected ?? [],
     evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     at: new Date().toISOString(),
@@ -520,9 +569,22 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     independentDomains: pack?.independentDomains ?? 0,
     priceEvidenceCount: pack?.counts.priceEvidenceCount ?? 0,
     ratingEvidenceCount: pack?.counts.ratingEvidenceCount ?? 0,
+    reviewCountEvidenceCount: pack?.counts.reviewCountEvidenceCount ?? 0,
+    totalObservedReviews: pack?.counts.totalObservedReviews ?? 0,
     availabilityEvidenceCount: pack?.counts.availabilityEvidenceCount ?? 0,
+    availableCount: pack?.counts.availableCount ?? 0,
+    unavailableCount: pack?.counts.unavailableCount ?? 0,
+    rejectedUrls: pack?.rejectedUrls ?? [],
     evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
+    retail: retailReport
+      ? {
+          searchRequests: retailReport.searchRequests,
+          domainsAttempted: retailReport.domainsAttempted,
+          domainsWithResults: retailReport.domainsWithResults,
+          rejected: retailReport.rejected,
+        }
+      : null,
   };
 
   return {
