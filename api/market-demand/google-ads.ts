@@ -89,6 +89,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const action = (url.searchParams.get('action') || 'health').toLowerCase();
 
   // ---------------- health ----------------
+  // Truthful, minimal semantics (Phase 4G.1A §4): health reflects env presence
+  // only — not_configured when required env is missing, configured otherwise.
+  // There is NO persisted online/offline probe here; a successful
+  // historical-metrics call reports status:'success' instead. Never claim
+  // health=online unless that state is actually implemented and persisted.
   if (action === 'health') {
     const status = googleAdsEnvStatus();
     const health = status.configured ? 'configured' : 'not_configured';
@@ -96,7 +101,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       provider: 'google-ads',
       health,
       detail: status.configured
-        ? 'Google Ads credential set is configured server-side. ONLINE is only reported after a successful authorized Google API request (live proof).'
+        ? 'Google Ads credential set is configured server-side. Live reachability is proven by a successful historical-metrics request (status success), not by this presence probe.'
         : 'Google Ads credentials are not configured on the server. Add the GOOGLE_ADS_* env set server-side only (never VITE_*) for a live proof.',
       missing: status.configured ? [] : status.missing,
     });

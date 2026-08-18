@@ -6,17 +6,21 @@
 //
 //   1. OAuth refresh — exchanges GOOGLE_ADS_REFRESH_TOKEN for a short-lived
 //      access token (cached in memory only until shortly before expiry).
-//   2. KeywordPlanIdeaService.GenerateKeywordHistoricalMetrics (official REST):
-//        POST https://googleads.googleapis.com/v25/customers/{customerId}/
-//            keywordPlanIdeas:generateKeywordHistoricalMetrics
+//   2. KeywordPlanIdeaService.GenerateKeywordHistoricalMetrics (official REST
+//      custom-method HTTP binding, verified against the v25 REST reference):
+//        POST https://googleads.googleapis.com/v25/customers/{customerId}:
+//            generateKeywordHistoricalMetrics
+//      Body uses Google REST/proto JSON lower-camel field names:
+//      { keywords, geoTargetConstants, keywordPlanNetwork, language } — the
+//      customer ID lives in the URL path, never redundantly in the body.
 //      geo = geoTargetConstants/2840 (USA)
 //      language = languageConstants/1000 (English)
 //      network = GOOGLE_SEARCH
 //
-// Phase 4G.1 performs NO live Google calls (no credentials supplied). The
-// whole path is exercised against MOCKED official-shape responses in tests so
-// the owner can add credentials later and run ONE controlled proof without an
-// architecture rewrite.
+// Phase 4G.1/4G.1A performs NO live Google calls (no credentials supplied).
+// The whole path is exercised against MOCKED official-shape responses in
+// tests so the owner can add credentials later and run ONE controlled proof
+// without an architecture rewrite.
 //
 // SECURITY: secrets stay server-side. We never log/return the access token,
 // refresh token, client secret, or developer token; we never persist them to
@@ -77,13 +81,24 @@ export function googleAdsConfiguredServer(): boolean {
 }
 
 /**
- * Customer IDs must be normalized without hyphens (official API expects a
- * plain numeric string). Returns null for anything non-numeric.
+ * Strict customer-id validation (Phase 4G.1A §3): accept ONLY the valid
+ * Google Ads customer-id syntax — digits, optionally hyphen-separated in
+ * 3-3-4 groups (e.g. 1234567890 or 123-456-7890). Anything else (letters,
+ * symbols, mixed garbage) is REJECTED rather than silently stripped into a
+ * plausible-looking id. The official API expects a plain numeric string, so
+ * hyphens are removed after the format check. Returns null when invalid.
  */
 export function normalizeGoogleAdsCustomerId(raw: string | undefined | null): string | null {
   if (!raw) return null;
-  const digits = raw.replace(/[^0-9]/g, '');
-  if (!digits || digits.length < 10) return null;
+  const trimmed = raw.trim();
+  // Only the two official syntaxes are valid: 10 digits, or 3-3-4 with
+  // hyphens (e.g. 1234567890 / 123-456-7890). Anything else (letters,
+  // symbols, partial garbage) is REJECTED — never silently coerced.
+  if (!/^\d{10}$/.test(trimmed) && !/^\d{3}-\d{3}-\d{4}$/.test(trimmed)) {
+    return null;
+  }
+  const digits = trimmed.replace(/[^0-9]/g, '');
+  if (digits.length !== 10) return null;
   return digits;
 }
 
@@ -349,12 +364,15 @@ export async function generateKeywordHistoricalMetrics(
   const loginCustomerId = normalizeGoogleAdsCustomerId(env('GOOGLE_ADS_LOGIN_CUSTOMER_ID'));
   if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
 
-  const url = `${GOOGLE_ADS_BASE_URL}/customers/${customerId}/keywordPlanIdeas:generateKeywordHistoricalMetrics`;
+  // Official custom-method HTTP binding (verified v25 REST reference): the
+  // method is bound directly to the customer resource, NOT to a
+  // /keywordPlanIdeas/ sub-resource. Customer ID lives in the URL path.
+  const url = `${GOOGLE_ADS_BASE_URL}/customers/${customerId}:generateKeywordHistoricalMetrics`;
+  // Google REST/proto JSON lower-camel field names — no customer_id here.
   const payload = {
-    customer_id: customerId,
     keywords: normalized,
-    geo_target_constants: [geo],
-    keyword_plan_network: GOOGLE_ADS_NETWORK,
+    geoTargetConstants: [geo],
+    keywordPlanNetwork: GOOGLE_ADS_NETWORK,
     language,
   };
 

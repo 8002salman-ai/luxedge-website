@@ -179,6 +179,21 @@ describe('Phase 4G.1 — customer id + required config (N, H, V)', () => {
     expect(normalizeGoogleAdsCustomerId(undefined)).toBeNull();
   });
 
+  it('E) invalid customer ids are REJECTED — never silently coerced', () => {
+    // Letters/symbols + digits must NOT become a plausible-looking id.
+    expect(normalizeGoogleAdsCustomerId('abc-1234567890')).toBeNull();
+    expect(normalizeGoogleAdsCustomerId('12X-456-7890')).toBeNull();
+    expect(normalizeGoogleAdsCustomerId('123.456.7890')).toBeNull();
+    expect(normalizeGoogleAdsCustomerId('123-456')).toBeNull();
+    expect(normalizeGoogleAdsCustomerId('123456789')).toBeNull(); // 9 digits
+    expect(normalizeGoogleAdsCustomerId('12345678901')).toBeNull(); // 11 digits
+  });
+
+  it('F) valid hyphenated customer normalizes to digits', () => {
+    expect(normalizeGoogleAdsCustomerId('123-456-7890')).toBe('1234567890');
+    expect(normalizeGoogleAdsCustomerId(' 123-456-7890 ')).toBe('1234567890');
+  });
+
   it('H) GOOGLE_ADS_CLIENT_SECRET is part of the REQUIRED server config', () => {
     // Full set → configured.
     expect(googleAdsEnvStatus().configured).toBe(true);
@@ -207,21 +222,48 @@ describe('Phase 4G.1 — OAuth + official v25 request (K, L, M, O, P, Q)', () =>
     expect(out.requestId).toBe('req-123');
     expect(calls.length).toBe(2); // OAuth + ONE v25 call
     expect(calls[0].url).toBe('https://oauth2.googleapis.com/token');
-    expect(calls[1].url).toContain(`/v25/customers/1234567890/keywordPlanIdeas:generateKeywordHistoricalMetrics`);
+    // Phase 4G.1A §1: exact official custom-method HTTP binding — method bound
+    // directly to the customer resource, NOT to a /keywordPlanIdeas/ sub-path.
+    expect(calls[1].url).toBe('https://googleads.googleapis.com/v25/customers/1234567890:generateKeywordHistoricalMetrics');
   });
 
-  it('O+P+Q) request body: geoTargetConstants/2840, languageConstants/1000, GOOGLE_SEARCH, hyphens stripped', async () => {
+  it('A+B) exact URL: customers/{id}:generateKeywordHistoricalMetrics, never /keywordPlanIdeas:', async () => {
     const { fetchImpl, calls } = mockFetchChain([
       () => ({ status: 200, json: { access_token: 'at', expires_in: 3600 } }),
       () => ({ status: 200, json: { results: [] } }),
     ]);
     await generateKeywordHistoricalMetrics(['dog ramp'], { fetchImpl });
-    const metricsCall = calls[1];
-    const body = JSON.parse(String(metricsCall.init?.body)) as Record<string, unknown>;
-    expect(body.customer_id).toBe('1234567890'); // hyphens stripped
-    expect(body.geo_target_constants).toEqual(['geoTargetConstants/2840']);
+    const metricsUrl = calls[1].url;
+    expect(metricsUrl).toBe('https://googleads.googleapis.com/v25/customers/1234567890:generateKeywordHistoricalMetrics');
+    expect(metricsUrl).not.toContain('/keywordPlanIdeas:');
+  });
+
+  it('C+D) request body uses lower-camel names; NO customer_id/customerId in the JSON body', async () => {
+    const { fetchImpl, calls } = mockFetchChain([
+      () => ({ status: 200, json: { access_token: 'at', expires_in: 3600 } }),
+      () => ({ status: 200, json: { results: [] } }),
+    ]);
+    await generateKeywordHistoricalMetrics(['dog ramp'], { fetchImpl });
+    const body = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
+    expect(body.keywords).toEqual(['dog ramp']);
+    expect(body.geoTargetConstants).toEqual(['geoTargetConstants/2840']);
+    expect(body.keywordPlanNetwork).toBe('GOOGLE_SEARCH');
     expect(body.language).toBe('languageConstants/1000');
-    expect(body.keyword_plan_network).toBe('GOOGLE_SEARCH');
+    // Customer ID belongs in the URL path only.
+    expect(body).not.toHaveProperty('customer_id');
+    expect(body).not.toHaveProperty('customerId');
+  });
+
+  it('O+P+Q) constants: geoTargetConstants/2840, languageConstants/1000, GOOGLE_SEARCH (in body)', async () => {
+    const { fetchImpl, calls } = mockFetchChain([
+      () => ({ status: 200, json: { access_token: 'at', expires_in: 3600 } }),
+      () => ({ status: 200, json: { results: [] } }),
+    ]);
+    await generateKeywordHistoricalMetrics(['dog ramp'], { fetchImpl });
+    const body = JSON.parse(String(calls[1].init?.body)) as Record<string, unknown>;
+    expect(body.geoTargetConstants).toEqual(['geoTargetConstants/2840']);
+    expect(body.language).toBe('languageConstants/1000');
+    expect(body.keywordPlanNetwork).toBe('GOOGLE_SEARCH');
   });
 
   it('L) manager mode: login-customer-id header included when configured', async () => {
@@ -244,6 +286,25 @@ describe('Phase 4G.1 — OAuth + official v25 request (K, L, M, O, P, Q)', () =>
     await generateKeywordHistoricalMetrics(['dog ramp'], { fetchImpl });
     const headers = calls[1].init?.headers as Record<string, string>;
     expect(headers['login-customer-id']).toBeUndefined();
+  });
+
+  it('G) mocked official v25 response still parses through the full call path', async () => {
+    const { fetchImpl, calls } = mockFetchChain([
+      () => ({ status: 200, json: { access_token: 'at', expires_in: 3600 } }),
+      () => ({ status: 200, json: { results: [OFFICIAL_RESULT] }, headers: { 'request-id': 'req-g' } }),
+    ]);
+    const out = await generateKeywordHistoricalMetrics(['dog travel accessories'], { fetchImpl });
+    expect(out.status).toBe('success');
+    expect(out.requestId).toBe('req-g');
+    expect(out.results).toHaveLength(1);
+    const r = out.results[0];
+    expect(r.text).toBe('dog travel accessories');
+    expect(r.closeVariants).toEqual(['dog travel gear', 'dog travel supplies']);
+    expect(r.keywordMetrics.avgMonthlySearches).toBe(5400);
+    expect(r.keywordMetrics.competition).toBe('HIGH');
+    expect(r.keywordMetrics.lowTopOfPageBidUsd).toBeCloseTo(1.5);
+    expect(r.keywordMetrics.monthlySearchVolumes[0]).toEqual({ year: 2026, month: 'AUGUST', monthlySearches: 5600 });
+    void calls;
   });
 
   it('K2) access token is cached in memory — a second metrics call reuses OAuth, no second token refresh', async () => {
