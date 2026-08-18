@@ -31,6 +31,9 @@ import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDeci
 import type { AgentJobRow } from '../../scout/persist';
 import { runSupplierSearch } from '../../scout/supplierSearch';
 import { parseHtmlPage, isProxyErrorText } from '../../ai/importer';
+import { discoverUrls } from '../../scout/discover';
+import { extractPageFacts } from '../../scout/extract';
+import { validateExactProduct } from '../../scout/marketEvidence';
 
 const ENABLED = process.env.RUN_LIVE_CJ_PROOF === '1';
 
@@ -527,6 +530,195 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         cjRun: { jobId: run.jobId, searched: run.searched, duplicates: run.duplicates, prefilterRejected: run.prefilterRejected, researched: run.researched, productShortlisted: run.productShortlisted, qaPassed: run.qaPassed, businessQualified: run.businessQualified, businessQualifiedCandidates: run.businessQualifiedCandidates, marketContext: run.marketContext, points: run.points, serverPoints: run.serverPoints },
         googleAds: { liveDemand: 'DEFERRED', calls: 0 },
       }, null, 2)}`);
+    } finally {
+      if (tempUserId) {
+        const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
+        console.log(`[cleanup] temp admin user deleted (HTTP ${del.status})`);
+      }
+    }
+  }, 600_000);
+
+  it('PRICE-EVIDENCE CLOSURE — elevated dog sofa bed: probe exact-product PDPs for REAL prices, then ONE grounded MI pass (no CJ calls)', async () => {
+    const env = loadEnv('.env');
+    const base = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const serviceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const preview = (env.VERCEL_PREVIEW_API || process.env.VERCEL_PREVIEW_API || '').trim().replace(/\/$/, '');
+    const bypass = (env.VERCEL_PREVIEW_BYPASS || process.env.VERCEL_PREVIEW_BYPASS || '').trim();
+    if (!base || !serviceKey || !anonKey || !preview) {
+      throw new Error('LIVE PROOF needs VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_ANON_KEY / VERCEL_PREVIEW_API in .env');
+    }
+
+    const email = `priceclosure-${Date.now()}@luxedge.us`;
+    const password = `Pw-${Date.now()}-x7q2`;
+    const created = await gotrue(base, serviceKey, '/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'admin' } }),
+    });
+    expect([200, 201]).toContain(created.status);
+    const tempUserId = String(created.body.id || '');
+    if (!tempUserId) throw new Error(`temp admin creation failed: ${JSON.stringify(created.body).slice(0, 200)}`);
+    let adminJwt = '';
+    try {
+      const token = await gotrue(base, serviceKey, '/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      expect(token.status).toBe(200);
+      adminJwt = String(token.body.access_token || '');
+      if (!adminJwt) throw new Error('no access_token from temp admin sign-in');
+
+      const db = new SupabaseAdapter(base, anonKey);
+      db.setAccessToken(adminJwt);
+
+      // 0) NO CJ calls. Reuse the exact product identity from the persisted
+      //    Phase 4F CJ seeds (elevated dog sofa bed — owner priority).
+      const jobs = await db.list<AgentJobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 100 });
+      const seedJob = jobs.find((j) => {
+        const o = j.output as Record<string, unknown> | null;
+        return j.type === 'PRODUCT_RESEARCH'
+          && o?.mode === 'CJ_SEED_DISCOVERY'
+          && Array.isArray(o?.seeds)
+          && (o?.seeds as unknown[]).length > 0;
+      });
+      expect(seedJob).toBeTruthy();
+      const persistedSeeds = ((seedJob!.output as Record<string, unknown>).seeds as CjSeedRecord[]).filter((s) => s && typeof s.title === 'string');
+      const concepts = clusterCjSeedConcepts(persistedSeeds);
+      const sofaBed = concepts.find((c) => /sofa/i.test(c.label))
+        ?? concepts.find((c) => /\belevated\b/i.test(c.label))
+        ?? concepts[0];
+      console.log(`[seed-source] job ${seedJob!.id} · concept "${sofaBed.label.slice(0, 70)}…" (${sofaBed.memberPids.length} CJ records, suitability ${sofaBed.suitabilityScore}) — NO new CJ calls`);
+      const q1 = seedConceptSearchQuery(sofaBed);
+      const q2 = 'elevated dog sofa bed';
+
+      // 1) PRICE-FOCUSED DISCOVERY — two real searches for the SAME exact
+      //    product to widen the retailer pool (CJ vocabulary + common name).
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      let pageFetches = 0;
+      const fetchPage = async (url: string) => {
+        pageFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
+      const aiCall = async (prompt: string, model?: string) => {
+        const res = await fetch(`${preview}/api/ai/generate`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!res.ok) throw new Error(`AI proxy HTTP ${res.status}`);
+        const body = await res.json() as { text?: string };
+        if (!body.text) throw new Error('AI proxy returned no text');
+        return body.text;
+      };
+
+      const [d1, d2] = await Promise.all([
+        discoverUrls({ query: q1, market: 'US', maxResults: 12 }),
+        discoverUrls({ query: q2, market: 'US', maxResults: 12 }),
+      ]);
+      const pool: string[] = [];
+      const seenUrl = new Set<string>();
+      for (const u of [...d1.urls, ...d2.urls]) {
+        if (!seenUrl.has(u)) { seenUrl.add(u); pool.push(u); }
+      }
+      console.log(`[probe] discovery pool ${pool.length} URLs (q1 "${q1}" → ${d1.urls.length}, q2 "${q2}" → ${d2.urls.length})`);
+
+      // 2) PROBE each candidate — fetch via the real proxy and keep ONLY
+      //    exact-product PDPs that expose a REAL price in the page itself
+      //    (visible HTML / JSON-LD / server-rendered data). Listing/category/
+      //    search-page prices are never PDP evidence. ≤2 per domain.
+      const priceRich: { url: string; price: number; domain: string }[] = [];
+      const probeRejections: { url: string; reason: string }[] = [];
+      const perDomain = new Map<string, number>();
+      for (const url of pool.slice(0, 16)) {
+        let page;
+        try {
+          page = await fetchPage(url);
+        } catch (e) {
+          probeRejections.push({ url, reason: `fetch failed: ${(e as Error).message}` });
+          continue;
+        }
+        const extract = extractPageFacts(page);
+        const valid = validateExactProduct(extract);
+        if (!valid.usable) {
+          probeRejections.push({ url, reason: valid.reason ?? 'not an exact product page' });
+          continue;
+        }
+        if (extract.price === null || extract.price <= 0) {
+          probeRejections.push({ url, reason: 'no real price in page extract (JS-rendered or blocked price)' });
+          continue;
+        }
+        const domain = new URL(url).hostname.replace(/^www\./, '');
+        const used = perDomain.get(domain) ?? 0;
+        if (used >= 2) {
+          probeRejections.push({ url, reason: `domain quota (max 2 per domain: ${domain})` });
+          continue;
+        }
+        perDomain.set(domain, used + 1);
+        priceRich.push({ url, price: extract.price, domain });
+      }
+      console.log(`[probe] page fetches=${pageFetches} · price-rich exact PDPs: ${priceRich.length} — ${priceRich.map((p) => `${p.domain} $${p.price}`).join(' | ')}`);
+      console.log(`[probe] rejections (${probeRejections.length}): ${probeRejections.slice(0, 10).map((r) => `${r.url.slice(0, 58)} → ${r.reason}`).join(' | ')}`);
+      const priceDomains = new Set(priceRich.map((p) => p.domain)).size;
+      if (priceRich.length < 3 || priceDomains < 3) {
+        console.log(`PRICE EVIDENCE BLOCKED — ${priceRich.length} real retailer prices across ${priceDomains} independent domain(s) (need >=3 each). No MI run, no DeepSeek, no CJ. No fetch-system redesign (per instruction).`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE', priceEvidenceBlocked: true, prices: priceRich, priceDomains, probeRejections,
+          googleAds: { liveDemand: 'DEFERRED', calls: 0 }, cjPointsSpent: 0,
+        }, null, 2)}`);
+        return;
+      }
+
+      // 3) ONE grounded MI pass — the evidence pack is built from the
+      //    price-rich exact PDPs (standard engine path; the gate still
+      //    requires >=4 pages / >=3 domains / >=3 prices / >=3 availability).
+      //    DeepSeek runs ONLY if the gate passes (max 1 call).
+      const priceRichUrls = priceRich.map((p) => p.url);
+      const mi = await runMarketIntelligenceJob({
+        query: q1,
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        discover: async () => ({ query: q1, rawLinks: priceRichUrls, urls: priceRichUrls, filtered: 0, duplicates: 0 }),
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      const ev = mi.evidence;
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+      console.log(`[mi] evidence pack: usable ${ev.successfulExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · identity pages ${ev.identityEvidencePages}`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+
+      // 4) GATES UNCHANGED: Market >= 60 + sufficient + persisted rec BEFORE
+      //    any CJ spend. If eligible: report READY — DO NOT start the 250-pt
+      //    CJ qualification run (owner authorizes the paid spend separately).
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (decision.run) {
+        console.log(`MARKET-GROUNDED CJ QUALIFICATION READY — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}". CJ qualification run NOT started (250-pt spend requires separate owner authorization).`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE', marketGroundedCjReady: true, marketScore: decision.marketScore,
+          miJobId: decision.marketAnalysisId, recommendation: decision.query,
+          prices: priceRich, evidence: ev,
+          googleAds: { liveDemand: 'DEFERRED', calls: 0 }, cjPointsSpent: 0,
+        }, null, 2)}`);
+      } else {
+        console.log(`MARKET NOT QUALIFIED — ${decision.reason}. No CJ research points spent.`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE', marketGroundedCjReady: false, decision,
+          market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidence: ev, miJobId: mi.jobId },
+          prices: priceRich,
+          googleAds: { liveDemand: 'DEFERRED', calls: 0 }, cjPointsSpent: 0,
+        }, null, 2)}`);
+      }
     } finally {
       if (tempUserId) {
         const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
