@@ -17,7 +17,7 @@ import {
   assessEvidenceQuality, countExtractEvidence, validateExactProduct,
   DEFAULT_EVIDENCE_QUALITY, type EvidenceCounts,
 } from '../marketEvidence';
-import { NoopMarketDemandAdapter, collectDemandSignals } from '../marketDemand';
+import { NoopMarketDemandAdapter, collectDemandSignals, type MarketDemandAdapter } from '../marketDemand';
 import { runMarketIntelligenceJob, cjMarketContextFor } from '../engine';
 import { verifyMarketIntelligenceJob } from '../marketProvenance';
 
@@ -626,10 +626,10 @@ describe('Phase 4E.1 market gate fail-closed', () => {
 // Demand adapter (future hook — no credentials in Phase 4D)
 // ---------------------------------------------------------------------------
 
-describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11)', () => {
+describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11 + 4G.1)', () => {
   it('no-op adapter → structured not_configured result, zero signals, never blocks the pipeline', async () => {
     const adapter = new NoopMarketDemandAdapter();
-    expect(adapter.configured).toBe(false);
+    expect((await adapter.getStatus()).health).toBe('not_configured');
     const result = await collectDemandSignals(adapter, { query: 'dog toys', market: 'US' });
     expect(result.status).toBe('not_configured');
     expect(result.signals).toEqual([]);
@@ -644,7 +644,11 @@ describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11)', () =
   });
 
   it('a failing CONFIGURED demand adapter reports explicit error status (Phase 4G §11 — never silently [])', async () => {
-    const failing = { provider: 'google', configured: true, getDemandSignals: async () => { throw new Error('down'); } };
+    const failing: MarketDemandAdapter = {
+      provider: 'google',
+      getStatus: async () => ({ health: 'configured' }),
+      collect: async () => { throw new Error('down'); },
+    };
     const result = await collectDemandSignals(failing, { query: 'x', market: 'US' });
     expect(result.status).toBe('error');
     expect(result.errorSafe).toBe('down');

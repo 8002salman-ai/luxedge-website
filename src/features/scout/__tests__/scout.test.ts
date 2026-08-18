@@ -15,6 +15,7 @@ import { applyRejectFilters, collectRiskFlags } from '../reject';
 import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
 import { extractPageFacts } from '../extract';
 import { runScoutResearch, qaCandidate, runMarketIntelligenceJob } from '../engine';
+import type { MarketDemandAdapter } from '../marketDemand';
 import { persistCandidate, persistScore, ensureSupplier, createProductDraft } from '../persist';
 import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, discoverUrls } from '../discover';
 import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
@@ -896,5 +897,85 @@ describe('MARKET_INTELLIGENCE job (Phase 4B)', () => {
     expect(jobs[0].status).toBe('completed');
     const runs = db.rows.get('agent_runs') as { job_id: string }[];
     expect(runs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('R+T) Phase 4G.1: the normal MI flow collects demand via the wired adapter — max ONE outbound request per job', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    let outboundCalls = 0;
+    const adapter: MarketDemandAdapter = {
+      provider: 'google-ads',
+      getStatus: async () => ({ health: 'configured' }),
+      collect: async (q) => {
+        outboundCalls++;
+        return {
+          status: 'success',
+          provider: 'google-ads',
+          requestedKeywords: q.keywords && q.keywords.length ? q.keywords : [q.query],
+          returnedResults: [{
+            text: 'dog toys', closeVariants: [], avgMonthlySearches: 8100,
+            monthlySearchVolumes: [{ year: 2026, month: 'AUGUST', monthlySearches: 8200 }],
+            competition: 'MEDIUM', competitionIndex: 52,
+            lowTopOfPageBidUsd: 0.5, highTopOfPageBidUsd: 2.5,
+          }],
+          keywordsRequested: 1,
+          keywordsReturned: 1,
+          signals: [],
+          errorSafe: null, errorCode: null, requestId: 'req-mi',
+          observedAt: '2026-08-18T00:00:00Z',
+          avgMonthlySearches: [8100],
+          monthlyHistory: [{ keyword: 'dog toys', month: '2026-08', searches: 8200 }],
+          competition: ['MEDIUM'], competitionIndex: [52],
+          bidRangeUsd: [{ keyword: 'dog toys', low: 0.5, high: 2.5 }],
+        };
+      },
+    };
+    const result = await runMarketIntelligenceJob({
+      query: 'dog toys',
+      market: 'US',
+      db: db as unknown as DbAdapter,
+      // The ProductScout normal flow passes the server-backed demand adapter;
+      // explicit deterministic keywords come from the caller (e.g. CJ-seed
+      // concept vocabulary) — never invented by DeepSeek.
+      demand: adapter,
+      demandKeywords: ['dog toys', 'interactive dog toy'],
+      discover: async () => ({ query: 'dog toys', rawLinks: [], urls: [], duplicates: 0, filtered: 0 }),
+      aiCall: async () => { throw new Error('not configured'); },
+    });
+    // Structured facts are PRIMARY on the result (not reverse-parsed summaries).
+    expect(result.demand.status).toBe('success');
+    expect(result.demand.provider).toBe('google-ads');
+    expect(result.demand.keywordsRequested).toBe(1);
+    expect(result.demand.keywordsReturned).toBe(1);
+    expect(result.demand.requestedKeywords).toEqual(['dog toys', 'interactive dog toy']);
+    expect(result.demand.returnedResults[0].text).toBe('dog toys');
+    expect(result.demand.returnedResults[0].avgMonthlySearches).toBe(8100);
+    expect(result.demand.returnedResults[0].monthlySearchVolumes[0].month).toBe('AUGUST');
+    expect(result.demand.requestId).toBe('req-mi');
+    // Exactly ONE outbound collect() for the whole MI job execution.
+    expect(outboundCalls).toBe(1);
+    // Persisted on the durable job output.
+    const job = (db.rows.get('agent_jobs') as Record<string, unknown>[]).find((j) => j.type === 'MARKET_INTELLIGENCE');
+    expect(job?.output as Record<string, unknown>).toMatchObject({
+      demandProvider: 'google-ads',
+      demandStatus: 'success',
+      keywordsRequested: 1,
+      keywordsReturned: 1,
+    });
+  });
+
+  it('Phase 4G.1: MI with no demand adapter → status not_configured, zero outbound calls, no crash', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runMarketIntelligenceJob({
+      query: 'dog toys',
+      market: 'US',
+      db: db as unknown as DbAdapter,
+      discover: async () => ({ query: 'dog toys', rawLinks: [], urls: [], duplicates: 0, filtered: 0 }),
+      aiCall: async () => { throw new Error('not configured'); },
+    });
+    expect(result.demand.status).toBe('not_configured');
+    expect(result.demand.keywordsRequested).toBe(0);
+    expect(result.signals).toBeGreaterThanOrEqual(0);
   });
 });

@@ -355,8 +355,18 @@ export interface MarketIntelligenceOptions {
   maxEvidencePages?: number;
   /** Evidence-quality gate thresholds (conservative configurable defaults). */
   evidenceThresholds?: EvidenceQualityThresholds;
-  /** Optional future demand-data adapter (no credentials needed in Phase 4D). */
+  /**
+   * Optional future demand-data adapter (no credentials needed in Phase 4D).
+   * Phase 4G.1: the normal ProductScout MI flow passes the server-backed
+   * GoogleAdsServerDemandAdapter (admin-JWT proxy, never browser secrets).
+   */
   demand?: MarketDemandAdapter;
+  /**
+   * Explicit demand keywords for the demand adapter (Phase 4G.1 §D8).
+   * Default [query]; max 5. For future CJ-seeded proofs the caller supplies
+   * the exact concept vocabulary deterministically — never invented terms.
+   */
+  demandKeywords?: string[];
   onProgress?: (msg: string) => void;
 }
 
@@ -431,9 +441,15 @@ export interface MarketIntelligenceResult {
     provider: string | null;
     status: 'not_configured' | 'success' | 'error';
     errorSafe: string | null;
+    errorCode: string | null;
+    requestId: string | null;
     keywordsRequested: number;
     keywordsReturned: number;
-    /** Avg monthly searches PER keyword (official 12-month estimate). */
+    /** Actual normalized requested keywords (authoritative). */
+    requestedKeywords: string[];
+    /** Structured official facts — source of truth (not reverse-parsed). */
+    returnedResults: import('./marketDemand').GoogleAdsReturnedResult[];
+    /** Avg monthly searches PER returned keyword (official 12-month estimate). */
     avgMonthlySearches: number[] | null;
     monthlyHistory: { month: string; searches: number }[];
     /** Advertiser competition level per keyword (LOW/MEDIUM/HIGH). */
@@ -478,7 +494,7 @@ export function cjMarketContextFor(result: MarketIntelligenceResult): CjMarketCo
  * Deterministic fallback keeps it working with no AI keys configured.
  */
 export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions): Promise<MarketIntelligenceResult> {
-  const { query, market, db, extracts, onProgress, fetchPage, maxEvidencePages, evidenceThresholds, demand } = opts;
+  const { query, market, db, extracts, onProgress, fetchPage, maxEvidencePages, evidenceThresholds, demand, demandKeywords } = opts;
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
@@ -600,7 +616,10 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   // Phase 4G — demand-data adapter with a STRUCTURED result. A configured-
   // but-failed demand source must NOT silently look identical to "no demand
   // provider configured": status is not_configured / success / error.
-  const demandCollection: DemandCollectionResult = await collectDemandSignals(demand, { query, market });
+  const demandCollection: DemandCollectionResult = await collectDemandSignals(
+    demand,
+    { query, market, keywords: demandKeywords && demandKeywords.length ? demandKeywords : undefined }
+  );
   if (demandCollection.signals.length) signals = [...signals, ...demandCollection.signals];
 
   const category = query.toLowerCase().includes('cat')
@@ -698,11 +717,16 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     // Phase 4G — product identity honesty on the evidence pack.
     identityEvidencePages: pack?.identityEvidencePages ?? 0,
     reviewAggregationNote: pack?.reviewAggregationNote ?? '',
-    // Phase 4G — direct-demand evidence (Google Ads adapter when configured;
-    // never secret values). Persisted so the audit UI can show it.
+    // Phase 4G.1 — direct-demand evidence (Google Ads adapter when configured;
+    // never secret values). Structured facts are primary; signals are derived
+    // from them. Persisted so the audit UI can show them.
     demandProvider: demandCollection.provider,
     demandStatus: demandCollection.status,
     demandErrorSafe: demandCollection.errorSafe ?? null,
+    demandErrorCode: demandCollection.errorCode ?? null,
+    demandRequestId: demandCollection.requestId ?? null,
+    demandRequestedKeywords: demandCollection.requestedKeywords,
+    demandReturnedResults: demandCollection.returnedResults,
     keywordsRequested: demandCollection.keywordsRequested,
     keywordsReturned: demandCollection.keywordsReturned,
     avgMonthlySearches: demandCollection.avgMonthlySearches,
@@ -770,8 +794,12 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
       provider: demandCollection.provider,
       status: demandCollection.status,
       errorSafe: demandCollection.errorSafe ?? null,
+      errorCode: demandCollection.errorCode ?? null,
+      requestId: demandCollection.requestId ?? null,
       keywordsRequested: demandCollection.keywordsRequested,
       keywordsReturned: demandCollection.keywordsReturned,
+      requestedKeywords: demandCollection.requestedKeywords,
+      returnedResults: demandCollection.returnedResults,
       avgMonthlySearches: demandCollection.avgMonthlySearches,
       monthlyHistory: demandCollection.monthlyHistory ?? [],
       competition: demandCollection.competition,

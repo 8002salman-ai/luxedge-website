@@ -21,7 +21,7 @@
 // O) CJ listedNum never enters MarketDemandAdapter
 // ============================================================================
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
 import type {
   SupplierDiscoveryAdapter, SupplierProductRecord, SupplierSearchResult,
@@ -33,9 +33,9 @@ import {
   assessConceptSuitability, type CjSeedRecord,
 } from '../cjSeedDiscovery';
 import {
-  GoogleAdsKeywordPlannerDemandAdapter, collectDemandSignals,
-  googleAdsConfigured, googleDemandCacheKey, googleMetricsToSignals,
-  parseGoogleAdsMetrics, GOOGLE_MAX_KEYWORDS, GOOGLE_ADS_ENV,
+  GoogleAdsServerDemandAdapter, collectDemandSignals,
+  normalizeDemandKeywords, parseGoogleAdsMetrics, googleResultsToSignals,
+  aggregatesFromResults, GOOGLE_MAX_KEYWORDS,
 } from '../marketDemand';
 import {
   identityMatchLevel, aggregateReviewEvidence,
@@ -314,105 +314,137 @@ describe('Phase 4G — product identity (Part C)', () => {
 // H) — N) Google Ads demand adapter (Part D/E)
 // ---------------------------------------------------------------------------
 
-describe('Phase 4G — Google Ads keyword planner adapter (Part D/E)', () => {
-  it('H) adapter not configured → status not_configured, zero outbound call', async () => {
-    const spy = vi.fn(async () => []);
-    const adapter = new GoogleAdsKeywordPlannerDemandAdapter({ fetchMetrics: spy });
-    // Force not-configured (no credentials in the test env).
-    expect(adapter.configured).toBe(false);
+describe('Phase 4G.1 — Google Ads server-backed demand adapter (Part D/E)', () => {
+  /** Build a server response handler that mimics /api/market-demand/google-ads. */
+  function serverAdapter(handler: (req: { path: string; body?: unknown }) => Promise<{ status: number; json: Record<string, unknown> }>) {
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const path = url.includes('action=') ? url.split('action=')[1].split('&')[0] : url;
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      const out = await handler({ path, body });
+      return {
+        ok: out.status >= 200 && out.status < 300,
+        status: out.status,
+        json: async () => out.json,
+      } as Response;
+    };
+    return new GoogleAdsServerDemandAdapter({ fetchImpl, getToken: () => 'admin-token' });
+  }
+
+  it('H) adapter with a server not_configured response → status not_configured, zero outbound Google call', async () => {
+    // Mirrors the real server route: when credentials are missing the route
+    // answers `not_configured` for BOTH health and historical-metrics and
+    // makes zero Google calls.
+    const adapter = serverAdapter(async ({ path }) => {
+      if (path === 'health') return { status: 200, json: { provider: 'google-ads', health: 'not_configured' } };
+      return {
+        status: 200,
+        json: { provider: 'google-ads', status: 'not_configured', requestedKeywords: [], results: [], warning: 'no live call made' },
+      };
+    });
+    const status = await adapter.getStatus();
+    expect(status.health).toBe('not_configured');
     const result = await collectDemandSignals(adapter, { query: 'dog travel accessories', market: 'US' });
     expect(result.status).toBe('not_configured');
     expect(result.signals).toEqual([]);
-    expect(spy).not.toHaveBeenCalled();
     expect(result.provider).toBe('google-ads');
   });
 
-  it('I) official metrics parse: avg monthly searches, monthly history, competition/index, bid ranges', () => {
+  it('I) official v25 result parses: text, closeVariants, keywordMetrics (avg, history, competition/index, bids)', () => {
     const raw = {
-      keyword: 'dog travel accessories',
-      keyword_idea_metrics: {
-        avg_monthly_searches: 5400,
+      text: 'dog travel accessories',
+      closeVariants: ['dog travel gear', 'dog travel supplies'],
+      keywordMetrics: {
+        avgMonthlySearches: '5400', // official int64 may arrive as string
         competition: 'HIGH',
-        competition_index: 84,
-        low_top_of_page_bid_micros: 1500000,
-        high_top_of_page_bid_micros: 4200000,
-      },
-      keyword_historical_metrics: {
-        monthly_search_volumes: [
-          { month: '2026-05', searches: 5100 },
-          { month: '2026-06', searches: 5800 },
+        competitionIndex: 84,
+        lowTopOfPageBidMicros: 1500000,
+        highTopOfPageBidMicros: 4200000,
+        monthlySearchVolumes: [
+          { year: 2026, month: 'AUGUST', monthlySearches: 5600 },
+          { year: 2026, month: 'JULY', monthlySearches: 5100 },
         ],
       },
     };
     const m = parseGoogleAdsMetrics(raw);
-    expect(m.keyword).toBe('dog travel accessories');
+    expect(m.text).toBe('dog travel accessories');
+    expect(m.closeVariants).toEqual(['dog travel gear', 'dog travel supplies']);
     expect(m.avgMonthlySearches).toBe(5400);
     expect(m.monthlySearchVolumes).toHaveLength(2);
+    expect(m.monthlySearchVolumes[0].year).toBe(2026);
+    expect(m.monthlySearchVolumes[0].month).toBe('AUGUST'); // enum, not YYYY-MM
+    expect(m.monthlySearchVolumes[0].monthlySearches).toBe(5600);
     expect(m.competition).toBe('HIGH');
     expect(m.competitionIndex).toBe(84);
     expect(m.lowTopOfPageBidUsd).toBeCloseTo(1.5);
     expect(m.highTopOfPageBidUsd).toBeCloseTo(4.2);
   });
 
-  it('J) no secret can enter the browser bundle (env access is process-guarded)', () => {
-    // GOOGLE_ADS_ENV lists only NAME constants — no values anywhere.
-    expect(GOOGLE_ADS_ENV).toContain('GOOGLE_ADS_DEVELOPER_TOKEN');
-    // The module must never reference VITE_* prefixed secrets.
-    const src = GoogleAdsKeywordPlannerDemandAdapter.toString();
-    expect(src).not.toMatch(/VITE_GOOGLE_ADS|localStorage/);
-    // googleAdsConfigured reads process.env only inside a typeof-process guard.
-    expect(typeof googleAdsConfigured).toBe('function');
+  it('J) the browser module contains NO process.env credential detection', () => {
+    // Phase 4G.1 §C: the browser must NEVER determine Google configuration by
+    // inspecting process.env — server is the only authority. Comments are
+    // allowed to say so; the CODE must contain no actual env access.
+    const src = GoogleAdsServerDemandAdapter.toString()
+      // strip comments so prose about the rule does not count as access
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '');
+    expect(src).not.toMatch(/process\.env\s*\.|process\.env\s*\[/);
+    expect(src).not.toMatch(/VITE_GOOGLE_ADS|localStorage|GOOGLE_ADS_(CLIENT_SECRET|REFRESH_TOKEN)/);
   });
 
-  it('K) max 5 keywords enforced', () => {
-    const many = GoogleAdsKeywordPlannerDemandAdapter.normalizeKeywords(
-      Array.from({ length: 20 }, (_, i) => `keyword number ${i}`)
-    );
+  it('K) client normalize caps at 5; the SERVER rejects >5 (Phase 4G.1 §A3)', () => {
+    const many = normalizeDemandKeywords(Array.from({ length: 20 }, (_, i) => `keyword number ${i}`));
     expect(many.length).toBe(5);
     expect(GOOGLE_MAX_KEYWORDS).toBe(5);
   });
 
-  it('L) configured provider failure → explicit safe error status, not silently []', async () => {
-    const adapter = new GoogleAdsKeywordPlannerDemandAdapter({
-      fetchMetrics: async () => { throw new Error('GOOGLE_ADS_REFRESH_TOKEN invalid (401)'); },
-    });
-    // Simulate configured by stubbing the getter (credentials absent in tests).
-    (adapter as unknown as { configured: boolean }).configured = true;
+  it('L) configured provider failure (server error) → explicit safe error status, not silently []', async () => {
+    const adapter = serverAdapter(async () => ({
+      status: 200,
+      json: {
+        provider: 'google-ads', status: 'error', requestedKeywords: ['dog travel'],
+        results: [], errorCode: 'AUTH_FAILED', errorSafe: 'Google Ads authorization failed: ***', requestId: 'req-1',
+      },
+    }));
     const result = await collectDemandSignals(adapter, { query: 'dog travel', market: 'US' });
     expect(result.status).toBe('error');
-    expect(result.errorSafe).toContain('401');
-    // Credential value must be scrubbed from the safe error.
-    expect(result.errorSafe).not.toContain('GOOGLE_ADS_REFRESH_TOKEN');
+    expect(result.errorCode).toBe('AUTH_FAILED');
+    expect(result.errorSafe).toContain('authorization failed');
+    // Credential values are scrubbed server-side; nothing secret in the result.
+    expect(result.errorSafe).not.toMatch(/Bearer [A-Za-z0-9._-]+/);
+    expect(result.signals).toEqual([]);
   });
 
-  it('M) same keyword+geo+month → cached result reused, no duplicate request', async () => {
+  it('M) one collect() per adapter instance → ONE outbound request (max one per MI job)', async () => {
     let calls = 0;
-    const adapter = new GoogleAdsKeywordPlannerDemandAdapter({
-      fetchMetrics: async () => {
-        calls++;
-        return [{ keyword: 'dog ramp', keyword_idea_metrics: { avg_monthly_searches: 1200 } }];
-      },
+    const adapter = serverAdapter(async ({ path }) => {
+      if (path === 'health') return { status: 200, json: { provider: 'google-ads', health: 'configured' } };
+      calls++;
+      return {
+        status: 200,
+        json: {
+          provider: 'google-ads', status: 'success', requestedKeywords: ['dog ramp'], keywordsRequested: 1, keywordsReturned: 1,
+          results: [{ text: 'dog ramp', closeVariants: [], keywordMetrics: { avgMonthlySearches: 1200, monthlySearchVolumes: [] } }],
+          requestId: 'req-x', observedAt: '2026-08-18T00:00:00Z', cacheHit: false,
+        },
+      };
     });
-    (adapter as unknown as { configured: boolean }).configured = true;
-    const a = await adapter.getDemandSignals({ query: 'dog ramp', market: 'US', keywords: ['Dog Ramp'] });
-    const b = await adapter.getDemandSignals({ query: 'dog ramp', market: 'US', keywords: ['dog ramp'] });
-    expect(a.length).toBeGreaterThan(0);
-    expect(b.length).toBeGreaterThan(0);
-    expect(calls).toBe(1); // cached — identical normalized keywords + geo + month
-    // The adapter normalizes keywords BEFORE keying (dedupe + lowercase), so
-    // the cache key is canonical — no duplicate keywords in the key.
-    const norm = GoogleAdsKeywordPlannerDemandAdapter.normalizeKeywords(['Dog Ramp', 'dog ramp']);
-    expect(norm).toEqual(['dog ramp']);
-    const key = googleDemandCacheKey(norm, 'US', 'en');
-    expect(key).toMatch(/^US:en:\d{4}-\d{2}:dog ramp$/);
+    const a = await adapter.collect({ query: 'dog ramp', market: 'US', keywords: ['Dog Ramp'] });
+    const b = await adapter.collect({ query: 'dog ramp', market: 'US', keywords: ['dog ramp'] });
+    expect(a.status).toBe('success');
+    expect(b.status).toBe('success');
+    expect(calls).toBe(1); // cached within the adapter instance
+    expect(a.keywordsRequested).toBe(1);
+    expect(a.keywordsReturned).toBe(1);
   });
 
-  it('N) Google metrics become MarketSignals with explicit limitations', () => {
-    const m = parseGoogleAdsMetrics({
-      keyword: 'dog car seat cover',
-      keyword_idea_metrics: { avg_monthly_searches: 8100, competition: 'MEDIUM', competition_index: 52 },
-    });
-    const signals = googleMetricsToSignals(m, '2026-08-18T00:00:00Z', { geo: 'US', language: 'en' });
+  it('N) structured facts become MarketSignals with explicit limitations (no reverse-summary parsing)', () => {
+    const results = [parseGoogleAdsMetrics({
+      text: 'dog car seat cover',
+      closeVariants: ['dog car seat protector'],
+      keywordMetrics: { avgMonthlySearches: 8100, competition: 'MEDIUM', competitionIndex: 52 },
+    })];
+    const signals = googleResultsToSignals(results, '2026-08-18T00:00:00Z', { geo: 'US', language: 'en' });
     expect(signals.length).toBe(2); // search_demand + keyword_ad_competition
     const demand = signals.find((s) => s.signalType === 'search_demand')!;
     expect(demand).toBeDefined();
@@ -424,6 +456,33 @@ describe('Phase 4G — Google Ads keyword planner adapter (Part D/E)', () => {
     expect(demand.summary).not.toMatch(/sales|orders|trending/i);
     // Geo = USA.
     expect(demand.source).toContain('US');
+  });
+
+  it('N2) aggregates derive from structured facts, not summary strings', () => {
+    const results = [parseGoogleAdsMetrics({
+      text: 'dog ramp',
+      closeVariants: [],
+      keywordMetrics: {
+        avgMonthlySearches: 1200,
+        competition: 'LOW',
+        competitionIndex: 10,
+        lowTopOfPageBidMicros: 500000,
+        highTopOfPageBidMicros: 2500000,
+        monthlySearchVolumes: [
+          { year: 2026, month: 'MAY', monthlySearches: 1100 },
+          { year: 2026, month: 'JUNE', monthlySearches: 1300 },
+        ],
+      },
+    })];
+    const agg = aggregatesFromResults(results);
+    expect(agg.avgMonthlySearches).toEqual([1200]);
+    expect(agg.monthlyHistory).toEqual([
+      { keyword: 'dog ramp', month: '2026-05', searches: 1100 },
+      { keyword: 'dog ramp', month: '2026-06', searches: 1300 },
+    ]);
+    expect(agg.competition).toEqual(['LOW']);
+    expect(agg.competitionIndex).toEqual([10]);
+    expect(agg.bidRangeUsd).toEqual([{ keyword: 'dog ramp', low: 0.5, high: 2.5 }]);
   });
 
   it('O) CJ listedNum never enters MarketDemandAdapter', async () => {

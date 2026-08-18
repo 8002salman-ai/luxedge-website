@@ -1,11 +1,16 @@
 // ============================================================================
-// LUXEDGE V2 — MARKET DEMAND ADAPTER (Phase 4D §9-§10 + Phase 4G §D)
+// LUXEDGE V2 — MARKET DEMAND ADAPTER (Phase 4D §9-§10 + Phase 4G §D + 4G.1)
 //
 // Provider-neutral interface for official/permitted demand-data sources.
-// Phase 4G adds the Google Ads Keyword Planner adapter architecture
-// (KeywordPlanIdeaService / GenerateKeywordHistoricalMetrics) — BUILT but NOT
-// configured and NEVER called live in Phase 4G (no credentials are supplied;
-// tests use fixtures only).
+// The Google Ads path is SERVER-BACKED: the browser NEVER holds Google
+// credentials and NEVER inspects process.env — the server route
+// (/api/market-demand/google-ads, admin JWT) is the ONLY authority for
+// configured / not_configured / online / offline.
+//
+// Phase 4G.1: structured facts are PRIMARY. The adapter/server return
+// requestedKeywords + returnedResults (official v25 row shape) and
+// MarketSignals are generated FROM those facts — never reverse-parsed from
+// human summary strings.
 //
 // HONESTY RULES:
 //   * Google Ads "competition" means ADVERTISER/ad-slot competition — never
@@ -15,8 +20,8 @@
 //   * CJ `listedNum` / supplier listing count is NEVER routed through this
 //     interface and is NEVER treated as consumer demand.
 //   * A configured-but-failed demand source must NOT silently look identical
-//     to "no demand provider configured" — collectDemandSignals returns a
-//     structured result (status: not_configured / success / error).
+//     to "no demand provider configured" — status: not_configured / success /
+//     error, with a safe (credential-scrubbed) error.
 // ============================================================================
 
 import type { MarketSignal } from './types';
@@ -29,140 +34,314 @@ export interface MarketDemandQuery {
 }
 
 export interface DemandSignalInput extends MarketDemandQuery {
-  /** For future geo = USA / language filters. */
+  /** Geo target (USA only for Phase 4G.1). */
   geo?: string;
-  /** Optional explicit keywords (max GOOGLE_MAX_KEYWORDS). Defaults to [query]. */
+  /** Explicit keywords (max GOOGLE_MAX_KEYWORDS). Defaults to [query]. */
   keywords?: string[];
-  /** Language code (default en). */
+  /** Language code (English only for Phase 4G.1). */
   language?: string;
 }
 
-/** A provider-neutral demand-data source. */
+/** Server-derived demand-source health. */
+export interface DemandSourceStatus {
+  health: 'not_configured' | 'configured' | 'online' | 'offline';
+}
+
+/** A provider-neutral demand-data source (server-backed). */
 export interface MarketDemandAdapter {
   readonly provider: string;
-  /** True when the adapter has valid server-side credentials configured. */
-  readonly configured: boolean;
-  /** Fetch demand evidence — never invented. */
-  getDemandSignals(query: DemandSignalInput): Promise<MarketSignal[]>;
+  /** Server-derived status — the browser never inspects process.env. */
+  getStatus(): Promise<DemandSourceStatus>;
+  /** Collect structured demand evidence — never invented. */
+  collect(query: DemandSignalInput): Promise<DemandCollectionResult>;
 }
 
 /** Default adapter when no demand-data provider is configured. */
 export class NoopMarketDemandAdapter implements MarketDemandAdapter {
   readonly provider = 'none';
-  readonly configured = false;
-  async getDemandSignals(): Promise<MarketSignal[]> {
-    return [];
+  async getStatus(): Promise<DemandSourceStatus> {
+    return { health: 'not_configured' };
+  }
+  async collect(_query: DemandSignalInput): Promise<DemandCollectionResult> {
+    return notConfiguredResult('none');
   }
 }
 
 // ---------------------------------------------------------------------------
-// Structured demand-collection result (Phase 4G §11)
+// Structured demand-collection result (Phase 4G §11 + 4G.1 §E)
 // ---------------------------------------------------------------------------
 
 export type DemandStatus = 'not_configured' | 'success' | 'error';
 
+/**
+ * One returned Google Ads historical-metrics row — STRUCTURED FACTS (the
+ * source of truth). Generated from the official v25 result shape:
+ *   results[] { text, closeVariants, keywordMetrics { ... } }
+ * monthlySearchVolumes keeps { year, month, monthlySearches } — month is the
+ * MonthOfYear enum name, NOT a YYYY-MM string (display is derived).
+ */
+export interface GoogleAdsReturnedResult {
+  text: string;
+  closeVariants: string[];
+  avgMonthlySearches: number | null;
+  monthlySearchVolumes: { year: number | null; month: string | null; monthlySearches: number | null }[];
+  competition: 'LOW' | 'MEDIUM' | 'HIGH' | null;
+  competitionIndex: number | null;
+  lowTopOfPageBidUsd: number | null;
+  highTopOfPageBidUsd: number | null;
+}
+
 export interface DemandCollectionResult {
   status: DemandStatus;
-  signals: MarketSignal[];
   provider: string | null;
-  /** Safe (credential-scrubbed) error when a configured provider failed. */
-  errorSafe: string | null;
-  observedAt: string | null;
+  /** Actual normalized request keywords (authoritative count). */
+  requestedKeywords: string[];
+  /** Actual Google results (close-variant dedupe may make this < requested). */
+  returnedResults: GoogleAdsReturnedResult[];
   keywordsRequested: number;
   keywordsReturned: number;
-  /** Official avg monthly searches per returned keyword (12-month). */
+  /** MarketSignals GENERATED from the structured facts above. */
+  signals: MarketSignal[];
+  errorSafe: string | null;
+  errorCode: string | null;
+  /** Google request-id when returned (debug aid; never auth headers). */
+  requestId: string | null;
+  observedAt: string | null;
+  /** Derived display aggregates — computed FROM returnedResults, never from summaries. */
   avgMonthlySearches: number[] | null;
-  /** Official monthly search history (keyword, month, searches). */
   monthlyHistory: { keyword: string; month: string; searches: number }[] | null;
-  /** Advertiser competition levels (LOW/MEDIUM/HIGH) per keyword. */
   competition: string[] | null;
-  /** Advertiser competition index (0-100) per keyword. */
   competitionIndex: number[] | null;
-  /** Top-of-page bid range (USD) per keyword. */
   bidRangeUsd: { keyword: string; low: number; high: number }[] | null;
 }
 
-/**
- * Collect demand-adapter signals with a STRUCTURED result. A configured-but-
- * failed provider reports status 'error' (with a safe error) — it must NOT
- * look identical to 'not_configured'.
- */
-export async function collectDemandSignals(
-  adapter: MarketDemandAdapter | undefined | null,
-  query: MarketDemandQuery
-): Promise<DemandCollectionResult> {
-  const empty = (status: DemandStatus, errorSafe: string | null = null): DemandCollectionResult => ({
-    status,
-    signals: [],
-    provider: adapter?.provider ?? null,
-    errorSafe,
-    observedAt: null,
+export function notConfiguredResult(provider: string | null): DemandCollectionResult {
+  return {
+    status: 'not_configured',
+    provider,
+    requestedKeywords: [],
+    returnedResults: [],
     keywordsRequested: 0,
     keywordsReturned: 0,
+    signals: [],
+    errorSafe: null,
+    errorCode: null,
+    requestId: null,
+    observedAt: null,
     avgMonthlySearches: null,
     monthlyHistory: null,
     competition: null,
     competitionIndex: null,
     bidRangeUsd: null,
-  });
-  if (!adapter || !adapter.configured) return empty('not_configured');
-  const at = new Date().toISOString();
+  };
+}
+
+/**
+ * Collect demand-adapter signals with a STRUCTURED result. A configured-but-
+ * failed provider reports status 'error' (with a safe error) — it must NOT
+ * look identical to 'not_configured'. The adapter is the server-backed path;
+ * this wrapper only normalizes thrown errors into a structured result.
+ */
+export async function collectDemandSignals(
+  adapter: MarketDemandAdapter | undefined | null,
+  query: MarketDemandQuery & { keywords?: string[] }
+): Promise<DemandCollectionResult> {
+  if (!adapter) return notConfiguredResult(null);
   try {
-    const signals = await adapter.getDemandSignals({ ...query, geo: query.market === 'US' || query.market === 'USA' ? 'US' : undefined });
-    const list = Array.isArray(signals) ? signals : [];
-    const metrics = demandMetricsFromSignals(list);
-    return {
-      status: 'success',
-      signals: list,
-      provider: adapter.provider,
-      errorSafe: null,
-      observedAt: at,
-      ...metrics,
-    };
+    const result = await adapter.collect({ ...query, geo: query.market === 'US' || query.market === 'USA' ? 'US' : undefined });
+    return result ?? notConfiguredResult(adapter.provider);
   } catch (e) {
     // Safe error only — never credentials.
     const msg = String((e as Error).message || e).replace(/(GOOGLE_ADS_[A-Z_]+|Bearer [A-Za-z0-9._-]+)/gi, '***');
-    return empty('error', msg.slice(0, 200));
+    return { ...notConfiguredResult(adapter.provider), status: 'error', errorSafe: msg.slice(0, 300) };
   }
 }
 
-/** Reverse-derive factual demand metrics from the collected signals (no invention). */
-export function demandMetricsFromSignals(signals: MarketSignal[]): Pick<
+// ---------------------------------------------------------------------------
+// Official v25 response parsing (Phase 4G.1 §B)
+// ---------------------------------------------------------------------------
+
+/** Hard cap on keywords per Google demand request (client-side proactive cap). */
+export const GOOGLE_MAX_KEYWORDS = 5;
+
+/** MonthOfYear enum → month number (1-12) for YYYY-MM display. */
+export const MONTH_OF_YEAR: Record<string, number> = {
+  JANUARY: 1, FEBRUARY: 2, MARCH: 3, APRIL: 4, MAY: 5, JUNE: 6,
+  JULY: 7, AUGUST: 8, SEPTEMBER: 9, OCTOBER: 10, NOVEMBER: 11, DECEMBER: 12,
+};
+
+/** Derive a YYYY-MM display string from year + MonthOfYear enum name. */
+export function monthOfYearDisplay(year: number | null, month: string | null): string | null {
+  if (year === null || month === null) return null;
+  const m = MONTH_OF_YEAR[month.toUpperCase()];
+  if (!m) return null;
+  return `${year}-${String(m).padStart(2, '0')}`;
+}
+
+function num(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim()) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+const COMPETITION_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+function competitionOf(v: unknown): 'LOW' | 'MEDIUM' | 'HIGH' | null {
+  const s = String(v ?? '').toUpperCase();
+  return (COMPETITION_LEVELS as readonly string[]).includes(s) ? (s as 'LOW' | 'MEDIUM' | 'HIGH') : null;
+}
+
+function microsToUsd(v: unknown): number | null {
+  const m = num(v);
+  return m !== null ? m / 1_000_000 : null;
+}
+
+/**
+ * Parse ONE official v25 GenerateKeywordHistoricalMetrics result row.
+ * Primary contract: { text, closeVariants, keywordMetrics }.
+ * Compatibility shapes (keyword ideas / snake_case) are accepted SECONDARY —
+ * never the primary expectation (Phase 4G.1 §B3).
+ */
+export function parseGoogleAdsMetrics(raw: Record<string, unknown>): GoogleAdsReturnedResult {
+  const kw = (raw.keyword_metrics ?? raw.keywordMetrics ?? raw.keyword_idea_metrics ?? raw.keywordIdeaMetrics ?? raw.keyword_historical_metrics ?? raw.keywordHistoricalMetrics ?? {}) as Record<string, unknown>;
+  const closeRaw = Array.isArray(raw.closeVariants) ? raw.closeVariants : Array.isArray(raw.close_variants) ? raw.close_variants : [];
+  const monthlyRaw = Array.isArray(kw.monthly_search_volumes) ? kw.monthly_search_volumes : Array.isArray(kw.monthlySearchVolumes) ? kw.monthlySearchVolumes : [];
+  const monthlySearchVolumes: GoogleAdsReturnedResult['monthlySearchVolumes'] = monthlyRaw
+    .map((row) => {
+      const r = (row ?? {}) as Record<string, unknown>;
+      return {
+        year: num(r.year),
+        month: r.month ? String(r.month) : null,
+        monthlySearches: num(r.monthly_searches ?? r.monthlySearches),
+      };
+    })
+    .filter((m) => m.year !== null || m.month !== null);
+  return {
+    text: String(raw.text ?? raw.keyword ?? raw.keywordText ?? ''),
+    closeVariants: closeRaw.map(String),
+    avgMonthlySearches: num(kw.avg_monthly_searches ?? kw.avgMonthlySearches),
+    monthlySearchVolumes,
+    competition: competitionOf(kw.competition),
+    competitionIndex: num(kw.competition_index ?? kw.competitionIndex),
+    lowTopOfPageBidUsd: microsToUsd(kw.low_top_of_page_bid_micros ?? kw.lowTopOfPageBidMicros),
+    highTopOfPageBidUsd: microsToUsd(kw.high_top_of_page_bid_micros ?? kw.highTopOfPageBidMicros),
+  };
+}
+
+/** Parse an array of official result rows (or a single row). */
+export function parseGoogleAdsResults(raw: unknown): GoogleAdsReturnedResult[] {
+  if (Array.isArray(raw)) {
+    return raw.map((r) => parseGoogleAdsMetrics((r ?? {}) as Record<string, unknown>)).filter((r) => r.text);
+  }
+  if (raw && typeof raw === 'object') {
+    const row = parseGoogleAdsMetrics(raw as Record<string, unknown>);
+    return row.text ? [row] : [];
+  }
+  return [];
+}
+
+const LIMITATION = 'Search-volume evidence from Google Search; it does not prove purchases, conversion rate, marketplace sales, or Luxedge profitability.';
+
+/**
+ * Generate MarketSignal[] FROM structured facts (Phase 4G.1 §E). Human
+ * summaries are display/audit output only — never parsed back into data.
+ */
+export function googleResultsToSignals(
+  results: GoogleAdsReturnedResult[],
+  observedAt: string,
+  opts: { geo?: string; language?: string } = {}
+): MarketSignal[] {
+  const geo = opts.geo || 'US';
+  const lang = opts.language || 'en';
+  const signals: MarketSignal[] = [];
+  for (const r of results) {
+    const kw = r.text || '?';
+    if (r.avgMonthlySearches !== null) {
+      signals.push({
+        id: `demand-${kw}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        signalType: 'search_demand',
+        source: `Google Ads Keyword Planner (${geo}, ${lang})`,
+        sourceUrl: '',
+        observedAt,
+        summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" avg monthly searches ~${r.avgMonthlySearches.toLocaleString('en-US')} (12-month official estimate). Advertiser-facing data, not purchases.`,
+        confidence: 'verified',
+        limitations: LIMITATION,
+      });
+    }
+    if (r.monthlySearchVolumes.length) {
+      const display = r.monthlySearchVolumes
+        .slice(0, 12)
+        .map((m) => `${monthOfYearDisplay(m.year, m.month) ?? `${m.month ?? '?'}/${m.year ?? '?'}`}: ${m.monthlySearches !== null ? m.monthlySearches.toLocaleString('en-US') : 'unknown'}`)
+        .join(', ');
+      signals.push({
+        id: `demand-hist-${kw}-${Date.now()}`,
+        signalType: 'search_demand_history',
+        source: `Google Ads Keyword Planner (${geo}, ${lang})`,
+        sourceUrl: '',
+        observedAt,
+        summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" monthly history — ${display}. Official historical estimates only.`,
+        confidence: 'verified',
+        limitations: LIMITATION,
+      });
+    }
+    if (r.competition) {
+      signals.push({
+        id: `demand-comp-${kw}-${Date.now()}`,
+        signalType: 'keyword_ad_competition',
+        source: `Google Ads Keyword Planner (${geo}, ${lang})`,
+        sourceUrl: '',
+        observedAt,
+        summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" advertiser competition ${r.competition}${r.competitionIndex !== null ? ` (index ${r.competitionIndex})` : ''} — AD-SLOT competition, NOT total product competition.`,
+        confidence: 'verified',
+        limitations: 'Google Ads "competition" measures advertiser bidding on the ad slot — it is not marketplace/ecommerce product competition and not demand for a specific product.',
+      });
+    }
+    if (r.lowTopOfPageBidUsd !== null || r.highTopOfPageBidUsd !== null) {
+      signals.push({
+        id: `demand-bid-${kw}-${Date.now()}`,
+        signalType: 'keyword_bid_range',
+        source: `Google Ads Keyword Planner (${geo}, ${lang})`,
+        sourceUrl: '',
+        observedAt,
+        summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" typical top-of-page bid ${r.lowTopOfPageBidUsd !== null ? `low $${r.lowTopOfPageBidUsd.toFixed(2)}` : 'low n/a'} / ${r.highTopOfPageBidUsd !== null ? `high $${r.highTopOfPageBidUsd.toFixed(2)}` : 'high n/a'} (advertiser cost signal, not product price).`,
+        confidence: 'verified',
+        limitations: 'Top-of-page bids are advertiser cost signals, not consumer price or product margin evidence.',
+      });
+    }
+  }
+  return signals;
+}
+
+/**
+ * Derive display aggregates DIRECTLY from structured facts (never from
+ * summary strings). Keywords may differ between requested and returned
+ * (close-variant dedupe) — counts are separate and honest.
+ */
+export function aggregatesFromResults(results: GoogleAdsReturnedResult[]): Pick<
   DemandCollectionResult,
-  'keywordsRequested' | 'keywordsReturned' | 'avgMonthlySearches' | 'monthlyHistory' | 'competition' | 'competitionIndex' | 'bidRangeUsd'
+  'avgMonthlySearches' | 'monthlyHistory' | 'competition' | 'competitionIndex' | 'bidRangeUsd'
 > {
-  const keywords = new Set<string>();
   const avg: number[] = [];
   const monthly: { keyword: string; month: string; searches: number }[] = [];
   const comp: string[] = [];
   const compIdx: number[] = [];
   const bids: { keyword: string; low: number; high: number }[] = [];
-
-  for (const s of signals) {
-    const kw = /keyword "([^"]+)"/.exec(s.summary)?.[1] ?? null;
-    if (kw) keywords.add(kw);
-    if (s.signalType === 'search_demand') {
-      const m = /avg monthly searches ~([\d,]+)/.exec(s.summary);
-      if (m) avg.push(parseInt(m[1].replace(/,/g, ''), 10));
-    } else if (s.signalType === 'search_demand_history') {
-      const rows = s.summary.matchAll(/([0-9]{4}-[0-9]{2}):\s*([\d,]+)/g);
-      for (const row of rows) {
-        if (row[1] && row[2]) monthly.push({ keyword: kw ?? '?', month: row[1], searches: parseInt(row[2].replace(/,/g, ''), 10) });
-      }
-    } else if (s.signalType === 'keyword_ad_competition') {
-      const lvl = /competition (LOW|MEDIUM|HIGH)/.exec(s.summary)?.[1] ?? null;
-      const idx = /index ([\d.]+)/.exec(s.summary)?.[1] ?? null;
-      if (lvl) comp.push(lvl);
-      if (idx) compIdx.push(parseFloat(idx));
-    } else if (s.signalType === 'keyword_bid_range') {
-      const lo = /low \$([\d.]+)/.exec(s.summary)?.[1] ?? null;
-      const hi = /high \$([\d.]+)/.exec(s.summary)?.[1] ?? null;
-      if (lo && hi && kw) bids.push({ keyword: kw, low: parseFloat(lo), high: parseFloat(hi) });
+  for (const r of results) {
+    const kw = r.text;
+    if (r.avgMonthlySearches !== null) avg.push(r.avgMonthlySearches);
+    for (const m of r.monthlySearchVolumes) {
+      const display = monthOfYearDisplay(m.year, m.month);
+      if (display && m.monthlySearches !== null) monthly.push({ keyword: kw, month: display, searches: m.monthlySearches });
+    }
+    if (r.competition) comp.push(r.competition);
+    if (r.competitionIndex !== null) compIdx.push(r.competitionIndex);
+    if (r.lowTopOfPageBidUsd !== null || r.highTopOfPageBidUsd !== null) {
+      bids.push({ keyword: kw, low: r.lowTopOfPageBidUsd ?? 0, high: r.highTopOfPageBidUsd ?? 0 });
     }
   }
   return {
-    keywordsRequested: keywords.size,
-    keywordsReturned: keywords.size,
     avgMonthlySearches: avg.length ? avg : null,
     monthlyHistory: monthly.length ? monthly : null,
     competition: comp.length ? comp : null,
@@ -172,219 +351,137 @@ export function demandMetricsFromSignals(signals: MarketSignal[]): Pick<
 }
 
 // ---------------------------------------------------------------------------
-// GOOGLE ADS KEYWORD PLANNER ADAPTER (Phase 4G §D — built, not live)
-// ---------------------------------------------------------------------------
+// SERVER-BACKED GOOGLE ADS ADAPTER (Phase 4G.1 §C6)
+//
+// Real path: ProductScout → /api/market-demand/google-ads (admin JWT) →
+// server OAuth → Google Ads v25. The browser sends only keywords/market/
+// language and receives structured metric facts. No Google secret ever
+// enters client code. configured/online status comes from the SERVER.
+//
+// CALL CONTROL: after the first successful collection this adapter instance
+// serves the cached result — one collect() per MI job execution means at
+// most ONE outbound historical-metrics request per job. Identical requests
+// across instances are additionally deduped by the server instance cache.
+// ============================================================================
 
-/** Official env var names (server-side only; values NEVER in this module). */
-export const GOOGLE_ADS_ENV = [
-  'GOOGLE_ADS_DEVELOPER_TOKEN',
-  'GOOGLE_ADS_CLIENT_ID',
-  'GOOGLE_ADS_CLIENT_SECRET',
-  'GOOGLE_ADS_REFRESH_TOKEN',
-  'GOOGLE_ADS_CUSTOMER_ID',
-  'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
-] as const;
-
-/** Hard cap on keywords per Google demand request (Phase 4G §E §10). */
-export const GOOGLE_MAX_KEYWORDS = 5;
-
-/** Read an env var ONLY when running in Node (never in the browser bundle). */
-function env(name: string): string | undefined {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>)[name] : undefined;
-  } catch {
-    return undefined;
-  }
+/** Normalize + proactively cap keywords (max GOOGLE_MAX_KEYWORDS). */
+export function normalizeDemandKeywords(input: string[]): string[] {
+  const uniq = [...new Set(input.map((k) => k.trim().toLowerCase()).filter(Boolean))];
+  return uniq.slice(0, GOOGLE_MAX_KEYWORDS);
 }
 
-/** True when the full server-side Google Ads credential set is present. */
-export function googleAdsConfigured(): boolean {
-  return Boolean(env('GOOGLE_ADS_DEVELOPER_TOKEN') && env('GOOGLE_ADS_CLIENT_ID') && env('GOOGLE_ADS_REFRESH_TOKEN') && env('GOOGLE_ADS_CUSTOMER_ID'));
-}
-
-/** One official KeywordPlanIdea / historical-metrics record (parsed). */
-export interface GoogleAdsKeywordMetrics {
-  keyword: string;
-  /** avg_monthly_searches (12-month) — null when not returned. */
-  avgMonthlySearches: number | null;
-  /** month → searches (official monthly history). */
-  monthlySearchVolumes: { month: string; searches: number }[];
-  /** Advertiser competition level — LOW/MEDIUM/HIGH — NOT ecommerce competition. */
-  competition: 'LOW' | 'MEDIUM' | 'HIGH' | null;
-  /** Advertiser competition index (0-100). */
-  competitionIndex: number | null;
-  lowTopOfPageBidUsd: number | null;
-  highTopOfPageBidUsd: number | null;
-}
-
-function num(v: unknown): number | null {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.trim()) {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-/**
- * Parse an official Google Ads KeywordPlanIdeaService /
- * GenerateKeywordHistoricalMetrics response fragment into factual metrics.
- * Accepts snake_case (official) or camelCase shapes; unknown fields stay null.
- */
-export function parseGoogleAdsMetrics(raw: Record<string, unknown>): GoogleAdsKeywordMetrics {
-  const kwi = (raw.keyword_idea_metrics ?? raw.keywordIdeaMetrics ?? {}) as Record<string, unknown>;
-  const khm = (raw.keyword_historical_metrics ?? raw.keywordHistoricalMetrics ?? {}) as Record<string, unknown>;
-  const monthlyRaw = (khm.monthly_search_volumes ?? khm.monthlySearchVolumes) as unknown;
-  const monthlySearchVolumes: { month: string; searches: number }[] = [];
-  if (Array.isArray(monthlyRaw)) {
-    for (const row of monthlyRaw) {
-      const r = (row ?? {}) as Record<string, unknown>;
-      const month = String(r.month ?? r.yearMonth ?? '');
-      const searches = num(r.searches ?? r.searchesCount ?? r.avgMonthlySearches);
-      if (month && searches !== null) monthlySearchVolumes.push({ month, searches });
-    }
-  }
-  const lowBidMicros = num(kwi.low_top_of_page_bid_micros ?? kwi.lowTopOfPageBidMicros);
-  const highBidMicros = num(kwi.high_top_of_page_bid_micros ?? kwi.highTopOfPageBidMicros);
-  return {
-    keyword: String(raw.keyword ?? raw.keywordText ?? ''),
-    avgMonthlySearches: num(kwi.avg_monthly_searches ?? khm.avg_monthly_searches ?? kwi.avgMonthlySearches ?? khm.avgMonthlySearches),
-    monthlySearchVolumes,
-    competition: (['LOW', 'MEDIUM', 'HIGH'] as readonly string[]).includes(String(kwi.competition ?? '').toUpperCase())
-      ? (String(kwi.competition).toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH')
-      : null,
-    competitionIndex: num(kwi.competition_index ?? kwi.competitionIndex),
-    lowTopOfPageBidUsd: lowBidMicros !== null ? lowBidMicros / 1_000_000 : null,
-    highTopOfPageBidUsd: highBidMicros !== null ? highBidMicros / 1_000_000 : null,
-  };
-}
-
-/** Normalized cache key: sorted keywords + geo + language + calendar month. */
-export function googleDemandCacheKey(keywords: string[], geo: string, language: string): string {
-  const norm = keywords.map((k) => k.trim().toLowerCase()).filter(Boolean).sort().join('|');
-  const now = new Date();
-  const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-  return `${geo}:${language}:${month}:${norm}`;
-}
-
-const LIMITATION = 'Search-volume evidence from Google Search; it does not prove purchases, conversion rate, marketplace sales, or Luxedge profitability.';
-
-/** Convert parsed official metrics into MarketSignal records (provider-neutral). */
-export function googleMetricsToSignals(
-  m: GoogleAdsKeywordMetrics,
-  observedAt: string,
-  opts: { geo?: string; language?: string } = {}
-): MarketSignal[] {
-  const geo = opts.geo || 'US';
-  const lang = opts.language || 'en';
-  const kw = m.keyword || '?';
-  const signals: MarketSignal[] = [];
-  if (m.avgMonthlySearches !== null) {
-    signals.push({
-      id: `demand-${kw}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      signalType: 'search_demand',
-      source: `Google Ads Keyword Planner (${geo}, ${lang})`,
-      sourceUrl: '',
-      observedAt,
-      summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" avg monthly searches ~${m.avgMonthlySearches.toLocaleString('en-US')} (12-month official estimate). Advertiser-facing data, not purchases.`,
-      confidence: 'verified',
-      limitations: LIMITATION,
-    });
-  }
-  if (m.monthlySearchVolumes.length) {
-    signals.push({
-      id: `demand-hist-${kw}-${Date.now()}`,
-      signalType: 'search_demand_history',
-      source: `Google Ads Keyword Planner (${geo}, ${lang})`,
-      sourceUrl: '',
-      observedAt,
-      summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" monthly history — ${m.monthlySearchVolumes.slice(0, 12).map((r) => `${r.month}: ${r.searches.toLocaleString('en-US')}`).join(', ')}. Official historical estimates only.`,
-      confidence: 'verified',
-      limitations: LIMITATION,
-    });
-  }
-  if (m.competition) {
-    signals.push({
-      id: `demand-comp-${kw}-${Date.now()}`,
-      signalType: 'keyword_ad_competition',
-      source: `Google Ads Keyword Planner (${geo}, ${lang})`,
-      sourceUrl: '',
-      observedAt,
-      summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" advertiser competition ${m.competition}${m.competitionIndex !== null ? ` (index ${m.competitionIndex})` : ''} — AD-SLOT competition, NOT total product competition.`,
-      confidence: 'verified',
-      limitations: 'Google Ads "competition" measures advertiser bidding on the ad slot — it is not marketplace/ecommerce product competition and not demand for a specific product.',
-    });
-  }
-  if (m.lowTopOfPageBidUsd !== null || m.highTopOfPageBidUsd !== null) {
-    signals.push({
-      id: `demand-bid-${kw}-${Date.now()}`,
-      signalType: 'keyword_bid_range',
-      source: `Google Ads Keyword Planner (${geo}, ${lang})`,
-      sourceUrl: '',
-      observedAt,
-      summary: `Google Ads (${geo}, ${lang}): keyword "${kw}" typical top-of-page bid ${m.lowTopOfPageBidUsd !== null ? `low $${m.lowTopOfPageBidUsd.toFixed(2)}` : 'low n/a'} / ${m.highTopOfPageBidUsd !== null ? `high $${m.highTopOfPageBidUsd.toFixed(2)}` : 'high n/a'} (advertiser cost signal, not product price).`,
-      confidence: 'verified',
-      limitations: 'Top-of-page bids are advertiser cost signals, not consumer price or product margin evidence.',
-    });
-  }
-  return signals;
-}
-
-/**
- * Google Ads Keyword Planner demand adapter — BUILT in Phase 4G, NOT live.
- *
- * configured = the full server-side credential set exists. When configured,
- * getDemandSignals proxies through the Luxedge server route
- * (/api/market-demand/google-ads — admin JWT, never browser-held secrets).
- * Phase 4G performs NO live Google calls: without credentials the route
- * reports not_configured and this adapter returns [].
- *
- * CACHING: identical (keywords + geo + language + calendar month) requests are
- * served from the in-memory cache — never duplicate Google requests in the
- * same month. No secrets in the cache.
- */
-export class GoogleAdsKeywordPlannerDemandAdapter implements MarketDemandAdapter {
+export class GoogleAdsServerDemandAdapter implements MarketDemandAdapter {
   readonly provider = 'google-ads';
-  readonly configured = googleAdsConfigured();
-  private cache = new Map<string, MarketSignal[]>();
-  /** Injectable fetcher for tests/fixtures (Phase 4G: never live). */
-  fetchMetrics: (input: { keywords: string[]; market: string; language: string; geo: string }) => Promise<unknown[]>;
-  constructor(opts: { fetchMetrics?: GoogleAdsKeywordPlannerDemandAdapter['fetchMetrics'] } = {}) {
-    this.fetchMetrics = opts.fetchMetrics ?? (async () => {
-      // Real path: Luxedge server proxy (admin JWT). Phase 4G has no Google
-      // credentials, so the server route returns not_configured → [] here.
-      return [];
-    });
+  private apiBase: string;
+  private fetchImpl: typeof fetch;
+  private getToken: () => string | null;
+  private cache: { result: DemandCollectionResult } | null = null;
+
+  constructor(opts: {
+    apiBase?: string;
+    fetchImpl?: typeof fetch;
+    getToken?: () => string | null;
+  } = {}) {
+    this.apiBase = opts.apiBase ?? '/api';
+    this.fetchImpl = opts.fetchImpl ?? ((...args) => fetch(...args));
+    this.getToken = opts.getToken ?? (() => null);
   }
 
-  /** Normalize + cap keywords (max GOOGLE_MAX_KEYWORDS). */
-  static normalizeKeywords(input: string[]): string[] {
-    const uniq = [...new Set(input.map((k) => k.trim().toLowerCase()).filter(Boolean))];
-    return uniq.slice(0, GOOGLE_MAX_KEYWORDS);
+  private authHeaders(): Record<string, string> {
+    const token = this.getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  async getDemandSignals(query: DemandSignalInput): Promise<MarketSignal[]> {
-    if (!this.configured) return [];
-    const keywords = GoogleAdsKeywordPlannerDemandAdapter.normalizeKeywords(
-      (query.keywords && query.keywords.length ? query.keywords : [query.query])
-    );
-    if (keywords.length === 0) return [];
-    const geo = query.geo || 'US';
-    const language = query.language || 'en';
-    const key = googleDemandCacheKey(keywords, geo, language);
-    const cached = this.cache.get(key);
-    if (cached) return cached; // same month + same keywords → no duplicate Google request
-
-    const raw = await this.fetchMetrics({ keywords, market: query.market || 'US', language, geo });
-    const at = new Date().toISOString();
-    const signals: MarketSignal[] = [];
-    for (const item of raw) {
-      if (!item || typeof item !== 'object') continue;
-      const m = parseGoogleAdsMetrics(item as Record<string, unknown>);
-      signals.push(...googleMetricsToSignals(m, at, { geo, language }));
+  /** Server-derived status — the browser never inspects process.env. */
+  async getStatus(): Promise<DemandSourceStatus> {
+    try {
+      const res = await this.fetchImpl(`${this.apiBase}/market-demand/google-ads?action=health`, {
+        headers: { ...this.authHeaders() },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return { health: 'offline' };
+      const data = (await res.json().catch(() => null)) as { health?: string } | null;
+      const health = data?.health;
+      return health === 'configured' || health === 'not_configured' ? { health } : { health: 'offline' };
+    } catch {
+      return { health: 'offline' };
     }
-    this.cache.set(key, signals);
-    return signals;
+  }
+
+  /** Collect structured demand facts through the server. */
+  async collect(query: DemandSignalInput): Promise<DemandCollectionResult> {
+    // One collect() per adapter instance → max one outbound request per MI job.
+    if (this.cache) return this.cache.result;
+
+    const keywords = normalizeDemandKeywords(
+      query.keywords && query.keywords.length ? query.keywords : [query.query]
+    );
+    if (keywords.length === 0) return notConfiguredResult(this.provider);
+
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.apiBase}/market-demand/google-ads?action=historical-metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+        body: JSON.stringify({ keywords, market: query.market || 'US', language: query.language || 'en' }),
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (e) {
+      const err: DemandCollectionResult = {
+        ...notConfiguredResult(this.provider),
+        status: 'error',
+        errorSafe: `Demand server unreachable: ${String((e as Error).message || e).slice(0, 200)}`,
+      };
+      this.cache = { result: err };
+      return err;
+    }
+    const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!res.ok || !data) {
+      const err: DemandCollectionResult = {
+        ...notConfiguredResult(this.provider),
+        status: 'error',
+        errorSafe: data && typeof data.error === 'string' ? data.error : `Demand server error (HTTP ${res.status})`,
+      };
+      this.cache = { result: err };
+      return err;
+    }
+    const serverStatus = String(data.status ?? '');
+    if (serverStatus === 'not_configured') {
+      const result = notConfiguredResult(this.provider);
+      this.cache = { result };
+      return result;
+    }
+    if (serverStatus === 'error') {
+      const result: DemandCollectionResult = {
+        ...notConfiguredResult(this.provider),
+        status: 'error',
+        errorSafe: data.errorSafe ? String(data.errorSafe) : 'Google Ads demand provider failed.',
+        errorCode: data.errorCode ? String(data.errorCode) : null,
+        requestId: data.requestId ? String(data.requestId) : null,
+        keywordsRequested: keywords.length,
+        keywordsReturned: 0,
+      };
+      this.cache = { result };
+      return result;
+    }
+    // success — structured facts first, signals generated from them.
+    const results = parseGoogleAdsResults(data.results);
+    const observedAt = data.observedAt ? String(data.observedAt) : new Date().toISOString();
+    const result: DemandCollectionResult = {
+      status: 'success',
+      provider: this.provider,
+      requestedKeywords: Array.isArray(data.requestedKeywords) ? data.requestedKeywords.map(String) : keywords,
+      returnedResults: results,
+      keywordsRequested: typeof data.keywordsRequested === 'number' ? data.keywordsRequested : keywords.length,
+      keywordsReturned: results.length,
+      signals: googleResultsToSignals(results, observedAt, { geo: query.geo || 'US', language: query.language || 'en' }),
+      errorSafe: null,
+      errorCode: null,
+      requestId: data.requestId ? String(data.requestId) : null,
+      observedAt,
+      ...aggregatesFromResults(results),
+    };
+    this.cache = { result };
+    return result;
   }
 }

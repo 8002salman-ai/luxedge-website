@@ -1,45 +1,77 @@
-// GET /api/market-demand/google-ads
+// GET/POST /api/market-demand/google-ads
 //
-// Admin-authenticated market-demand proxy (Phase 4G §E). The browser NEVER
-// holds Google Ads credentials — it calls THIS endpoint with the admin JWT.
+// Admin-authenticated market-demand proxy (Phase 4G §E, hardened 4G.1).
+// The browser NEVER holds Google Ads credentials — it calls THIS endpoint
+// with the admin JWT; the server performs OAuth + the official v25 call.
 //
 // Actions:
-//   health             → { provider:'google-ads', health: configured|not_configured }
-//                        Phase 4G: presence check only — NO live Google call
-//                        (online/offline requires the owner-approved live proof).
-//   historical-metrics → ?action=historical-metrics with POST body
-//                        { keywords: string[], market: 'US', language: 'en' }
-//                        Hard limits: max 5 keywords, USA only, English only.
-//                        Phase 4G returns status 'not_configured' — no live call.
+//   health             → { provider:'google-ads', health: not_configured|configured }
+//                        NOT CONFIGURED: required env missing.
+//                        CONFIGURED: env present (no live probe yet — ONLINE is
+//                        only reported after a successful authorized request).
+//   historical-metrics → POST { keywords[], market:'US', language:'en' }
+//                        Hard limit: max 5 UNIQUE normalized keywords — a
+//                        6-keyword request is rejected with HTTP 400
+//                        (MAX_KEYWORDS_EXCEEDED), never silently truncated.
+//                        USA only, English only. When the credential set is
+//                        configured the server performs the official v25 call.
 //
-// SECURITY: admin JWT required; keyword/market/language validated; response
-// contains NO secret values — only configured/not_configured and (future)
-// official metric facts.
+// SECURITY: admin JWT required; keyword/market/language validated; the
+// response contains structured metric FACTS and safe errors only — never
+// tokens, secrets, or raw Google error bodies with sensitive context.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
-import { googleAdsConfiguredServer, googleAdsSafeError } from '../_lib/googleAds.js';
+import {
+  googleAdsConfiguredServer, generateKeywordHistoricalMetrics,
+  googleAdsEnvStatus, type GoogleHistoricalMetricsOutcome,
+} from '../_lib/googleAds.js';
 
 const MAX_KEYWORDS = 5;
 
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  let raw = '';
-  for await (const chunk of req) {
-    raw += chunk;
-    if (raw.length > 1_000_000) break;
-  }
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
+function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    let raw = '';
+    req.on('data', (chunk: Buffer | string) => {
+      raw += chunk.toString();
+      if (raw.length > 1_000_000) req.destroy();
+    });
+    req.on('end', () => {
+      if (!raw) return resolve({});
+      try {
+        resolve(JSON.parse(raw) as Record<string, unknown>);
+      } catch {
+        resolve({});
+      }
+    });
+    req.on('error', () => resolve({}));
+  });
 }
 
+/**
+ * Normalize WITHOUT truncating: returns every unique normalized keyword.
+ * The >5 rejection must be reachable — the route checks the full count below
+ * instead of silently slicing to 5 (Phase 4G.1 §A3).
+ */
 function normalizeKeywords(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  const uniq = [...new Set(raw.filter((k): k is string => typeof k === 'string' && k.trim().length > 0).map((k) => k.trim().toLowerCase()))];
-  return uniq.slice(0, MAX_KEYWORDS);
+  return [...new Set(raw.filter((k): k is string => typeof k === 'string' && k.trim().length > 0).map((k) => k.trim().toLowerCase()))];
+}
+
+function safeOutcome(o: GoogleHistoricalMetricsOutcome): Record<string, unknown> {
+  return {
+    provider: 'google-ads',
+    status: o.status,
+    requestedKeywords: o.requestedKeywords,
+    keywordsRequested: o.requestedKeywords.length,
+    keywordsReturned: o.results.length,
+    results: o.results,
+    errorCode: o.errorCode,
+    errorSafe: o.errorSafe,
+    requestId: o.requestId,
+    cacheHit: o.cacheHit,
+    observedAt: new Date().toISOString(),
+  };
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -58,15 +90,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   // ---------------- health ----------------
   if (action === 'health') {
-    // Phase 4G: presence probe only — configured / not_configured. A live
-    // online/offline probe belongs to the owner-approved live-proof phase.
-    const configured = googleAdsConfiguredServer();
+    const status = googleAdsEnvStatus();
+    const health = status.configured ? 'configured' : 'not_configured';
     sendJson(res, 200, {
       provider: 'google-ads',
-      health: configured ? 'configured' : 'not_configured',
-      detail: configured
-        ? 'Google Ads credential set is configured server-side. Live Keyword Planner calls are NOT enabled in Phase 4G (owner-approved live proof pending).'
+      health,
+      detail: status.configured
+        ? 'Google Ads credential set is configured server-side. ONLINE is only reported after a successful authorized Google API request (live proof).'
         : 'Google Ads credentials are not configured on the server. Add the GOOGLE_ADS_* env set server-side only (never VITE_*) for a live proof.',
+      missing: status.configured ? [] : status.missing,
     });
     return;
   }
@@ -76,21 +108,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const body = await readBody(req);
     const keywords = normalizeKeywords(body.keywords);
     if (keywords.length === 0) {
-      sendJson(res, 400, { error: 'At least one keyword is required (max 5).' });
+      sendJson(res, 400, { error: 'At least one keyword is required.' });
       return;
     }
+    // Strict rejection — never silently truncate an oversized request.
     if (keywords.length > MAX_KEYWORDS) {
-      sendJson(res, 400, { error: `Maximum ${MAX_KEYWORDS} keywords per proof request.` });
+      sendJson(res, 400, { errorCode: 'MAX_KEYWORDS_EXCEEDED', error: `Maximum ${MAX_KEYWORDS} keywords per proof request (received ${keywords.length}).` });
       return;
     }
     const market = String(body.market || 'US').trim().toUpperCase();
     if (market !== 'US' && market !== 'USA') {
-      sendJson(res, 400, { error: 'USA only for Phase 4G demand proof.' });
+      sendJson(res, 400, { error: 'USA only for the demand proof.' });
       return;
     }
     const language = String(body.language || 'en').trim().toLowerCase();
     if (language !== 'en' && language !== 'english') {
-      sendJson(res, 400, { error: 'English only for Phase 4G demand proof.' });
+      sendJson(res, 400, { error: 'English only for the demand proof.' });
       return;
     }
 
@@ -98,28 +131,33 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, 200, {
         provider: 'google-ads',
         status: 'not_configured',
-        keywords,
-        market: 'US',
-        language: 'en',
-        metrics: [],
-        warning: 'Google Ads credentials not configured server-side — no live call made (Phase 4G).',
+        requestedKeywords: keywords,
+        keywordsRequested: keywords.length,
+        keywordsReturned: 0,
+        results: [],
+        errorCode: null,
+        errorSafe: null,
+        requestId: null,
+        cacheHit: false,
+        warning: 'Google Ads credentials not configured server-side — no live call made.',
+        observedAt: new Date().toISOString(),
       });
       return;
     }
 
-    // Phase 4G HARD RULE: NO live Google Ads calls. The live path (official
-    // KeywordPlanIdeaService / GenerateKeywordHistoricalMetrics with the
-    // server credential set) is implemented by the client adapter but is only
-    // exercised in the owner-approved live-proof phase. Fail safe here.
-    sendJson(res, 200, {
-      provider: 'google-ads',
-      status: 'error',
-      keywords,
-      market: 'US',
-      language: 'en',
-      metrics: [],
-      errorSafe: googleAdsSafeError('live Google Ads Keyword Planner calls are not enabled in Phase 4G (owner-approved live proof required)'),
-    });
+    // Real-capable path (Phase 4G.1): the server performs the official v25
+    // GenerateKeywordHistoricalMetrics call with its own OAuth access token.
+    const outcome = await generateKeywordHistoricalMetrics(keywords);
+    if (outcome.status === 'error' && outcome.errorCode === 'NOT_CONFIGURED') {
+      sendJson(res, 200, { ...safeOutcome(outcome), warning: 'Google Ads credentials not configured server-side — no live call made.' });
+      return;
+    }
+    if (outcome.status === 'error') {
+      // Safe structured error — no raw Google error body, no tokens.
+      sendJson(res, 200, safeOutcome(outcome));
+      return;
+    }
+    sendJson(res, 200, safeOutcome(outcome));
     return;
   }
 

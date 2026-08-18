@@ -28,6 +28,7 @@ import type { QAOutcome } from '../features/scout/engine';
 import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
 import { RETAIL_EVIDENCE_DOMAINS } from '../features/scout/retailDiscovery';
+import { GoogleAdsServerDemandAdapter } from '../features/scout/marketDemand';
 import { runSupplierSearch } from '../features/scout/supplierSearch';
 import { CjSupplierAdapter } from '../features/suppliers/cj/adapter';
 import type { SupplierHealth } from '../features/suppliers/types';
@@ -500,6 +501,10 @@ export default function ProductScout() {
         // Phase 4E: site-restricted retailer discovery by default so the pack
         // gets exact product pages (market evidence only).
         retailDomains: miRetail ? RETAIL_EVIDENCE_DOMAINS : undefined,
+        // Phase 4G.1: the normal MI flow wires the SERVER-BACKED Google Ads
+        // demand adapter (admin-JWT proxy). configured/not_configured/online/
+        // offline come from the server — never from process.env in the browser.
+        demand: new GoogleAdsServerDemandAdapter({ getToken: getAccessToken }),
         onProgress,
       });
       const ev = result.evidence;
