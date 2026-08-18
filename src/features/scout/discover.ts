@@ -206,8 +206,14 @@ export function buildQueries(opts: DiscoverOptions): string[] {
   const suffix = [market, cost].filter(Boolean).join(' ');
   const mk = (term: string) => [term, suffix].filter(Boolean).join(' ');
 
-  // Product-specific: contains a product noun or brand word → search as-is.
-  if (/\b(?:kong|chuckit|west paw|frisco|nylabone|barkbox|petfusion|outward hound)\b|\b(?:toy|bed|harness|collar|leash|brush|carrier|fountain|dispenser|scratch|tunnel|bowl|kennel|crate|shampoo|clipper|supplement|treat)\b/i.test(q)) {
+  // Product-specific: contains a concrete product noun or brand word → search
+  // the ORIGINAL query as-is. A product-specific seed query (e.g. a CJ-seeded
+  // concept like "single door dog cage") must NEVER be replaced by unrelated
+  // generic QUERY_EXPANSIONS — the original query is the authoritative search
+  // term. The noun list covers the concrete pet-product vocabulary actually
+  // used by the Phase 4F CJ seed concepts (cage, playpen, mat, blanket, ramp,
+  // sofa, bag, backpack, trailer, seat belt, clothes, shoe, fence, saucer, …).
+  if (/\b(?:kong|chuckit|west paw|frisco|nylabone|barkbox|petfusion|outward hound)\b|\b(?:toy|bed|harness|collar|leash|brush|carrier|fountain|dispenser|scratch|tunnel|bowl|kennel|crate|cage|playpen|pen|mat|blanket|ramp|sofa|bag|backpack|trailer|seat ?belt|clothes|clothing|shirt|sweater|shoe|shoes|fence|stroller|bottle|saucer|ball|puzzle|treat|supplement|shampoo|clipper|groomer|towel|pad|house|igloo|jacket|boots|necklace|feeder|perch)\b/i.test(q)) {
     return [mk(q)];
   }
   // Generic category query → expand into concrete product types.

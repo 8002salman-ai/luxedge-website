@@ -17,7 +17,7 @@ import { extractPageFacts } from '../extract';
 import { runScoutResearch, qaCandidate, runMarketIntelligenceJob } from '../engine';
 import type { MarketDemandAdapter } from '../marketDemand';
 import { persistCandidate, persistScore, ensureSupplier, createProductDraft } from '../persist';
-import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, discoverUrls } from '../discover';
+import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, buildQueries, discoverUrls } from '../discover';
 import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
 import { DEFAULT_AUTONOMY_CONFIG, evaluateAutonomy, pushAttentionItem, loadAttentionItems, resolveAttentionItem, attentionForCandidate } from '../autonomy';
 import { evidenceFingerprint, cacheGet, cachePut, clearAiCache, candidateEvidenceKey, aiPrefilter, makeAiBudget } from '../aiCost';
@@ -346,6 +346,33 @@ describe('discovery (autonomous mode)', () => {
     const r = await discoverUrls({ query: 'dog toys' }, async () => { throw new Error('no proxy'); });
     expect(r.warning).toContain('no proxy');
     expect(r.urls.length).toBe(0);
+  });
+
+  it('PHASE 4J — single door dog cage is searched as itself, never expanded to generic dog toy/cat toy', async () => {
+    const queries = buildQueries({ query: 'single door dog cage', market: 'US' });
+    expect(queries).toEqual(['single door dog cage US']);
+    // The specific query is the ONLY search — it must never be replaced by
+    // unrelated generic QUERY_EXPANSIONS (Phase 4I regression: `cage` was
+    // missing from the product-noun list so the seed query degraded into
+    // dog-toy/cat-toy searches).
+    for (const q of queries) {
+      expect(q).not.toMatch(/dog toy/);
+      expect(q).not.toMatch(/cat toy/);
+    }
+  });
+
+  it('PHASE 4J — other CJ-seeded concept nouns also search as themselves', () => {
+    for (const q of ['dog playpen indoor fence', 'dog crate furniture wheel', 'pet dog seat belt leash adjustable', 'cute cat blanket dog pet mat']) {
+      const queries = buildQueries({ query: q });
+      expect(queries.length).toBe(1);
+      expect(queries[0]).toBe(q);
+    }
+  });
+
+  it('PHASE 4J — a genuinely generic category query still expands (no regression)', () => {
+    expect(buildQueries({ query: 'pet accessories' })).toEqual(
+      expect.arrayContaining(['dog toy', 'cat toy', 'dog bed'])
+    );
   });
 });
 
