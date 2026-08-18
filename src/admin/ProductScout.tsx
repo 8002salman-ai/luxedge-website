@@ -128,7 +128,7 @@ export default function ProductScout() {
   // Phase 4E — retailer-restricted evidence discovery (site:chewy/target/walmart).
   const [miRetail, setMiRetail] = useState(true);
   const [miLog, setMiLog] = useState<string[]>([]);
-  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; diagnosticDeterministicScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number } } | null>(null);
+  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; diagnosticDeterministicScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number; availabilityEvidenceCount: number }; demand?: { provider: string | null; status: string; errorSafe: string | null; keywordsRequested: number; keywordsReturned: number; avgMonthlySearches: number[] | null; competition: string[] | null; competitionIndex: number[] | null; bidRangeUsd: { keyword: string; low: number; high: number }[] | null; observedAt: string | null } } | null>(null);
   const [autonomyCfg, setAutonomyCfg] = useState<AutonomyConfig>(() => loadAutonomyConfig());
   const [attention, setAttention] = useState<OwnerAttentionItem[]>(() => loadAttentionItems());
   const [scanning, setScanning] = useState(false);
@@ -506,7 +506,7 @@ export default function ProductScout() {
       const qualified = result.qualificationEligible && result.marketScore !== null;
       log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore ?? 'NULL'}/100${qualified ? '' : ` (diagnostic ${result.diagnosticDeterministicScore ?? 'n/a'}/100 — NOT qualification eligible)`}, ai=${result.aiUsed}, evidence=${ev.evidenceQuality} (${ev.successfulExtracts} extracts, ${ev.independentDomains} domains, ${ev.priceEvidenceCount} prices, ${ev.availabilityEvidenceCount} available)`);
       setMiLog([...log]);
-      setMiResult({ signals: result.signals, marketScore: result.marketScore, diagnosticDeterministicScore: result.diagnosticDeterministicScore, aiUsed: result.aiUsed, analysis: result.analysis, evidence: { evidenceQuality: result.evidence.evidenceQuality, missing: result.evidence.evidenceQuality === 'insufficient' ? result.evidence.evidenceQualityReasons : [], successfulExtracts: result.evidence.successfulExtracts, independentDomains: result.evidence.independentDomains, priceEvidenceCount: result.evidence.priceEvidenceCount } });
+      setMiResult({ signals: result.signals, marketScore: result.marketScore, diagnosticDeterministicScore: result.diagnosticDeterministicScore, aiUsed: result.aiUsed, analysis: result.analysis, evidence: { evidenceQuality: result.evidence.evidenceQuality, missing: result.evidence.evidenceQuality === 'insufficient' ? result.evidence.evidenceQualityReasons : [], successfulExtracts: result.evidence.successfulExtracts, independentDomains: result.evidence.independentDomains, priceEvidenceCount: result.evidence.priceEvidenceCount, availabilityEvidenceCount: result.evidence.availabilityEvidenceCount }, demand: { provider: result.demand.provider, status: result.demand.status, errorSafe: result.demand.errorSafe, keywordsRequested: result.demand.keywordsRequested, keywordsReturned: result.demand.keywordsReturned, avgMonthlySearches: result.demand.avgMonthlySearches, competition: result.demand.competition, competitionIndex: result.demand.competitionIndex, bidRangeUsd: result.demand.bidRangeUsd, observedAt: result.demand.observedAt } });
       // Phase 4E.1 FAIL-CLOSED: arm the market-grounded CJ context ONLY when
       // the MI run is qualification-eligible (evidence sufficient + qualifying
       // market score >= 60 + real search hypotheses). An insufficient run can
@@ -1319,6 +1319,24 @@ export default function ProductScout() {
                   {miResult.analysis.recommendedSearchQueries.length > 0 && <p><span className="font-semibold">Recommended searches (diagnostic):</span> {miResult.analysis.recommendedSearchQueries.join(', ')}</p>}
                 </div>
               )}
+              {/* Phase 4G — DIRECT DEMAND DATA (Google Ads adapter; factual metrics only) */}
+              <div className="border-t border-indigo-200 pt-2">
+                <p className="text-xs font-bold text-indigo-900">DIRECT DEMAND DATA</p>
+                {!miResult.demand || miResult.demand.status === 'not_configured' ? (
+                  <p className="text-xs text-gray-600">Status: <span className="font-semibold text-gray-700">NOT CONFIGURED</span> — no demand-data provider credentials (server-side env only, e.g. GOOGLE_ADS_*). No outbound demand calls were made.</p>
+                ) : miResult.demand.status === 'error' ? (
+                  <p className="text-xs text-amber-700">Status: <span className="font-semibold">ERROR</span> — {miResult.demand.errorSafe ?? 'provider failed'}. Safe error only; credentials never exposed.</p>
+                ) : (
+                  <div className="text-xs text-indigo-800 space-y-1">
+                    <p>Status: <span className="font-semibold text-emerald-700">EVIDENCE COLLECTED</span> · provider: {miResult.demand.provider ?? 'unknown'} · observed: {miResult.demand.observedAt ?? 'n/a'}</p>
+                    <p>Keywords: {miResult.demand.keywordsReturned}/{miResult.demand.keywordsRequested} returned</p>
+                    {miResult.demand.avgMonthlySearches && miResult.demand.avgMonthlySearches.length > 0 && <p>Avg monthly searches (USA): <span className="font-semibold">{miResult.demand.avgMonthlySearches.map((n) => n.toLocaleString()).join(' · ')}</span> — search-volume evidence only; does NOT prove purchases, conversion, sales, or Luxedge profitability.</p>}
+                    {miResult.demand.competition && miResult.demand.competition.length > 0 && <p>Keyword ad competition: {miResult.demand.competition.join(' · ')}{miResult.demand.competitionIndex && miResult.demand.competitionIndex.length > 0 ? ` (index ${miResult.demand.competitionIndex.join(' · ')})` : ''} — advertiser ad-slot competition, NOT ecommerce product competition.</p>}
+                    {miResult.demand.bidRangeUsd && miResult.demand.bidRangeUsd.length > 0 && <p>Top-of-page bid range: {miResult.demand.bidRangeUsd.map((b) => `${b.keyword}: $${b.low.toFixed(2)}–$${b.high.toFixed(2)}`).join(' · ')}</p>}
+                    <p className="text-gray-600">Not labeled sales/orders/demand trend — single-metric labels like WINNER/TRENDING are never derived from one metric.</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {miLog.length > 0 && (

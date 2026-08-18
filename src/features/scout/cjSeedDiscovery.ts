@@ -141,11 +141,14 @@ export interface CjSeedConcept {
   records: CjSeedRecord[];
   memberPids: string[];
   /**
-   * Supplier-suitability score (NOT a demand/market score). Ranks concepts
+   * FIXED concept-level supplier-suitability score (0–15, Phase 4G §B) — NOT
+   * a demand/market score and NOT scaled by member count. Ranks concepts
    * only for: pet relevance, product clarity, supplier data completeness,
    * basic safety/risk suitability. Higher = more researchable, not "popular".
    */
   suitabilityScore: number;
+  /** Informational only — NEVER popularity, NEVER a score input. */
+  memberCount: number;
   /** Why this concept was ranked the way it was (deterministic reasons). */
   suitabilityReasons: string[];
 }
@@ -189,57 +192,71 @@ export function clusterCjSeedConcepts(
       memberPids: members.map((m) => m.productId),
       suitabilityScore: suitability.score,
       suitabilityReasons: suitability.reasons,
+      // Informational only — never a score input, never popularity.
+      memberCount: members.length,
     };
   });
 }
 
 /**
- * Supplier-suitability assessment for a concept's seed records. Uses ONLY
- * supplier/data facts: pet relevance, product clarity, real price, image,
- * US inventory figure, delivery cycle, and the existing deterministic
- * prefilter for IP/medical/battery/price/image safety. This is NOT consumer
- * demand proof and it contributes nothing to any Market Score.
+ * Supplier-suitability assessment for a concept — FIXED CONCEPT-LEVEL SCORE
+ * (Phase 4G §B). Points are awarded ONCE per concept, NOT per member record:
+ * a concept with 5 near-duplicate CJ variants must NOT outrank an equally-
+ * complete concept with 1 record merely because more listings exist. That is
+ * not consumer demand and it is an undesirable selection bias.
+ *
+ *   pet relevance           0–2   (dog/cat/pet in the representative title)
+ *   clear product concept   0–2   (title length is a real single-product title)
+ *   verified supplier price 0–2   (ANY member has a real price — not count)
+ *   usable image evidence   0–2   (ANY member has a real image — not count)
+ *   US inventory evidence   0–2   (ANY member has a US inventory figure —
+ *                                  inventory, NOT delivery, NOT demand)
+ *   delivery-cycle evidence 0–1   (ANY member has a delivery cycle)
+ *   basic safety pass       0–2   (ALL members pass IP/medical/battery/
+ *                                  price/image prefilter)
+ *   researchability         0–2   (concept tokens in a researchable band)
+ *   MAX = 15
+ *
+ * memberCount and listedNum are recorded separately (informational only) and
+ * NEVER contribute to the score. This is NOT demand proof and contributes
+ * nothing to any Market Score.
  */
 export function assessConceptSuitability(records: CjSeedRecord[]): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  let score = 0;
+  const rep = [...records].sort((a, b) => b.title.length - a.title.length)[0];
+  if (!rep) return { score: 0, reasons: ['no records'] };
+  const any = (fn: (r: CjSeedRecord) => boolean) => records.some(fn);
+  const title = rep.title.toLowerCase();
 
-  const petRelevant = records.filter((r) => /\b(dog|puppy|canine|cat|kitten|feline|pet)\b/i.test(r.title));
-  if (petRelevant.length) {
-    score += petRelevant.length;
-    reasons.push(`${petRelevant.length}/${records.length} records clearly pet-relevant`);
-  }
+  // 1) Pet relevance (0–2)
+  let petPts = 0;
+  if (/\b(dog|puppy|canine|cat|kitten|feline)\b/.test(title)) petPts = 2;
+  else if (/\bpet\b/.test(title)) petPts = 1;
+  reasons.push(petPts ? `pet-relevant title (+${petPts})` : 'no clear pet keyword in title');
 
-  const withPrice = records.filter((r) => r.sellPrice !== null && r.sellPrice > 0);
-  if (withPrice.length) {
-    score += withPrice.length;
-    reasons.push(`real supplier price on ${withPrice.length}`);
-  }
-  const withImage = records.filter((r) => r.imageUrl && r.images.length);
-  if (withImage.length) {
-    score += withImage.length;
-    reasons.push(`usable images on ${withImage.length}`);
-  }
-  const withUsStock = records.filter((r) => r.usInventoryTotal !== null && r.usInventoryTotal > 0);
-  if (withUsStock.length) {
-    score += withUsStock.length;
-    reasons.push(`US inventory figure on ${withUsStock.length} (inventory, not delivery)`);
-  }
-  const withDelivery = records.filter((r) => r.deliveryCycle !== null);
-  if (withDelivery.length) {
-    score += withDelivery.length;
-    reasons.push(`delivery cycle on ${withDelivery.length}`);
-  }
-  // Long enough to be a real product title, short enough to be a clear concept.
-  const clarity = records.filter((r) => r.title.length >= 12 && r.title.length <= 120);
-  if (clarity.length) {
-    score += clarity.length;
-    reasons.push('clear single-product titles');
-  }
+  // 2) Clear product concept (0–2) — a real single-product title.
+  const clarity = rep.title.length >= 12 && rep.title.length <= 120;
+  reasons.push(clarity ? 'clear single-product title (+2)' : 'title not a clean single-product concept');
 
-  // Basic safety/risk suitability — reuses the deterministic prefilter rules
-  // (IP/counterfeit, medical/veterinary, battery/fire) with US-inventory not
-  // required at the concept level. This filters supplier suitability only.
+  // 3) Verified supplier price (0–2) — presence, not count.
+  const hasPrice = any((r) => r.sellPrice !== null && r.sellPrice > 0);
+  reasons.push(hasPrice ? 'verified supplier price present (+2)' : 'no verified supplier price');
+
+  // 4) Usable image evidence (0–2) — presence, not count.
+  const hasImage = any((r) => Boolean(r.imageUrl && r.images.length > 0));
+  reasons.push(hasImage ? 'usable product image present (+2)' : 'no usable product image');
+
+  // 5) US inventory evidence (0–2) — inventory figure presence (NOT delivery,
+  //    NOT demand).
+  const hasUsInv = any((r) => r.usInventoryTotal !== null && r.usInventoryTotal > 0);
+  reasons.push(hasUsInv ? 'US inventory figure present (+2, inventory not delivery)' : 'no US inventory figure');
+
+  // 6) Delivery-cycle evidence (0–1).
+  const hasDelivery = any((r) => r.deliveryCycle !== null);
+  reasons.push(hasDelivery ? 'delivery cycle present (+1)' : 'no delivery-cycle evidence');
+
+  // 7) Basic safety pass (0–2) — ALL members must pass (IP/medical/battery/
+  //    price/image prefilter with US inventory NOT required at concept level).
   let safe = 0;
   for (const r of records) {
     const probe: SupplierProductRecord = {
@@ -254,12 +271,27 @@ export function assessConceptSuitability(records: CjSeedRecord[]): { score: numb
     };
     if (prefilterCjRecord(probe, { requireUsInventory: false }).ok) safe++;
   }
-  score += safe;
-  reasons.push(safe === records.length
-    ? 'all records pass basic IP/medical/battery/price/image safety filters'
-    : `${safe}/${records.length} records pass basic safety filters`);
+  const safetyPts = safe === records.length ? 2 : safe > 0 ? 1 : 0;
+  reasons.push(safetyPts === 2
+    ? 'all members pass basic safety filters (+2)'
+    : safetyPts === 1
+      ? `only ${safe}/${records.length} members pass basic safety filters (+1)`
+      : 'no member passes basic safety filters');
 
-  return { score, reasons };
+  // 8) Researchability (0–2) — concept tokens in a researchable band.
+  const tokens = conceptTokens(rep.title);
+  const researchable = tokens.length >= 2 && tokens.length <= 7;
+  reasons.push(researchable ? `researchable concept vocabulary (${tokens.length} tokens) (+2)` : `concept vocabulary not researchable (${tokens.length} tokens)`);
+
+  const score = petPts
+    + (clarity ? 2 : 0)
+    + (hasPrice ? 2 : 0)
+    + (hasImage ? 2 : 0)
+    + (hasUsInv ? 2 : 0)
+    + (hasDelivery ? 1 : 0)
+    + safetyPts
+    + (researchable ? 2 : 0);
+  return { score: Math.min(15, score), reasons };
 }
 
 /**
@@ -268,8 +300,11 @@ export function assessConceptSuitability(records: CjSeedRecord[]): { score: numb
  * never invented popularity. Returns concepts sorted by suitabilityScore desc.
  */
 export function selectSeedConcepts(records: CjSeedRecord[], max = CJ_SEED_MAX_CONCEPTS): CjSeedConcept[] {
+  // Deterministic ranking: suitability score desc, then label asc. Member
+  // count / listedNum NEVER break ties — Phase 4G §B: more near-duplicate
+  // records is not a quality signal.
   const clusters = clusterCjSeedConcepts(records)
-    .sort((a, b) => b.suitabilityScore - a.suitabilityScore || b.memberPids.length - a.memberPids.length)
+    .sort((a, b) => b.suitabilityScore - a.suitabilityScore || a.label.localeCompare(b.label))
     .slice(0, Math.max(1, max));
   return clusters;
 }
@@ -301,8 +336,23 @@ export interface CjSeedRunResult {
   /** Records AFTER stable pid/SKU dedupe (CJ seed facts only). */
   seeds: CjSeedRecord[];
   duplicates: number;
-  /** Points reserved for actual paid requests (server-authoritative when known). */
+  /**
+   * CLIENT FORECAST of points used (local CjPointBudget) — DIAGNOSTICS ONLY.
+   * Phase 4G: the DURABLE SERVER LEDGER is the authority; if a response is
+   * lost after the server reserved points, this can read 0 while the server
+   * correctly reports 50. Never treat this as the authoritative count.
+   */
+  clientForecastPoints: number;
+  /** @deprecated Phase 4G — same value as clientForecastPoints (kept for compat). */
   pointsReserved: number;
+  /** SERVER-AUTHORIZED / RESERVED points (durable ledger, authoritative). */
+  serverAuthorizedPoints: number | null;
+  serverRemainingPoints: number | null;
+  serverListAttempts: number | null;
+  serverDetailAttempts: number | null;
+  serverFreightAttempts: number | null;
+  serverPaidRetries: number | null;
+  serverDeniedAttempts: number | null;
   listCalls: number;
   detailCalls: number;
   freightCalls: number;
@@ -363,6 +413,35 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
     return adapter.finishRun?.(status).catch(() => {});
   };
 
+  // Phase 4G — SERVER-AUTHORITATIVE ACCOUNTING. The durable supplier_api_runs
+  // ledger is the authority: it reserves points BEFORE every outbound paid CJ
+  // request, so a lost/aborted client response must never be reported as
+  // "0 points used". After EVERY paid seed attempt — success or failure — we
+  // fetch the durable usage when a run id exists. The local CjPointBudget
+  // stays a CLIENT FORECAST for diagnostics only.
+  // Object holder defeats TS CFA narrowing of `let` captured by closures —
+  // the holder property always keeps the declared type.
+  const usageState: { value: SupplierPointUsage | null } = { value: null };
+  const refreshServerUsage = async () => {
+    if (!runId) return;
+    try {
+      usageState.value = (await adapter.getRunUsage?.()) ?? null;
+    } catch {
+      usageState.value = null; // ledger unreachable now — keep last known
+    }
+  };
+  const serverOut = () => ({
+    clientForecastPoints: budget.used,
+    pointsReserved: budget.used, // @deprecated — client forecast (compat)
+    serverAuthorizedPoints: usageState.value?.reserved ?? null,
+    serverRemainingPoints: usageState.value?.remaining ?? null,
+    serverListAttempts: usageState.value?.listAttempts ?? null,
+    serverDetailAttempts: usageState.value?.detailAttempts ?? null,
+    serverFreightAttempts: usageState.value?.freightAttempts ?? null,
+    serverPaidRetries: usageState.value?.paidRetries ?? null,
+    serverDeniedAttempts: usageState.value?.denied ?? null,
+  });
+
   if (!runId) {
     const code = 'CJ_DURABLE_LEDGER_UNAVAILABLE';
     const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
@@ -375,7 +454,11 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
     progress(`[block] ${code} — zero paid supplier calls issued.`);
     return {
       jobId, runId: null, hardBudget, query, health: 'offline', code,
-      recordsReturned: 0, seeds: [], duplicates: 0, pointsReserved: 0,
+      recordsReturned: 0, seeds: [], duplicates: 0,
+      clientForecastPoints: 0, pointsReserved: 0,
+      serverAuthorizedPoints: null, serverRemainingPoints: null,
+      serverListAttempts: null, serverDetailAttempts: null, serverFreightAttempts: null,
+      serverPaidRetries: null, serverDeniedAttempts: null,
       listCalls: 0, detailCalls: 0, freightCalls: 0, concepts: [],
       warning: `Seed run blocked: durable point ledger unavailable (${ledgerError}) — zero paid calls issued.`,
     };
@@ -393,8 +476,15 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
     await addLog(db, jobId, 'error', `Seed budget ${budget.budget} exhausted before the search — run denied.`);
     await addRun(db, jobId, 'cj-seed-discovery', 'failed', 'CJ point budget exhausted before search');
     await completeJob(db, jobId, 'failed', { error: 'CJ point budget exhausted', points: budget.usage() });
+    await refreshServerUsage(); // authoritative ledger still governs the run
     await finishRun('failed');
-    return { jobId, runId, hardBudget, query, health: 'offline', recordsReturned: 0, seeds: [], duplicates: 0, pointsReserved: 0, listCalls: 0, detailCalls: 0, freightCalls: 0, concepts: [], warning: 'Seed budget exhausted before search' };
+    return {
+      jobId, runId, hardBudget, query, health: 'offline',
+      recordsReturned: 0, seeds: [], duplicates: 0,
+      ...serverOut(), listCalls: 0, detailCalls: 0, freightCalls: 0, concepts: [],
+      serverPoints: usageState.value,
+      warning: 'Seed budget exhausted before search',
+    };
   }
 
   let result;
@@ -402,12 +492,29 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
     result = await adapter.searchProducts({ query, market, maxResults } as SupplierSearchOptions);
     budget.spend('listV2');
   } catch (e) {
-    await addLog(db, jobId, 'error', `CJ_SEED_DISCOVERY search failed: ${(e as Error).message} (retries=0)`);
+    // FAILURE-PATH ACCOUNTING (Phase 4G §2): the server may have reserved the
+    // 50 points before the outbound response was lost. NEVER report 0
+    // automatically — fetch the durable ledger BEFORE returning.
+    await refreshServerUsage();
+    await addLog(db, jobId, 'error', `CJ_SEED_DISCOVERY search failed: ${(e as Error).message} (serverAuthorized=${usageState.value?.reserved ?? 'unknown'}pts, clientForecast=${budget.used}pts)`);
     await addRun(db, jobId, 'cj-seed-discovery', 'failed', `Seed search failed: ${(e as Error).message}`);
-    await completeJob(db, jobId, 'failed', { error: (e as Error).message, retries: 0, points: budget.usage() });
+    await completeJob(db, jobId, 'failed', {
+      error: (e as Error).message, retries: 0,
+      clientForecastPoints: budget.used, serverAuthorizedPoints: usageState.value?.reserved ?? null,
+      transportStatus: 'failed/unknown',
+    });
     await finishRun('failed');
-    return { jobId, runId, hardBudget, query, health: 'offline', recordsReturned: 0, seeds: [], duplicates: 0, pointsReserved: 0, listCalls: 0, detailCalls: 0, freightCalls: 0, concepts: [], warning: `Seed search failed: ${(e as Error).message}` };
+    return {
+      jobId, runId, hardBudget, query, health: 'offline',
+      recordsReturned: 0, seeds: [], duplicates: 0,
+      ...serverOut(), listCalls: 0, detailCalls: 0, freightCalls: 0, concepts: [],
+      serverPoints: usageState.value,
+      warning: `Seed search failed: ${(e as Error).message} (serverAuthorized=${usageState.value?.reserved ?? 'unknown'}pts)`,
+    };
   }
+  // After a SUCCESSFUL paid attempt the durable ledger is the authority for
+  // what was actually authorized/reserved (Phase 4G §1).
+  await refreshServerUsage();
   progress(`[seed] ${adapter.provider.toUpperCase()} returned ${result.records.length} records (health=${result.health}, points used ${budget.used}/${budget.budget})${result.warning ? ' — ' + result.warning : ''}`);
   await addLog(db, jobId, 'info', `CJ_SEED_DISCOVERY: ${result.records.length} records, health=${result.health}${result.warning ? '; ' + result.warning : ''}`);
 
@@ -433,13 +540,24 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
   // (no schema migration needed): factual seed records + concepts. NEVER
   // create product_candidates here — seeds are concepts for research, not
   // candidates, and are never scored as winners.
-  await addRun(db, jobId, 'cj-seed-discovery', 'completed', `${seeds.length} seeds (${duplicates} dups) · ${concepts.length} concepts · budget ${budget.used}/${budget.budget}pts`);
+  await addRun(db, jobId, 'cj-seed-discovery', 'completed', `${seeds.length} seeds (${duplicates} dups) · ${concepts.length} concepts · serverAuthorized=${usageState.value?.reserved ?? 'unknown'}/${hardBudget}pts`);
   await completeJob(db, jobId, 'completed', {
     query, market,
     mode: 'CJ_SEED_DISCOVERY',
     runId,
     hardBudget,
-    pointsReserved: budget.used,
+    // Phase 4G: SERVER-AUTHORIZED usage is authoritative; the client forecast
+    // is diagnostics only. Correct wording: SERVER-AUTHORIZED / RESERVED
+    // points — never "exact CJ billing" unless CJ itself reports billing.
+    serverAuthorizedPoints: usageState.value?.reserved ?? null,
+    serverRemainingPoints: usageState.value?.remaining ?? null,
+    serverListAttempts: usageState.value?.listAttempts ?? null,
+    serverDetailAttempts: usageState.value?.detailAttempts ?? null,
+    serverFreightAttempts: usageState.value?.freightAttempts ?? null,
+    serverPaidRetries: usageState.value?.paidRetries ?? null,
+    serverDeniedAttempts: usageState.value?.denied ?? null,
+    clientForecastPoints: budget.used,
+    pointsReserved: budget.used, // @deprecated — client forecast (compat)
     recordsReturned: result.records.length,
     seedsDeduped: seeds.length,
     duplicates,
@@ -470,7 +588,7 @@ export async function runCjSeedDiscovery(opts: CjSeedDiscoveryOptions): Promise<
     health: result.health,
     recordsReturned: result.records.length,
     seeds, duplicates,
-    pointsReserved: budget.used,
+    ...serverOut(),
     listCalls: budget.listCalls,
     detailCalls: budget.detailCalls,
     freightCalls: budget.freightCalls,

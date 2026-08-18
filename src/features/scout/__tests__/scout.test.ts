@@ -641,7 +641,8 @@ describe('market intelligence (Phase 4B)', () => {
     const r = scoreMarketOpportunity({ signals: signals(), category: 'Dog' });
     expect(r.score).toBeGreaterThanOrEqual(50);
     expect(r.score).toBeLessThanOrEqual(100);
-    expect(r.breakdown.demand.points).toBe(30); // 18 URLs
+    expect(r.breakdown.supplyVisibility.points).toBe(30); // 18 URLs — market-supply visibility
+    expect(r.breakdown.demand).toBe(r.breakdown.supplyVisibility); // @deprecated compat alias (same criterion)
     expect(r.breakdown.competition.points).toBe(6); // 6 domains = saturated
     expect(r.explanation).toContain('Market opportunity');
   });

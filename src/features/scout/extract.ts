@@ -16,6 +16,56 @@ const SHIP_DAYS_RE = /(?:ships|delivery|arrives|shipping)\s+(?:within\s+|in\s+)?
 const ORIGIN_RE = /\bmade in\s+([A-Za-z][A-Za-z\s-]{1,20})/i;
 const SIZES_RE = /\bsizes?:?\s*([A-Za-z0-9][A-Za-z0-9,\s\/\-]{0,60})/i;
 
+// Phase 4G — market-page IDENTITY evidence (observable only; never invented).
+// A product FAMILY is not automatically the SAME exact product: exact
+// identity requires a shared GTIN/UPC, MPN, or brand + exact model/SKU.
+const ID_LABELED_RE = {
+  upc: /\b(?:upc|gtin|ean|barcode|asin)\s*[a-z]*\s*[:#-]?\s*(\d{12,14}|[A-Z0-9]{10})/i,
+  mpn: /\b(?:mpn|model\s*number|model\s*no|part\s*number|part\s*no|item\s*number)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_.]{3,32})/i,
+  sku: /\b(?:sku|stock\s*keeping\s*unit)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_.]{2,40})/i,
+  model: /\b(?:model|style)\s*[:#-]?\s*([A-Za-z0-9][A-Za-z0-9\-_.]{2,32})/i,
+  brand: /\bbrand\s*[:#-]?\s*([A-Za-z][A-Za-z0-9&'\- ]{1,40})/i,
+} as const;
+// Bare fallbacks (no label) — conservative: 12–14 digit UPC/GTIN strings and
+// JSON-LD "brand":{"name":...} / "sku"/"mpn" keys.
+const BARE_UPC_RE = /\b(\d{12,14})\b/;
+const JSONLD_BRAND_RE = /"brand"\s*:\s*\{[^}]*?"name"\s*:\s*"([^"]{1,60})"/i;
+const JSONLD_ID_RE = /"(sku|mpn|model|gtin|gtin13|gtin12)"\s*:\s*"([^"]{2,60})"/i;
+
+function extractIdentityField(text: string, label: keyof typeof ID_LABELED_RE): string | null {
+  const m = text.match(ID_LABELED_RE[label]);
+  if (m && m[1]) return m[1].trim().slice(0, 64);
+  return null;
+}
+
+/**
+ * Best-effort identity evidence from the raw page text. Unknown stays null.
+ * A bare 12–14 digit UPC/GTIN is only accepted when no labeled code exists.
+ */
+function extractIdentity(text: string): { brand: string | null; model: string | null; mpn: string | null; sku: string | null; upc: string | null } {
+  const upcLabeled = extractIdentityField(text, 'upc');
+  const mpn = extractIdentityField(text, 'mpn');
+  const sku = extractIdentityField(text, 'sku');
+  const model = extractIdentityField(text, 'model');
+  const brand = extractIdentityField(text, 'brand');
+
+  // JSON-LD structured data (Product schema) — authoritative when present.
+  const jBrand = text.match(JSONLD_BRAND_RE);
+  const jId = text.match(JSONLD_ID_RE);
+  const brandOut = brand || (jBrand && jBrand[1] ? jBrand[1].trim().slice(0, 64) : null);
+  const mpnOut = mpn || (jId && jId[1] === 'mpn' ? jId[2] : null);
+  const skuOut = sku || (jId && jId[1] === 'sku' ? jId[2] : null);
+  const modelOut = model || (jId && jId[1] === 'model' ? jId[2] : null);
+  const upcOut = upcLabeled
+    || (jId && (jId[1] === 'gtin' || jId[1] === 'gtin13' || jId[1] === 'gtin12') ? jId[2] : null)
+    || (() => {
+      const bare = text.match(BARE_UPC_RE);
+      return bare ? bare[1] : null;
+    })();
+
+  return { brand: brandOut, model: modelOut, mpn: mpnOut, sku: skuOut, upc: upcOut };
+}
+
 /** Pull the title from STRONG page markers only (no fabrication from prose). */
 function extractTitle(text: string): string | null {
   const og = text.match(/og:title[:\s]+([^\n]{5,160})/i);
@@ -86,6 +136,7 @@ export function extractPageFacts(page: FetchedSourcePage): PageExtract {
   const reviewCount = parseReviewCount(text);
   const sizes = extractSizes(text);
   const images = page.images || [];
+  const identity = extractIdentity(text);
 
   // Weak fallback title is accepted ONLY when the page shows a real product
   // signal — never fabricated from bare prose (honesty rule).
@@ -115,6 +166,11 @@ export function extractPageFacts(page: FetchedSourcePage): PageExtract {
     reviewCount,
     origin,
     sizes,
+    brand: identity.brand,
+    model: identity.model,
+    mpn: identity.mpn,
+    sku: identity.sku,
+    upc: identity.upc,
   };
 }
 

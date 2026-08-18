@@ -36,7 +36,8 @@ import {
 } from './marketEvidence';
 import { DuckDuckGoRetailDiscoveryAdapter, type RetailEvidenceSearchResult } from './retailDiscovery';
 import { FetchingRetailNavigationAdapter, MAX_NAV_LISTING_SOURCES, MAX_NAV_PDP_LINKS, type RetailNavigationAdapter } from './retailNavigation';
-import { collectDemandSignals, type MarketDemandAdapter } from './marketDemand';
+import { collectDemandSignals, type MarketDemandAdapter, type DemandCollectionResult } from './marketDemand';
+import { identityEvidenceFromExtract, hasExplicitIdentity, aggregateReviewEvidence } from './identity';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
   createJob, completeJob, addRun, addLog,
@@ -213,6 +214,11 @@ export function scorePhaseCandidate(
     reviewCount: (ev as { reviewCount?: unknown }).reviewCount as number | null ?? null,
     origin: (ev.origin.value as string | null) ?? null,
     sizes: (ev.sizes.value as string[] | null) ?? null,
+    brand: (ev as { brand?: unknown }).brand as string | null ?? null,
+    model: (ev as { model?: unknown }).model as string | null ?? null,
+    mpn: (ev as { mpn?: unknown }).mpn as string | null ?? null,
+    sku: (ev as { sku?: unknown }).sku as string | null ?? null,
+    upc: (ev as { upc?: unknown }).upc as string | null ?? null,
   };
 
   const margin = candidate.margin && candidate.margin.confidence !== 'low'
@@ -377,10 +383,13 @@ export interface MarketEvidenceSummary {
     domainsWithResults: string[];
     rejected: { url: string; reason: string }[];
     /** Phase 4E.2 — listing/search pages used as NAVIGATION sources (never evidence). */
-    listingSources: number;
-    /** Phase 4E.2 — exact PDP URLs extracted from listing pages via navigation. */
-    navigationPdpExtracted: number;
+    listingSources: number;  /** Phase 4E.2 — exact PDP URLs extracted from listing pages via navigation. */
+  navigationPdpExtracted: number;
   } | null;
+  /** Phase 4G — pages carrying explicit identity evidence (brand/model/MPN/SKU/UPC). */
+  identityEvidencePages: number;
+  /** Phase 4G — review-aggregation honesty note (never summed across non-exact identities). */
+  reviewAggregationNote: string;
 }
 
 export interface MarketIntelligenceResult {
@@ -414,6 +423,26 @@ export interface MarketIntelligenceResult {
   evidenceFingerprint: string | null;
   /** Phase 4D evidence pack summary (what the score was grounded on). */
   evidence: MarketEvidenceSummary;
+  /**
+   * Phase 4G — direct-demand data collection status (Google Ads adapter when
+   * configured). NEVER a substitute for evidence quality; factual metrics only.
+   */
+  demand: {
+    provider: string | null;
+    status: 'not_configured' | 'success' | 'error';
+    errorSafe: string | null;
+    keywordsRequested: number;
+    keywordsReturned: number;
+    /** Avg monthly searches PER keyword (official 12-month estimate). */
+    avgMonthlySearches: number[] | null;
+    monthlyHistory: { month: string; searches: number }[];
+    /** Advertiser competition level per keyword (LOW/MEDIUM/HIGH). */
+    competition: string[] | null;
+    competitionIndex: number[] | null;
+    /** Top-of-page bid range (USD) per keyword. */
+    bidRangeUsd: { keyword: string; low: number; high: number }[] | null;
+    observedAt: string | null;
+  };
 }
 
 /**
@@ -536,6 +565,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   // extracts ARE supplied (previous research run), they are the pack.
   let pack: Awaited<ReturnType<typeof buildMarketEvidencePack>> | null = null;
   if (extracts && extracts.length > 0) {
+    const identities = extracts.map((x) => identityEvidenceFromExtract(x.extract));
+    const reviewAgg = aggregateReviewEvidence(identities);
     pack = {
       selectedUrls: [],
       extracts: extracts.map((x) => ({ url: '', ...x })),
@@ -543,6 +574,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
       rejectedUrls: [],
       independentDomains: 0, // not derivable from extracts without source URLs
       counts: { ...countExtractEvidence(extracts), independentDomains: 0 },
+      identityEvidencePages: identities.filter((i) => hasExplicitIdentity(i)).length,
+      reviewAggregationNote: reviewAgg.note,
     };
   } else if (fetchPage) {
     progress('[evidence] building market evidence pack (select → fetch → extract)');
@@ -564,9 +597,11 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     signals = [...signals, ...signalsFromExtracts(pack.extracts, at)];
   }
 
-  // Optional future demand-data adapter (no credentials in Phase 4D — no-op).
-  const demandSignals = await collectDemandSignals(demand, { query, market });
-  if (demandSignals.length) signals = [...signals, ...demandSignals];
+  // Phase 4G — demand-data adapter with a STRUCTURED result. A configured-
+  // but-failed demand source must NOT silently look identical to "no demand
+  // provider configured": status is not_configured / success / error.
+  const demandCollection: DemandCollectionResult = await collectDemandSignals(demand, { query, market });
+  if (demandCollection.signals.length) signals = [...signals, ...demandCollection.signals];
 
   const category = query.toLowerCase().includes('cat')
     ? 'Cat' : query.toLowerCase().includes('dog') || query.toLowerCase().includes('puppy')
@@ -660,6 +695,22 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     availableCount: pack?.counts.availableCount ?? 0,
     unavailableCount: pack?.counts.unavailableCount ?? 0,
     rejectedUrls: pack?.rejectedUrls ?? [],
+    // Phase 4G — product identity honesty on the evidence pack.
+    identityEvidencePages: pack?.identityEvidencePages ?? 0,
+    reviewAggregationNote: pack?.reviewAggregationNote ?? '',
+    // Phase 4G — direct-demand evidence (Google Ads adapter when configured;
+    // never secret values). Persisted so the audit UI can show it.
+    demandProvider: demandCollection.provider,
+    demandStatus: demandCollection.status,
+    demandErrorSafe: demandCollection.errorSafe ?? null,
+    keywordsRequested: demandCollection.keywordsRequested,
+    keywordsReturned: demandCollection.keywordsReturned,
+    avgMonthlySearches: demandCollection.avgMonthlySearches,
+    demandMonthlyHistory: demandCollection.monthlyHistory,
+    keywordAdCompetition: demandCollection.competition,
+    competitionIndex: demandCollection.competitionIndex,
+    bidRangeUsd: demandCollection.bidRangeUsd,
+    demandObservedAt: demandCollection.observedAt,
     retailSearchRequests: retailReport?.searchRequests ?? 0,
     retailDomainsAttempted: retailReport?.domainsAttempted ?? [],
     retailDomainsWithResults: retailReport?.domainsWithResults ?? [],
@@ -687,6 +738,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     availableCount: pack?.counts.availableCount ?? 0,
     unavailableCount: pack?.counts.unavailableCount ?? 0,
     rejectedUrls: pack?.rejectedUrls ?? [],
+    identityEvidencePages: pack?.identityEvidencePages ?? 0,
+    reviewAggregationNote: pack?.reviewAggregationNote ?? '',
     evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     retail: retailReport
@@ -713,6 +766,19 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     analysis,
     evidenceFingerprint: fp,
     evidence,
+    demand: {
+      provider: demandCollection.provider,
+      status: demandCollection.status,
+      errorSafe: demandCollection.errorSafe ?? null,
+      keywordsRequested: demandCollection.keywordsRequested,
+      keywordsReturned: demandCollection.keywordsReturned,
+      avgMonthlySearches: demandCollection.avgMonthlySearches,
+      monthlyHistory: demandCollection.monthlyHistory ?? [],
+      competition: demandCollection.competition,
+      competitionIndex: demandCollection.competitionIndex,
+      bidRangeUsd: demandCollection.bidRangeUsd,
+      observedAt: demandCollection.observedAt,
+    },
   };
 }
 

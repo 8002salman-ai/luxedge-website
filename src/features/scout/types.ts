@@ -125,6 +125,14 @@ export interface PageExtract {
   reviewCount: number | null;
   origin: string | null;
   sizes: string[] | null;
+  // Phase 4G — market-page identity evidence (observable only; null = unknown).
+  // Used to decide whether review/rating evidence from DIFFERENT pages can be
+  // treated as the SAME exact product (identityMatch: exact / concept / unknown).
+  brand: string | null;
+  model: string | null;
+  mpn: string | null;
+  sku: string | null;
+  upc: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -222,6 +222,7 @@ describe('selectEvidencePages (Phase 4D)', () => {
     const check = validateExactProduct({
       title: 'Best Cat Toys 2024', price: 19.99, images: [], availability: 'unknown',
       shippingDays: null, freeShipping: false, rating: null, reviewCount: null, origin: null, sizes: null,
+      brand: null, model: null, mpn: null, sku: null, upc: null,
     });
     expect(check.usable).toBe(false);
     expect(check.reason).toContain('1 of 2 required product signals');
@@ -231,6 +232,7 @@ describe('selectEvidencePages (Phase 4D)', () => {
     const check = validateExactProduct({
       title: 'KONG Classic Dog Toy', price: 11.96, images: ['https://img/1.jpg'], availability: 'available',
       shippingDays: { min: 3, max: 5 }, freeShipping: false, rating: 4.8, reviewCount: 1200, origin: 'USA', sizes: ['L'],
+      brand: 'KONG', model: 'Classic', mpn: null, sku: null, upc: null,
     });
     expect(check.usable).toBe(true);
     expect(check.reason).toBeNull();
@@ -624,21 +626,28 @@ describe('Phase 4E.1 market gate fail-closed', () => {
 // Demand adapter (future hook — no credentials in Phase 4D)
 // ---------------------------------------------------------------------------
 
-describe('MarketDemandAdapter (Phase 4D §9-§10)', () => {
-  it('no-op adapter returns zero signals and never blocks the pipeline', async () => {
+describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11)', () => {
+  it('no-op adapter → structured not_configured result, zero signals, never blocks the pipeline', async () => {
     const adapter = new NoopMarketDemandAdapter();
     expect(adapter.configured).toBe(false);
-    const signals = await collectDemandSignals(adapter, { query: 'dog toys', market: 'US' });
-    expect(signals).toEqual([]);
+    const result = await collectDemandSignals(adapter, { query: 'dog toys', market: 'US' });
+    expect(result.status).toBe('not_configured');
+    expect(result.signals).toEqual([]);
   });
 
-  it('unconfigured/undefined adapter contributes nothing', async () => {
-    expect(await collectDemandSignals(undefined, { query: 'x', market: 'US' })).toEqual([]);
-    expect(await collectDemandSignals(null, { query: 'x', market: 'US' })).toEqual([]);
+  it('unconfigured/undefined adapter contributes nothing (structured not_configured)', async () => {
+    const a = await collectDemandSignals(undefined, { query: 'x', market: 'US' });
+    const b = await collectDemandSignals(null, { query: 'x', market: 'US' });
+    expect(a.status).toBe('not_configured');
+    expect(a.signals).toEqual([]);
+    expect(b.status).toBe('not_configured');
   });
 
-  it('a failing demand adapter never breaks the deterministic pipeline (returns [])', async () => {
+  it('a failing CONFIGURED demand adapter reports explicit error status (Phase 4G §11 — never silently [])', async () => {
     const failing = { provider: 'google', configured: true, getDemandSignals: async () => { throw new Error('down'); } };
-    expect(await collectDemandSignals(failing, { query: 'x', market: 'US' })).toEqual([]);
+    const result = await collectDemandSignals(failing, { query: 'x', market: 'US' });
+    expect(result.status).toBe('error');
+    expect(result.errorSafe).toBe('down');
+    expect(result.signals).toEqual([]);
   });
 });

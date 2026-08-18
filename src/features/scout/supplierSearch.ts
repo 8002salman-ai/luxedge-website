@@ -770,6 +770,11 @@ export function scoreSupplierCandidate(candidate: ScoutCandidate, markup?: numbe
     reviewCount: null,
     origin: (ev.origin.value as string | null) ?? null,
     sizes: (ev.sizes.value as string[] | null) ?? null,
+    brand: (ev as { brand?: unknown }).brand as string | null ?? null,
+    model: (ev as { model?: unknown }).model as string | null ?? null,
+    mpn: (ev as { mpn?: unknown }).mpn as string | null ?? null,
+    sku: (ev as { sku?: unknown }).sku as string | null ?? null,
+    upc: (ev as { upc?: unknown }).upc as string | null ?? null,
   };
   const margin = candidate.margin && candidate.margin.confidence !== 'low'
     ? candidate.margin

@@ -29,6 +29,7 @@
 
 import { extractPageFacts } from './extract';
 import type { FetchedSourcePage, PageExtract } from './types';
+import { identityEvidenceFromExtract, hasExplicitIdentity, aggregateReviewEvidence } from './identity';
 
 /** Conservative evidence-quality gate defaults (configurable per job). */
 export interface EvidenceQualityThresholds {
@@ -343,6 +344,10 @@ export interface MarketEvidencePack {
   rejectedUrls: { url: string; reason: string }[];
   independentDomains: number;
   counts: EvidenceCounts;
+  // Phase 4G — product identity honesty. Pages with explicit identity
+  // evidence (brand/model/MPN/SKU/UPC) and the review-aggregation note.
+  identityEvidencePages: number;
+  reviewAggregationNote: string;
 }
 
 /**
@@ -387,6 +392,12 @@ export async function buildMarketEvidencePack(opts: EvidencePackOptions): Promis
 
   const base = countExtractEvidence(extracts);
   const domains = independentDomains(extracts.map((x) => x.url));
+  // Phase 4G — identity evidence across the usable pages. A product family is
+  // not the same exact product; review counts are never summed across
+  // non-exact identities.
+  const identities = extracts.map((x) => identityEvidenceFromExtract(x.extract));
+  const identityEvidencePages = identities.filter((i) => hasExplicitIdentity(i)).length;
+  const reviewAgg = aggregateReviewEvidence(identities);
   return {
     selectedUrls: selection.selected,
     extracts,
@@ -399,6 +410,8 @@ export async function buildMarketEvidencePack(opts: EvidencePackOptions): Promis
       failedExtracts: failedUrls.length,
       attemptedPages: selection.selected.length,
     },
+    identityEvidencePages,
+    reviewAggregationNote: reviewAgg.note,
   };
 }
 

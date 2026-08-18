@@ -159,11 +159,16 @@ export function scoreMarketOpportunity(input: MarketScoreInput): { score: number
   const pattern = signals.find((s) => s.signalType === 'search_breadth') || signals.find((s) => s.signalType === 'search_pattern');
   const urlCount = pattern ? parseInt((pattern.summary.match(/surfaced (\d+) product-page/) || [])[1] || '0', 10) : 0;
   const supply = Math.min(30, urlCount >= 15 ? 30 : urlCount >= 8 ? 22 : urlCount >= 4 ? 14 : urlCount >= 1 ? 6 : 0);
-  breakdown.demand = {
+  // Phase 4G §8: this criterion is market-SUPPLY VISIBILITY (search-result
+  // breadth), NOT consumer demand. Renamed to supplyVisibility; `demand` is
+  // kept as a compatibility alias pointing at the same criterion (weights and
+  // total score are unchanged).
+  breakdown.supplyVisibility = {
     points: supply,
     max: 30,
-    note: `${urlCount} product URLs surfaced (market-supply visibility, not sales/search volume)`,
+    note: `${urlCount} product URLs surfaced (market-supply visibility, not sales/search volume/consumer demand)`,
   };
+  breakdown.demand = breakdown.supplyVisibility; // @deprecated compatibility alias
 
   // Price-band viability (20): verified price range inside a sellable band.
   const priceSig = signals.find((s) => s.signalType === 'price_range');
@@ -215,10 +220,10 @@ export function scoreMarketOpportunity(input: MarketScoreInput): { score: number
   };
 
   const overall = Math.round(
-    breakdown.demand.points + breakdown.priceBand.points + breakdown.competition.points +
+    breakdown.supplyVisibility.points + breakdown.priceBand.points + breakdown.competition.points +
     breakdown.ratings.points + breakdown.availability.points
   );
-  const explanation = `Market opportunity ${overall}/100 — demand ${urlCount} URLs, price ${priceSig ? 'verified' : 'unknown'}, competition ${hostCount} domains, ratings ${rated}/${ratedTotal}, availability ${avail}/${availTotal}.`;
+  const explanation = `Market opportunity ${overall}/100 — supply-visibility ${urlCount} URLs (not demand), price ${priceSig ? 'verified' : 'unknown'}, competition ${hostCount} domains, ratings ${rated}/${ratedTotal}, availability ${avail}/${availTotal}.`;
 
   return { score: overall, explanation, breakdown };
 }
