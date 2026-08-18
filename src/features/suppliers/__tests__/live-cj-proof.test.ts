@@ -1076,4 +1076,225 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
       }
     }
   }, 600_000);
+
+  it('PHASE 4I — next CJ-seeded concept (single-door dog cage): deterministic re-ranking + ONE market-evidence pass + ONE grounded MI, NO CJ calls', async () => {
+    const env = loadEnv('.env');
+    const base = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const serviceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const preview = (env.VERCEL_PREVIEW_API || process.env.VERCEL_PREVIEW_API || '').trim().replace(/\/$/, '');
+    const bypass = (env.VERCEL_PREVIEW_BYPASS || process.env.VERCEL_PREVIEW_BYPASS || '').trim();
+    if (!base || !serviceKey || !anonKey || !preview) {
+      throw new Error('LIVE PROOF needs VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_ANON_KEY / VERCEL_PREVIEW_API in .env');
+    }
+
+    const email = `phase4i-${Date.now()}@luxedge.us`;
+    const password = `Pw-${Date.now()}-x7q2`;
+    const created = await gotrue(base, serviceKey, '/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'admin' } }),
+    });
+    expect([200, 201]).toContain(created.status);
+    const tempUserId = String(created.body.id || '');
+    if (!tempUserId) throw new Error(`temp admin creation failed: ${JSON.stringify(created.body).slice(0, 200)}`);
+    let adminJwt = '';
+    try {
+      const token = await gotrue(base, serviceKey, '/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      expect(token.status).toBe(200);
+      adminJwt = String(token.body.access_token || '');
+      if (!adminJwt) throw new Error('no access_token from temp admin sign-in');
+
+      const db = new SupabaseAdapter(base, anonKey);
+      db.setAccessToken(adminJwt);
+
+      // 0) NO CJ calls. Rank the REMAINING concepts from the persisted Phase 4F
+      //    seed job using the existing deterministic suitability logic. The two
+      //    already-scored-45 concepts (dog ramp + elevated dog sofa bed) are
+      //    EXCLUDED — never re-researched, never rephrased. The best remaining
+      //    eligible concept is selected deterministically (suitability desc,
+      //    label asc tie-break — same rule as selectSeedConcepts).
+      const KNOWN_FAILED = [/\bramp\b/i, /sofa bed|elevated dog sofa/i];
+      const jobs = await db.list<AgentJobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 100 });
+      const seedJob = jobs.find((j) => {
+        const o = j.output as Record<string, unknown> | null;
+        return j.type === 'PRODUCT_RESEARCH'
+          && o?.mode === 'CJ_SEED_DISCOVERY'
+          && Array.isArray(o?.seeds)
+          && (o?.seeds as unknown[]).length > 0;
+      });
+      expect(seedJob).toBeTruthy();
+      const persistedSeeds = ((seedJob!.output as Record<string, unknown>).seeds as CjSeedRecord[]).filter((s) => s && typeof s.title === 'string');
+      const allConcepts = clusterCjSeedConcepts(persistedSeeds);
+      const remaining = allConcepts
+        .filter((c) => !KNOWN_FAILED.some((re) => re.test(c.label)))
+        .sort((a, b) => b.suitabilityScore - a.suitabilityScore || a.label.localeCompare(b.label));
+      console.log(`[seed-source] job ${seedJob!.id} · ${persistedSeeds.length} persisted CJ seeds · ${allConcepts.length} concepts · remaining eligible (excl. dog ramp + sofa bed): ${remaining.length}`);
+      console.log(`[ranking] top 5 remaining: ${remaining.slice(0, 5).map((c) => `"${c.label.slice(0, 40)}" (${c.memberPids.length} rec, ${c.suitabilityScore})`).join(' | ')}`);
+      expect(remaining.length).toBeGreaterThan(0);
+      const concept = remaining[0];
+      console.log(`[concept] deterministic best remaining: "${concept.label}" — ${concept.memberPids.length} CJ record(s), suitability ${concept.suitabilityScore} (${concept.suitabilityReasons.join('; ')})`);
+      const q1 = seedConceptSearchQuery(concept);
+      const q2 = 'single door dog crate';
+      console.log(`[query] targeted market-search vocabulary: "${q1}" (+ common name "${q2}")`);
+
+      // 1) ONE market-evidence investigation. Two real searches (CJ vocabulary
+      //    + common name) → merge → dedupe → probe each exact-product candidate
+      //    with the proven combined fetcher (Jina proxy first; headless-Chrome
+      //    rendered fallback where the proxy is blocked/JS-rendered). Keep only
+      //    exact PDPs with a REAL extractable price. ≤2 per domain.
+      const [d1, d2] = await Promise.all([
+        discoverUrls({ query: q1, market: 'US', maxResults: 12 }),
+        discoverUrls({ query: q2, market: 'US', maxResults: 12 }),
+      ]);
+      const pool: string[] = [];
+      const seenUrl = new Set<string>();
+      for (const u of [...d1.urls, ...d2.urls]) {
+        if (!seenUrl.has(u)) { seenUrl.add(u); pool.push(u); }
+      }
+      console.log(`[pool] ${pool.length} exact-product candidate URLs (q1 → ${d1.urls.length}, q2 → ${d2.urls.length})`);
+
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      const UA = '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+      let jinaFetches = 0;
+      let renderedFetches = 0;
+      const proxyFetch = async (url: string) => {
+        jinaFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
+      // Combined fetcher used BOTH for the probe and for the MI job: normal
+      // fetch first, rendered-browser fallback where the proxy fails or the
+      // price is JS-rendered (the proven Phase 4H.3 closure path).
+      const fetchPage = async (url: string) => {
+        try {
+          const page = await proxyFetch(url);
+          const ext = extractPageFacts(page);
+          if (ext.price !== null && ext.price > 0) return page;
+          // Proxy delivered content but no real price — try the rendered path.
+          renderedFetches++;
+          return renderPageWithChrome(url, { extraFlags: [UA] });
+        } catch {
+          renderedFetches++;
+          return renderPageWithChrome(url, { extraFlags: [UA] });
+        }
+      };
+
+      const priceRich: { url: string; price: number; domain: string }[] = [];
+      const probeRejections: { url: string; reason: string }[] = [];
+      const perDomain = new Map<string, number>();
+      for (const url of pool.slice(0, 16)) {
+        let page;
+        try {
+          page = await fetchPage(url);
+        } catch (e) {
+          probeRejections.push({ url, reason: `fetch failed: ${(e as Error).message.slice(0, 120)}` });
+          continue;
+        }
+        const extract = extractPageFacts(page);
+        const valid = validateExactProduct(extract);
+        if (!valid.usable) {
+          probeRejections.push({ url, reason: valid.reason ?? 'not an exact product page' });
+          continue;
+        }
+        if (extract.price === null || extract.price <= 0) {
+          probeRejections.push({ url, reason: 'no real price in page extract (JS-rendered or blocked price)' });
+          continue;
+        }
+        const domain = new URL(url).hostname.replace(/^www\./, '');
+        const used = perDomain.get(domain) ?? 0;
+        if (used >= 2) {
+          probeRejections.push({ url, reason: `domain quota (max 2 per domain: ${domain})` });
+          continue;
+        }
+        perDomain.set(domain, used + 1);
+        priceRich.push({ url, price: extract.price, domain });
+      }
+      // NOTE: probe hits are pre-filters only — the engine's strict re-validation
+      // (selectEvidencePages + validateExactProduct) is the authority; a
+      // listicle with a price-like string can pass the probe but is rejected
+      // by the gate (seen live: wedogy/catclaws/theguardian listicles).
+      console.log(`[probe] jinaFetches=${jinaFetches} · renderedFetches=${renderedFetches} · candidate pages with a price-like extract: ${priceRich.length} — ${priceRich.map((p) => `${p.domain} $${p.price}`).join(' | ')} (engine re-validates each)`);
+      console.log(`[probe] rejections (${probeRejections.length}): ${probeRejections.slice(0, 8).map((r) => `${r.url.slice(0, 52)} → ${r.reason.slice(0, 60)}`).join(' | ')}`);
+      if (priceRich.length < 3) {
+        console.log(`PRICE EVIDENCE BLOCKED — ${priceRich.length} real retailer prices (need >=3). No MI run, no DeepSeek, no CJ.`);
+        console.log(`[result] ${JSON.stringify({
+          winner: 'NONE', concept: { label: concept.label, pids: concept.memberPids.length, suitability: concept.suitabilityScore },
+          query: q1, seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
+          priceEvidenceBlocked: true, prices: priceRich, probeRejections,
+          googleAds: { liveDemand: 'DEFERRED', calls: 0 }, cjCalls: 0, cjPointsSpent: 0, deepSeekCalls: 0,
+        }, null, 2)}`);
+        return;
+      }
+
+      // 2) ONE grounded MI pass — the price-rich exact PDPs feed the standard
+      //    evidence pack (the engine re-fetches them through the same combined
+      //    fetcher so the gate counts are internally consistent). DeepSeek runs
+      //    ONLY if the gate passes (exactly ONE call).
+      const priceRichUrls = priceRich.map((p) => p.url);
+      const aiCall = async (prompt: string, model?: string) => {
+        const res = await fetch(`${preview}/api/ai/generate`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!res.ok) throw new Error(`AI proxy HTTP ${res.status}`);
+        const body = await res.json() as { text?: string };
+        if (!body.text) throw new Error('AI proxy returned no text');
+        return body.text;
+      };
+      const mi = await runMarketIntelligenceJob({
+        query: q1,
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        discover: async () => ({ query: q1, rawLinks: priceRichUrls, urls: priceRichUrls, filtered: 0, duplicates: 0 }),
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      const ev = mi.evidence;
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · jinaFetches=${jinaFetches} · renderedFetches=${renderedFetches}`);
+      console.log(`[mi] evidence pack: usable ${ev.successfulExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · identity pages ${ev.identityEvidencePages}`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+      if (ev.rejectedUrls.length) console.log(`[mi] rejected (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url.slice(0, 52)} → ${r.reason.slice(0, 60)}`).join(' | ')}`);
+
+      // 3) GATES UNCHANGED (fail-closed). If eligible: report READY — DO NOT
+      //    start the 250-pt CJ qualification run (separate owner approval).
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (decision.run) {
+        console.log(`MARKET-GROUNDED CJ QUALIFICATION READY — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}". CJ qualification run NOT started (250-pt spend requires separate owner authorization).`);
+      } else {
+        console.log(`MARKET NOT QUALIFIED — ${decision.reason}. No CJ research points spent.`);
+      }
+      console.log(`[result] ${JSON.stringify({
+        winner: 'NONE',
+        selectedConcept: { label: concept.label, pids: concept.memberPids.length, suitability: concept.suitabilityScore, reasons: concept.suitabilityReasons },
+        ranking: remaining.slice(0, 5).map((c) => ({ label: c.label.slice(0, 60), memberCount: c.memberPids.length, suitability: c.suitabilityScore })),
+        query: q1,
+        seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
+        prices: priceRich,
+        market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: ev.evidenceQuality, evidence: ev, miJobId: mi.jobId },
+        conditionalRun: decision,
+        googleAds: { liveDemand: 'DEFERRED', calls: 0 },
+        cjCalls: 0, cjPointsSpent: 0, deepSeekCalls: mi.aiUsed ? 1 : 0,
+      }, null, 2)}`);
+    } finally {
+      if (tempUserId) {
+        const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
+        console.log(`[cleanup] temp admin user deleted (HTTP ${del.status})`);
+      }
+    }
+  }, 600_000);
 });
