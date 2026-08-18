@@ -390,6 +390,9 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   await addLog(db, jobId, 'info',
     `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}${warning ? '; ' + warning : ''} (retries=0)`);
   await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'}`);
+  // Persist the recommended search hypotheses + opportunity/category on the
+  // durable job output (Phase 4C migration-security revision, §9) so a later
+  // supplier search can PROVE the query it ran follows THIS analysis.
   await completeJob(db, jobId, 'completed', {
     query,
     signals: signals.length,
@@ -397,6 +400,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     aiUsed: analysis.aiUsed,
     warning: warning || null,
     evidenceFingerprint: fp,
+    recommendedSearchQueries: analysis.recommendedSearchQueries,
+    opportunity: category,
     at: new Date().toISOString(),
   }, undefined, analysis.aiUsed
     ? { provider: 'deepseek', model: analysis.model || 'deepseek-chat' }

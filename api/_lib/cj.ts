@@ -35,6 +35,19 @@ const FETCH_TIMEOUT_MS = 15_000;
 /** Returned when a paid call cannot be afforded — NO HTTP request was made. */
 export const CJ_POINT_BUDGET_EXHAUSTED = 'CJ_POINT_BUDGET_EXHAUSTED';
 
+/**
+ * Returned when the DURABLE supplier run ledger cannot be created/read/
+ * reserved (unconfigured env, DB unreachable, permission denied, or no run id
+ * provided). The run FAILS CLOSED: NO paid CJ HTTP request may be issued when
+ * the durable ledger is unavailable. The client-side budget forecast can
+ * never authorize a live paid request.
+ */
+export const CJ_DURABLE_LEDGER_UNAVAILABLE = 'CJ_DURABLE_LEDGER_UNAVAILABLE';
+
+function ledgerUnavailable(detail: string): Error {
+  return new Error(`${CJ_DURABLE_LEDGER_UNAVAILABLE}: ${detail}`);
+}
+
 // Endpoint-aware retry caps (Phase 4C hardening): auth/network-transient
 // endpoints may retry more; PAID data endpoints (listV2/query/freight) are
 // tightly capped so a run never pays 3× for one result. Hard 4xx, validation
@@ -175,11 +188,6 @@ function usageFromRow(r: SupplierApiRunRow): CjServerPointUsage {
   };
 }
 
-/** Server policy: HARD MAX 250/run. Requested 50–250 accepted; >250 clamped. */
-function clampBudget(requested: number): number {
-  return new CjServerRunBudget(requested).budget;
-}
-
 /**
  * Talks to the durable Supabase ledger (supplier_api_runs +
  * reserve_supplier_api_points) using the admin JWT from the CJ proxy request.
@@ -214,25 +222,31 @@ export class CjDurableRunLedger {
     return Array.isArray(rows) ? rows : [];
   }
 
-  /** POST /rest/v1/supplier_api_runs — create the durable run (hard budget stored). */
+  /**
+   * POST /rest/v1/rpc/start_supplier_api_run — create the durable run. The
+   * DATABASE (not the caller) derives and stores the hard budget
+   * (LEAST(GREATEST(requested,50),250)) — the browser can request less than
+   * 250 but NEVER more; there is no client "owner" flag that raises the cap.
+   */
   async start(provider: string, requestedBudget: number): Promise<{ runId: string; usage: CjServerPointUsage }> {
-    const hard = clampBudget(requestedBudget);
     const { url, headers } = this.rest();
-    const res = await fetch(`${url}/rest/v1/supplier_api_runs`, {
+    const res = await fetch(`${url}/rest/v1/rpc/start_supplier_api_run`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ provider, requested_budget: hard, hard_budget: hard, status: 'running' }),
+      body: JSON.stringify({ p_provider: provider, p_requested_budget: requestedBudget }),
       signal: AbortSignal.timeout(10_000),
     });
     const rows = await this.read(res);
-    if (!res.ok || !rows[0]?.id) throw new Error(`CJ point ledger start failed (HTTP ${res.status})`);
+    if (!res.ok || !rows[0]?.id) throw ledgerUnavailable(`start RPC failed (HTTP ${res.status})`);
     return { runId: String(rows[0].id), usage: usageFromRow(rows[0]) };
   }
 
   /**
    * POST /rest/v1/rpc/reserve_supplier_api_points — ATOMIC reservation for
-   * one actual paid outbound request (initial or retry). Denied ⇒ the CJ
-   * HTTP request must not occur.
+   * one actual paid outbound request (initial or retry). The DATABASE derives
+   * the point cost from the action (list=50 / detail=10 / freight=10) — the
+   * caller can NEVER supply a custom cost (cost=0/-10/1 cannot bypass the
+   * budget). Denied ⇒ the CJ HTTP request must not occur.
    */
   async reserve(runId: string, action: CjPointAction, isRetry: boolean): Promise<{ approved: boolean; usage: CjServerPointUsage | null }> {
     const { url, headers } = this.rest();
@@ -241,16 +255,15 @@ export class CjDurableRunLedger {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        run_id: runId,
-        provider: 'cj',
-        action: rpcAction,
-        cost: CJ_POINT_COST[action],
-        is_retry: isRetry,
+        p_run_id: runId,
+        p_provider: 'cj',
+        p_action: rpcAction,
+        p_is_retry: isRetry,
       }),
       signal: AbortSignal.timeout(10_000),
     });
     const rows = await this.read(res);
-    if (!res.ok) throw new Error(`CJ point ledger reserve failed (HTTP ${res.status})`);
+    if (!res.ok) throw ledgerUnavailable(`reserve RPC failed (HTTP ${res.status})`);
     if (!rows[0]) return { approved: false, usage: null };
     return { approved: !!rows[0].approved, usage: usageFromRow(rows[0]) };
   }
@@ -263,18 +276,25 @@ export class CjDurableRunLedger {
       signal: AbortSignal.timeout(10_000),
     });
     const rows = await this.read(res);
+    if (!res.ok) throw ledgerUnavailable(`usage read failed (HTTP ${res.status})`);
     return rows[0] ? usageFromRow(rows[0]) : null;
   }
 
-  /** Mark the run finished (completed / failed / exhausted). */
+  /**
+   * POST /rest/v1/rpc/finish_supplier_api_run — mark the run finished.
+   * Only a currently-running row may finish, and only with an allowed final
+   * status (completed / failed / exhausted). There is NO direct PATCH path —
+   * authenticated clients cannot rewrite a completed run back to running.
+   */
   async finish(runId: string, status: 'completed' | 'failed' | 'exhausted'): Promise<void> {
     const { url, headers } = this.rest();
-    await fetch(`${url}/rest/v1/supplier_api_runs?id=eq.${encodeURIComponent(runId)}`, {
-      method: 'PATCH',
+    const res = await fetch(`${url}/rest/v1/rpc/finish_supplier_api_run`, {
+      method: 'POST',
       headers,
-      body: JSON.stringify({ status, finished_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ p_run_id: runId, p_status: status }),
       signal: AbortSignal.timeout(10_000),
     });
+    if (!res.ok) throw ledgerUnavailable(`finish RPC failed (HTTP ${res.status})`);
   }
 }
 

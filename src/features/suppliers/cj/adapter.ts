@@ -19,6 +19,12 @@ import { CJ_POINTS_BUDGET_PER_RUN, CJ_POINTS_HARD_MAX } from './points';
 const ENDPOINT = '/api/suppliers/cj';
 
 export const CJ_POINT_BUDGET_EXHAUSTED = 'CJ_POINT_BUDGET_EXHAUSTED';
+/**
+ * Server reported that the DURABLE supplier run ledger is unavailable.
+ * The run FAILS CLOSED: no paid CJ request may occur without it. The engine
+ * treats this as a hard stop (zero paid HTTP calls), not a warning.
+ */
+export const CJ_DURABLE_LEDGER_UNAVAILABLE = 'CJ_DURABLE_LEDGER_UNAVAILABLE';
 
 async function call<T>(
   action: string,
@@ -41,6 +47,12 @@ async function call<T>(
     },
   });
   const body = await res.json().catch(() => ({}));
+  const code = (body as { code?: string }).code;
+  // FAIL CLOSED: a missing/unreachable durable ledger is never a warning —
+  // surface a distinguishable error so the engine stops before any paid call.
+  if (code === CJ_DURABLE_LEDGER_UNAVAILABLE) {
+    throw new Error(CJ_DURABLE_LEDGER_UNAVAILABLE);
+  }
   if (!res.ok) {
     throw new Error((body as { error?: string }).error || `Supplier API error ${res.status}`);
   }
@@ -95,15 +107,23 @@ export class CjSupplierAdapter implements SupplierDiscoveryAdapter {
    * subsequent paid call reserves points against THAT persisted run.
    */
   async startRun(requestedBudget?: number): Promise<{ runId: string; hardBudget: number } | null> {
-    const data = await call<{ runId?: string | null; hardBudget?: number }>(
-      'start',
-      {},
-      {
-        method: 'POST',
-        body: JSON.stringify({ provider: 'cj', requestedBudget: requestedBudget ?? CJ_POINTS_BUDGET_PER_RUN }),
-      }
-    );
-    if (!data.runId) return null;
+    let data: { runId?: string | null; hardBudget?: number; usage?: SupplierPointUsage };
+    try {
+      data = await call<{ runId?: string | null; hardBudget?: number; usage?: SupplierPointUsage }>(
+        'start',
+        {},
+        {
+          method: 'POST',
+          body: JSON.stringify({ provider: 'cj', requestedBudget: requestedBudget ?? CJ_POINTS_BUDGET_PER_RUN }),
+        }
+      );
+    } catch (e) {
+      // The server returned CJ_DURABLE_LEDGER_UNAVAILABLE (or any start
+      // failure) — rethrow as the distinguishable fail-closed error.
+      if (e instanceof Error && e.message === CJ_DURABLE_LEDGER_UNAVAILABLE) throw e;
+      throw new Error(CJ_DURABLE_LEDGER_UNAVAILABLE);
+    }
+    if (!data.runId) throw new Error(CJ_DURABLE_LEDGER_UNAVAILABLE);
     this.runId = data.runId;
     this.runBudget = data.hardBudget ?? CJ_POINTS_HARD_MAX;
     this.lastServerUsage = data.usage ?? null;

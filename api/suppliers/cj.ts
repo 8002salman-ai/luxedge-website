@@ -33,7 +33,7 @@ import { sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin, getBearerToken } from '../_lib/auth.js';
 import {
   cjConfigured, cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
-  CjDurableRunLedger, CjDurableRunContext, CjServerRunBudget, CJ_POINT_BUDGET_EXHAUSTED,
+  CjDurableRunLedger, CjDurableRunContext, CJ_POINT_BUDGET_EXHAUSTED, CJ_DURABLE_LEDGER_UNAVAILABLE,
   type CjRunContext, type CjServerPointUsage,
 } from '../_lib/cj.js';
 import {
@@ -44,25 +44,25 @@ import { CJ_POINT_COST, CJ_POINTS_BUDGET_PER_RUN } from '../../src/features/supp
 const MAX_SEARCH_SIZE = 100;
 
 /**
- * Build the run context for a paid action.
- *  - runId present → DURABLE ledger context (authoritative). The run row must
- *    exist (created by action=start); missing → error, no paid calls.
- *  - runId absent → local in-memory forecast only (manual probe path) — never
- *    authoritative across instances.
+ * Build the run context for a PAID action. FAIL CLOSED: every paid CJ call
+ * (listV2 / product/query / freightCalculate) MUST be backed by a durable
+ * run created via action=start — a missing runId or an unreachable ledger
+ * returns CJ_DURABLE_LEDGER_UNAVAILABLE and NO paid HTTP request is issued.
+ * The client-side budget forecast is UX-only and can NEVER authorize a live
+ * paid request.
  */
 async function runContextFor(req: IncomingMessage): Promise<{ run: CjRunContext | null; error?: string }> {
   const url = new URL(req.url || '/', 'http://localhost');
   const runId = (url.searchParams.get('runId') || '').trim();
   if (!runId) {
-    const requested = parseInt(url.searchParams.get('runBudget') || String(CJ_POINTS_BUDGET_PER_RUN), 10);
-    return { run: new CjServerRunBudget(requested) };
+    return { run: null, error: `${CJ_DURABLE_LEDGER_UNAVAILABLE}: a durable supplier run (runId) is required before any paid CJ call — call action=start first.` };
   }
   const ledger = new CjDurableRunLedger(getBearerToken(req));
   let row: CjServerPointUsage | null = null;
   try {
     row = await ledger.usage(runId);
-  } catch {
-    row = null;
+  } catch (e) {
+    return { run: null, error: `${CJ_DURABLE_LEDGER_UNAVAILABLE}: ${cjSafeError(e)}` };
   }
   if (!row) return { run: null, error: 'Supplier run not found — call action=start first.' };
   return { run: new CjDurableRunContext(ledger, runId, row.budget) };
@@ -126,6 +126,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   // ---------------- start (create the DURABLE run) ----------------
+  // The DATABASE stores the hard budget (clamped to [50, 250]) via the
+  // start_supplier_api_run RPC — the browser never writes the ledger directly.
   if (action === 'start' && req.method === 'POST') {
     const body = await readBody(req);
     const provider = String(body.provider || 'cj').slice(0, 40);
@@ -136,8 +138,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const started = await ledger.start(provider, Number.isFinite(requested) ? requested : CJ_POINTS_BUDGET_PER_RUN);
       sendJson(res, 200, { provider, runId: started.runId, hardBudget: started.usage.budget, usage: started.usage });
     } catch (e) {
+      // FAIL CLOSED: no durable run → no paid CJ call may ever occur.
       sendJson(res, 200, {
         provider, runId: null, health: 'offline',
+        code: CJ_DURABLE_LEDGER_UNAVAILABLE,
         warning: `Supplier run could not be started — ${cjSafeError(e)}`,
       });
     }
@@ -155,7 +159,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const usage = await new CjDurableRunLedger(getBearerToken(req)).usage(runId);
       sendJson(res, 200, { provider: 'cj', health: usage ? 'online' : 'offline', usage });
     } catch (e) {
-      sendJson(res, 200, { provider: 'cj', health: 'offline', warning: cjSafeError(e) });
+      sendJson(res, 200, { provider: 'cj', health: 'offline', code: CJ_DURABLE_LEDGER_UNAVAILABLE, warning: cjSafeError(e) });
     }
     return;
   }
@@ -173,7 +177,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       await new CjDurableRunLedger(getBearerToken(req)).finish(runId, status as 'completed' | 'failed' | 'exhausted');
       sendJson(res, 200, { provider: 'cj', runId, status });
     } catch (e) {
-      sendJson(res, 200, { provider: 'cj', runId, status: 'unknown', warning: cjSafeError(e) });
+      sendJson(res, 200, { provider: 'cj', runId, status: 'unknown', code: CJ_DURABLE_LEDGER_UNAVAILABLE, warning: cjSafeError(e) });
     }
     return;
   }
@@ -193,7 +197,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const country = normalizeCountryCode(market);
     const ctx = await runContextFor(req);
     if (ctx.error) {
-      sendJson(res, 400, { error: ctx.error });
+      const code = ctx.error.startsWith(CJ_DURABLE_LEDGER_UNAVAILABLE) ? CJ_DURABLE_LEDGER_UNAVAILABLE : undefined;
+      sendJson(res, 400, { error: ctx.error, ...(code ? { code } : {}) });
       return;
     }
     const run = ctx.run;
@@ -246,7 +251,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const country = normalizeCountryCode(market);
     const ctx = await runContextFor(req);
     if (ctx.error) {
-      sendJson(res, 400, { error: ctx.error });
+      const code = ctx.error.startsWith(CJ_DURABLE_LEDGER_UNAVAILABLE) ? CJ_DURABLE_LEDGER_UNAVAILABLE : undefined;
+      sendJson(res, 400, { error: ctx.error, ...(code ? { code } : {}) });
       return;
     }
     const run = ctx.run;
@@ -295,7 +301,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     const ctx = await runContextFor(req);
     if (ctx.error) {
-      sendJson(res, 400, { error: ctx.error });
+      const code = ctx.error.startsWith(CJ_DURABLE_LEDGER_UNAVAILABLE) ? CJ_DURABLE_LEDGER_UNAVAILABLE : undefined;
+      sendJson(res, 400, { error: ctx.error, ...(code ? { code } : {}) });
       return;
     }
     const run = ctx.run;

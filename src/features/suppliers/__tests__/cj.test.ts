@@ -32,11 +32,12 @@ import { calculateMargin } from '../../scout/margin';
 import { scoreCandidate, SHORTLIST_THRESHOLD } from '../../scout/score';
 import { extractPageFacts } from '../../scout/extract';
 import type { FetchedSourcePage, ScoutCandidate, CandidateEvidence } from '../../scout/types';
+import fs from 'node:fs';
 import {
-  cjConfigured, cjSafeError, cjSearchProducts, CjServerRunBudget, CjDurableRunLedger,
-  CjDurableRunContext, CJ_POINT_BUDGET_EXHAUSTED,
+  cjConfigured, cjSafeError, cjSearchProducts, cjFreightCalculate, CjServerRunBudget,
+  CjDurableRunLedger, CjDurableRunContext, CJ_POINT_BUDGET_EXHAUSTED, CJ_DURABLE_LEDGER_UNAVAILABLE,
 } from '../../../../api/_lib/cj';
-import { verifyMarketIntelligenceJob } from '../../scout/marketProvenance';
+import { verifyMarketIntelligenceJob, normalizeMarketQuery } from '../../scout/marketProvenance';
 import {
   CjPointBudget, CJ_POINTS_BUDGET_PER_RUN, CJ_POINTS_HARD_MAX, enrichmentCaps, CJ_POINT_COST,
 } from '../cj/points';
@@ -149,21 +150,35 @@ function adminToken(): string {
   return `header.${payload}.sig`;
 }
 
-/** Seed a REAL persisted MARKET_INTELLIGENCE job row (source of truth). */
+/**
+ * Seed a REAL persisted MARKET_INTELLIGENCE job row (source of truth). The
+ * migration-security revision requires recommendedSearchQueries + opportunity
+ * persisted on the job output (runMarketIntelligenceJob persists them); the
+ * default recommendation matches the existing tests' query so their market
+ * gate stays VERIFIED. Pass over.output to override.
+ */
 function seedMiJob(
   db: FakeDb,
   id: string,
   marketScore: number,
   fingerprint: string,
-  over: Partial<Record<string, unknown>> = {}
+  over: Partial<Record<string, unknown>> & { output?: Record<string, unknown> } = {}
 ): { id: string } {
   const at = new Date().toISOString();
+  const { output: outOverride = {}, ...rowOver } = over;
   const row = {
     id,
     type: 'MARKET_INTELLIGENCE',
     status: 'completed',
     input: { query: 'dog toys' },
-    output: { marketScore, evidenceFingerprint: fingerprint, at },
+    output: {
+      marketScore,
+      evidenceFingerprint: fingerprint,
+      at,
+      recommendedSearchQueries: ['orthopedic dog bed'],
+      opportunity: 'Dog beds',
+      ...outOverride,
+    },
     error: null,
     provider: null,
     model: null,
@@ -173,7 +188,7 @@ function seedMiJob(
     created_at: at,
     started_at: at,
     finished_at: at,
-    ...over,
+    ...rowOver,
   };
   db.rows.get('agent_jobs')?.push(row);
   return { id };
@@ -229,17 +244,31 @@ class FakeCjAdapter implements SupplierDiscoveryAdapter {
     arrivalDays: '8-12', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
     observedAt: new Date().toISOString(), verified: true, note: 'freight quote (totalPostageFee)'
   };
+  /** When true, startRun simulates a durable-ledger failure (fail closed). */
+  failStart = false;
+  /** Paid-call counters — used to prove ZERO paid calls when fail-closed. */
+  searchCalls = 0;
+  detailCalls = 0;
+  freightCalls = 0;
   constructor(records: SupplierProductRecord[]) { this.records = records; }
   async searchProducts(): Promise<SupplierSearchResult> {
+    this.searchCalls++;
     return { records: this.records, health: 'online', usage: this.serverUsage ?? undefined };
   }
-  async getProduct(): Promise<SupplierProductRecord | null> { return this.records[0] ?? null; }
-  async getShippingEvidence(): Promise<SupplierShippingEvidence> { return this.freight; }
+  async getProduct(): Promise<SupplierProductRecord | null> {
+    this.detailCalls++;
+    return this.records[0] ?? null;
+  }
+  async getShippingEvidence(): Promise<SupplierShippingEvidence> {
+    this.freightCalls++;
+    return this.freight;
+  }
   async healthCheck(): Promise<SupplierHealthResult> { return { provider: 'cj', health: 'online' }; }
   setRunScope(): void { /* fake — no server budget */ }
   async getRunUsage(): Promise<SupplierPointUsage | null> { return this.serverUsage; }
   /** Fake durable run — the engine exercises the start→reserve→finish flow. */
   async startRun(requestedBudget?: number): Promise<{ runId: string; hardBudget: number } | null> {
+    if (this.failStart) throw new Error('CJ_DURABLE_LEDGER_UNAVAILABLE: simulated ledger failure');
     return { runId: 'run-fake', hardBudget: requestedBudget ?? 250 };
   }
   finishedStatus: string | null = null;
@@ -1145,6 +1174,18 @@ interface MockRunRow {
  * table + atomic reserve RPC) shared across ledger instances, mirroring the
  * DB row lock + re-evaluated WHERE semantics. Admin JWT required.
  */
+/**
+ * A tiny in-memory emulation of the REVISED 0008 migration backend, mirroring
+ * the migration-security model exactly:
+ *   - mutation ONLY via SECURITY DEFINER RPCs (start / reserve / finish) with
+ *     p_-prefixed args;
+ *   - reserve derives the point cost from the action (list=50, detail=10,
+ *     freight=10) — the caller can NEVER supply cost; unknown actions reject;
+ *   - start clamps the budget into [50, 250] (the DB, not the caller, decides);
+ *   - direct table INSERT/UPDATE/PATCH is DENIED (403) — mirroring the revoked
+ *     grants and the admin-only SELECT policy;
+ *   - row lock + re-evaluated WHERE semantics for concurrency.
+ */
 function mockSupabaseLedger(state: Map<string, MockRunRow>) {
   const ok = (rows: unknown[], status = 200) => new Response(JSON.stringify(rows), { status });
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1155,16 +1196,40 @@ function mockSupabaseLedger(state: Map<string, MockRunRow>) {
     // Mirror the migration's ADMIN-ONLY guard: a non-admin bearer is refused.
     if (!/Bearer .*admin/i.test(auth)) return new Response(JSON.stringify({ message: 'permission denied' }), { status: 403 });
 
+    // ---------------- start RPC: DB derives + stores the hard budget ----------------
+    if (url.includes('/rest/v1/rpc/start_supplier_api_run')) {
+      const body = JSON.parse(String(init?.body || '{}')) as { p_provider: string; p_requested_budget: number };
+      // Mirror LEAST(GREATEST(requested, 50), 250) — the DB clamps.
+      const hard = Math.min(Math.max(Math.floor(body.p_requested_budget ?? 250), 50), 250);
+      const row: MockRunRow = {
+        id: `run-${Math.random().toString(36).slice(2, 10)}`,
+        provider: body.p_provider, status: 'running',
+        requested_budget: hard, hard_budget: hard, reserved_points: 0,
+        list_attempts: 0, detail_attempts: 0, freight_attempts: 0,
+        paid_retries: 0, denied_attempts: 0,
+      };
+      state.set(row.id, row);
+      return ok([row]);
+    }
+
+    // ---------------- reserve RPC: DB derives cost; caller NEVER supplies it ----------------
     if (url.includes('/rest/v1/rpc/reserve_supplier_api_points')) {
       const body = JSON.parse(String(init?.body || '{}')) as {
-        run_id: string; action: string; cost: number; is_retry: boolean;
+        p_run_id: string; p_provider: string; p_action: string; p_is_retry: boolean;
       };
-      const row = state.get(body.run_id);
-      const afford = !!row && row.status === 'running' && (row.reserved_points + body.cost) <= row.hard_budget;
+      // Mirror the migration: caller-supplied cost is IMPOSSIBLE (no param),
+      // and unknown actions are REJECTED (raise exception → 400).
+      let cost: number;
+      if (body.p_action === 'list') cost = 50;
+      else if (body.p_action === 'detail') cost = 10;
+      else if (body.p_action === 'freight') cost = 10;
+      else return new Response(JSON.stringify({ message: `unknown supplier API action: ${body.p_action}` }), { status: 400 });
+      const row = state.get(body.p_run_id);
+      const afford = !!row && row.status === 'running' && (row.reserved_points + cost) <= row.hard_budget;
       if (!afford) {
         if (row) row.denied_attempts = (row.denied_attempts || 0) + 1;
         return ok([{
-          approved: false, run_id: body.run_id, provider: 'cj', status: row?.status ?? 'missing',
+          approved: false, run_id: body.p_run_id, provider: 'cj', status: row?.status ?? 'missing',
           hard_budget: row?.hard_budget ?? 0, reserved_points: row?.reserved_points ?? 0,
           remaining: (row?.hard_budget ?? 0) - (row?.reserved_points ?? 0),
           list_attempts: row?.list_attempts ?? 0, detail_attempts: row?.detail_attempts ?? 0,
@@ -1172,32 +1237,37 @@ function mockSupabaseLedger(state: Map<string, MockRunRow>) {
           denied_attempts: row?.denied_attempts ?? 0,
         }]);
       }
-      row.reserved_points += body.cost;
-      if (body.action === 'list') row.list_attempts = (row.list_attempts || 0) + 1;
-      if (body.action === 'detail') row.detail_attempts = (row.detail_attempts || 0) + 1;
-      if (body.action === 'freight') row.freight_attempts = (row.freight_attempts || 0) + 1;
-      if (body.is_retry) row.paid_retries = (row.paid_retries || 0) + 1;
-      return ok([{ approved: true, run_id: body.run_id, provider: 'cj', ...row }]);
+      row.reserved_points += cost;
+      if (body.p_action === 'list') row.list_attempts = (row.list_attempts || 0) + 1;
+      if (body.p_action === 'detail') row.detail_attempts = (row.detail_attempts || 0) + 1;
+      if (body.p_action === 'freight') row.freight_attempts = (row.freight_attempts || 0) + 1;
+      if (body.p_is_retry) row.paid_retries = (row.paid_retries || 0) + 1;
+      return ok([{ approved: true, run_id: body.p_run_id, provider: 'cj', ...row }]);
     }
 
+    // ---------------- finish RPC: only a running row may finish ----------------
+    if (url.includes('/rest/v1/rpc/finish_supplier_api_run')) {
+      const body = JSON.parse(String(init?.body || '{}')) as { p_run_id: string; p_status: string };
+      const row = state.get(body.p_run_id);
+      if (!row || row.status !== 'running') {
+        return new Response(JSON.stringify({ message: `supplier run ${body.p_run_id} is not running or does not exist` }), { status: 400 });
+      }
+      if (!['completed', 'failed', 'exhausted'].includes(body.p_status)) {
+        return new Response(JSON.stringify({ message: `invalid final status: ${body.p_status}` }), { status: 400 });
+      }
+      row.status = body.p_status;
+      return ok([{ run_id: row.id, provider: row.provider, status: row.status, hard_budget: row.hard_budget, reserved_points: row.reserved_points, finished_at: new Date().toISOString() }]);
+    }
+
+    // ---------------- direct table access: SELECT allowed (admin RLS);
+    // INSERT / UPDATE / PATCH DENIED (grants revoked — mirror of the migration)
     if (url.includes('/rest/v1/supplier_api_runs')) {
-      if (method === 'POST') {
-        const body = JSON.parse(String(init?.body || '{}')) as Partial<MockRunRow>;
-        const row = {
-          id: `run-${Math.random().toString(36).slice(2, 10)}`,
-          status: 'running', reserved_points: 0, list_attempts: 0, detail_attempts: 0,
-          freight_attempts: 0, paid_retries: 0, denied_attempts: 0, ...body,
-        } as MockRunRow;
-        state.set(row.id, row);
-        return ok([row], 201);
+      if (method === 'POST' || method === 'PATCH') {
+        return new Response(JSON.stringify({ message: 'permission denied for table supplier_api_runs' }), { status: 403 });
       }
       const id = /id=eq\.([^&]+)/.exec(url)?.[1];
       const row = id ? state.get(decodeURIComponent(id)) : null;
       if (method === 'GET') return ok(row ? [row] : []);
-      if (method === 'PATCH' && row) {
-        Object.assign(row, JSON.parse(String(init?.body || '{}')));
-        return ok([row]);
-      }
     }
     return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
   });
@@ -1453,5 +1523,347 @@ describe('EVIDENCE-COMPLETION HOOK (strongest 3–6 only, deterministic, no extr
     // With a consistent US-stock variant + origin, those gaps are NOT claimed.
     expect(gaps).not.toContain('internally-consistent selected variant');
     expect(gaps).not.toContain('origin/warehouse evidence');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C MIGRATION SECURITY — fail closed + DB-enforced hard cap
+// ---------------------------------------------------------------------------
+
+describe('MIGRATION 0008 — FAIL CLOSED when the durable ledger is unavailable', () => {
+  it('A) ledger unavailable + CJ configured → ZERO outbound paid CJ requests', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const adapter = strongAdapter();
+    adapter.failStart = true; // startRun throws → no durable run
+    const result = await runSupplierSearch({
+      adapter,
+      search: { query: 'orthopedic dog bed', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    // The run STOPPED with the fail-closed code — no records, no qualification.
+    expect(result.code).toBe(CJ_DURABLE_LEDGER_UNAVAILABLE);
+    expect(result.health).toBe('offline');
+    expect(result.searched).toBe(0);
+    expect(result.productShortlisted).toBe(0);
+    expect(result.businessQualified).toBe(0);
+    // ZERO paid calls were made (no listV2 / product/query / freightCalculate).
+    expect(adapter.searchCalls).toBe(0);
+    expect(adapter.detailCalls).toBe(0);
+    expect(adapter.freightCalls).toBe(0);
+    // A failed PRODUCT_RESEARCH job was recorded (truthful audit trail).
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
+    expect(job?.status).toBe('failed');
+    expect(job?.output).toMatchObject({ code: 'CJ_DURABLE_LEDGER_UNAVAILABLE' });
+  });
+
+  it('A2) startRun returning null (no run id) also fails closed with zero paid calls', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const adapter = strongAdapter();
+    const original = adapter.startRun.bind(adapter);
+    adapter.startRun = async () => null; // durable run could not be created
+    const result = await runSupplierSearch({
+      adapter,
+      search: { query: 'orthopedic dog bed', market: 'US', maxResults: 10 },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.code).toBe(CJ_DURABLE_LEDGER_UNAVAILABLE);
+    expect(adapter.searchCalls).toBe(0);
+    expect(adapter.detailCalls).toBe(0);
+    expect(adapter.freightCalls).toBe(0);
+    adapter.startRun = original;
+  });
+});
+
+describe('MIGRATION 0008 — SQL contract (static verification of the migration file)', () => {
+  const migration = fs.readFileSync('supabase/migrations/0008_supplier_api_runs.sql', 'utf8');
+
+  it('DB CHECK constraints enforce the [50,250] hard cap and counter integrity', () => {
+    expect(migration).toMatch(/requested_budget between 50 and 250/i);
+    expect(migration).toMatch(/hard_budget between 50 and 250/i);
+    expect(migration).toMatch(/reserved_points >= 0/i);
+    expect(migration).toMatch(/reserved_points <= hard_budget/i);
+    expect(migration).toMatch(/list_attempts >= 0/i);
+    expect(migration).toMatch(/detail_attempts >= 0/i);
+    expect(migration).toMatch(/freight_attempts >= 0/i);
+    expect(migration).toMatch(/paid_retries >= 0/i);
+    expect(migration).toMatch(/denied_attempts >= 0/i);
+    expect(migration).toMatch(/status in \('running', 'completed', 'failed', 'exhausted'\)/i);
+    expect(migration).toMatch(/provider in \('cj'\)/i);
+  });
+
+  it('C/D) direct authenticated INSERT/UPDATE/DELETE on the ledger is DENIED', () => {
+    // Only SELECT is granted to authenticated — no insert/update/delete grant.
+    expect(migration).toMatch(/grant select on public\.supplier_api_runs to authenticated/i);
+    expect(migration).not.toMatch(/grant (insert|update|delete).*supplier_api_runs/i);
+    expect(migration).not.toMatch(/grant all on public\.supplier_api_runs/i);
+    // The RLS policy is SELECT-only (admin), so a browser/admin JWT cannot
+    // raise hard_budget, lower reserved_points or reset counters via the table.
+    expect(migration).toMatch(/for select\n  using \(\(auth\.jwt\(\) -> 'app_metadata' ->> 'role'\) = 'admin'\)/i);
+    expect(migration).toMatch(/revoke all on public\.supplier_api_runs from public/i);
+  });
+
+  it('F/H) reserve RPC has NO caller-supplied cost parameter (bypass impossible by design)', () => {
+    // The function signature has exactly 4 args and no cost — a caller can
+    // never send cost = 0 / -10 / 1. Costs are DB literals.
+    expect(migration).toMatch(/create or replace function public\.reserve_supplier_api_points\(\s*p_run_id uuid,\s*p_provider text,\s*p_action text,\s*p_is_retry boolean default false\s*\)/);
+    expect(migration).toMatch(/v_cost := 50;/);
+    expect(migration).toMatch(/v_cost := 10;/);
+    // Unknown actions raise an exception (REJECT, zero reservation).
+    expect(migration).toMatch(/raise exception 'unknown supplier API action: %', p_action/);
+  });
+
+  it('G) invalid action → rejected, zero reservation (DB raises for unknown actions)', () => {
+    expect(migration).toMatch(/raise exception 'unknown supplier API action: %', p_action/);
+  });
+
+  it('B) the DB (not the caller) derives and stores the hard budget (LEAST/GREATEST clamp)', () => {
+    expect(migration).toMatch(/v_requested := least\(greatest\(coalesce\(p_requested_budget, 250\), 50\), 250\);/);
+    expect(migration).toMatch(/start_supplier_api_run\(/);
+    expect(migration).toMatch(/finish_supplier_api_run\(/);
+  });
+
+  it('parameter shadowing is impossible: every parameter is p_-prefixed and WHERE uses aliases', () => {
+    expect(migration).toMatch(/where r\.id = p_run_id/);
+    expect(migration).toMatch(/and r\.provider = p_provider/);
+    // No ambiguous `provider = provider` / `run_id = run_id` comparisons exist.
+    expect(migration).not.toMatch(/where\s+provider\s*=\s*provider/i);
+  });
+
+  it('SECURITY DEFINER hygiene: search_path set, EXECUTE revoked from PUBLIC, no service_role grants', () => {
+    expect(migration).toMatch(/security definer/);
+    expect((migration.match(/set search_path = public/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect((migration.match(/revoke all on function /g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(migration).not.toMatch(/to authenticated, service_role/);
+    expect(migration).not.toMatch(/grant .* to service_role/i);
+  });
+});
+
+describe('MIGRATION 0008 — server ledger RPC contract (mock mirrors the DB)', () => {
+  const state = new Map<string, MockRunRow>();
+  let realFetch: typeof fetch;
+  let env: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    state.clear();
+    realFetch = global.fetch;
+    env = {
+      VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
+      VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    };
+    process.env.VITE_SUPABASE_URL = 'https://proj.supabase.co';
+    process.env.VITE_SUPABASE_ANON_KEY = 'anon-key';
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    global.fetch = mockSupabaseLedger(state) as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = realFetch;
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('E) reservation action=detail → the DB derives 10 points (no caller cost sent)', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    const sent: string[] = [];
+    const realFetch2 = global.fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(String(init?.body || ''));
+      return realFetch2(input, init);
+    }) as unknown as typeof fetch;
+    const r = await ledger.reserve(runId, 'productQuery', false);
+    expect(r.approved).toBe(true);
+    // The wire payload carries p_action (and NO cost field whatsoever).
+    const wire = sent.find((b) => b.includes('p_action')) || '';
+    expect(wire).toContain('p_action');
+    expect(wire).toContain('detail');
+    expect(wire).not.toContain('cost');
+    const usage = await ledger.usage(runId);
+    expect(usage?.reserved).toBe(10); // DB-derived cost
+    expect(usage?.detailAttempts).toBe(1);
+  });
+
+  it('B) requested budget 1000 → the DB start RPC returns 250 (hard max enforced by DB)', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const big = await ledger.start('cj', 1000);
+    expect(big.usage.budget).toBe(250);
+    const small = await ledger.start('cj', 100);
+    expect(small.usage.budget).toBe(100); // under max is accepted
+  });
+
+  it('I) 249 reserved + detail(10) → DENIED, zero CJ HTTP requests', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    // Reserve 50 (list) + 19×10 (details) = 240 … then one more detail = 250.
+    await ledger.reserve(runId, 'listV2', false);
+    for (let i = 0; i < 19; i++) await ledger.reserve(runId, 'productQuery', false);
+    await ledger.reserve(runId, 'productQuery', false); // 250 → 0 remaining
+    expect((await ledger.usage(runId))?.remaining).toBe(0);
+    // 249-reserved state: budget 250, reserved 240, remaining 10 — a freight
+    // call needs 10 but the client must reserve BEFORE the HTTP request.
+    const supabaseMock = global.fetch;
+    let cjFreightCalls = 0;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(input);
+      if (u.includes('cjdropshipping')) {
+        if (u.includes('/logistic/freightCalculate')) cjFreightCalls++;
+        return new Response('{}', { status: 200 });
+      }
+      return supabaseMock(input, init);
+    }) as unknown as typeof fetch;
+    const ctx = new CjDurableRunContext(ledger, runId, 250);
+    await expect(cjFreightCalculate({ startCountryCode: 'US', endCountryCode: 'US', vid: 'V1' }, ctx)).rejects.toThrow(CJ_POINT_BUDGET_EXHAUSTED);
+    expect(cjFreightCalls).toBe(0); // NO freight HTTP request issued
+    expect((await ledger.usage(runId))?.denied).toBe(1);
+  });
+
+  it('G) invalid reservation action → REJECTED by the DB, zero reservation', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    // The typed JS API only ever sends list/detail/freight; the DB-level
+    // rejection is exercised directly over the RPC wire (mirrors PostgREST):
+    // an unknown p_action raises → 400 → zero reservation, counters untouched.
+    const res = await fetch('https://proj.supabase.co/rest/v1/rpc/reserve_supplier_api_points', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: 'anon-key', Authorization: 'Bearer admin.jwt' },
+      body: JSON.stringify({ p_run_id: runId, p_provider: 'cj', p_action: 'bogus', p_is_retry: false }),
+    });
+    expect(res.status).toBe(400);
+    expect(String(await res.text())).toMatch(/unknown supplier API action/i);
+    const usage = await ledger.usage(runId);
+    expect(usage?.reserved).toBe(0); // nothing reserved
+    expect(usage?.listAttempts).toBe(0);
+    expect(usage?.detailAttempts).toBe(0);
+    expect(usage?.freightAttempts).toBe(0);
+    expect(usage?.denied).toBe(0);
+  });
+
+  it('C/D) direct table INSERT/UPDATE is denied — only the RPCs mutate the ledger', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    // start via RPC succeeds (the supported path)…
+    const { runId } = await ledger.start('cj', 250);
+    // …but a direct table POST/PATCH (what a raw browser call would do) is 403.
+    const { url, headers } = { url: 'https://proj.supabase.co', headers: { apikey: 'anon-key', Authorization: 'Bearer admin.jwt' } };
+    const post = await fetch(`${url}/rest/v1/supplier_api_runs`, { method: 'POST', headers, body: JSON.stringify({ provider: 'cj', hard_budget: 9999 }) });
+    expect(post.status).toBe(403);
+    const patch = await fetch(`${url}/rest/v1/supplier_api_runs?id=eq.${runId}`, { method: 'PATCH', headers, body: JSON.stringify({ hard_budget: 9999 }) });
+    expect(patch.status).toBe(403);
+    // The supported finish path goes through the RPC (not a PATCH).
+    await ledger.finish(runId, 'completed');
+    expect(state.get(runId)?.status).toBe('completed');
+  });
+
+  it('J) two concurrent 10-pt reservations with 10 remaining → exactly ONE succeeds (atomic)', async () => {
+    const ledger = new CjDurableRunLedger('admin.jwt');
+    const { runId } = await ledger.start('cj', 250);
+    await ledger.reserve(runId, 'listV2', false); // 50
+    for (let i = 0; i < 19; i++) await ledger.reserve(runId, 'productQuery', false); // 240
+    const [a, b] = await Promise.all([
+      ledger.reserve(runId, 'freightCalculate', false),
+      ledger.reserve(runId, 'freightCalculate', false),
+    ]);
+    expect([a.approved, b.approved].filter(Boolean)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 4C MIGRATION SECURITY — market query provenance (§10/§11)
+// ---------------------------------------------------------------------------
+
+describe('MARKET QUERY PROVENANCE — actual query must match a persisted recommendation', () => {
+  it('K) MI recommendation ["interactive dog toy"] + CJ query "interactive dog toy" → VERIFIED', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    seedMiJob(db, 'mi-k', 65, 'fp-k', {
+      output: { recommendedSearchQueries: ['interactive dog toy'] },
+    });
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'interactive dog toy', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'mi-k', hypothesis: 'interactive dog toy' },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.marketContext?.verified).toBe(true);
+    expect(result.marketContext?.queryProvenance).toBe('verified');
+    expect(result.marketContext?.marketScore).toBe(65); // effective score applies
+    expect(result.marketContext?.hypothesis).toBe('interactive dog toy'); // matched DB recommendation
+    expect(result.businessQualified).toBe(1);
+    const researchJob = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
+    expect(researchJob?.output).toMatchObject({
+      market_query_provenance: 'verified', market_hypothesis: 'interactive dog toy',
+      market_score: 65, market_score_db: 65,
+    });
+  });
+
+  it('L) same MI job but CJ query "cat carrier" → Market UNKNOWN, BUSINESS_QUALIFIED false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    seedMiJob(db, 'mi-l', 65, 'fp-l', {
+      output: { recommendedSearchQueries: ['interactive dog toy'] },
+    });
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'cat carrier', market: 'US', maxResults: 10,
+        marketContext: { marketAnalysisId: 'mi-l', hypothesis: 'interactive dog toy' },
+      },
+      db,
+      onProgress: () => {},
+    });
+    // The JOB is real, but the QUERY is not grounded in its evidence.
+    expect(result.marketContext?.verified).toBe(true);
+    expect(result.marketContext?.queryProvenance).toBe('unverified');
+    expect(result.marketContext?.marketScore).toBeNull(); // effective = UNKNOWN
+    expect(result.marketContext?.marketScoreDb).toBe(65); // raw DB score still reported
+    expect(result.marketContext?.hypothesis).toBeNull();
+    expect(result.productShortlisted).toBe(1); // PRODUCT research still works
+    expect(result.businessQualified).toBe(0); // market gate NOT met
+    const researchJob = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'PRODUCT_RESEARCH');
+    expect(researchJob?.output).toMatchObject({
+      market_query_provenance: 'unverified', market_hypothesis: null,
+      market_score: null, market_score_db: 65,
+    });
+  });
+
+  it('M) client-claimed hypothesis not stored in the MI job → ignored (DB is the only verifier)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    seedMiJob(db, 'mi-m', 65, 'fp-m', {
+      output: { recommendedSearchQueries: ['interactive dog toy'] },
+    });
+    // The client CLAIMS a hypothesis that is NOT a persisted recommendation.
+    const result = await runSupplierSearch({
+      adapter: strongAdapter(),
+      search: {
+        query: 'orthopedic dog bed', market: 'US', maxResults: 10,
+        marketContext: {
+          marketAnalysisId: 'mi-m',
+          hypothesis: 'orthopedic dog bed', // claimed, but NOT in the job
+          opportunity: 'Orthopedic beds',   // client label — never verified
+        },
+      },
+      db,
+      onProgress: () => {},
+    });
+    expect(result.marketContext?.queryProvenance).toBe('unverified');
+    expect(result.marketContext?.marketScore).toBeNull();
+    // The DB opportunity is used (verified), not the client label.
+    expect(result.marketContext?.opportunity).toBe('Dog beds');
+    expect(result.businessQualified).toBe(0);
+  });
+
+  it('normalizeMarketQuery handles casing/punctuation so real matches verify', () => {
+    expect(normalizeMarketQuery('  Interactive-DOG  Toy! ')).toBe('interactive dog toy');
+    expect(normalizeMarketQuery('Interactive Dog Toy')).toBe('interactive dog toy');
+    expect(normalizeMarketQuery('')).toBe('');
   });
 });

@@ -73,6 +73,11 @@ export interface SupplierSearchRunResult {
   scoreJobId?: string;
   qaJobId?: string;
   health: string;
+  /**
+   * Fail-closed code, when the durable supplier run ledger is unavailable
+   * (CJ_DURABLE_LEDGER_UNAVAILABLE) — zero paid supplier calls were issued.
+   */
+  code?: string;
   searched: number;
   duplicates: number;
   prefilterRejected: number;
@@ -91,12 +96,23 @@ export interface SupplierSearchRunResult {
   /** Market gate: the verified MI context that justified the search (DB-derived). */
   marketContext?: {
     marketAnalysisId?: string | null;
+    /** Opportunity/category persisted on the MI job output (DB, not client). */
     opportunity?: string | null;
+    /**
+     * EFFECTIVE market score for qualification: the persisted job's score
+     * ONLY when queryProvenance === 'verified', else null (UNKNOWN).
+     */
     marketScore: number | null;
+    /** Raw score from the persisted MI job (DB) — reported even when unverified. */
+    marketScoreDb?: number | null;
     evidenceFingerprint?: string | null;
     observedAt?: string | null;
     /** True only when the persisted MARKET_INTELLIGENCE job verified the context. */
     verified?: boolean;
+    /** Whether the ACTUAL search query matched a persisted recommendation. */
+    queryProvenance?: 'verified' | 'unverified';
+    /** The matched persisted recommendation (DB) — null when unverified. */
+    hypothesis?: string | null;
   };
   warning?: string;
   /** Client-side forecast budget usage (UX only). */
@@ -246,22 +262,30 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
-  // Per-run DURABLE point ledger (Phase 4C live-readiness): the SERVER creates
-  // the run (supplier_api_runs row — migration 0008), clamps the requested
-  // budget to the HARD MAX, and reserves points atomically before every paid
-  // CJ request. Client-side CjPointBudget stays UX forecast only.
+  // Per-run DURABLE point ledger (Phase 4C live-readiness + migration-security
+  // revision): the SERVER creates the run (supplier_api_runs row — migration
+  // 0008) via the start RPC, and the DATABASE stores the hard budget (clamped
+  // to [50, 250]) and reserves points atomically before every paid CJ request.
+  // Client-side CjPointBudget stays UX forecast only — it can NEVER authorize
+  // a live paid request.
+  //
+  // FAIL CLOSED: if the durable run cannot be created (unconfigured env, DB
+  // unreachable, permission denied, startRun absent), the supplier run STOPS
+  // with CJ_DURABLE_LEDGER_UNAVAILABLE and ZERO paid CJ HTTP requests occur
+  // (no listV2 / product/query / freightCalculate).
   let runId: string | null = null;
   let hardBudget = CJ_POINTS_BUDGET_PER_RUN;
-  let ledgerWarn = '';
+  let ledgerError = '';
   try {
     const started = await adapter.startRun?.(search.pointsBudget);
-    if (started?.runId) {
-      runId = started.runId;
-      hardBudget = started.hardBudget;
+    if (!started?.runId) {
+      throw new Error('durable supplier run was not created (startRun returned no run id)');
     }
+    runId = started.runId;
+    hardBudget = started.hardBudget;
   } catch (e) {
-    ledgerWarn = `server point ledger unavailable — client forecast only (${(e as Error).message})`;
-    progress(`[warn] ${ledgerWarn}`);
+    ledgerError = (e as Error).message;
+    progress(`[block] ${ledgerError}`);
   }
   const budget = new CjPointBudget(hardBudget);
   const caps = enrichmentCaps(budget);
@@ -273,35 +297,88 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
 
   // Grounded Market Intelligence context (market gate). The persisted
   // MARKET_INTELLIGENCE job is the SOURCE OF TRUTH: the client may CLAIM a
-  // marketAnalysisId + fingerprint, but the score/fingerprint/observed_at are
-  // derived ONLY from the verified DB job. No valid job ⇒ Market Score
-  // UNKNOWN ⇒ BUSINESS_QUALIFIED impossible. Never trust the client score.
+  // marketAnalysisId + fingerprint, but the score/fingerprint/observed_at and
+  // the recommended search hypotheses are derived ONLY from the verified DB
+  // job. No valid job ⇒ Market Score UNKNOWN ⇒ BUSINESS_QUALIFIED impossible.
+  // Never trust the client score.
+  //
+  // QUERY PROVENANCE (§10): the ACTUAL search.query must match one of the
+  // recommendedSearchQueries persisted on the MI job (normalized exact match).
+  // A client-claimed hypothesis / React state / client text is NEVER trusted
+  // alone. If the query does not match, the market score is treated as UNKNOWN
+  // for qualification (manual/off-hypothesis search still works as PRODUCT
+  // research and can be PRODUCT_SHORTLISTED).
   const claimed: MarketContext = search.marketContext ?? {};
   let verifiedMarket: VerifiedMarketContext | null = null;
   if (claimed.marketAnalysisId) {
     try {
       const job = await db.get<Record<string, unknown>>('agent_jobs', claimed.marketAnalysisId);
-      verifiedMarket = verifyMarketIntelligenceJob(job, claimed);
+      verifiedMarket = verifyMarketIntelligenceJob(job, claimed, search.query);
     } catch (e) {
       progress(`[market] failed to load MI job ${claimed.marketAnalysisId}: ${(e as Error).message}`);
     }
     if (verifiedMarket) {
-      progress(`[market] verified MARKET_INTELLIGENCE ${verifiedMarket.marketAnalysisId}: score ${verifiedMarket.marketScore}/100 (fingerprint ${verifiedMarket.evidenceFingerprint})`);
+      if (verifiedMarket.queryProvenance === 'verified') {
+        progress(`[market] verified MARKET_INTELLIGENCE ${verifiedMarket.marketAnalysisId}: score ${verifiedMarket.marketScore}/100, query "${search.query}" matches persisted recommendation "${verifiedMarket.hypothesis}"`);
+      } else {
+        progress(`[market] MI job ${verifiedMarket.marketAnalysisId} verified (score ${verifiedMarket.marketScore}/100) but query "${search.query}" matches NO persisted recommendation — Market Score UNKNOWN, BUSINESS_QUALIFIED impossible`);
+      }
     } else {
       progress(`[market] market context NOT verified (job ${claimed.marketAnalysisId} missing/not completed/fingerprint mismatch) — Market Score UNKNOWN, BUSINESS_QUALIFIED impossible`);
     }
   } else {
     progress('[market] no linked Market Intelligence job — manual supplier search; Market Score UNKNOWN, BUSINESS_QUALIFIED impossible');
   }
-  const marketScore = verifiedMarket?.marketScore ?? null;
+  // Effective market score: ONLY when the job verified AND the actual query
+  // follows a persisted recommendation. Otherwise UNKNOWN (null).
+  const marketScore =
+    verifiedMarket && verifiedMarket.queryProvenance === 'verified'
+      ? verifiedMarket.marketScore
+      : null;
   const marketOut = (): NonNullable<SupplierSearchRunResult['marketContext']> => ({
     marketAnalysisId: verifiedMarket?.marketAnalysisId ?? null,
-    opportunity: claimed.opportunity ?? null,
+    // Opportunity from the DB job output only — never a client label.
+    opportunity: verifiedMarket?.opportunity ?? null,
     marketScore,
+    marketScoreDb: verifiedMarket?.marketScore ?? null,
     evidenceFingerprint: verifiedMarket?.evidenceFingerprint ?? null,
     observedAt: verifiedMarket?.observedAt ?? null,
     verified: !!verifiedMarket,
+    queryProvenance: verifiedMarket?.queryProvenance ?? 'unverified',
+    hypothesis: verifiedMarket?.hypothesis ?? null,
   });
+
+  // ======================================================================
+  // FAIL CLOSED — durable supplier run ledger unavailable. A paid supplier
+  // run MUST be backed by the durable ledger; without it no listV2 /
+  // product/query / freightCalculate HTTP request may be issued. The job is
+  // recorded as failed so the audit trail is truthful.
+  // ======================================================================
+  if (!runId) {
+    const code = 'CJ_DURABLE_LEDGER_UNAVAILABLE';
+    const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
+      provider: adapter.provider,
+      query: search.query,
+      target_market: search.market || null,
+      at,
+      note: 'BLOCKED — durable supplier run ledger unavailable; zero paid supplier API calls issued (fail closed).',
+    });
+    await addRun(db, jobId, 'supplier-search', 'failed', code);
+    await addLog(db, jobId, 'error', `SUPPLIER SEARCH BLOCKED: ${code} — ${ledgerError}`);
+    await completeJob(db, jobId, 'failed', { code, error: ledgerError, retries: 0 });
+    progress(`[block] ${code} — zero paid supplier calls issued.`);
+    return {
+      jobId,
+      health: 'offline',
+      code,
+      searched: 0, duplicates: 0, prefilterRejected: 0, researched: 0, rejected: 0,
+      productShortlisted: 0, qaPassed: 0, businessQualified: 0, failed: 1,
+      candidates: [], businessQualifiedCandidates: [],
+      marketContext: marketOut(),
+      points: budget.usage(), serverPoints: null,
+      warning: `Supplier run blocked: durable point ledger unavailable (${ledgerError}) — zero paid ${adapter.provider.toUpperCase()} calls issued.`,
+    };
+  }
 
   const jobId = await createJob(db, 'PRODUCT_RESEARCH', {
     provider: adapter.provider,
@@ -541,13 +618,18 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     points: budget.usage(),
     // Market link (VERIFIED): WHY this product was searched + WHICH MI
     // evidence justified it — derived from the persisted DB job, never the
-    // client-supplied score.
+    // client-supplied score. market_score is the EFFECTIVE score (only when
+    // query provenance is verified); market_score_db is the raw job score;
+    // market_hypothesis is the MATCHED persisted recommendation (DB), never
+    // the client's claimed hypothesis.
     market_intelligence_job_id: verifiedMarket?.marketAnalysisId ?? null,
     market_score: marketScore,
+    market_score_db: verifiedMarket?.marketScore ?? null,
     market_evidence_fingerprint: verifiedMarket?.evidenceFingerprint ?? null,
     market_observed_at: verifiedMarket?.observedAt ?? null,
     market_verified: !!verifiedMarket,
-    market_hypothesis: verifiedMarket?.hypothesis ?? claimed.hypothesis ?? null,
+    market_query_provenance: verifiedMarket?.queryProvenance ?? 'unverified',
+    market_hypothesis: verifiedMarket?.hypothesis ?? null,
     supplier_search_query: search.query,
   });
 
@@ -668,7 +750,7 @@ export async function runSupplierSearch(opts: SupplierSearchRunOptions): Promise
     candidates: scored,
     businessQualifiedCandidates,
     marketContext: marketOut(),
-    warning: [result.warning, ledgerWarn].filter(Boolean).join(' · ') || undefined,
+    warning: result.warning || undefined,
     points: budget.usage(),
     serverPoints,
   };
