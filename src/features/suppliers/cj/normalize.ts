@@ -18,6 +18,7 @@
 // ============================================================================
 
 import type { SupplierProductRecord, SupplierVariantEvidence, SupplierShippingEvidence } from '../types';
+import { curateSupplierImageSet } from '../images';
 
 export const CJ_API_BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
 export const CJ_PRODUCT_PAGE = 'https://www.cjdropshipping.com/product';
@@ -243,6 +244,9 @@ export function normalizeCjListProduct(
     title,
     imageUrl: str(p.bigImage),
     images: [str(p.bigImage)].filter((i): i is string => !!i),
+    // Truthful image content: the supplier's list-level image (bigImage). No
+    // dimensions are invented; variant mapping stays empty at list level.
+    imageSet: curateSupplierImageSet({ title, images: [p.bigImage] }),
     sellPrice: bestPrice,
     category,
     weightGrams: null,
@@ -285,6 +289,12 @@ export function normalizeCjProductDetail(
     images: Array.isArray(d.productImageSet) && d.productImageSet.length
       ? d.productImageSet.filter((i): i is string => !!i)
       : base.images,
+    // Detail-level full gallery (productImageSet) is the supplier's own
+    // highest-resolution image set — exact-deduped, hero-first, honest alt.
+    imageSet: curateSupplierImageSet({
+      title: base.title,
+      images: Array.isArray(d.productImageSet) ? d.productImageSet : base.images,
+    }),
     weightGrams: num(d.productWeight) ?? selected?.weightGrams ?? null,
     selectedVariant: selected,
     sellPrice: price,

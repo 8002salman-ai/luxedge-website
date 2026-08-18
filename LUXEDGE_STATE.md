@@ -656,10 +656,29 @@ Consequence: the sofa-bed concept's suitability rose 10 → **14/15** (complete:
 
 **PART D — VISUAL (restrained):** product-card hover (2nd image + soft shadow/lift), PDP gallery balance; Luxedge BLUE brand preserved — no cartoon/rainbow/glassmorphism/neon; no fake products, reviews, ratings, inventory, discounts, shipping claims, or scarcity introduced.
 
-**Status:** **MARKET EVIDENCE GATE = CLOSED (4 pages / 4 domains) · QUALIFYING MARKET SCORE = 45/100 (fail-closed, <60) · MARKET-GROUNDED CJ QUALIFICATION READY = NO · DEEPSEEK = 1 (authorized) · CJ = 0 calls/points · WINNER = NONE · IMAGE SYSTEM = PREMIUM (fallback + hover + mobile swipe) · ICONS = PHOSPHOR (lucide removed) · GOOGLE ADS = DEFERRED / 0 CALLS · HIGGSFIELD = PLAN PENDING / 0 · main = `b62090f` (untouched).**
+**Status:** **MARKET EVIDENCE GATE = CLOSED (4 pages / 4 domains) · QUALIFYING MARKET SCORE = 45/100 (fail-closed, <60) · MARKET-GROUNDED CJ QUALIFICATION READY = NO · DEEPSEEK = 1 (authorized) · CJ = 0 calls/points · WINNER = NONE · IMAGE PRESENTATION = PREMIUM (fallback + hover + mobile swipe) · ICONS = @untitledui/icons (storefront) / Phosphor (admin lazy) · GOOGLE ADS = DEFERRED / 0 CALLS · HIGGSFIELD = PLAN PENDING / 0 · main = `b62090f` (untouched).**
+
+## PHASE 4H.3 — IMAGE CONTENT CORRECTION + SUPPLIER IMAGE CURATION (2026-08-18)
+
+**Honest correction:** the prior 4H.3 "image system" work was PRESENTATION ONLY (card hover, PDP gallery CSS, branded fallback) — NOT image content. No qualified product exists yet (winner = NONE), so no real supplier image content has been (or can legitimately be) attached to a live listing. Recorded here so image work is never reported complete on CSS alone.
+
+**Real image-content layer built (`src/features/suppliers/images.ts`):**
+- `SupplierImageSet` / `SupplierImage`: `primaryImage` (strongest hero), `galleryImages` (deduped, hero-first), `variantImages` (genuine variant→image links ONLY), `altText` (derived from the REAL title — never invented), `width`/`height` (only when the URL literally encodes a size — never guessed).
+- `dedupeImageUrls`: EXACT dedupe (normalized URL key, tracking params stripped); junk dropped; removed keys recorded for audit.
+- `isObviouslyWeakImageUrl`: thumb/thumbnail/small heuristic used ONLY to rank the hero (never deletes).
+- `imageUrlResolutionHint`: parses real size hints (`_800x800`, `w=800&h=800`, Aliyun OSS resize) — UNKNOWN (null) otherwise; no upscaling, no fabricated resolution.
+- **"Highest resolution" = the supplier's own full-size image set** (CJ `product/query` `productImageSet`) preferred over the list-level `bigImage` thumbnail. No invented transform.
+- Wired into CJ normalization: `SupplierProductRecord.imageSet` (optional) is populated at list (bigImage) and detail (productImageSet) level.
+- **Variant images are NEVER guessed** from title color words — populated only from a real supplier variant→image linkage (the current verified CJ DTO exposes none, so CJ variantImages stays empty until proven).
+
+**Homepage/category lifestyle imagery:** still UNAVAILABLE honestly — Luxedge owns no lifestyle asset set and Higgsfield is PLAN PENDING (key absent, calls 0). Premium lifestyle imagery will come from (a) Luxedge-owned/commissioned assets or (b) Higgsfield creative on a future OWNER-APPROVED qualified product. We do NOT hotlink retailer lifestyle images and do NOT misrepresent the actual product with unrelated stock.
+
+**Tests:** 16 new (`images.test.ts`): dedupe, hero, gallery order, honest alt, honest resolution, variant no-guess, list+detail normalization. `npm test` ✅ 418 passed + 5 skipped · tsc 0 · build ✅.
+
+**Status:** IMAGE CONTENT = REAL PIPELINE BUILT (dedupe/hero/gallery/variant/alt/resolution truth) · QUALIFIED PRODUCT = NONE (no images attached to any live listing — product truth) · LIFESTYLE IMAGERY = NOT YET (no owned assets, Higgsfield PENDING) · CJ = 0 calls/points · main = `b62090f` (untouched).
 
 ## Exact recommended next task
 
-Phase 4H.3 closed the evidence gate (rendered fetch: 4 usable pages / 4 domains) and ran ONE grounded MI pass for the elevated dog sofa bed → **Market Score 45/100 < 60 ⇒ MARKET NOT QUALIFIED** (honest STOP; DeepSeek 1, CJ 0). The storefront image/icon presentation is now premium (Phosphor icons, lucide removed, branded image fallback, mobile swipe gallery).
+Phase 4H.3 closed the evidence gate (rendered fetch: 4 usable pages / 4 domains) and ran ONE grounded MI pass for the elevated dog sofa bed → **Market Score 45/100 < 60 ⇒ MARKET NOT QUALIFIED** (honest STOP; DeepSeek 1, CJ 0). The storefront image/icon presentation is now premium (@untitledui/icons line icons, strokeWidth 1.5, branded image fallback, mobile swipe gallery).
 
 **ONE next business step:** run the next CJ-seeded concept (from the persisted Phase 4F seed job — NOT the already-45 dog ramp or sofa bed) through the now-closed evidence pipeline — rendered fetch + MARKET-COMPARABLE prices + exact-identity rules — to find a concept whose honest Market Score reaches ≥60. Only then may the first 250-pt market-grounded CJ qualification run start (separate owner authorization, durable ledger + provenance gates) to produce a Product Score ≥75 + QA-PASS winner. Everything downstream (listing → creative → checkout → sale) waits for that first genuine winner. Google Ads stays DEFERRED (billing); Higgsfield PLAN PENDING; `main` = `b62090f` untouched.

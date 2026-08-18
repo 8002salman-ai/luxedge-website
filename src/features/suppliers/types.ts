@@ -17,6 +17,8 @@
 // supplier API. No supplier key ever reaches the browser.
 // ============================================================================
 
+import type { SupplierImageSet } from './images';
+
 /** Which supplier provider a record/adapter belongs to. */
 export type SupplierProviderId = 'cj';
 
@@ -56,6 +58,12 @@ export interface SupplierProductRecord {
   title: string;
   imageUrl: string | null;
   images: string[];
+  /**
+   * Curated, truthful image content (hero + deduped gallery + variant
+   * mapping + honest alt/resolution). Optional for backward compatibility;
+   * populated by the normalization layer. Never invented.
+   */
+  imageSet?: SupplierImageSet;
   /** Supplier cost (sell price) — VERIFIED when the API returns it. */
   sellPrice: number | null;
   category: string | null;
