@@ -557,7 +557,12 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
-  const [products, setProducts] = useState<Product[]>(ALL_PRODUCTS);
+  // PRODUCTION CATALOG RESET HOTFIX (Phase 4E.2): the customer storefront must
+  // NOT initialize from demo products. Zero demo product may be reachable on
+  // the customer storefront path — the catalog starts empty until genuinely
+  // approved products exist. (Demo fixtures above remain only as admin/dev
+  // data and are never the storefront source of truth.)
+  const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
@@ -1702,20 +1707,35 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ BEST SELLERS ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+      {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
+      {/* Production catalog reset: with zero approved products the storefront
+          shows ONE premium curation notice instead of empty grids or demo
+          cards. No fake counts, launch dates, reviews, or shipping claims. */}
+      {featured.length === 0 ? (
+        <section className="py-16 sm:py-20 bg-luxe-cream">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkles size={22} className="text-luxe-gold" /></div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
+            <p className="text-sm text-luxe-gray leading-relaxed">Thoughtfully selected pet essentials are coming soon. Every product is verified before it reaches your door.</p>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="py-14 sm:py-18 bg-luxe-cream">
+            <div className="max-w-7xl mx-auto px-4">
+              <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
+              <Reveal delay={60}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                </div>
+              </Reveal>
             </div>
-          </Reveal>
-        </div>
-      </section>
+          </section>
 
-      {/* ════════ Ad: Between Product Sections ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+          {/* ════════ Ad: Between Product Sections ════════ */}
+          <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+        </>
+      )}
 
       {/* ════════ SHOP BY NEED ════════ */}
       <section className="py-14 sm:py-18 bg-white">
@@ -1743,17 +1763,19 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ PET PARENT FAVORITES ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-            </div>
-          </Reveal>
-        </div>
-      </section>
+      {/* ════════ PET PARENT FAVORITES (only when the catalog has products) ════════ */}
+      {featured.length > 0 && (
+        <section className="py-14 sm:py-18 bg-luxe-cream">
+          <div className="max-w-7xl mx-auto px-4">
+            <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
+            <Reveal delay={60}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {/* ════════ TRUST BAR ════════ */}
       <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
@@ -1954,6 +1976,15 @@ function ShopPage() {
             {f.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {f.map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            ) : products.length === 0 ? (
+              /* Production catalog reset: genuinely empty catalog — premium
+                 curation notice, never demo cards or fake counts. */
+              <div className="text-center py-20">
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkles size={22} className="text-luxe-gold" /></div>
+                <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
+                <p className="text-sm text-luxe-gray mb-5">Thoughtfully selected pet essentials are coming soon.</p>
+                <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
               </div>
             ) : (
               <div className="text-center py-20">
