@@ -32,3 +32,5 @@ Thumbs.db
 .freebuff/
 .freebuff-backup/
 ```
+# Vercel CLI local state
+.vercel/

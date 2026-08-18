@@ -458,7 +458,7 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b6', slug:'get-pet-to-drink-more-water', title:'How to Get Your Pet to Drink More Water', excerpt:'Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.', content:'Pets often don\u2019t drink enough water. Here\u2019s how to keep them properly hydrated.\n\n## Upgrade to a Fountain\nMany pets prefer running water. A Stainless Steel Pet Water Fountain with triple filtration is irresistible to most cats and dogs.\n\n## Keep Bowls Clean\nPets refuse stale water. Wash bowls daily and refresh water at least twice a day.\n\n## Add Water to Food\nMix a little warm water into dry kibble or add broth to increase daily intake.\n\n## Multiple Stations\nPlace water bowls in several rooms so water is always nearby.\n\n## Watch the Signs\nCheck for dry gums, lethargy, or loss of appetite. If you\u2019re worried about dehydration, contact your vet.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['hydration','water fountain','health','cat and dog'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
   { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding — and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
   { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle — great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
-  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Curated stores like Luxedge use 256-bit SSL encryption.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Luxedge offers 30-day hassle-free returns.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
+  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. This site is served over an encrypted (HTTPS) connection.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Review the current Luxedge returns policy before ordering.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
   { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability — here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
   { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions — even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase — not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
   { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
@@ -504,10 +504,16 @@ interface Ctx {
 const AC = createContext<Ctx | null>(null);
 export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
-const CART_STORAGE_KEY = 'luxedge_cart';
+// PHASE 4E.2A CART MIGRATION: the demo-era key 'luxedge_cart' held demo/fake
+// product objects that must NEVER surface again. The current key is
+// 'luxedge_cart_v2'; the legacy key is purged once on load and never read.
+const CART_STORAGE_KEY_LEGACY = 'luxedge_cart';
+const CART_STORAGE_KEY = 'luxedge_cart_v2';
 
 function loadCart(): CartItem[] {
   try {
+    // One-time purge of the legacy demo-era cart payload.
+    localStorage.removeItem(CART_STORAGE_KEY_LEGACY);
     const raw = localStorage.getItem(CART_STORAGE_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
@@ -557,11 +563,13 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
-  // PRODUCTION CATALOG RESET HOTFIX (Phase 4E.2): the customer storefront must
-  // NOT initialize from demo products. Zero demo product may be reachable on
-  // the customer storefront path — the catalog starts empty until genuinely
-  // approved products exist. (Demo fixtures above remain only as admin/dev
-  // data and are never the storefront source of truth.)
+  // PRODUCTION CATALOG RESET HOTFIX — TEMPORARY EMPTY-CATALOG LOCK
+  // (Phase 4E.2/4E.2A): this emergency branch does NOT load a Supabase
+  // catalog — it intentionally renders ZERO products. Demo products are
+  // never customer-visible; the storefront stays empty until the approved
+  // luxedge-v2 production release ships the real DB-driven catalog. Future
+  // published DB products will NOT automatically appear through this
+  // temporary hotfix. (Demo fixtures above remain only as admin/dev data.)
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
@@ -578,6 +586,20 @@ function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { /* storage full or unavailable */ }
   }, [cart]);
+
+  // PHASE 4E.2A defense in depth: the cart may only contain products that
+  // exist in the current customer-visible catalog. Under the TEMPORARY
+  // EMPTY-CATALOG LOCK (products === []) ANY stored item is stale, so the
+  // cart is forced empty — old demo cart items become ZERO on reload and a
+  // manually-restored malformed payload is reconciled away on mount.
+  useEffect(() => {
+    setCart(prev => {
+      if (!products.length) return [];
+      const valid = prev.filter(i => i && i.product && products.some(p => p.id === i.product.id));
+      return valid.length === prev.length ? prev : valid;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
 
   // Persist the signed-in user so the session survives a page refresh.
   useEffect(() => {
@@ -679,11 +701,37 @@ function AppProvider({ children }: { children: ReactNode }) {
       notify('Profile updated!');
     }
   };
-  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
+  // PHASE 4E.2A add-to-cart safety: a product absent from the current
+  // customer-visible catalog cannot enter the cart (no demo fixture can).
+  const addToCart = (p: Product) => {
+    if (!products.some(x => x.id === p.id)) {
+      notify('This product is no longer available.');
+      return;
+    }
+    setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`);
+  };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => { const oid = `ORD-${Date.now()}`; const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]); trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); clearCart(); return oid; };
+  // PHASE 4E.2A checkout safety: never create an order or fire a purchase
+  // conversion for products that are not in the current customer-visible
+  // catalog. Under the temporary empty lock (products === []) no order can
+  // be placed at all. Returns '' when blocked (no order, no purchase event).
+  const placeOrder = (addr: string) => {
+    if (cart.length === 0) return '';
+    const valid = cart.filter(i => i && i.product && products.some(p => p.id === i.product.id));
+    if (products.length === 0 || valid.length !== cart.length) {
+      setCart(prev => prev.filter(i => i && i.product && products.some(p => p.id === i.product.id)));
+      notify('Your cart contained items that are no longer available.');
+      return '';
+    }
+    const oid = `ORD-${Date.now()}`;
+    const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+    setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]);
+    trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+    clearCart();
+    return oid;
+  };
 
   return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
 }
@@ -778,11 +826,13 @@ function Header() {
   return (<>
     {/* ── Top utility bar ── */}
     <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
-      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Free Shipping $50+</span>
+      {/* Top bar — factual only (Phase 4E.2A): no unverified shipping/
+          returns/support-hours claims. */}
+      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Premium pet essentials</span>
       <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RotateCcw size={12} /> Easy 30-Day Returns</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RotateCcw size={12} /> Thoughtfully curated</span>
       <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer Support</span>
+      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer support</span>
     </div>
 
     {/* ── Main header ── */}
@@ -987,7 +1037,7 @@ function Footer() {
               </div>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
                 <Clock size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                Mon – Fri, 9AM – 6PM CT
+                Customer support by email & phone
               </div>
             </div>
           </div>
@@ -1011,11 +1061,12 @@ function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-5">
+              {/* Footer trust strip — factual only (Phase 4E.2A). */}
               {[
-                { icon: Shield, text: 'Secure Checkout' },
-                { icon: Truck, text: 'Free Shipping $50+' },
-                { icon: RotateCcw, text: '30-Day Returns' },
-                { icon: Headphones, text: 'Customer Support' },
+                { icon: Shield, text: 'Secure Shopping' },
+                { icon: Truck, text: 'Premium pet essentials' },
+                { icon: RotateCcw, text: 'Thoughtfully curated' },
+                { icon: Headphones, text: 'Customer support' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
                   <b.icon size={14} className="text-luxe-gold-light" />
@@ -1337,7 +1388,7 @@ function ProductDetailPage() {
             {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
             {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
             {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
-            <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />30-day easy returns</span>
+            <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />Thoughtfully curated essentials</span>
           </div>
 
           {/* Short Desc */}
@@ -1388,11 +1439,13 @@ function ProductDetailPage() {
 
           {/* Trust */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {/* Trust — factual only. Free-shipping/return/support-hours claims
+                are NOT verified by a current policy (Phase 4E.2A). */}
             {[
-              { icon: Truck, t: 'Free ship $50+' },
-              { icon: RotateCcw, t: '30-day returns' },
-              { icon: Shield, t: 'Quality guarantee' },
-              { icon: Lock, t: 'Secure checkout' },
+              { icon: Truck, t: 'Thoughtfully curated' },
+              { icon: RotateCcw, t: 'Premium pet essentials' },
+              { icon: Shield, t: 'Quality focused' },
+              { icon: Lock, t: 'Secure shopping experience' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
                 <b.icon size={14} className="text-luxe-gold shrink-0" />
@@ -1581,8 +1634,8 @@ function HomePage() {
                 customer counts, or social proof (Master Plan §14 / Phase 4E.2). */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Shield size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Premium pet essentials</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> Quality focused</div>
             </div>
           </div>
 
@@ -1605,15 +1658,15 @@ function HomePage() {
             <div className="absolute -left-3 sm:-left-6 top-6 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl animate-float">
               <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck size={16} /></span>
               <div>
-                <p className="text-[11px] font-bold text-luxe-black">Free Shipping</p>
-                <p className="text-[10px] text-luxe-gray">On orders $50+</p>
+                <p className="text-[11px] font-bold text-luxe-black">Premium Essentials</p>
+                <p className="text-[10px] text-luxe-gray">Curated for your pet</p>
               </div>
             </div>
             <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
               <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Shield size={16} /></span>
               <div>
-                <p className="text-[11px] font-bold text-luxe-black">Quality Guarantee</p>
-                <p className="text-[10px] text-luxe-gray">Handpicked & tested</p>
+                <p className="text-[11px] font-bold text-luxe-black">Quality First</p>
+                <p className="text-[10px] text-luxe-gray">Carefully selected</p>
               </div>
             </div>
           </div>
@@ -1778,11 +1831,13 @@ function HomePage() {
       {/* ════════ TRUST BAR ════════ */}
       <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Trust — factual only. Free-shipping/return/support-hours claims
+              are NOT verified by a current policy (Phase 4E.2A). */}
           {[
-            { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
-            { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
-            { icon: Shield, title: 'Secure Checkout', desc: '256-bit SSL encryption' },
-            { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
+            { icon: Truck, title: 'Premium Pet Essentials', desc: 'Curated for your pet' },
+            { icon: RotateCcw, title: 'Thoughtfully Curated', desc: 'Quality-focused selection' },
+            { icon: Shield, title: 'Secure Shopping', desc: 'Encrypted browsing experience' },
+            { icon: Headphones, title: 'Customer Support', desc: 'Here to help by email & phone' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
               <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
@@ -2012,7 +2067,6 @@ function CartDrawer() {
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const sh = sub >= 50 ? 0 : 4.99;
   const tot = sub + sh;
-  const remaining = 50 - sub;
 
   const checkout = () => {
     closeCart();
@@ -2061,19 +2115,11 @@ function CartDrawer() {
             <>
               {/* Items */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                {sub < 50 ? (
-                  <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
-                    <p className="text-[11px] text-gray-600">You're <span className="font-bold text-luxe-gold">${remaining.toFixed(2)}</span> away from free shipping</p>
-                    <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 flex items-center gap-2">
-                    <CheckCircle size={14} className="text-green-600 shrink-0" />
-                    <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
-                  </div>
-                )}
+                {/* Shipping-policy claim removed (Phase 4E.2A): no verified
+                    free-shipping policy exists on this branch. */}
+                <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
+                  <p className="text-[11px] text-gray-600">Shipping costs are calculated at checkout.</p>
+                </div>
 
                 {cart.map(item => (
                   <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
@@ -2121,7 +2167,6 @@ function CartDrawer() {
 function CartPage() {
   const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
-  const remaining = 50 - sub;
 
   if (cart.length === 0) return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
@@ -2170,10 +2215,7 @@ function CartPage() {
             <h2 className="font-serif text-lg font-bold text-luxe-black mb-5">Order Summary</h2>
             {sub < 50 && (
               <div className="rounded-xl bg-luxe-gold-soft/70 border border-luxe-gold/20 px-4 py-3 mb-5">
-                <p className="text-[11px] text-luxe-gray">Add <span className="font-bold text-luxe-gold-dark">${remaining.toFixed(2)}</span> more for free shipping</p>
-                <div className="mt-2 h-1.5 bg-white rounded-full overflow-hidden">
-                  <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
-                </div>
+                <p className="text-[11px] text-luxe-gray">Shipping costs are calculated at checkout.</p>
               </div>
             )}
             <div className="space-y-2.5 text-sm">
@@ -2196,7 +2238,7 @@ function CartPage() {
 }
 
 function CheckoutPage() {
-  const { cart, placeOrder, user } = useApp();
+  const { cart, placeOrder, user, notify } = useApp();
   const nav = useNavigate();
 
   const [step, setStep] = useState(1); // 1=info, 2=payment, 3=processing, 4=done
@@ -2251,6 +2293,9 @@ function CheckoutPage() {
       await new Promise(r => setTimeout(r, 2500));
       const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
       const oid = placeOrder(addr);
+      // PHASE 4E.2A: a blocked order (stale/invalid cart) must not reach the
+      // fake success screen and must not fire a purchase conversion.
+      if (!oid) { notify('Unable to complete your order. Please review your cart.'); setStep(2); return; }
       setOrderId(oid);
       setStep(4);
     }
@@ -2467,7 +2512,7 @@ function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {shipCost > 0 && sub < 50 && <p className="text-xs text-luxe-gold">💡 Add ${(50 - sub).toFixed(2)} more for free shipping!</p>}
+                {/* Free-shipping promo removed (Phase 4E.2A): unverified policy. */}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
@@ -2480,9 +2525,9 @@ function CheckoutPage() {
               {/* Trust Badges */}
               <div className="mt-6 pt-5 border-t space-y-2.5">
                 {[
-                  { i: Truck, t: `${shipMethod === 'express' ? 'Express 2-4 days' : 'Standard 7-12 days'}` },
-                  { i: RotateCcw, t: '30-day hassle-free returns' },
-                  { i: Shield, t: 'Secure SSL checkout' },
+                  { i: Truck, t: 'Shipping rates confirmed at checkout' },
+                  { i: RotateCcw, t: 'Thoughtfully curated essentials' },
+                  { i: Shield, t: 'Secure shopping experience' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
                     <b.i size={14} className="text-luxe-gold shrink-0" />{b.t}
@@ -2609,9 +2654,9 @@ function LoginPage() {
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure shopping experience</span>
+          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Premium pet essentials</span>
+          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> Thoughtfully curated</span>
         </div>
 
         {/* Admin link */}
@@ -2705,9 +2750,9 @@ function SignupPage() {
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure shopping experience</span>
+          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Premium pet essentials</span>
+          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> Thoughtfully curated</span>
         </div>
       </div>
     </div>
@@ -2801,14 +2846,14 @@ function AboutPage() {
       <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
       <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
+      <p className="text-gray-600 leading-relaxed">We're building Luxedge to stand behind what we sell. Our shipping and return policies are documented on the Shipping and Returns pages, and if something isn't right with an order we want to hear about it.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       {/* No fabricated statistics (no fake customer counts / satisfaction
           percentages / product counts) — Master Plan §14 / Phase 4E.2. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10 pt-8 border-t">
         <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Shield size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Thoughtfully curated</p><p className="text-xs text-gray-500 mt-1">Every product is verified before it reaches your door.</p></div>
         <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Sparkles size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Quality first</p><p className="text-xs text-gray-500 mt-1">We select only items we would genuinely recommend.</p></div>
-        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Headphones size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Real support</p><p className="text-xs text-gray-500 mt-1">Mon–Fri, 9AM–6PM CT.</p></div>
+        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Headphones size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Real support</p><p className="text-xs text-gray-500 mt-1">Here to help by email & phone.</p></div>
       </div>
     </div></section>
   </div>);
@@ -2864,8 +2909,8 @@ function ShippingPolicyPage() {
     <LegalPage title="Shipping Policy" updated="March 15, 2025">
       <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations soon.</p></LS>
       <LS t="Processing Time"><p>Orders are typically processed within <strong>1-3 business days</strong> after payment confirmation. You'll receive an email confirmation when your order has been shipped with tracking information.</p></LS>
-      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">7-12 business days</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">2-4 business days</td><td className="px-4 py-2 border">$9.99</td></tr></tbody></table></div></LS>
-      <LS t="Free Shipping"><p>Enjoy <strong>free standard shipping</strong> on all orders of $50 or more. This offer applies automatically at checkout — no coupon code needed.</p></LS>
+      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">Confirmed at checkout</td><td className="px-4 py-2 border">Calculated at checkout</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">Confirmed at checkout</td><td className="px-4 py-2 border">Calculated at checkout</td></tr></tbody></table></div></LS>
+      <LS t="Shipping Costs"><p>Shipping costs are calculated at checkout and confirmed before you pay. Delivery estimates are provided once the storefront begins taking orders.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
       <LS t="Delivery Delays"><p>While we strive to meet all estimated delivery windows, delays may occasionally occur due to high order volume, carrier issues, weather events, or other circumstances beyond our control. If your order is significantly delayed, please contact us and we'll investigate immediately.</p></LS>
       <LS t="Missing or Lost Packages"><p>If your tracking shows "delivered" but you haven't received your package, please check with neighbors, building management, or your local post office. If you still can't locate your package after 48 hours, contact us at hello@luxedge.us and we'll work with the carrier to resolve the issue.</p></LS>
@@ -2880,7 +2925,7 @@ function FAQPage() {
   const faqs = [
     { c: 'Orders & Shipping', qs: [
       { q: 'How long does shipping take?', a: 'Standard shipping takes 7-12 business days. Express shipping delivers in 2-4 business days. Processing takes an additional 1-3 business days before shipment.' },
-      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
+      { q: 'Do you offer free shipping?', a: 'Shipping costs are calculated at checkout and confirmed before you pay. See the Shipping Policy page for current details.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
       { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },
       { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
@@ -2892,8 +2937,8 @@ function FAQPage() {
       { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. All transactions are processed securely through Stripe or PayPal.' },
-      { q: 'Is my payment information secure?', a: 'Absolutely. We use 256-bit SSL encryption for all transactions. Your payment data is processed through PCI-DSS compliant processors. We never store your full card details on our servers.' },
+      { q: 'What payment methods do you accept?', a: 'This preview storefront does not process real payments yet. Payment methods will be announced when checkout goes live.' },
+      { q: 'Is my payment information secure?', a: 'This site is served over an encrypted (HTTPS) connection. No real payments are processed in this preview.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
     { c: 'Products & Quality', qs: [
@@ -2903,7 +2948,7 @@ function FAQPage() {
     ]},
     { c: 'Account & Support', qs: [
       { q: 'Do I need an account to shop?', a: 'You need an account to place orders, track shipments, and submit reviews. Creating an account is free and takes less than a minute.' },
-      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002. Our support team is available Monday-Friday, 9 AM - 6 PM CT. We typically respond to emails within 24 hours.' },
+      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002.' },
       { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
     ]},
   ];
@@ -2948,15 +2993,15 @@ function ContactPage() {
     <div>
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
         <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Contact Us</h1>
-        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you.</p>
       </div></section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
-            { i: Mail, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
-            { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Mon-Fri, 9AM-6PM CT' },
+            { i: Mail, l: 'Email', v: 'hello@luxedge.us', s: 'Support by email' },
+            { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Support by phone' },
             { i: MapPin, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
-            { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
+            { i: Clock, l: 'Availability', v: 'Email & phone', s: "We'll get back to you" },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
               <x.i className="mx-auto mb-2 text-luxe-gold" size={22} />
@@ -2972,7 +3017,7 @@ function ContactPage() {
             <div className="text-center py-16 bg-green-50 rounded-2xl border border-green-200">
               <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
               <h2 className="text-xl font-bold mb-2">Message Received!</h2>
-              <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you within 24 hours.</p>
+              <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you.</p>
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
