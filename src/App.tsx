@@ -345,7 +345,10 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
   const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
-  const [products, setProducts] = useState<Product[]>(ALL_PRODUCTS);
+  // Phase 4E.1 — the storefront catalog starts EMPTY. Demo/fallback products
+  // must NEVER appear when the database has no published products; only the
+  // qualified/approved pipeline may populate the customer-facing catalog.
+  const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
@@ -1577,20 +1580,40 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ BEST SELLERS ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+      {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
+      {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
+          show ONE premium curation notice instead of empty product grids. No
+          fake product cards, no fake counts, no fake launch dates. */}
+      {featured.length === 0 ? (
+        <section className="py-16 sm:py-20 bg-luxe-cream">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkles size={22} className="text-luxe-gold" /></div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
+            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Shield size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
             </div>
-          </Reveal>
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="py-14 sm:py-18 bg-luxe-cream">
+            <div className="max-w-7xl mx-auto px-4">
+              <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
+              <Reveal delay={60}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                </div>
+              </Reveal>
+            </div>
+          </section>
 
-      {/* ════════ Ad: Between Product Sections ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+          {/* ════════ Ad: Between Product Sections ════════ */}
+          <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+        </>
+      )}
 
       {/* ════════ SHOP BY NEED ════════ */}
       <section className="py-14 sm:py-18 bg-white">
@@ -1618,17 +1641,19 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ PET PARENT FAVORITES ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-              {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-            </div>
-          </Reveal>
-        </div>
-      </section>
+      {/* ════════ PET PARENT FAVORITES (only when the catalog has products) ════════ */}
+      {featured.length > 0 && (
+        <section className="py-14 sm:py-18 bg-luxe-cream">
+          <div className="max-w-7xl mx-auto px-4">
+            <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
+            <Reveal delay={60}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {/* ════════ TRUST BAR ════════ */}
       <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
@@ -1844,6 +1869,15 @@ function ShopPage() {
             {f.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {f.map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            ) : products.length === 0 ? (
+              /* Phase 4E.1 — genuinely empty catalog (no published DB products):
+                 premium curation notice, never fake cards or fake counts. */
+              <div className="text-center py-20">
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkles size={22} className="text-luxe-gold" /></div>
+                <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
+                <p className="text-sm text-luxe-gray mb-5">Every product is verified before it reaches your door. Please check back soon.</p>
+                <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
               </div>
             ) : (
               <div className="text-center py-20">

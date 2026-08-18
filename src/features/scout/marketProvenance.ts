@@ -9,11 +9,17 @@
 //
 //   type   = 'MARKET_INTELLIGENCE'
 //   status = 'completed'
-//   output.marketScore            (0..100, finite)
+//   output.evidenceQuality      = 'sufficient'   (Phase 4E.1 fail-closed)
+//   output.qualificationEligible = true          (Phase 4E.1 fail-closed)
+//   output.marketScore            (0..100, finite — QUALIFYING score)
 //   output.evidenceFingerprint    (non-empty)
 //   observed_at                   (output.at / finished_at, parseable)
 //   claimed fingerprint, when supplied, must MATCH the persisted job's
 //     fingerprint (provenance: the run claims to follow THIS evidence).
+//
+// An insufficient-evidence job is rejected for qualification even when its
+// diagnostic deterministic score happens to be >= 60 — a diagnostic score is
+// NEVER a qualification-capable Market Opportunity Score.
 //
 // QUERY PROVENANCE (owner audit §10): the ACTUAL supplier search query must be
 // verified against the recommendations persisted on the MI job
@@ -80,9 +86,11 @@ function recommendationList(out: Record<string, unknown>): string[] {
  * context AND the actual supplier search query. Returns the VERIFIED market
  * context (every value from the DB) or null.
  *
- * Null is returned for: missing job, wrong type, not completed, missing/
- * invalid marketScore, missing evidence fingerprint, invalid observed_at, or
- * a claimed fingerprint that does not match the persisted job's.
+ * Null is returned for: missing job, wrong type, not completed, insufficient
+ * evidence (evidenceQuality != 'sufficient'), qualificationEligible != true,
+ * missing/invalid marketScore, missing evidence fingerprint, invalid
+ * observed_at, or a claimed fingerprint that does not match the persisted
+ * job's.
  *
  * queryProvenance is 'verified' only when the normalized searchQuery matches a
  * persisted recommendedSearchQueries entry; otherwise 'unverified' (the job is
@@ -99,6 +107,15 @@ export function verifyMarketIntelligenceJob(
   if (j.status !== 'completed') return null;
 
   const out = (j.output && typeof j.output === 'object' ? j.output : {}) as Record<string, unknown>;
+
+  // Phase 4E.1 FAIL-CLOSED: a job is eligible market provenance ONLY when the
+  // evidence-quality gate passed (evidenceQuality 'sufficient' AND
+  // qualificationEligible true). An insufficient-evidence job is rejected even
+  // if its diagnostic score happens to be >= 60 — a diagnostic score is never
+  // a qualification-capable Market Opportunity Score.
+  if (out.evidenceQuality !== 'sufficient') return null;
+  if (out.qualificationEligible !== true) return null;
+
   const score = out.marketScore;
   if (!isFiniteNumber(score) || score < 0 || score > 100) return null;
 

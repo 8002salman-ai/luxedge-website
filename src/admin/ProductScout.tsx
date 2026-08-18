@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDb } from '../services/db';
 import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
-import { runScoutResearch, runMarketIntelligenceJob, qaCandidate } from '../features/scout/engine';
+import { runScoutResearch, runMarketIntelligenceJob, qaCandidate, cjMarketContextFor } from '../features/scout/engine';
 import type { QAOutcome } from '../features/scout/engine';
 import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
@@ -128,7 +128,7 @@ export default function ProductScout() {
   // Phase 4E — retailer-restricted evidence discovery (site:chewy/target/walmart).
   const [miRetail, setMiRetail] = useState(true);
   const [miLog, setMiLog] = useState<string[]>([]);
-  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number } } | null>(null);
+  const [miResult, setMiResult] = useState<{ signals: number; marketScore: number | null; diagnosticDeterministicScore: number | null; aiUsed: boolean; analysis: MarketAnalysis | null; evidence?: { evidenceQuality: string; missing: string[]; successfulExtracts: number; independentDomains: number; priceEvidenceCount: number } } | null>(null);
   const [autonomyCfg, setAutonomyCfg] = useState<AutonomyConfig>(() => loadAutonomyConfig());
   const [attention, setAttention] = useState<OwnerAttentionItem[]>(() => loadAttentionItems());
   const [scanning, setScanning] = useState(false);
@@ -479,6 +479,13 @@ export default function ProductScout() {
     if (!q) { notify('Enter a market query (e.g. “dog toys”)'); return; }
     setMiRunning(true);
     setMiLog([]);
+    // Phase 4E.1 FAIL-CLOSED: clear any stale market-grounded CJ context at
+    // the START of every new MI run — a later insufficient/failed run must
+    // never leave an earlier passing MI job silently armed for qualification.
+    setMiJobId(null);
+    setMiHypotheses([]);
+    setCjHypothesis('');
+    setCjMarketGrounded(false);
     const log: string[] = [];
     const onProgress = (m: string) => { log.push(m); setMiLog([...log]); };
     try {
@@ -496,20 +503,26 @@ export default function ProductScout() {
         onProgress,
       });
       const ev = result.evidence;
-      log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore}/100, ai=${result.aiUsed}, evidence=${ev.evidenceQuality} (${ev.successfulExtracts} extracts, ${ev.independentDomains} domains, ${ev.priceEvidenceCount} prices, ${ev.availabilityEvidenceCount} available)`);
+      const qualified = result.qualificationEligible && result.marketScore !== null;
+      log.push(`✔ MARKET_INTELLIGENCE ${result.jobId}: ${result.signals} signals, market score ${result.marketScore ?? 'NULL'}/100${qualified ? '' : ` (diagnostic ${result.diagnosticDeterministicScore ?? 'n/a'}/100 — NOT qualification eligible)`}, ai=${result.aiUsed}, evidence=${ev.evidenceQuality} (${ev.successfulExtracts} extracts, ${ev.independentDomains} domains, ${ev.priceEvidenceCount} prices, ${ev.availabilityEvidenceCount} available)`);
       setMiLog([...log]);
-      setMiResult({ signals: result.signals, marketScore: result.marketScore, aiUsed: result.aiUsed, analysis: result.analysis, evidence: { evidenceQuality: result.evidence.evidenceQuality, missing: result.evidence.evidenceQuality === 'insufficient' ? result.evidence.evidenceQualityReasons : [], successfulExtracts: result.evidence.successfulExtracts, independentDomains: result.evidence.independentDomains, priceEvidenceCount: result.evidence.priceEvidenceCount } });
-      // Remember the durable MI job + its recommended search hypotheses so a
-      // CJ run can be linked to THIS exact evidence (DB job = source of truth).
-      setMiJobId(result.jobId);
-      const hypotheses = result.analysis?.recommendedSearchQueries ?? [];
-      setMiHypotheses(hypotheses);
-      if (hypotheses.length > 0) {
-        setCjHypothesis(hypotheses[0]);
+      setMiResult({ signals: result.signals, marketScore: result.marketScore, diagnosticDeterministicScore: result.diagnosticDeterministicScore, aiUsed: result.aiUsed, analysis: result.analysis, evidence: { evidenceQuality: result.evidence.evidenceQuality, missing: result.evidence.evidenceQuality === 'insufficient' ? result.evidence.evidenceQualityReasons : [], successfulExtracts: result.evidence.successfulExtracts, independentDomains: result.evidence.independentDomains, priceEvidenceCount: result.evidence.priceEvidenceCount } });
+      // Phase 4E.1 FAIL-CLOSED: arm the market-grounded CJ context ONLY when
+      // the MI run is qualification-eligible (evidence sufficient + qualifying
+      // market score >= 60 + real search hypotheses). An insufficient run can
+      // NEVER arm CJ — its diagnostic score/suggested queries stay diagnostic.
+      const arm = cjMarketContextFor(result);
+      setMiJobId(arm?.marketAnalysisId ?? null);
+      setMiHypotheses(arm?.recommendedSearchQueries ?? []);
+      if (arm) {
+        setCjHypothesis(arm.hypothesis);
         setCjMarketGrounded(true);
-        setCjQuery(hypotheses[0]);
+        setCjQuery(arm.hypothesis);
+      } else {
+        setCjHypothesis('');
+        setCjMarketGrounded(false);
       }
-      notify(`Market Intelligence complete — score ${result.marketScore}/100${result.aiUsed ? ' (DeepSeek)' : ' (deterministic — AI not configured)'}`);
+      notify(`Market Intelligence complete — ${qualified ? `score ${result.marketScore}/100` : 'MARKET NOT ELIGIBLE FOR SUPPLIER QUALIFICATION'}${result.aiUsed ? ' (DeepSeek)' : ' (deterministic — AI not configured)'}`);
     } catch (e) {
       log.push(`✗ ${(e as Error).message}`);
       setMiLog([...log]);
@@ -1273,11 +1286,23 @@ export default function ProductScout() {
           </label>
           {miResult && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-2">
-              <p className="text-sm font-bold text-indigo-800">Market Opportunity Score: <span className="text-xl">{miResult.marketScore}</span>/100</p>
+              {miResult.marketScore !== null && miResult.evidence?.evidenceQuality === 'sufficient' ? (
+                <p className="text-sm font-bold text-indigo-800">Market Opportunity Score: <span className="text-xl">{miResult.marketScore}</span>/100</p>
+              ) : (
+                <p className="text-sm font-bold text-indigo-800">Qualifying Market Opportunity Score: <span className="text-xl text-amber-700">NULL</span></p>
+              )}
               {miResult.evidence && (
                 <p className={`text-xs font-semibold ${miResult.evidence.evidenceQuality === 'sufficient' ? 'text-emerald-700' : 'text-amber-700'}`}>
                   Evidence quality: {miResult.evidence.evidenceQuality.toUpperCase()} — {miResult.evidence.successfulExtracts} exact product pages, {miResult.evidence.independentDomains} domains, {miResult.evidence.priceEvidenceCount} prices
                   {miResult.evidence.missing.length > 0 && <span> · missing: {miResult.evidence.missing.join('; ')}</span>}
+                </p>
+              )}
+              {miResult.evidence?.evidenceQuality === 'insufficient' && (
+                <p className="text-xs font-bold text-amber-700">MARKET NOT ELIGIBLE FOR SUPPLIER QUALIFICATION</p>
+              )}
+              {miResult.evidence?.evidenceQuality === 'insufficient' && miResult.diagnosticDeterministicScore !== null && (
+                <p className="text-xs text-amber-700">
+                  DIAGNOSTIC SCORE — NOT QUALIFICATION ELIGIBLE: {miResult.diagnosticDeterministicScore}/100 (debugging only; never a qualifying Market Opportunity Score)
                 </p>
               )}
               <p className="text-xs text-indigo-700">{miResult.signals} evidence signals collected · {miResult.aiUsed ? 'DeepSeek analysis used' : 'deterministic evidence analysis used'}{miResult.evidence && miResult.evidence.evidenceQuality === 'insufficient' ? ' (DeepSeek skipped — MARKET EVIDENCE INSUFFICIENT)' : ''}</p>
@@ -1291,7 +1316,7 @@ export default function ProductScout() {
                   {miResult.analysis.unsupportedClaims.length > 0 && (
                     <p className="text-amber-700"><span className="font-semibold">Unsupported claims dropped:</span> {miResult.analysis.unsupportedClaims.join('; ')}</p>
                   )}
-                  {miResult.analysis.recommendedSearchQueries.length > 0 && <p><span className="font-semibold">Recommended searches:</span> {miResult.analysis.recommendedSearchQueries.join(', ')}</p>}
+                  {miResult.analysis.recommendedSearchQueries.length > 0 && <p><span className="font-semibold">Recommended searches (diagnostic):</span> {miResult.analysis.recommendedSearchQueries.join(', ')}</p>}
                 </div>
               )}
             </div>

@@ -18,7 +18,8 @@ import {
   DEFAULT_EVIDENCE_QUALITY, type EvidenceCounts,
 } from '../marketEvidence';
 import { NoopMarketDemandAdapter, collectDemandSignals } from '../marketDemand';
-import { runMarketIntelligenceJob } from '../engine';
+import { runMarketIntelligenceJob, cjMarketContextFor } from '../engine';
+import { verifyMarketIntelligenceJob } from '../marketProvenance';
 
 // ---------------------------------------------------------------------------
 // Fake admin-JWT db adapter (mirrors RLS: only admin-token writes succeed)
@@ -423,9 +424,16 @@ describe('runMarketIntelligenceJob evidence gate (Phase 4D)', () => {
     expect(result.aiUsed).toBe(true);
     expect(result.evidence.evidenceQuality).toBe('sufficient');
     expect(result.evidence.independentDomains).toBeGreaterThanOrEqual(3);
+    // Phase 4E.1: sufficient evidence ⇒ qualification-eligible with a REAL score.
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(72);
+    expect(result.recommendedSearchQueries).toEqual(['dog travel bag']);
     const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE');
     const out = job?.output as Record<string, unknown> | undefined;
     expect(out?.evidenceQuality).toBe('sufficient');
+    expect(out?.qualificationEligible).toBe(true);
+    expect(out?.marketScore).toBe(72);
+    expect(out?.recommendedSearchQueries).toEqual(['dog travel bag']);
     expect(out?.independentDomains).toBeGreaterThanOrEqual(3);
     expect(out?.successfulExtracts).toBe(8);
     expect(out?.aiUsed).toBe(true);
@@ -448,10 +456,167 @@ describe('runMarketIntelligenceJob evidence gate (Phase 4D)', () => {
     const richExtracts = Array.from({ length: 6 }, (_, i) => ({ title: `Product ${i}`, extract: extractPageFacts(page(`Product ${i}`, 9 + i, 'available', 4.5)) }));
     const thin = await run(undefined, ['https://r1.com/product/a']);
     const rich = await run(richExtracts, ['https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d', 'https://r5.com/product/e', 'https://r6.com/product/f']);
-    // Deterministic market score must be strictly higher with price/rating/availability evidence.
-    expect(rich.marketScore ?? 0).toBeGreaterThan(thin.marketScore ?? 100);
+    // Phase 4E.1: the deterministic DIAGNOSTIC score is strictly higher with
+    // price/rating/availability evidence — and it is the diagnostic score, NOT
+    // a qualifying market score.
+    expect(rich.diagnosticDeterministicScore ?? 0).toBeGreaterThan(thin.diagnosticDeterministicScore ?? 100);
     expect(rich.evidence.priceEvidenceCount).toBe(6);
     expect(rich.evidence.ratingEvidenceCount).toBe(6);
+    // Fail-closed: the thin (no-pack) run has NO qualifying market score.
+    expect(thin.marketScore).toBeNull();
+    expect(thin.qualificationEligible).toBe(false);
+    expect(thin.recommendedSearchQueries).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 4E.1 — MARKET GATE FAIL-CLOSED
+//
+// A diagnostic deterministic score must NEVER become a qualification-capable
+// Market Opportunity Score when the evidence-quality gate did not pass:
+//   * insufficient evidence ⇒ marketScore = null, qualificationEligible = false
+//   * recommendedSearchQueries (qualification) = [] — diagnostics stay separate
+//   * verifyMarketIntelligenceJob rejects insufficient jobs for qualification
+//   * the Product Scout arming decision (cjMarketContextFor) never arms CJ from
+//     an insufficient run, and a new run always starts from cleared state.
+// ---------------------------------------------------------------------------
+
+describe('Phase 4E.1 market gate fail-closed', () => {
+  it('A) 1 usable page, diagnostic 72, insufficient → marketScore null, qualificationEligible false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const fetchPage = vi.fn(async () => page('Lone Product', 39.99, 'available', 4.5));
+    const result = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(result.diagnosticDeterministicScore).not.toBeNull();
+    expect(result.marketScore).toBeNull();
+    expect(result.qualificationEligible).toBe(false);
+    expect(aiCall).not.toHaveBeenCalled();
+  });
+
+  it('B/C) insufficient job persisted: marketScore null, qualification queries [], diagnostics separate; provenance rejects it', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const fetchPage = vi.fn(async () => page('Lone Product', 39.99, 'available', 4.5));
+    const result = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE') as Record<string, unknown>;
+    const out = (job.output || {}) as Record<string, unknown>;
+    expect(out.evidenceQuality).toBe('insufficient');
+    expect(out.qualificationEligible).toBe(false);
+    expect(out.marketScore).toBeNull();
+    expect(out.recommendedSearchQueries).toEqual([]);
+    // Diagnostic artifacts persisted SEPARATELY (debugging only).
+    expect(out.diagnosticDeterministicScore).toBe(result.diagnosticDeterministicScore);
+    expect(Array.isArray(out.diagnosticSuggestedQueries)).toBe(true);
+    // B) the same persisted job is rejected by market provenance.
+    expect(verifyMarketIntelligenceJob(job)).toBeNull();
+    // D) a client-supplied marketScore cannot rescue it either.
+    expect(verifyMarketIntelligenceJob(job, { marketScore: 95, evidenceFingerprint: String(out.evidenceFingerprint) })).toBeNull();
+    // H) the UI arming decision is never positive for this run.
+    expect(cjMarketContextFor(result)).toBeNull();
+  });
+
+  it('E) sufficient evidence + deterministic fallback (AI unavailable) → qualificationEligible true with the gated deterministic score', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall: async () => { throw new Error('not configured'); }, // deterministic fallback AFTER the gate passed
+    });
+    expect(result.evidence.evidenceQuality).toBe('sufficient');
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(result.diagnosticDeterministicScore);
+    expect(result.marketScore).not.toBeNull();
+  });
+
+  it('F) sufficient evidence + DeepSeek 68 → marketScore 68 (grounded AI score wins)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => JSON.stringify({
+      marketOpportunityScore: 68, trendConfidence: 'inferred', demandEvidence: 'evidence', competitionLevel: 'medium',
+      customerPainPoint: null, priceBand: { min: 5, max: 40 }, risks: [], recommendedSearchQueries: ['dog travel bag'],
+      reasoningSummary: 'grounded',
+    }));
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall,
+    });
+    expect(aiCall).toHaveBeenCalledTimes(1);
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(68);
+    const arm = cjMarketContextFor(result);
+    expect(arm).not.toBeNull();
+    expect(arm?.marketAnalysisId).toBe(result.jobId);
+    expect(arm?.hypothesis).toBe('dog travel bag');
+  });
+
+  it('G) a new insufficient/failed run never inherits previously armed CJ context (arming derives ONLY from the current run)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Passing run — armed.
+    const passing = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall: async () => JSON.stringify({ marketOpportunityScore: 68, trendConfidence: 'inferred', demandEvidence: 'e', competitionLevel: 'medium', customerPainPoint: null, priceBand: { min: 5, max: 40 }, risks: [], recommendedSearchQueries: ['dog travel bag'], reasoningSummary: 'g' }),
+    });
+    expect(cjMarketContextFor(passing)).not.toBeNull();
+    // New run — insufficient (single page). The ProductScout UI clears state at
+    // run start, and the decision derives ONLY from this run's result.
+    const failing = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage: async () => page('Lone Product', 39.99, 'available', 4.5),
+      aiCall: async () => { throw new Error('should never be called'); },
+    });
+    expect(cjMarketContextFor(failing)).toBeNull();
+    // The UI would have cleared the armed ids at run start — assert the engine
+    // result itself never carries stale arming.
+    expect(failing.marketScore).toBeNull();
+    expect(failing.qualificationEligible).toBe(false);
+    expect(failing.recommendedSearchQueries).toEqual([]);
+  });
+
+  it('H) insufficient MI job can never mark CJ market-grounded, even with a high diagnostic score', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Construct a thin-but-strong-diagnostic run directly (what the live proof
+    // produced: 1 exact page, diagnostic 72).
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: ['https://target.com/p/travel-bag/-/A-1'], duplicates: 0, filtered: 0 }),
+      fetchPage: async () => page('PetAmi Travel Bag', 39.99, 'available', 4.2),
+      aiCall: async () => { throw new Error('should never be called'); },
+    });
+    expect(result.diagnosticDeterministicScore ?? 0).toBeGreaterThanOrEqual(0);
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(cjMarketContextFor(result)).toBeNull();
   });
 });
 

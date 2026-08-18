@@ -11,6 +11,14 @@
 //   products       — published products (status = 'published')
 //   product_images — product image urls (optional; tolerated on failure)
 //
+// PERMANENT STOREFRONT RULE (Phase 4E.1 §10): a product must NOT become
+// customer-visible merely because it exists in `products` or is
+// PRODUCT_SHORTLISTED. Only `status = 'published'` rows ever render here, and
+// the future publish path additionally requires BUSINESS_QUALIFIED + QA PASS +
+// OWNER APPROVAL + listing factual QA PASS + creative/image quality gate PASS
+// + explicit publish authorization. AUTO PUBLISH = OFF for now — the engine
+// only ever creates drafts.
+//
 // SECURITY
 //   Uses the public anon key only (via the db adapter). The service-role key
 //   never reaches this module or the browser bundle. RLS further restricts

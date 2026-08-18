@@ -175,6 +175,12 @@ function seedMiJob(
       marketScore,
       evidenceFingerprint: fingerprint,
       at,
+      // Phase 4E.1 fail-closed: a persisted MI job is qualification-eligible
+      // only when the evidence-quality gate passed. These seeded jobs model
+      // sufficient-evidence runs (as produced by runMarketIntelligenceJob
+      // after the gate). Pass over.output to simulate insufficient evidence.
+      evidenceQuality: 'sufficient',
+      qualificationEligible: true,
       recommendedSearchQueries: ['orthopedic dog bed'],
       opportunity: 'Dog beds',
       ...outOverride,
@@ -1406,11 +1412,17 @@ describe('DURABLE POINT LEDGER — cross-instance, atomic, cold-start safe (migr
 // ---------------------------------------------------------------------------
 
 describe('MARKET PROVENANCE — persisted MI job verification', () => {
+  const sufficientOutput = (marketScore: number, fp: string, at: string) => ({
+    marketScore, evidenceFingerprint: fp, at,
+    // Phase 4E.1 fail-closed: qualification requires sufficient evidence.
+    evidenceQuality: 'sufficient', qualificationEligible: true,
+  });
+
   it('G) valid MI job + matching claimed fingerprint → verified market context', () => {
     const at = new Date().toISOString();
     const job = {
       id: 'mi-real', type: 'MARKET_INTELLIGENCE', status: 'completed',
-      output: { marketScore: 65, evidenceFingerprint: 'fp-real', at }, finished_at: at, created_at: at,
+      output: sufficientOutput(65, 'fp-real', at), finished_at: at, created_at: at,
     };
     const v = verifyMarketIntelligenceJob(job, { marketAnalysisId: 'mi-real', evidenceFingerprint: 'fp-real' });
     expect(v).not.toBeNull();
@@ -1423,19 +1435,38 @@ describe('MARKET PROVENANCE — persisted MI job verification', () => {
     const at = new Date().toISOString();
     const job = {
       id: 'mi-real', type: 'MARKET_INTELLIGENCE', status: 'completed',
-      output: { marketScore: 65, evidenceFingerprint: 'fp-real', at }, finished_at: at, created_at: at,
+      output: sufficientOutput(65, 'fp-real', at), finished_at: at, created_at: at,
     };
     expect(verifyMarketIntelligenceJob(job, { evidenceFingerprint: 'fp-WRONG' })).toBeNull();
   });
 
   it('wrong type / not completed / missing score / missing fingerprint → null', () => {
     const at = new Date().toISOString();
-    const base = { id: 'x', type: 'MARKET_INTELLIGENCE', status: 'completed', output: { marketScore: 65, evidenceFingerprint: 'fp', at }, finished_at: at, created_at: at };
+    const base = { id: 'x', type: 'MARKET_INTELLIGENCE', status: 'completed', output: sufficientOutput(65, 'fp', at), finished_at: at, created_at: at };
     expect(verifyMarketIntelligenceJob({ ...base, type: 'PRODUCT_RESEARCH' })).toBeNull();
     expect(verifyMarketIntelligenceJob({ ...base, status: 'failed' })).toBeNull();
     expect(verifyMarketIntelligenceJob({ ...base, output: { evidenceFingerprint: 'fp', at } })).toBeNull();
     expect(verifyMarketIntelligenceJob({ ...base, output: { marketScore: 65, at } })).toBeNull();
     expect(verifyMarketIntelligenceJob(null)).toBeNull();
+  });
+
+  it('Phase 4E.1: insufficient evidence (even with a high diagnostic score) → NOT verified', () => {
+    const at = new Date().toISOString();
+    const job = {
+      id: 'mi-thin', type: 'MARKET_INTELLIGENCE', status: 'completed',
+      output: {
+        marketScore: 72, evidenceFingerprint: 'fp-thin', at,
+        evidenceQuality: 'insufficient', qualificationEligible: false,
+        diagnosticDeterministicScore: 72,
+      },
+      finished_at: at, created_at: at,
+    };
+    expect(verifyMarketIntelligenceJob(job)).toBeNull();
+    // Client-claimed score never rescues an insufficient-evidence job.
+    expect(verifyMarketIntelligenceJob(job, { marketScore: 95, evidenceFingerprint: 'fp-thin' })).toBeNull();
+    // Missing the fail-closed flags entirely ⇒ treated as not eligible.
+    const legacy = { id: 'x', type: 'MARKET_INTELLIGENCE', status: 'completed', output: { marketScore: 72, evidenceFingerprint: 'fp', at }, finished_at: at, created_at: at };
+    expect(verifyMarketIntelligenceJob(legacy)).toBeNull();
   });
 });
 

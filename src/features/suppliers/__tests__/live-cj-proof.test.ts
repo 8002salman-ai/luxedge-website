@@ -273,7 +273,7 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         retailDomains: ['chewy.com', 'target.com', 'walmart.com'],
         onProgress: (m) => console.log(`[mi] ${m}`),
       });
-      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
       const ev = mi.evidence;
       console.log(`[mi] evidence pack: discovered ${ev.discoveredUrls} URLs · selected ${ev.selectedUrls.length} · extracts ok ${ev.successfulExtracts} · failed ${ev.failedExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · reviews ${ev.reviewCountEvidenceCount} pages (${ev.totalObservedReviews} total)`);
       console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);

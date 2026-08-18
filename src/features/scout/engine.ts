@@ -369,13 +369,60 @@ export interface MarketIntelligenceResult {
   jobId: string;
   query: string;
   signals: number;
+  /**
+   * QUALIFYING Market Opportunity Score /100 — null when the evidence-quality
+   * gate did NOT pass (Phase 4E.1 fail-closed). A diagnostic deterministic
+   * score is exposed separately and is NEVER qualification-capable.
+   */
   marketScore: number | null;
+  /**
+   * Deterministic score for debugging only — DIAGNOSTIC SCORE, NOT
+   * QUALIFICATION ELIGIBLE when evidenceQuality is insufficient.
+   */
+  diagnosticDeterministicScore: number | null;
+  /**
+   * true ONLY when the evidence-quality gate passed. Gates DeepSeek spend AND
+   * supplier-search qualification (BUSINESS_QUALIFIED requires this).
+   */
+  qualificationEligible: boolean;
+  /**
+   * Search hypotheses that may feed supplier qualification — EMPTY unless the
+   * run is qualification-eligible (diagnostic suggestions stay separate).
+   */
+  recommendedSearchQueries: string[];
   aiUsed: boolean;
   analysis: MarketAnalysis | null;
   /** Fingerprint of the collected signals — persisted on the durable job. */
   evidenceFingerprint: string | null;
   /** Phase 4D evidence pack summary (what the score was grounded on). */
   evidence: MarketEvidenceSummary;
+}
+
+/**
+ * Market Opportunity Score required for a supplier run to be market-grounded
+ * (Phase 4E.1). Matches the business gate used by supplierSearch (60).
+ */
+export const MARKET_QUALIFICATION_GATE = 60;
+
+export interface CjMarketContextArm {
+  marketAnalysisId: string;
+  hypothesis: string;
+  recommendedSearchQueries: string[];
+}
+
+/**
+ * Phase 4E.1 — FAIL-CLOSED CJ arming decision. The Product Scout UI arms a
+ * market-grounded CJ run ONLY when the MI run is qualification-eligible AND
+ * the QUALIFYING market score meets the business gate (>= 60) AND the analysis
+ * produced search hypotheses. Returns null otherwise — an insufficient-
+ * evidence run can NEVER arm CJ, no matter how high its diagnostic score was.
+ */
+export function cjMarketContextFor(result: MarketIntelligenceResult): CjMarketContextArm | null {
+  if (!result.qualificationEligible) return null;
+  if (result.marketScore === null || result.marketScore < MARKET_QUALIFICATION_GATE) return null;
+  const recs = result.analysis?.recommendedSearchQueries ?? [];
+  if (recs.length === 0) return null;
+  return { marketAnalysisId: result.jobId, hypothesis: recs[0], recommendedSearchQueries: recs };
 }
 
 /**
@@ -505,6 +552,20 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   const analysis = await runMarketIntelligence({ signals, category }, det, aiUsed
     ? opts.aiCall
     : async () => { throw new Error('DEEPSEEK CALL SKIPPED — MARKET EVIDENCE INSUFFICIENT'); });
+
+  // Phase 4E.1 — FAIL-CLOSED semantics. When the evidence-quality gate did NOT
+  // pass, the diagnostic deterministic score is NOT a qualifying Market Score:
+  //   * marketScore = null (no qualification-capable score)
+  //   * qualificationEligible = false
+  //   * recommendedSearchQueries = [] (no supplier hypotheses)
+  //   * DeepSeek calls = 0 (already enforced by the gate)
+  // The diagnostic score + its suggested queries are still persisted for
+  // debugging under diagnosticDeterministicScore / diagnosticSuggestedQueries
+  // and must NEVER be accepted as supplier hypotheses by market provenance.
+  const evidenceQuality: 'sufficient' | 'insufficient' = gate.pass ? 'sufficient' : 'insufficient';
+  const qualificationEligible = gate.pass;
+  const qualifyingMarketScore = gate.pass ? analysis.marketOpportunityScore : null;
+  const qualifyingQueries = gate.pass ? analysis.recommendedSearchQueries : [];
   if (analysis.aiUsed) {
     progress(`[ai] DeepSeek market analysis used (model ${analysis.model || 'deepseek-chat'})`);
   } else if (gate.pass) {
@@ -521,21 +582,28 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     ...signals.map((s) => `${s.signalType}:${s.summary}`),
   ]);
   await addLog(db, jobId, 'info',
-    `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${analysis.marketOpportunityScore}/100, ai=${analysis.aiUsed}, evidence_quality=${gate.pass ? 'sufficient' : 'insufficient'}${warning ? '; ' + warning : ''} (retries=0)`);
-  await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · score ${analysis.marketOpportunityScore}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'} · evidence ${gate.pass ? 'OK' : 'INSUFFICIENT'}`);
+    `MARKET_INTELLIGENCE finished: ${signals.length} signals, market score ${qualifyingMarketScore ?? 'NULL (evidence insufficient)'}/100, diagnostic ${det.score}/100, ai=${analysis.aiUsed}, evidence_quality=${evidenceQuality}${warning ? '; ' + warning : ''} (retries=0)`);
+  await addRun(db, jobId, 'market-intelligence', 'completed', `${signals.length} signals · market ${qualifyingMarketScore ?? 'NULL'}/100 · diagnostic ${det.score}/100 · ${analysis.aiUsed ? 'AI' : 'deterministic'} · evidence ${gate.pass ? 'OK' : 'INSUFFICIENT'}`);
   // Persist the recommended search hypotheses + opportunity/category on the
   // durable job output (Phase 4C migration-security revision, §9) so a later
   // supplier search can PROVE the query it ran follows THIS analysis. Phase 4D
   // additionally persists the evidence-pack provenance (what grounded the
-  // score) — never any credentials.
+  // score) — never any credentials. Phase 4E.1: the QUALIFYING marketScore and
+  // recommendedSearchQueries are persisted ONLY when the evidence gate passed;
+  // the deterministic diagnostic score + its suggested queries are stored
+  // SEPARATELY (diagnosticDeterministicScore / diagnosticSuggestedQueries) and
+  // are never qualification-capable.
   await completeJob(db, jobId, 'completed', {
     query,
     signals: signals.length,
-    marketScore: analysis.marketOpportunityScore,
+    diagnosticDeterministicScore: det.score,
+    marketScore: qualifyingMarketScore,
+    qualificationEligible,
     aiUsed: analysis.aiUsed,
     warning: warning || null,
     evidenceFingerprint: fp,
-    recommendedSearchQueries: analysis.recommendedSearchQueries,
+    recommendedSearchQueries: qualifyingQueries,
+    diagnosticSuggestedQueries: analysis.recommendedSearchQueries,
     opportunity: category,
     discoveredUrls: discoveredUrls.length,
     selectedUrls: pack?.selectedUrls ?? [],
@@ -554,7 +622,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     retailDomainsAttempted: retailReport?.domainsAttempted ?? [],
     retailDomainsWithResults: retailReport?.domainsWithResults ?? [],
     retailRejectedUrls: retailReport?.rejected ?? [],
-    evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
+    evidenceQuality,
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     at: new Date().toISOString(),
   }, undefined, analysis.aiUsed
@@ -591,7 +659,10 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     jobId,
     query,
     signals: signals.length,
-    marketScore: analysis.marketOpportunityScore,
+    marketScore: qualifyingMarketScore,
+    diagnosticDeterministicScore: det.score,
+    qualificationEligible,
+    recommendedSearchQueries: qualifyingQueries,
     aiUsed: analysis.aiUsed,
     analysis,
     evidenceFingerprint: fp,
