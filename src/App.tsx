@@ -1567,7 +1567,7 @@ function HomePage() {
               Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
             </h1>
             <p className="text-luxe-gray text-sm sm:text-base max-w-lg mx-auto lg:mx-0 mb-8 leading-relaxed">
-              Handpicked essentials for feeding, comfort, play, and grooming — tested by our team, loved by pets, delivered to your door.
+              Handpicked essentials for feeding, comfort, play, and grooming — thoughtfully curated for pet parents and delivered to your door.
             </p>
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">
@@ -1577,12 +1577,10 @@ function HomePage() {
                 Explore Deals
               </Link>
             </div>
-            {/* Social proof */}
+            {/* Store trust — factual only. No fabricated ratings, reviews,
+                customer counts, or social proof (Master Plan §14 / Phase 4E.2). */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={13} className="text-star fill-star" />)}</div>
-                <span className="text-[12px] text-luxe-gray"><strong className="text-luxe-black font-bold">4.9/5</strong> · 2,000+ happy pet parents</span>
-              </div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Shield size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
             </div>
@@ -2805,10 +2803,12 @@ function AboutPage() {
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
       <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
-        {[{v:'2,000+',l:'Happy Customers'},{v:'500+',l:'Products Curated'},{v:'99%',l:'Satisfaction Rate'},{v:'24/7',l:'Customer Support'}].map((s,i)=>
-          <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
-        )}
+      {/* No fabricated statistics (no fake customer counts / satisfaction
+          percentages / product counts) — Master Plan §14 / Phase 4E.2. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10 pt-8 border-t">
+        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Shield size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Thoughtfully curated</p><p className="text-xs text-gray-500 mt-1">Every product is verified before it reaches your door.</p></div>
+        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Sparkles size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Quality first</p><p className="text-xs text-gray-500 mt-1">We select only items we would genuinely recommend.</p></div>
+        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Headphones size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Real support</p><p className="text-xs text-gray-500 mt-1">Mon–Fri, 9AM–6PM CT.</p></div>
       </div>
     </div></section>
   </div>);
