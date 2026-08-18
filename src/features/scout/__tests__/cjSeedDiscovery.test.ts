@@ -356,6 +356,8 @@ function sufficientEvidence(): MarketEvidenceSummary {
     evidenceQualityReasons: ['4 usable pages', '3 domains', '4 prices', '4 availability'],
     identityEvidencePages: 0,
     reviewAggregationNote: '',
+    comparablePriceEvidenceCount: 0,
+    comparablePrices: [],
     retail: null,
   };
 }

@@ -28,7 +28,7 @@
 // ============================================================================
 
 import { extractPageFacts } from './extract';
-import type { FetchedSourcePage, PageExtract } from './types';
+import type { ComparablePriceEvidence, FetchedSourcePage, PageExtract } from './types';
 import { identityEvidenceFromExtract, hasExplicitIdentity, aggregateReviewEvidence } from './identity';
 
 /** Conservative evidence-quality gate defaults (configurable per job). */
@@ -76,6 +76,13 @@ export interface EvidenceCounts {
   availableCount: number;
   /** Pages showing explicit OUT OF STOCK. */
   unavailableCount: number;
+  /**
+   * Phase 4H.2 — browser-verified MARKET-COMPARABLE price observations
+   * ingested into the concept-level price evidence (full provenance in
+   * pack.comparablePrices). Concept-level market price-band evidence — never
+   * exact-SKU identity. Exact-product identity rules remain separate.
+   */
+  comparablePriceEvidenceCount: number;
 }
 
 export interface EvidenceQualityAssessment {
@@ -100,6 +107,7 @@ const EMPTY_COUNTS: EvidenceCounts = {
   availabilityEvidenceCount: 0,
   availableCount: 0,
   unavailableCount: 0,
+  comparablePriceEvidenceCount: 0,
 };
 
 /** Empty counts for the no-pack fallback path. */
@@ -145,6 +153,37 @@ export function countExtractEvidence(extracts: { title: string; extract: PageExt
     availabilityEvidenceCount: availability,
     availableCount: available,
     unavailableCount: unavailable,
+    comparablePriceEvidenceCount: 0,
+  };
+}
+
+/**
+ * Phase 4H.2 — fold browser-verified MARKET-COMPARABLE prices into the
+ * concept-level price-evidence count.
+ *
+ * Semantics (honest): the market evidence gate's `minPriceEvidence` is a
+ * CONCEPT/MARKET-level requirement — real retailer PDP prices observed for
+ * products within the concept, feeding the market price-band signal. It is
+ * NOT an exact-SKU identity requirement (product-identity rules live in
+ * identity.ts and are untouched). Comparable observations are counted only
+ * when their PDP URL is not already represented by an extract price (union),
+ * so a price is never double-counted. The breakdown stays visible:
+ * `comparablePriceEvidenceCount` = how many comparable observations were
+ * ingested; `priceEvidenceCount` = total distinct concept-level price
+ * observations (extract prices + distinct comparables).
+ */
+export function mergeComparablePriceEvidence(
+  counts: EvidenceCounts,
+  comparables: ComparablePriceEvidence[],
+  pricedExtractUrls: string[] = []
+): EvidenceCounts {
+  if (!comparables.length) return counts;
+  const pricedExtractSet = new Set(pricedExtractUrls.map(canonicalKey));
+  const distinct = comparables.filter((c) => !pricedExtractSet.has(canonicalKey(c.url)));
+  return {
+    ...counts,
+    comparablePriceEvidenceCount: comparables.length,
+    priceEvidenceCount: counts.priceEvidenceCount + distinct.length,
   };
 }
 
@@ -348,6 +387,13 @@ export interface MarketEvidencePack {
   // evidence (brand/model/MPN/SKU/UPC) and the review-aggregation note.
   identityEvidencePages: number;
   reviewAggregationNote: string;
+  /**
+   * Phase 4H.2 — browser-verified MARKET-COMPARABLE price observations with
+   * full provenance (retailer, exact PDP URL, price, currency, brand, SKU,
+   * variant, observed_at, evidenceType). Concept-level market price-band
+   * evidence only — never exact-SKU identity.
+   */
+  comparablePrices: ComparablePriceEvidence[];
 }
 
 /**
@@ -412,6 +458,7 @@ export async function buildMarketEvidencePack(opts: EvidencePackOptions): Promis
     },
     identityEvidencePages,
     reviewAggregationNote: reviewAgg.note,
+    comparablePrices: [],
   };
 }
 

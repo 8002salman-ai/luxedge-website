@@ -139,6 +139,41 @@ export interface PageExtract {
 // Phase 4B — Market Intelligence + Guarded Autonomy
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase 4H.2 — a browser-verified retailer PDP price observation for a
+ * product in the SAME market CONCEPT (variants/brands may differ). It is
+ * MARKET-level price-band evidence (evidenceType MARKET_COMPARABLE_PRICE),
+ * NEVER exact-SKU identity. Exact-product identity rules (identity.ts:
+ * review aggregation, identityMatch) remain separate and are untouched by
+ * comparable pricing.
+ *
+ * identityMatch:
+ *   exact   — the SAME product identity proven (e.g. the same PDP URL/ASIN as
+ *             an extracted exact product page); still classified as comparable
+ *             price evidence because it contributes concept-level price-band
+ *             context, never a claim about another retailer's product.
+ *   concept — same product concept, brand/SKU/variant may differ (documented).
+ */
+export interface ComparablePriceEvidence {
+  /** Evidence class: market-comparable (concept-level) price observation. */
+  evidenceType: 'MARKET_COMPARABLE_PRICE';
+  /** Retailer domain (www-stripped), e.g. 'macys.com'. */
+  retailer: string;
+  /** Exact PDP URL the price was visibly rendered on. */
+  url: string;
+  /** Observed current selling price. */
+  price: number;
+  currency: string;
+  brand: string | null;
+  /** SKU / product code when visible on the page. */
+  sku: string | null;
+  /** Size/color variant that produced the price (when a selection was required). */
+  variant: string | null;
+  /** exact = same product identity proven; concept = same concept, differs. */
+  identityMatch: 'exact' | 'concept';
+  observedAt: string;
+}
+
 /** A single collected market signal (evidence-based, never invented). */
 export interface MarketSignal {
   id: string;

@@ -18,7 +18,7 @@
 
 import { routerGenerate } from './aiRouter';
 import type { DiscoverResult } from './discover';
-import type { MarketSignal, MarketAnalysis, FinalOpportunityScore, PageExtract } from './types';
+import type { MarketSignal, MarketAnalysis, FinalOpportunityScore, PageExtract, ComparablePriceEvidence } from './types';
 import { newId } from './persist';
 
 // ---------------------------------------------------------------------------
@@ -72,8 +72,16 @@ export function signalsFromDiscovery(q: { query: string; market?: string; maxRes
   return signals;
 }
 
-/** Fold extracted page facts (prices, ratings, availability) into signals. */
-export function signalsFromExtracts(items: { title: string; extract: PageExtract }[], at: string): MarketSignal[] {
+/**
+ * Fold extracted page facts (prices, ratings, availability) into signals.
+ *
+ * Phase 4H.2 — optional browser-verified MARKET-COMPARABLE prices join the
+ * concept-level price band. They are real retailer PDP prices for products in
+ * the same CONCEPT (variants/brands may differ) and are labeled as such —
+ * NEVER exact-SKU identity. Missing comparable price evidence never blocks
+ * the exact-product price range.
+ */
+export function signalsFromExtracts(items: { title: string; extract: PageExtract }[], at: string, comparables: ComparablePriceEvidence[] = []): MarketSignal[] {
   const signals: MarketSignal[] = [];
   const prices: number[] = [];
   let rated = 0;
@@ -94,19 +102,24 @@ export function signalsFromExtracts(items: { title: string; extract: PageExtract
     if (extract.availability === 'available' || extract.availability === 'unavailable') availabilityKnown++;
   }
 
-  if (prices.length) {
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const comparablePrices = comparables.filter((c) => c.price > 0).map((c) => c.price);
+  const allPrices = [...prices, ...comparablePrices];
+  if (allPrices.length) {
+    const min = Math.min(...allPrices);
+    const max = Math.max(...allPrices);
+    const avg = allPrices.reduce((a, b) => a + b, 0) / allPrices.length;
+    const comparableNote = comparablePrices.length
+      ? ` — includes ${comparablePrices.length} browser-verified MARKET-COMPARABLE price(s) from independent retailer PDPs (variants/brands may differ; NOT exact-SKU identity)`
+      : '';
     signals.push({
       id: newId(),
       signalType: 'price_range',
-      source: 'Researched product pages',
+      source: 'Researched product pages + browser-verified market-comparable PDPs',
       sourceUrl: '',
       observedAt: at,
-      summary: `Observed supplier-price range $${min.toFixed(2)}–$${max.toFixed(2)} across ${prices.length} products (avg $${avg.toFixed(2)}).`,
+      summary: `Observed market price range $${min.toFixed(2)}–$${max.toFixed(2)} across ${allPrices.length} products (avg $${avg.toFixed(2)})${comparableNote}.`,
       confidence: 'verified',
-      limitations: 'Prices are observed snapshots; shipping/landed cost varies by source.',
+      limitations: 'Prices are observed snapshots; shipping/landed cost varies by source. Comparable prices are concept-level market observations, not proof of exact-SKU identity across retailers.',
     });
   }
 

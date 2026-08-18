@@ -25,6 +25,7 @@ import type {
   SupplierProductRecord, SupplierShippingEvidence, SupplierHealthResult,
   SupplierPointUsage,
 } from '../types';
+import type { ComparablePriceEvidence } from '../../scout/types';
 import { SupabaseAdapter } from '../../../services/db';
 import { runMarketIntelligenceJob, MARKET_QUALIFICATION_GATE } from '../../scout/engine';
 import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDecision, clusterCjSeedConcepts, type CjSeedRecord } from '../../scout/cjSeedDiscovery';
@@ -719,6 +720,188 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
           googleAds: { liveDemand: 'DEFERRED', calls: 0 }, cjPointsSpent: 0,
         }, null, 2)}`);
       }
+    } finally {
+      if (tempUserId) {
+        const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
+        console.log(`[cleanup] temp admin user deleted (HTTP ${del.status})`);
+      }
+    }
+  }, 600_000);
+
+  it('PHASE 4H.2 — browser-verified MARKET-COMPARABLE price ingestion + ONE grounded MI pass (elevated dog sofa bed, NO CJ calls)', async () => {
+    const env = loadEnv('.env');
+    const base = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const serviceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const preview = (env.VERCEL_PREVIEW_API || process.env.VERCEL_PREVIEW_API || '').trim().replace(/\/$/, '');
+    const bypass = (env.VERCEL_PREVIEW_BYPASS || process.env.VERCEL_PREVIEW_BYPASS || '').trim();
+    if (!base || !serviceKey || !anonKey || !preview) {
+      throw new Error('LIVE PROOF needs VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_ANON_KEY / VERCEL_PREVIEW_API in .env');
+    }
+
+    const email = `sofabed42h2-${Date.now()}@luxedge.us`;
+    const password = `Pw-${Date.now()}-x7q2`;
+    const created = await gotrue(base, serviceKey, '/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'admin' } }),
+    });
+    expect([200, 201]).toContain(created.status);
+    const tempUserId = String(created.body.id || '');
+    if (!tempUserId) throw new Error(`temp admin creation failed: ${JSON.stringify(created.body).slice(0, 200)}`);
+    let adminJwt = '';
+    try {
+      const token = await gotrue(base, serviceKey, '/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      expect(token.status).toBe(200);
+      adminJwt = String(token.body.access_token || '');
+      if (!adminJwt) throw new Error('no access_token from temp admin sign-in');
+
+      const db = new SupabaseAdapter(base, anonKey);
+      db.setAccessToken(adminJwt);
+
+      // 0) NO CJ calls. Reuse the persisted Phase 4F CJ seed concept vocabulary
+      //    (elevated dog sofa bed — owner priority).
+      const jobs = await db.list<AgentJobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 100 });
+      const seedJob = jobs.find((j) => {
+        const o = j.output as Record<string, unknown> | null;
+        return j.type === 'PRODUCT_RESEARCH'
+          && o?.mode === 'CJ_SEED_DISCOVERY'
+          && Array.isArray(o?.seeds)
+          && (o?.seeds as unknown[]).length > 0;
+      });
+      expect(seedJob).toBeTruthy();
+      const persistedSeeds = ((seedJob!.output as Record<string, unknown>).seeds as CjSeedRecord[]).filter((s) => s && typeof s.title === 'string');
+      const concepts = clusterCjSeedConcepts(persistedSeeds);
+      const sofaBed = concepts.find((c) => /sofa/i.test(c.label))
+        ?? concepts.find((c) => /\belevated\b/i.test(c.label))
+        ?? concepts[0];
+      console.log(`[seed-source] job ${seedJob!.id} · concept "${sofaBed.label.slice(0, 70)}…" (${sofaBed.memberPids.length} CJ records, suitability ${sofaBed.suitabilityScore}) — NO new CJ calls`);
+      const q1 = seedConceptSearchQuery(sofaBed);
+      const q2 = 'elevated dog sofa bed';
+
+      // 1) Discovery pool for the SAME exact product (CJ vocabulary + common
+      //    name) — real searches, like Phase 4H.1.
+      const [d1, d2] = await Promise.all([
+        discoverUrls({ query: q1, market: 'US', maxResults: 12 }),
+        discoverUrls({ query: q2, market: 'US', maxResults: 12 }),
+      ]);
+      const pool: string[] = [];
+      const seenUrl = new Set<string>();
+      for (const u of [...d1.urls, ...d2.urls]) {
+        if (!seenUrl.has(u)) { seenUrl.add(u); pool.push(u); }
+      }
+      console.log(`[pool] ${pool.length} exact-product candidate URLs (q1 "${q1}" → ${d1.urls.length}, q2 "${q2}" → ${d2.urls.length})`);
+
+      // 2) The THREE browser-verified MARKET-COMPARABLE prices (rendered in a
+      //    real browser on 2026-08-18, same product CONCEPT — brands/SKUs/
+      //    sizes differ, so they are MARKET-COMPARABLE PRICE evidence, NEVER
+      //    exact-SKU identity). Full provenance; exact clock time of the
+      //    browser verification was not recorded — only the date.
+      const comparablePrices: ComparablePriceEvidence[] = [
+        {
+          evidenceType: 'MARKET_COMPARABLE_PRICE',
+          retailer: 'amazon.com',
+          url: 'https://www.amazon.com/dp/B0FZ4MQGS5',
+          price: 159.79, currency: 'USD',
+          brand: null, sku: null,
+          variant: 'small/medium',
+          identityMatch: 'exact', // same PDP/ASIN as the extracted exact product — same URL
+          observedAt: '2026-08-18',
+        },
+        {
+          evidenceType: 'MARKET_COMPARABLE_PRICE',
+          retailer: 'macys.com',
+          url: 'https://www.macys.com/shop/product/zeny-elegant-rectangular-pet-bed-for-big-oversized-dogs-durable-elevated-dog-sofa-bed-comfortable-dog-sofa-modern-fashionable?ID=27616252',
+          price: 259.99, currency: 'USD',
+          brand: 'ZENY', sku: '760518918098USA',
+          variant: 'Green / ONE SIZE (big & oversized)',
+          identityMatch: 'concept', // ZENY brand, big/oversized variant — same concept, NOT the same SKU
+          observedAt: '2026-08-18',
+        },
+        {
+          evidenceType: 'MARKET_COMPARABLE_PRICE',
+          retailer: 'streamdalefurniture.com',
+          url: 'https://streamdalefurniture.com/products/c6302282-7032-4ba7-9353-f56670dbcb19',
+          price: 274.98, currency: 'USD',
+          brand: 'Simplie Fun', sku: 'W487P189544',
+          variant: 'medium/large (dark grey)',
+          identityMatch: 'concept', // Simplie Fun brand, medium/large — same concept, NOT the same SKU
+          observedAt: '2026-08-18',
+        },
+      ];
+      console.log(`[comparable] ${comparablePrices.length} browser-verified MARKET-COMPARABLE prices: ${comparablePrices.map((c) => `${c.retailer} $${c.price} (${c.identityMatch})`).join(' | ')} — concept-level price-band evidence, never exact-SKU identity`);
+
+      // 3) ONE grounded MI pass — real exact-product pages via the proxy for
+      //    pages/availability/ratings + the verified comparable prices for
+      //    concept price evidence. DeepSeek runs ONLY if the gate passes
+      //    (exactly ONE call).
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      let pageFetches = 0;
+      const fetchPage = async (url: string) => {
+        pageFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
+      const aiCall = async (prompt: string, model?: string) => {
+        const res = await fetch(`${preview}/api/ai/generate`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!res.ok) throw new Error(`AI proxy HTTP ${res.status}`);
+        const body = await res.json() as { text?: string };
+        if (!body.text) throw new Error('AI proxy returned no text');
+        return body.text;
+      };
+
+      const mi = await runMarketIntelligenceJob({
+        query: q1,
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        comparablePrices,
+        discover: async () => ({ query: q1, rawLinks: pool, urls: pool, filtered: 0, duplicates: 0 }),
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      const ev = mi.evidence;
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · page fetches=${pageFetches}`);
+      console.log(`[mi] evidence pack: usable ${ev.successfulExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} (${ev.comparablePriceEvidenceCount} market-comparable) · availability evidence ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · identity pages ${ev.identityEvidencePages}`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+
+      // 4) GATES UNCHANGED (fail-closed): Market >= 60 + sufficient + persisted
+      //    recommendation BEFORE any CJ spend. If eligible: report READY — DO
+      //    NOT start the 250-pt CJ qualification run (separate owner approval).
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (decision.run) {
+        console.log(`MARKET-GROUNDED CJ QUALIFICATION READY — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}". CJ qualification run NOT started (250-pt spend requires separate owner authorization).`);
+      } else {
+        console.log(`MARKET NOT QUALIFIED — ${decision.reason}. No CJ research points spent.`);
+      }
+      console.log(`[result] ${JSON.stringify({
+        winner: 'NONE',
+        concept: { label: sofaBed.label, pids: sofaBed.memberPids.length, suitability: sofaBed.suitabilityScore },
+        query: q1,
+        seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
+        evidenceClassification: { exactProductIdentity: 'separate (identity.ts unchanged)', comparablePrices: 'MARKET_COMPARABLE_PRICE — concept-level, never exact-SKU' },
+        comparablePrices,
+        market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: ev.evidenceQuality, evidence: ev, miJobId: mi.jobId },
+        conditionalRun: decision,
+        googleAds: { liveDemand: 'DEFERRED', calls: 0 },
+        cjCalls: 0, cjPointsSpent: 0, deepSeekCalls: mi.aiUsed ? 1 : 0,
+      }, null, 2)}`);
     } finally {
       if (tempUserId) {
         const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });

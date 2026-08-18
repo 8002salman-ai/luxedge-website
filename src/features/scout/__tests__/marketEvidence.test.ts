@@ -10,13 +10,15 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
-import type { FetchedSourcePage, PageExtract } from '../types';
+import type { ComparablePriceEvidence, FetchedSourcePage, PageExtract } from '../types';
 import { extractPageFacts } from '../extract';
 import {
   selectEvidencePages, selectEvidencePagesDetailed, buildMarketEvidencePack,
   assessEvidenceQuality, countExtractEvidence, validateExactProduct,
+  mergeComparablePriceEvidence, emptyEvidenceCounts,
   DEFAULT_EVIDENCE_QUALITY, type EvidenceCounts,
 } from '../marketEvidence';
+import { signalsFromExtracts } from '../market';
 import { NoopMarketDemandAdapter, collectDemandSignals, type MarketDemandAdapter } from '../marketDemand';
 import { runMarketIntelligenceJob, cjMarketContextFor } from '../engine';
 import { verifyMarketIntelligenceJob } from '../marketProvenance';
@@ -318,6 +320,7 @@ describe('assessEvidenceQuality (Phase 4D + 4E)', () => {
     independentDomains: 4, priceEvidenceCount: 5, ratingEvidenceCount: 3,
     reviewCountEvidenceCount: 2, totalObservedReviews: 340,
     availabilityEvidenceCount: 5, availableCount: 4, unavailableCount: 1,
+    comparablePriceEvidenceCount: 0,
   };
 
   it('passes with sufficient evidence and reports the pack contents', () => {
@@ -352,6 +355,7 @@ describe('assessEvidenceQuality (Phase 4D + 4E)', () => {
       independentDomains: 3, priceEvidenceCount: 3, ratingEvidenceCount: 1,
       reviewCountEvidenceCount: 0, totalObservedReviews: 0,
       availabilityEvidenceCount: 3, availableCount: 2, unavailableCount: 1,
+      comparablePriceEvidenceCount: 0,
     };
     const a = assessEvidenceQuality(counts);
     expect(a.pass).toBe(true);
@@ -653,5 +657,180 @@ describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11 + 4G.1)
     expect(result.status).toBe('error');
     expect(result.errorSafe).toBe('down');
     expect(result.signals).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 4H.2 — BROWSER-VERIFIED MARKET-COMPARABLE PRICE EVIDENCE
+//
+// Three REAL retailer PDP prices were verified in a rendered browser for the
+// elevated dog sofa bed concept (Amazon $159.79, Macy's $259.99, Streamdale
+// $274.98). Brands/SKUs/sizes differ — they are MARKET-COMPARABLE price
+// evidence at the CONCEPT level, NEVER exact-SKU identity. These tests prove:
+//   * comparable observations merge into the concept price evidence without
+//     double-counting an extract price of the same PDP URL;
+//   * the gate legitimately counts concept-level comparable pricing toward
+//     minPriceEvidence (the gate is market-level; product-identity rules in
+//     identity.ts are untouched);
+//   * the price-range signal labels comparables honestly;
+//   * the engine persists provenance + never lets comparables affect exact-
+//     product identity evidence (identityEvidencePages / review aggregation).
+// ---------------------------------------------------------------------------
+
+describe('Phase 4H.2 market-comparable price evidence', () => {
+  const comparable = (over: Partial<ComparablePriceEvidence>): ComparablePriceEvidence => ({
+    evidenceType: 'MARKET_COMPARABLE_PRICE',
+    retailer: 'macys.com',
+    url: 'https://www.macys.com/shop/product/zeny-elevated-dog-sofa-bed?ID=27616252',
+    price: 259.99,
+    currency: 'USD',
+    brand: 'ZENY',
+    sku: '760518918098USA',
+    variant: 'Green / ONE SIZE (big & oversized)',
+    identityMatch: 'concept',
+    observedAt: '2026-08-18T00:00:00.000Z',
+    ...over,
+  });
+
+  it('merge: no comparables → counts unchanged (backward compatible)', () => {
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 2 };
+    const out = mergeComparablePriceEvidence(base, []);
+    expect(out).toEqual(base);
+    expect(out.comparablePriceEvidenceCount).toBe(0);
+  });
+
+  it('merge: distinct comparable URLs add to the concept price evidence; provenance count tracked', () => {
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 1 };
+    const out = mergeComparablePriceEvidence(base, [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', brand: 'Simplie Fun', sku: 'W487P189544', price: 274.98 }),
+    ]);
+    expect(out.comparablePriceEvidenceCount).toBe(2);
+    expect(out.priceEvidenceCount).toBe(3); // 1 extract + 2 distinct comparables
+  });
+
+  it('merge: an extract price of the SAME PDP URL is never double-counted (union)', () => {
+    const amazon = 'https://www.amazon.com/dp/B0FZ4MQGS5';
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 1 };
+    const out = mergeComparablePriceEvidence(base, [
+      comparable({ retailer: 'amazon.com', url: amazon, price: 159.79, identityMatch: 'exact' as const, sku: null, brand: null, variant: 'small/medium' }),
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ], [amazon]);
+    // Amazon appears in both extract prices and comparables — counted ONCE.
+    expect(out.comparablePriceEvidenceCount).toBe(3);
+    expect(out.priceEvidenceCount).toBe(3); // 1 (amazon extract) + 2 distinct
+  });
+
+  it('gate: comparable prices legitimately satisfy the market-level minPriceEvidence (concept price evidence)', () => {
+    const base: EvidenceCounts = {
+      usablePages: 4, attemptedPages: 4, successfulExtracts: 4, failedExtracts: 0,
+      independentDomains: 3, priceEvidenceCount: 1, ratingEvidenceCount: 1,
+      reviewCountEvidenceCount: 0, totalObservedReviews: 0,
+      availabilityEvidenceCount: 4, availableCount: 3, unavailableCount: 1,
+      comparablePriceEvidenceCount: 0,
+    };
+    // WITHOUT comparables: price evidence 1 < 3 → gate fails.
+    expect(assessEvidenceQuality(base).pass).toBe(false);
+    const merged = mergeComparablePriceEvidence(base, [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+      comparable({ retailer: 'amazon.com', url: 'https://www.amazon.com/dp/B0FZ4MQGS5', price: 159.79, identityMatch: 'exact' as const }),
+    ]);
+    expect(merged.priceEvidenceCount).toBe(4); // 1 extract + 3 distinct comparables
+    const gate = assessEvidenceQuality(merged);
+    expect(gate.pass).toBe(true);
+    expect(gate.reasons.join(' ')).toContain('price evidence on 4 products');
+  });
+
+  it('price-range signal: comparable prices join the concept band with honest labeling (never exact-identity claim)', () => {
+    const extract = { title: 'Elegant Rectangular Pet Bed', extract: extractPageFacts(page('Elegant Rectangular Pet Bed\nPrice: $159.79\nIn Stock', 159.79, 'available')) };
+    const signals = signalsFromExtracts([extract], '2026-08-18T00:00:00.000Z', [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ]);
+    const price = signals.find((s) => s.signalType === 'price_range');
+    expect(price).toBeTruthy();
+    expect(price!.summary).toContain('$159.79–$274.98');
+    expect(price!.summary).toContain('3 products');
+    expect(price!.summary).toContain('MARKET-COMPARABLE');
+    expect(price!.summary).toContain('NOT exact-SKU identity');
+    expect(price!.limitations).toContain('not proof of exact-SKU identity');
+  });
+
+  it('engine: comparable prices can lift the gate over minPriceEvidence; provenance persisted; identity evidence untouched', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => JSON.stringify({
+      marketOpportunityScore: 66, trendConfidence: 'inferred', demandEvidence: 'evidence', competitionLevel: 'medium',
+      customerPainPoint: null, priceBand: { min: 150, max: 280 }, risks: [], recommendedSearchQueries: ['elevated dog sofa bed'],
+      reasoningSummary: 'grounded',
+    }));
+    const urls = [
+      'https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d',
+    ];
+    // 4 exact pages / 4 domains / 4 availability, but only 2 extract prices →
+    // the gate fails on price WITHOUT the 2 comparable observations.
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      const i = urls.indexOf(url);
+      if (url.includes('/product/a') || url.includes('/product/b')) {
+        return page(`Product ${i}`, 160 + i, 'available', 4.5);
+      }
+      return page(`Product ${i}`, null, 'available');
+    });
+    const comparables = [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ];
+    const result = await runMarketIntelligenceJob({
+      query: 'elevated dog sofa bed', market: 'US', db,
+      discover: async () => ({ query: 'elevated dog sofa bed', rawLinks: [], urls, duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall, comparablePrices: comparables,
+    });
+    expect(aiCall).toHaveBeenCalledTimes(1); // gate passed WITH comparables
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(66);
+    expect(result.evidence.comparablePriceEvidenceCount).toBe(2);
+    expect(result.evidence.comparablePrices).toHaveLength(2);
+    expect(result.evidence.priceEvidenceCount).toBe(4); // 2 extract + 2 distinct comparables
+    // Provenance persisted on the durable job output.
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE');
+    const out = job?.output as Record<string, unknown> | undefined;
+    expect(out?.comparablePriceEvidenceCount).toBe(2);
+    expect(Array.isArray(out?.comparablePrices)).toBe(true);
+    expect((out?.comparablePrices as ComparablePriceEvidence[])[0].evidenceType).toBe('MARKET_COMPARABLE_PRICE');
+    expect((out?.comparablePrices as ComparablePriceEvidence[])[0].sku).toBe('760518918098USA');
+    // Comparable prices NEVER create exact-product identity evidence: the
+    // test pages carry ratings but NO identity fields, so the honest note
+    // reports 0 exact-identity groups — comparable prices added none.
+    expect(result.evidence.identityEvidencePages).toBe(0);
+    expect(result.evidence.reviewAggregationNote).toContain('0 exact-identity group(s)');
+    expect(result.evidence.reviewAggregationNote).toContain('4 concept/unknown page(s)');
+  });
+
+  it('engine: without comparables the same pack stays below the price gate (no silent free points)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const urls = [
+      'https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d',
+    ];
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      if (url.includes('/product/a') || url.includes('/product/b')) {
+        return page('Product', 160, 'available', 4.5);
+      }
+      return page('Product', null, 'available');
+    });
+    const result = await runMarketIntelligenceJob({
+      query: 'elevated dog sofa bed', market: 'US', db,
+      discover: async () => ({ query: 'elevated dog sofa bed', rawLinks: [], urls, duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    expect(aiCall).not.toHaveBeenCalled(); // 2 extract prices < 3 → gate blocks DeepSeek
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(result.evidence.evidenceQualityReasons.some((r) => r.includes('price evidence on 2 products'))).toBe(true);
+    // No comparable evidence was supplied or invented.
+    expect(result.evidence.comparablePriceEvidenceCount).toBe(0);
+    expect(result.evidence.comparablePrices).toEqual([]);
   });
 });

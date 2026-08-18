@@ -20,7 +20,7 @@
 // ============================================================================
 
 import type { DbAdapter } from '../../services/db';
-import type { FetchedSourcePage, PageExtract, ScoutCandidate, ScoutRunResult, MarketAnalysis } from './types';
+import type { FetchedSourcePage, PageExtract, ScoutCandidate, ScoutRunResult, MarketAnalysis, ComparablePriceEvidence } from './types';
 import { supplierFromUrl, dedupeKey, normalizeTitle } from './normalize';
 import { extractPageFacts, describeExtract } from './extract';
 import { calculateMargin } from './margin';
@@ -31,7 +31,7 @@ import { evidenceFingerprint } from './aiCost';
 import { newId } from './persist';
 import {
   buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence, emptyEvidenceCounts,
-  selectEvidencePagesDetailed,
+  mergeComparablePriceEvidence, selectEvidencePagesDetailed,
   type EvidenceQualityThresholds,
 } from './marketEvidence';
 import { DuckDuckGoRetailDiscoveryAdapter, type RetailEvidenceSearchResult } from './retailDiscovery';
@@ -367,6 +367,14 @@ export interface MarketIntelligenceOptions {
    * the exact concept vocabulary deterministically — never invented terms.
    */
   demandKeywords?: string[];
+  /**
+   * Phase 4H.2 — browser-verified MARKET-COMPARABLE price observations for
+   * the CONCEPT (retailer PDP prices visibly rendered; variants/brands may
+   * differ). They contribute concept-level price-band evidence to the market
+   * gate and score, with full provenance — NEVER exact-SKU identity. Exact-
+   * product identity rules (identity.ts) are untouched. Missing = no effect.
+   */
+  comparablePrices?: ComparablePriceEvidence[];
   onProgress?: (msg: string) => void;
 }
 
@@ -400,6 +408,12 @@ export interface MarketEvidenceSummary {
   identityEvidencePages: number;
   /** Phase 4G — review-aggregation honesty note (never summed across non-exact identities). */
   reviewAggregationNote: string;
+  /**
+   * Phase 4H.2 — browser-verified MARKET-COMPARABLE prices ingested (with
+   * provenance). Concept-level price-band evidence; never exact-SKU identity.
+   */
+  comparablePriceEvidenceCount: number;
+  comparablePrices: ComparablePriceEvidence[];
 }
 
 export interface MarketIntelligenceResult {
@@ -494,7 +508,8 @@ export function cjMarketContextFor(result: MarketIntelligenceResult): CjMarketCo
  * Deterministic fallback keeps it working with no AI keys configured.
  */
 export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions): Promise<MarketIntelligenceResult> {
-  const { query, market, db, extracts, onProgress, fetchPage, maxEvidencePages, evidenceThresholds, demand, demandKeywords } = opts;
+  const { query, market, db, extracts, onProgress, fetchPage, maxEvidencePages, evidenceThresholds, demand, demandKeywords, comparablePrices: comparablePriceInput } = opts;
+  const comparablePrices: ComparablePriceEvidence[] = comparablePriceInput ?? [];
   const progress = (m: string) => onProgress?.(m);
   const at = new Date().toISOString();
 
@@ -592,6 +607,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
       counts: { ...countExtractEvidence(extracts), independentDomains: 0 },
       identityEvidencePages: identities.filter((i) => hasExplicitIdentity(i)).length,
       reviewAggregationNote: reviewAgg.note,
+      comparablePrices: [],
     };
   } else if (fetchPage) {
     progress('[evidence] building market evidence pack (select → fetch → extract)');
@@ -609,8 +625,22 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   } else {
     progress('[warn] no extracts and no fetchPage — Market Intelligence is discovery-only (weak evidence, see Phase 4D)');
   }
+  // Phase 4H.2 — fold browser-verified MARKET-COMPARABLE prices into the
+  // pack (concept-level price-band evidence; provenance persisted). The gate
+  // counts them toward minPriceEvidence as distinct concept price observations
+  // (never double-counted against an extract price of the same PDP URL).
+  if (pack && comparablePrices.length) {
+    const pricedExtractUrls = pack.extracts.filter((x) => x.extract.price !== null).map((x) => x.url);
+    const before = pack.counts.priceEvidenceCount;
+    pack = {
+      ...pack,
+      comparablePrices,
+      counts: mergeComparablePriceEvidence(pack.counts, comparablePrices, pricedExtractUrls),
+    };
+    progress(`[evidence] ingested ${comparablePrices.length} browser-verified MARKET-COMPARABLE prices → concept price evidence ${before} → ${pack.counts.priceEvidenceCount} (${pack.counts.comparablePriceEvidenceCount} comparable, full provenance persisted)`);
+  }
   if (pack && pack.extracts.length) {
-    signals = [...signals, ...signalsFromExtracts(pack.extracts, at)];
+    signals = [...signals, ...signalsFromExtracts(pack.extracts, at, pack.comparablePrices)];
   }
 
   // Phase 4G — demand-data adapter with a STRUCTURED result. A configured-
@@ -717,6 +747,10 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     // Phase 4G — product identity honesty on the evidence pack.
     identityEvidencePages: pack?.identityEvidencePages ?? 0,
     reviewAggregationNote: pack?.reviewAggregationNote ?? '',
+    // Phase 4H.2 — browser-verified MARKET-COMPARABLE prices (concept-level
+    // price-band evidence with provenance; never exact-SKU identity).
+    comparablePriceEvidenceCount: pack?.counts.comparablePriceEvidenceCount ?? 0,
+    comparablePrices: pack?.comparablePrices ?? [],
     // Phase 4G.1 — direct-demand evidence (Google Ads adapter when configured;
     // never secret values). Structured facts are primary; signals are derived
     // from them. Persisted so the audit UI can show them.
@@ -764,6 +798,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     rejectedUrls: pack?.rejectedUrls ?? [],
     identityEvidencePages: pack?.identityEvidencePages ?? 0,
     reviewAggregationNote: pack?.reviewAggregationNote ?? '',
+    comparablePriceEvidenceCount: pack?.counts.comparablePriceEvidenceCount ?? 0,
+    comparablePrices: pack?.comparablePrices ?? [],
     evidenceQuality: gate.pass ? 'sufficient' : 'insufficient',
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     retail: retailReport
