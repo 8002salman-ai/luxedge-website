@@ -279,6 +279,7 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
       console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
       if (ev.retail) {
         console.log(`[mi] retail discovery: ${ev.retail.searchRequests} search requests · domains attempted ${ev.retail.domainsAttempted.join(',')} · with results ${ev.retail.domainsWithResults.join(',') || 'NONE'}`);
+        console.log(`[mi] retail navigation (Phase 4E.2): ${ev.retail.listingSources} listing/search pages used as NAVIGATION sources only · ${ev.retail.navigationPdpExtracted} exact PDP URLs extracted from listing pages`);
       }
       if (ev.rejectedUrls.length) {
         console.log(`[mi] rejected pages (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url} → ${r.reason}`).join(' | ')}`);

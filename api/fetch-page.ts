@@ -60,10 +60,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         continue;
       }
       // Jina Reader returns "Warning: <host> URL returned error <code>: ..."
-      // for failed pages (429/403/404/…). That is NOT a page — it must never
-      // be returned as successful content (Phase 4E honesty fix).
-      if (/^Warning:\s+.+?\bURL returned error\s+\d{3}\b/im.test(text)) {
-        lastErr = `${label}: proxy error page (target returned an error)`;
+      // for failed pages (429/403/404/…) and BLOCKED-SNAPSHOT pages (e.g.
+      // "## www.target.com is blocked … ERR_BLOCKED_BY_CLIENT") when its own
+      // crawl was blocked. Neither is a page — they must never be returned as
+      // successful content (Phase 4E/4E.2 honesty fix).
+      const lower = text.toLowerCase();
+      if (/^Warning:\s+.+?\bURL returned error\s+\d{3}\b/im.test(text) ||
+        (text.length < 15000 && (lower.includes('err_blocked_by_client') || lower.includes('page has been blocked by chrome') || lower.includes('this page has been blocked')))) {
+        lastErr = `${label}: proxy error/block page (target not retrievable)`;
         continue;
       }
       sendText(res, 200, text);

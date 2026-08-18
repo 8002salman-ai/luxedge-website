@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractProductJson, parseHtmlPage, buildExtractionPrompt } from '../importer';
+import { extractProductJson, parseHtmlPage, buildExtractionPrompt, isProxyErrorText } from '../importer';
 
 describe('extractProductJson', () => {
   it('parses plain JSON objects', () => {
@@ -24,6 +24,28 @@ describe('extractProductJson', () => {
     expect(extractProductJson('no json here at all')).toBeNull();
     expect(extractProductJson('')).toBeNull();
     expect(extractProductJson('{invalid json}')).toBeNull();
+  });
+});
+
+describe('isProxyErrorText', () => {
+  it('flags Jina "URL returned error" pages', () => {
+    expect(isProxyErrorText('Warning: www.target.com URL returned error 429: Too many requests')).toBe(true);
+  });
+  it('flags Jina BLOCKED-SNAPSHOT pages (ERR_BLOCKED_BY_CLIENT)', () => {
+    const snapshot = [
+      'Title: www.target.com',
+      'URL Source: https://www.target.com/p/.../A-91561719',
+      'Warning: This is a cached snapshot of the original page.',
+      'Markdown Content:',
+      '## www.target.com is blocked',
+      'This page has been blocked by Chrome',
+      'ERR_BLOCKED_BY_CLIENT',
+    ].join('\n');
+    expect(isProxyErrorText(snapshot)).toBe(true);
+  });
+  it('does NOT flag a real product page with price/availability text', () => {
+    const page = 'Title: PetAmi Dog Travel Bag\nPrice: $39.99\nAvailability: In stock\nA real product description with plenty of content padding beyond one hundred characters to exceed the length threshold safely.'.repeat(1);
+    expect(isProxyErrorText(page)).toBe(false);
   });
 });
 

@@ -30,6 +30,9 @@ export const OPTIONAL_RETAIL_EVIDENCE_DOMAINS = ['petco.com', 'petsmart.com', 't
 /** Hard cap on the number of site-restricted search requests per run. */
 export const MAX_RETAIL_SEARCH_REQUESTS = 8;
 
+/** Max retailer listing/search pages surfaced as NAVIGATION sources per run. */
+export const MAX_RETAIL_LISTING_SOURCES = 3;
+
 export interface RetailEvidenceSearchOptions {
   /** Market hypothesis, e.g. "dog travel accessories". */
   query: string;
@@ -63,6 +66,14 @@ export interface RetailEvidenceSearchResult {
   candidates: RetailEvidenceCandidate[];
   /** Same-domain URLs dropped for not being exact single-product pages. */
   rejected: { url: string; reason: string }[];
+  /**
+   * Phase 4E.2 — retailer LISTING/search/category pages surfaced by the same
+   * site-restricted searches. NAVIGATION SOURCES ONLY (up to
+   * MAX_RETAIL_LISTING_SOURCES, diverse domains): they are never product
+   * evidence themselves; the navigation adapter fetches them and extracts
+   * exact PDP links.
+   */
+  listingSources: { url: string; domain: string; reason: string }[];
   /** Number of site-restricted search requests actually issued. */
   searchRequests: number;
   domainsAttempted: string[];
@@ -136,6 +147,7 @@ export class DuckDuckGoRetailDiscoveryAdapter implements RetailEvidenceDiscovery
     const rejected: { url: string; reason: string }[] = [];
     const domainsWithResults = new Set<string>();
     const warnings: string[] = [];
+    const listingCandidatesByDomain = new Map<string, { url: string; reason: string }[]>();
     let searchRequests = 0;
 
     for (const domain of domains) {
@@ -167,6 +179,13 @@ export class DuckDuckGoRetailDiscoveryAdapter implements RetailEvidenceDiscovery
         const urlReason = evidenceUrlRejectionReason(clean);
         if (urlReason) {
           rejected.push({ url: clean, reason: urlReason });
+          // Phase 4E.2 — a category/search/browse/list rejection is a potential
+          // NAVIGATION source (the listing page may link to exact PDPs).
+          if (/category|search|browse|listing|collection|listicle|deal/i.test(urlReason)) {
+            const list = listingCandidatesByDomain.get(domain) ?? [];
+            list.push({ url: clean, reason: urlReason });
+            listingCandidatesByDomain.set(domain, list);
+          }
           continue;
         }
         const { matched } = retailProductUrlPattern(clean);
@@ -175,6 +194,9 @@ export class DuckDuckGoRetailDiscoveryAdapter implements RetailEvidenceDiscovery
         // content validation as "usable" evidence — Phase 4E live finding).
         if (STRICT_PATTERN_DOMAINS.has(domain) && !matched) {
           rejected.push({ url: clean, reason: 'not a verified single-product URL pattern for this retailer' });
+          const list = listingCandidatesByDomain.get(domain) ?? [];
+          list.push({ url: clean, reason: 'not a verified single-product URL pattern for this retailer' });
+          listingCandidatesByDomain.set(domain, list);
           continue;
         }
         perDomain.push({ url: clean, matched });
@@ -197,10 +219,24 @@ export class DuckDuckGoRetailDiscoveryAdapter implements RetailEvidenceDiscovery
       }
     }
 
+    // Phase 4E.2 — pick up to MAX_RETAIL_LISTING_SOURCES listing/search pages
+    // as NAVIGATION sources: one per domain first (round-robin), then fill
+    // remaining capacity. The first listing candidate per domain is preferred.
+    const listingSources: { url: string; domain: string; reason: string }[] = [];
+    const listingByDomain = [...listingCandidatesByDomain.entries()];
+    for (let pass = 0; pass < 3 && listingSources.length < MAX_RETAIL_LISTING_SOURCES; pass++) {
+      for (const [d, list] of listingByDomain) {
+        if (listingSources.length >= MAX_RETAIL_LISTING_SOURCES) break;
+        if (pass >= list.length) continue;
+        listingSources.push({ url: list[pass].url, domain: d, reason: list[pass].reason });
+      }
+    }
+
     return {
       query: opts.query,
       candidates,
       rejected,
+      listingSources,
       searchRequests,
       domainsAttempted: domains,
       domainsWithResults: [...domainsWithResults],

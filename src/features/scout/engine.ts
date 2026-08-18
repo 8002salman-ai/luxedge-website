@@ -31,9 +31,11 @@ import { evidenceFingerprint } from './aiCost';
 import { newId } from './persist';
 import {
   buildMarketEvidencePack, assessEvidenceQuality, countExtractEvidence, emptyEvidenceCounts,
+  selectEvidencePagesDetailed,
   type EvidenceQualityThresholds,
 } from './marketEvidence';
 import { DuckDuckGoRetailDiscoveryAdapter, type RetailEvidenceSearchResult } from './retailDiscovery';
+import { FetchingRetailNavigationAdapter, MAX_NAV_LISTING_SOURCES, MAX_NAV_PDP_LINKS, type RetailNavigationAdapter } from './retailNavigation';
 import { collectDemandSignals, type MarketDemandAdapter } from './marketDemand';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
@@ -323,6 +325,13 @@ export interface MarketIntelligenceOptions {
    * pages with real prices/availability. Market evidence only.
    */
   retailDomains?: string[];
+  /**
+   * Phase 4E.2: injectable retailer listing-page NAVIGATION adapter. Defaults
+   * to FetchingRetailNavigationAdapter over `fetchPage` when retailDomains is
+   * set. Listing pages are navigation sources only — they extract exact PDP
+   * links and contribute ZERO evidence themselves.
+   */
+  retailNavigation?: RetailNavigationAdapter;
   /** Injectable AI call (defaults to DeepSeek via secure server proxy). */
   aiCall?: (prompt: string, model?: string) => Promise<string>;
   /**
@@ -362,7 +371,16 @@ export interface MarketEvidenceSummary {
   evidenceQuality: 'sufficient' | 'insufficient' | 'not-assessed';
   evidenceQualityReasons: string[];
   /** Phase 4E retailer-restricted discovery report (when used). */
-  retail: { searchRequests: number; domainsAttempted: string[]; domainsWithResults: string[]; rejected: { url: string; reason: string }[] } | null;
+  retail: {
+    searchRequests: number;
+    domainsAttempted: string[];
+    domainsWithResults: string[];
+    rejected: { url: string; reason: string }[];
+    /** Phase 4E.2 — listing/search pages used as NAVIGATION sources (never evidence). */
+    listingSources: number;
+    /** Phase 4E.2 — exact PDP URLs extracted from listing pages via navigation. */
+    navigationPdpExtracted: number;
+  } | null;
 }
 
 export interface MarketIntelligenceResult {
@@ -448,6 +466,7 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
   let warning = '';
   let discoveredUrls: string[] = [];
   let retailReport: RetailEvidenceSearchResult | null = null;
+  let navPdp: string[] = []; // Phase 4E.2 — PDPs found via listing-page navigation
   try {
     if (opts.retailDomains && opts.retailDomains.length > 0) {
       // Phase 4E — retailer-restricted discovery: site:<domain> searches so
@@ -455,7 +474,30 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
       // only; not supplier sourcing, not CJ research).
       const adapter = new DuckDuckGoRetailDiscoveryAdapter();
       retailReport = await adapter.searchExactProducts({ query, market, domains: opts.retailDomains, maxPerDomain: 2, maxTotal: 8 });
-      discoveredUrls = retailReport.candidates.map((c) => c.url);
+      const directPdp = retailReport.candidates.map((c) => c.url);
+      // Phase 4E.2 — retailer LISTING/search pages are NAVIGATION sources only:
+      // fetch up to MAX_NAV_LISTING_SOURCES of them, extract exact PDP links,
+      // validate. The listing page itself contributes ZERO price/rating/
+      // availability evidence and ZERO Market Score points.
+      const listingSources = retailReport.listingSources ?? [];
+      if (listingSources.length && opts.fetchPage) {
+        const nav: RetailNavigationAdapter = opts.retailNavigation
+          ?? new FetchingRetailNavigationAdapter(opts.fetchPage);
+        for (const ls of listingSources.slice(0, MAX_NAV_LISTING_SOURCES)) {
+          try {
+            const navRes = await nav.discoverProductLinks({ sourceUrl: ls.url, maxLinks: MAX_NAV_PDP_LINKS });
+            progress(`[nav] ${ls.domain} listing ${ls.url.slice(0, 64)}… → ${navRes.pdpUrls.length} exact PDP link(s)${navRes.pdpUrls.length ? '' : ' (no valid PDPs on the listing page)'}`);
+            navPdp.push(...navRes.pdpUrls);
+          } catch (e) {
+            progress(`[nav] listing ${ls.url.slice(0, 64)}… failed: ${(e as Error).message}`);
+          }
+        }
+      } else if (listingSources.length && !opts.fetchPage) {
+        progress('[nav] retailer listing pages found but no page fetcher available — skipping navigation (direct PDPs only)');
+      }
+      // Global dedupe + domain round-robin caps (≤8 total, ≤2 per retailer).
+      discoveredUrls = selectEvidencePagesDetailed([...directPdp, ...navPdp], 8, 2).selected;
+      const navTotal = navPdp.length;
       signals = signalsFromDiscovery(
         { query, market, maxResults: 12 },
         { query, rawLinks: discoveredUrls, urls: discoveredUrls, filtered: 0, duplicates: 0, warning: retailReport.warning },
@@ -464,14 +506,14 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
       signals.push({
         id: newId(),
         signalType: 'retail_coverage',
-        source: 'Site-restricted retailer search (DuckDuckGo HTML)',
+        source: 'Site-restricted retailer search (DuckDuckGo HTML) + listing navigation',
         sourceUrl: '',
         observedAt: at,
-        summary: `Retailer-restricted search: ${retailReport.candidates.length} exact product URLs across ${retailReport.domainsWithResults.length} of ${retailReport.domainsAttempted.length} attempted retailer domains (${retailReport.searchRequests} search requests) — market-supply visibility, NOT sales or demand.`,
+        summary: `Retailer-restricted search: ${discoveredUrls.length} exact product URLs (${directPdp.length} direct + ${navTotal} via ${listingSources.length} listing-page navigation sources) across ${retailReport.domainsWithResults.length} of ${retailReport.domainsAttempted.length} attempted retailer domains (${retailReport.searchRequests} search requests) — market-supply visibility, NOT sales or demand. Listing pages are navigation sources only and contribute no evidence themselves.`,
         confidence: retailReport.domainsWithResults.length ? 'verified' : 'inferred',
-        limitations: 'Retailer domain coverage varies; a URL list is not consumer demand evidence.',
+        limitations: 'Retailer domain coverage varies; a URL list is not consumer demand evidence; navigation-derived PDPs still require content validation.',
       });
-      progress(`[signals] ${query}: retailer-restricted — ${retailReport.candidates.length} exact product URLs, ${retailReport.domainsWithResults.length}/${retailReport.domainsAttempted.length} domains with results`);
+      progress(`[signals] ${query}: retailer-restricted — ${discoveredUrls.length} exact product URLs (${directPdp.length} direct, ${navTotal} via navigation), ${retailReport.domainsWithResults.length}/${retailReport.domainsAttempted.length} domains with results`);
       if (retailReport.warning) warning = retailReport.warning;
     } else {
       const result = opts.discover
@@ -622,6 +664,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
     retailDomainsAttempted: retailReport?.domainsAttempted ?? [],
     retailDomainsWithResults: retailReport?.domainsWithResults ?? [],
     retailRejectedUrls: retailReport?.rejected ?? [],
+    retailListingSources: retailReport?.listingSources?.length ?? 0,
+    retailNavigationPdpUrls: navPdp.length,
     evidenceQuality,
     evidenceQualityReasons: [...gate.missing, ...gate.reasons],
     at: new Date().toISOString(),
@@ -651,6 +695,8 @@ export async function runMarketIntelligenceJob(opts: MarketIntelligenceOptions):
           domainsAttempted: retailReport.domainsAttempted,
           domainsWithResults: retailReport.domainsWithResults,
           rejected: retailReport.rejected,
+          listingSources: retailReport.listingSources?.length ?? 0,
+          navigationPdpExtracted: navPdp.length,
         }
       : null,
   };

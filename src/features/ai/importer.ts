@@ -19,6 +19,21 @@ function looksLikeBotPage(raw: string): boolean {
 }
 
 /**
+ * Jina Reader also returns BLOCKED-SNAPSHOT pages when its own crawl was
+ * blocked (e.g. "## www.target.com is blocked … ERR_BLOCKED_BY_CLIENT").
+ * That text is NOT a page — it must never count as product evidence.
+ */
+function looksLikeJinaBlockSnapshot(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return raw.length < 15000 && (
+    lower.includes('err_blocked_by_client') ||
+    lower.includes('page has been blocked by chrome') ||
+    lower.includes('this page has been blocked') ||
+    lower.includes('is blocked by the browser')
+  );
+}
+
+/**
  * Jina Reader returns "Warning: <host> URL returned error <code>: ..." when
  * the target page failed (429/403/404/…). That text is NOT a page and must
  * never be counted as product evidence (Phase 4E live finding: a 429
@@ -28,7 +43,7 @@ const JINA_ERROR_RE = /^Warning:\s+.+?\bURL returned error\s+\d{3}\b/im;
 
 /** True when fetched text is a proxy error page, not a real page. */
 export function isProxyErrorText(text: string): boolean {
-  return JINA_ERROR_RE.test(text) || looksLikeBotPage(text);
+  return JINA_ERROR_RE.test(text) || looksLikeBotPage(text) || looksLikeJinaBlockSnapshot(text);
 }
 
 interface FetchedPage {

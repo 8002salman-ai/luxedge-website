@@ -31,13 +31,19 @@ describe('loadStorefrontCatalog', () => {
     expect(await loadStorefrontCatalog()).toBeNull();
   });
 
-  it('returns null when there are no published products yet', async () => {
+  it('returns an EMPTY REAL CATALOG (not null, not demo fallback) when the DB is reachable with zero published products', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([{ id: 'c1', name: 'Pet Toys', slug: 'pet-toys', is_active: true, sort_order: 0 }]));
       if (url.includes('/products')) return Promise.resolve(jsonResponse([]));
       return Promise.resolve(jsonResponse([]));
     }));
-    expect(await loadStorefrontCatalog()).toBeNull();
+    const cat = await loadStorefrontCatalog();
+    expect(cat).not.toBeNull();
+    expect(cat!.source).toBe('supabase');
+    expect(cat!.products).toEqual([]);
+    // Categories still load — only the product list is intentionally empty.
+    expect(cat!.categories.length).toBe(1);
+    expect(cat!.categories[0].name).toBe('Pet Toys');
   });
 
   it('filters to published products with prices (V2 schema: name/price)', async () => {

@@ -2,9 +2,13 @@
 // LUXEDGE V2 — STOREFRONT CATALOG SERVICE (Phase 3B)
 //
 // Loads the storefront catalog from Supabase when it is configured AND
-// reachable AND populated. Returns null when any of those conditions fail so
-// the caller can keep its demo/fallback data — the storefront never renders
-// empty just because the database is not provisioned yet.
+// reachable. Returns an EMPTY REAL CATALOG ({ products: [], categories, … })
+// when the database is reachable but has zero published products — a valid
+// empty DB result is NOT an error and must never trigger demo/fallback data.
+// Returns null ONLY for genuine failures (not configured, unreachable, schema
+// not provisioned) — and even then the caller must NOT fall back to demo
+// products (Phase 4E.1/4E.2: the storefront starts empty and stays empty
+// until genuinely approved products exist).
 //
 // DATA SOURCES (supabase/migrations/0004_reconcile_live.sql)
 //   categories     — active storefront categories
@@ -110,8 +114,10 @@ function tagsOf(v: unknown): string[] {
 
 /**
  * Load the storefront catalog from Supabase.
- * Returns null when: not configured, unreachable, schema not provisioned,
- * or no published products exist yet — the caller keeps its demo catalog.
+ * Returns an EMPTY REAL CATALOG when the DB is reachable but has zero
+ * published products (intentional empty catalog — never demo fallback).
+ * Returns null only when: not configured, unreachable, schema not
+ * provisioned, or the DB query itself failed.
  */
 export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null> {
   if (getDbMode() !== 'supabase') return null;
@@ -139,7 +145,11 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
     // Products without any price info are not ready for the storefront.
     const usable = published.filter((p) => num(p.price) > 0 || num(p.price_amount) > 0);
-    if (usable.length === 0) return null;
+    // Phase 4E.2 — a reachable DB with ZERO published products is a valid
+    // EMPTY REAL CATALOG, not an error. Never signal "use demo fallback".
+    if (usable.length === 0) {
+      return { products: [], categories, source: 'supabase' };
+    }
 
     // Optional: attach product images. Tolerate failures (missing table,
     // grants, RLS) without failing the whole catalog load.
@@ -189,7 +199,9 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
     return { products, categories, source: 'supabase' };
   } catch {
-    // Unreachable / schema not provisioned / permission denied → demo fallback.
+    // Unreachable / schema not provisioned / permission denied → null.
+    // The caller must NOT fall back to demo products — the storefront stays
+    // empty (Phase 4E.1/4E.2).
     return null;
   }
 }

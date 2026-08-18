@@ -1620,7 +1620,9 @@ describe('MIGRATION 0008 — FAIL CLOSED when the durable ledger is unavailable'
 });
 
 describe('MIGRATION 0008 — SQL contract (static verification of the migration file)', () => {
-  const migration = fs.readFileSync('supabase/migrations/0008_supplier_api_runs.sql', 'utf8');
+  // Normalize CRLF (core.autocrlf=true checkouts on Windows) so the static
+  // contract check is line-ending agnostic.
+  const migration = fs.readFileSync('supabase/migrations/0008_supplier_api_runs.sql', 'utf8').replace(/\r\n/g, '\n');
 
   it('DB CHECK constraints enforce the [50,250] hard cap and counter integrity', () => {
     expect(migration).toMatch(/requested_budget between 50 and 250/i);
