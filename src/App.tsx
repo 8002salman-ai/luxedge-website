@@ -8,6 +8,7 @@ import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
+import { parseStoredCart, reconcileCart, isCartOrderable, CART_STORAGE_KEY } from './services/cartSafety';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -287,29 +288,10 @@ interface Ctx {
 const AC = createContext<Ctx | null>(null);
 export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
-const CART_STORAGE_KEY = 'luxedge_cart';
-
+// Cart persistence uses the catalog-safe v2 key (legacy demo-era payload is
+// purged on load — Phase 4E.2A hotfix behavior, kept on luxedge-v2).
 function loadCart(): CartItem[] {
-  try {
-    const raw = localStorage.getItem(CART_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const items: CartItem[] = [];
-    for (const entry of parsed) {
-      const e = entry as Partial<CartItem>;
-      if (
-        e && typeof e === 'object' &&
-        e.product && typeof e.product.id === 'string' &&
-        typeof e.quantity === 'number' && e.quantity > 0
-      ) {
-        items.push({ product: e.product, quantity: Math.floor(e.quantity) });
-      }
-    }
-    return items;
-  } catch {
-    return [];
-  }
+  return parseStoredCart<Product>();
 }
 
 const SESSION_STORAGE_KEY = 'luxedge_session';
@@ -359,9 +341,14 @@ function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void loadStorefrontCatalog().then((cat) => {
-      if (cancelled || !cat) return;
-      if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
-      if (cat.categories.length) setCategories(cat.categories.map(mapCatalogCategory));
+      if (cancelled) return;
+      if (cat) {
+        // Catalog load completed (even with zero products) — the cart can
+        // now be safely reconciled against the real customer-visible set.
+        setCatalogLoaded(true);
+        if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
+        if (cat.categories.length) setCategories(cat.categories.map(mapCatalogCategory));
+      }
     });
     return () => { cancelled = true; };
   }, []);
@@ -400,6 +387,21 @@ function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { /* storage full or unavailable */ }
   }, [cart]);
+
+  // Catalog Launch Phase defense in depth: the cart may only contain
+  // products that exist in the current customer-visible catalog. Once the
+  // catalog has actually loaded, any stored item not in it is stale and is
+  // reconciled away — a manually-restored malformed payload never survives.
+  // (Only runs after a successful catalog load, so a DB outage never wipes
+  // a valid cart.)
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    setCart(prev => {
+      const valid = reconcileCart(prev, products);
+      return valid.length === prev.length ? prev : valid;
+    });
+  }, [catalogLoaded, products]);
 
   // Persist the signed-in user so the session survives a page refresh.
   useEffect(() => {
@@ -479,7 +481,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     // Hotfix safety (Phase 4E.2A): never place an order containing a product
     // that is not in the current customer-visible catalog. Empty/stale carts
     // are rejected and cleared — no fake success, no purchase conversion.
-    if (cart.length === 0 || !cart.every((i) => products.some((p) => p.id === i.product.id))) {
+    if (!isCartOrderable(cart, products)) {
       clearCart();
       removeCoupon();
       notify('Your cart is empty or contains items that are no longer available.', 'error');
@@ -2156,13 +2158,21 @@ function CartDrawer() {
                   )}
                 </div>
 
-                {cart.map(item => (
+                {cart.map(item => {
+                  // Defensive rendering: a cart item may never crash the
+                  // drawer. Fall back to the branded placeholder image, safe
+                  // text, and a $0 price for any missing field.
+                  const img = (Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+                  const nm = item.product.name || 'Product';
+                  const cat = item.product.category || '';
+                  const pr = typeof item.product.price === 'number' && Number.isFinite(item.product.price) ? item.product.price : 0;
+                  return (
                   <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
-                    <img src={item.product.images[0]} alt={item.product.name} className="w-20 h-20 object-cover rounded-lg shrink-0" />
+                    <img src={img} alt={nm} onError={onImageError} className="w-20 h-20 object-cover rounded-lg shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-luxe-black truncate">{item.product.name}</h4>
-                      <p className="text-[11px] text-gray-400 truncate">{item.product.category}</p>
-                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${item.product.price.toFixed(2)}</p>
+                      <h4 className="text-sm font-semibold text-luxe-black truncate">{nm}</h4>
+                      <p className="text-[11px] text-gray-400 truncate">{cat}</p>
+                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${pr.toFixed(2)}</p>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
                           <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={12} /></button>
@@ -2172,9 +2182,10 @@ function CartDrawer() {
                         <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={14} /></button>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-luxe-black shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-luxe-black shrink-0">${(pr * item.quantity).toFixed(2)}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Footer */}
@@ -2224,9 +2235,11 @@ function CartPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Items */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm divide-y divide-luxe-silver/60">
-            {cart.map(i => (
+            {cart.map(i => {
+              const img = (Array.isArray(i.product.images) && i.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+              return (
               <div key={i.product.id} className="flex gap-4 p-5">
-                <img src={i.product.images[0]} alt={i.product.name} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
+                <img src={img} alt={i.product.name || 'Product'} onError={onImageError} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
                 <div className="flex-1 min-w-0">
                   <Link to={`/product/${i.product.id}`} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
                   <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
@@ -2240,11 +2253,12 @@ function CartPage() {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-luxe-black">${(i.product.price * i.quantity).toFixed(2)}</p>
-                  <p className="text-xs text-luxe-gray">${i.product.price.toFixed(2)} each</p>
+                  <p className="font-bold text-luxe-black">${((i.product.price || 0) * i.quantity).toFixed(2)}</p>
+                  <p className="text-xs text-luxe-gray">${(i.product.price || 0).toFixed(2)} each</p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Summary */}
