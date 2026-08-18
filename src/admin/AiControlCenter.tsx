@@ -15,8 +15,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, Bot, CheckCircle, Cpu, ListChecks, Power, RefreshCw, Shield, ShieldAlert, XCircle,
-} from 'lucide-react';
+  Pulse, Warning, Robot, CheckCircle, Cpu, ListChecks, Power, ArrowClockwise, ShieldCheck, ShieldWarning, XCircle,
+} from '@phosphor-icons/react';
 import { useApp, serverProviderStatus } from '../App';
 import {
   AI_TASKS, CONTROL_MODES, COST_STRATEGIES, DEFAULT_MODEL_HELP, SECOND_OPINION_MODES,
@@ -103,13 +103,13 @@ export default function AiControlCenter() {
           <p className="text-[11px] text-gray-500">Decide how much control AI gets — 100% human, copilot, or guarded autonomous.</p>
         </div>
         <button onClick={refresh} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-50">
-          <RefreshCw size={12} /> Refresh
+          <ArrowClockwise size={12} /> Refresh
         </button>
       </div>
 
       {/* Status banner */}
       <div className={`rounded-xl p-3 border flex items-center gap-3 ${aiOn ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-        {aiOn ? <CheckCircle size={18} className="text-green-600" /> : <AlertTriangle size={18} className="text-amber-600" />}
+        {aiOn ? <CheckCircle size={18} className="text-green-600" /> : <Warning size={18} className="text-amber-600" />}
         <div className="flex-1">
           <p className="text-sm font-bold text-gray-900">{aiOn ? 'AI Services: ON' : 'AI Services: OFF — Manual operation active'}</p>
           <p className="text-[11px] text-gray-600">
@@ -119,7 +119,7 @@ export default function AiControlCenter() {
           </p>
         </div>
         <button onClick={manual} className="px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 shadow-sm flex items-center gap-1.5">
-          <ShieldAlert size={12} /> TAKE MANUAL CONTROL
+          <ShieldWarning size={12} /> TAKE MANUAL CONTROL
         </button>
         <button onClick={() => resume('ASSISTED')} disabled={cfg.controlMode === 'ASSISTED'} className="px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-blue-500 hover:bg-blue-600 shadow-sm disabled:opacity-40">
           RESUME AI (ASSISTED)
@@ -189,7 +189,7 @@ export default function AiControlCenter() {
       {/* PROVIDERS */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden card-lift">
         <div className="px-4 py-2.5 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="font-bold text-xs text-gray-800 flex items-center gap-1.5"><Bot size={12} className="text-blue-500" />AI Providers</h2>
+          <h2 className="font-bold text-xs text-gray-800 flex items-center gap-1.5"><Robot size={12} className="text-blue-500" />AI Providers</h2>
           <span className="text-[10px] text-gray-400">Keys stay server-side — toggling OFF never deletes configuration</span>
         </div>
         <div className="overflow-x-auto">
@@ -240,7 +240,7 @@ export default function AiControlCenter() {
       {/* FEATURES + ROUTING */}
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-4 card-lift">
-          <h2 className="font-bold text-xs text-gray-800 mb-3 flex items-center gap-1.5"><Activity size={12} className="text-blue-500" />Feature-Level AI Switches</h2>
+          <h2 className="font-bold text-xs text-gray-800 mb-3 flex items-center gap-1.5"><Pulse size={12} className="text-blue-500" />Feature-Level AI Switches</h2>
           <div className="space-y-2">
             {FEATURE_KEYS.map((k) => (
               <div key={k} className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export default function AiControlCenter() {
 
       {/* OWNER ATTENTION */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 card-lift">
-        <h2 className="font-bold text-xs text-gray-800 mb-3 flex items-center gap-1.5"><Shield size={12} className="text-amber-500" />Owner Attention Queue</h2>
+        <h2 className="font-bold text-xs text-gray-800 mb-3 flex items-center gap-1.5"><ShieldCheck size={12} className="text-amber-500" />Owner Attention Queue</h2>
         {(() => {
           const items = loadAttentionItems().filter((i) => i.status === 'pending');
           if (!items.length) return <p className="text-[11px] text-gray-400">No pending decisions — the queue only surfaces exceptions.</p>;

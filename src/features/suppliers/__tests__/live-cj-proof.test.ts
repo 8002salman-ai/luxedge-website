@@ -32,6 +32,7 @@ import { runCjSeedDiscovery, seedConceptSearchQuery, conditionalQualifiedRunDeci
 import type { AgentJobRow } from '../../scout/persist';
 import { runSupplierSearch } from '../../scout/supplierSearch';
 import { parseHtmlPage, isProxyErrorText } from '../../ai/importer';
+import { renderPageWithChrome } from './renderedFetch';
 import { discoverUrls } from '../../scout/discover';
 import { extractPageFacts } from '../../scout/extract';
 import { validateExactProduct } from '../../scout/marketEvidence';
@@ -896,6 +897,172 @@ describe.skipIf(!ENABLED)('LIVE CJ PROOF (RUN_LIVE_CJ_PROOF=1 only)', () => {
         query: q1,
         seedSource: { jobId: seedJob!.id, records: persistedSeeds.length },
         evidenceClassification: { exactProductIdentity: 'separate (identity.ts unchanged)', comparablePrices: 'MARKET_COMPARABLE_PRICE — concept-level, never exact-SKU' },
+        comparablePrices,
+        market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: ev.evidenceQuality, evidence: ev, miJobId: mi.jobId },
+        conditionalRun: decision,
+        googleAds: { liveDemand: 'DEFERRED', calls: 0 },
+        cjCalls: 0, cjPointsSpent: 0, deepSeekCalls: mi.aiUsed ? 1 : 0,
+      }, null, 2)}`);
+    } finally {
+      if (tempUserId) {
+        const del = await gotrue(base, serviceKey, `/admin/users/${tempUserId}`, { method: 'DELETE' });
+        console.log(`[cleanup] temp admin user deleted (HTTP ${del.status})`);
+      }
+    }
+  }, 600_000);
+
+  it('PHASE 4H.3 — rendered evidence closure (Macy\'s/Streamdale via headless Chrome + Amazon via proxy) + ONE grounded MI pass, NO CJ', async () => {
+    const env = loadEnv('.env');
+    const base = (env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const serviceKey = (env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim();
+    const preview = (env.VERCEL_PREVIEW_API || process.env.VERCEL_PREVIEW_API || '').trim().replace(/\/$/, '');
+    const bypass = (env.VERCEL_PREVIEW_BYPASS || process.env.VERCEL_PREVIEW_BYPASS || '').trim();
+    if (!base || !serviceKey || !anonKey || !preview) {
+      throw new Error('LIVE PROOF needs VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_ANON_KEY / VERCEL_PREVIEW_API in .env');
+    }
+
+    const email = `rendered42h3-${Date.now()}@luxedge.us`;
+    const password = `Pw-${Date.now()}-x7q2`;
+    const created = await gotrue(base, serviceKey, '/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, email_confirm: true, app_metadata: { role: 'admin' } }),
+    });
+    expect([200, 201]).toContain(created.status);
+    const tempUserId = String(created.body.id || '');
+    if (!tempUserId) throw new Error(`temp admin creation failed: ${JSON.stringify(created.body).slice(0, 200)}`);
+    let adminJwt = '';
+    try {
+      const token = await gotrue(base, serviceKey, '/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      expect(token.status).toBe(200);
+      adminJwt = String(token.body.access_token || '');
+      if (!adminJwt) throw new Error('no access_token from temp admin sign-in');
+
+      const db = new SupabaseAdapter(base, anonKey);
+      db.setAccessToken(adminJwt);
+
+      // 0) NO CJ calls. The concept vocabulary + verified PDPs come from the
+      //    persisted Phase 4F seeds and the rendered-browser verification.
+      const jobs = await db.list<AgentJobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 100 });
+      const seedJob = jobs.find((j) => {
+        const o = j.output as Record<string, unknown> | null;
+        return j.type === 'PRODUCT_RESEARCH'
+          && o?.mode === 'CJ_SEED_DISCOVERY'
+          && Array.isArray(o?.seeds)
+          && (o?.seeds as unknown[]).length > 0;
+      });
+      expect(seedJob).toBeTruthy();
+      const persistedSeeds = ((seedJob!.output as Record<string, unknown>).seeds as CjSeedRecord[]).filter((s) => s && typeof s.title === 'string');
+      const concepts = clusterCjSeedConcepts(persistedSeeds);
+      const sofaBed = concepts.find((c) => /sofa/i.test(c.label))
+        ?? concepts.find((c) => /\belevated\b/i.test(c.label))
+        ?? concepts[0];
+      const q1 = seedConceptSearchQuery(sofaBed);
+      console.log(`[seed-source] job ${seedJob!.id} · concept "${sofaBed.label.slice(0, 64)}…" (${sofaBed.memberPids.length} CJ records) — NO new CJ calls`);
+
+      // 1) Focused exact-PDP pool: the already browser-verifiable pages
+      //    (Macy's, Streamdale) + Amazon (Jina proxy) + the second Amazon
+      //    variant — the SAME elevated dog sofa-bed market concept.
+      const macysUrl = 'https://www.macys.com/shop/product/zeny-elegant-rectangular-pet-bed-for-big-oversized-dogs-durable-elevated-dog-sofa-bed-comfortable-dog-sofa-modern-fashionable?ID=27616252';
+      const streamdaleUrl = 'https://streamdalefurniture.com/products/c6302282-7032-4ba7-9353-f56670dbcb19';
+      // Focused exact-PDP pool for the SAME elevated dog sofa-bed concept:
+      // rendered-verifiable retailers (Macy's, Streamdale) first, then the
+      // already-verified retailer PDPs (Amazon/Lowes/Target/Wayfair/Walmart/
+      // BedBathAndBeyond) — one per domain, so round-robin selects all 8.
+      const pool = [
+        macysUrl,
+        streamdaleUrl,
+        'https://www.amazon.com/Elegant-Rectangular-Small-Medium-Dogs/dp/B0FZ4MQGS5',
+        'https://www.lowes.com/pd/Blisstyle-Elegant-Rectangular-Pet-Bed-for-Small-and-Medium-Sized-Dogs-Durable-Elevated-Dog-Sofa-Bed-Comfortable-Dog-Sofa-Modern-and-Fashionable-Linen-Fabric-Dog-Sofa-Black-Pet-Bed-Furniture/9008944',
+        'https://www.target.com/p/elegant-rectangle-pet-bed-for-small-and-medium-dogs-gray/-/A-1006620693',
+        'https://www.wayfair.com/pet/pdp/tucker-murphy-pet-elegant-rectangular-pet-bed-for-small-and-medium-sized-dogs-durable-elevated-dog-sofa-bed-comfortable-dog-sofa-modern-and-fashionable-linen-fabric-dog-sofa-w115754974.html',
+        'https://www.walmart.com/ip/Elegant-rectangular-pet-bed-small-medium-sized-dogs-durable-elevated-dog-sofa-bed-comfortable-dog-sofa-modern-fashionable-linen-fabric-dog-sofa/16540018967',
+        'https://www.bedbathandbeyond.com/Home-Garden/Elegant-Rectangle-Pet-Bed-for-Small-and-Medium-Dogs/43752531/product.html',
+      ];
+      const RENDERED_HOSTS = /macys\.com|streamdalefurniture\.com/i;
+
+      // 2) The THREE browser-verified MARKET-COMPARABLE prices (brands/SKUs/
+      //    sizes differ — concept-level price evidence, never exact-SKU identity).
+      const comparablePrices: ComparablePriceEvidence[] = [
+        { evidenceType: 'MARKET_COMPARABLE_PRICE', retailer: 'amazon.com', url: 'https://www.amazon.com/dp/B0FZ4MQGS5', price: 159.79, currency: 'USD', brand: null, sku: null, variant: 'small/medium', identityMatch: 'exact', observedAt: '2026-08-18' },
+        { evidenceType: 'MARKET_COMPARABLE_PRICE', retailer: 'macys.com', url: macysUrl, price: 259.99, currency: 'USD', brand: 'ZENY', sku: '760518918098USA', variant: 'Green / ONE SIZE (big & oversized)', identityMatch: 'concept', observedAt: '2026-08-18' },
+        { evidenceType: 'MARKET_COMPARABLE_PRICE', retailer: 'streamdalefurniture.com', url: streamdaleUrl, price: 274.98, currency: 'USD', brand: 'Simplie Fun', sku: 'W487P189544', variant: 'medium/large (dark grey)', identityMatch: 'concept', observedAt: '2026-08-18' },
+      ];
+
+      // 3) COMBINED fetcher — the smallest legitimate rendered-evidence path:
+      //    headless Chrome (curated og:title + JSON-LD Product) for the
+      //    rendered-verifiable retailers, the existing /api/fetch-page proxy
+      //    everywhere else (Amazon). Same extractPageFacts downstream.
+      const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+      const UA = '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+      let jinaFetches = 0;
+      let renderedFetches = 0;
+      const fetchPage = async (url: string) => {
+        if (RENDERED_HOSTS.test(url)) {
+          renderedFetches++;
+          return renderPageWithChrome(url, { extraFlags: [UA] });
+        }
+        jinaFetches++;
+        const res = await fetch(`${preview}/api/fetch-page?url=${encodeURIComponent(url)}`, {
+          headers: { Accept: 'text/plain', Authorization: `Bearer ${adminJwt}`, ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+          signal: AbortSignal.timeout(45_000),
+        });
+        if (!res.ok) throw new Error(`fetch-page HTTP ${res.status}`);
+        const raw = await res.text();
+        if (isProxyErrorText(raw)) throw new Error('proxy error page (rate-limited/blocked)');
+        const parsed = parseHtmlPage(raw);
+        if (!parsed.text || parsed.text.trim().length < 100) throw new Error('page returned no usable content');
+        return { text: parsed.text, images: parsed.images || [] };
+      };
+      const aiCall = async (prompt: string, model?: string) => {
+        const res = await fetch(`${preview}/api/ai/generate`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ provider: 'deepseek', model: model || 'deepseek-chat', prompt, system: 'You are Luxedge\'s USA pet-market analyst. Reason ONLY over the given evidence; never invent facts. Return STRICT JSON with keys: marketOpportunityScore, trendConfidence, demandEvidence, competitionLevel, customerPainPoint, priceBand, risks, recommendedSearchQueries, reasoningSummary.' }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        if (!res.ok) throw new Error(`AI proxy HTTP ${res.status}`);
+        const body = await res.json() as { text?: string };
+        if (!body.text) throw new Error('AI proxy returned no text');
+        return body.text;
+      };
+
+      // 4) ONE grounded MI pass (the engine fetches the pool, validates each
+      //    exact page, applies the fail-closed gate, then DeepSeek ONLY if the
+      //    gate passes — max 1 call).
+      const mi = await runMarketIntelligenceJob({
+        query: q1,
+        market: 'US',
+        db,
+        fetchPage,
+        aiCall,
+        comparablePrices,
+        discover: async () => ({ query: q1, rawLinks: pool, urls: pool, filtered: 0, duplicates: 0 }),
+        onProgress: (m) => console.log(`[mi] ${m}`),
+      });
+      const ev = mi.evidence;
+      console.log(`[mi] job ${mi.jobId} · signals ${mi.signals} · market score ${mi.marketScore ?? 'NULL'} (diagnostic ${mi.diagnosticDeterministicScore ?? 'n/a'}/100) · qualificationEligible=${mi.qualificationEligible} · ai=${mi.aiUsed} · jinaFetches=${jinaFetches} · renderedFetches=${renderedFetches}`);
+      console.log(`[mi] evidence pack: usable ${ev.successfulExtracts} · domains ${ev.independentDomains} · prices ${ev.priceEvidenceCount} (${ev.comparablePriceEvidenceCount} comparable) · availability ${ev.availabilityEvidenceCount} (${ev.availableCount} available) · ratings ${ev.ratingEvidenceCount} · identity pages ${ev.identityEvidencePages}`);
+      console.log(`[mi] evidence quality: ${ev.evidenceQuality.toUpperCase()} — ${ev.evidenceQualityReasons.join('; ')}`);
+      if (ev.rejectedUrls.length) console.log(`[mi] rejected (${ev.rejectedUrls.length}): ${ev.rejectedUrls.slice(0, 8).map((r) => `${r.url.slice(0, 55)} → ${r.reason}`).join(' | ')}`);
+
+      // 5) GATES UNCHANGED (fail-closed). If eligible: report READY — DO NOT
+      //    start the 250-pt CJ qualification run (separate owner approval).
+      const decision = conditionalQualifiedRunDecision(mi);
+      console.log(`[gate] conditional run decision: ${JSON.stringify(decision)}`);
+      if (decision.run) {
+        console.log(`MARKET-GROUNDED CJ QUALIFICATION READY — score ${decision.marketScore} >= ${MARKET_QUALIFICATION_GATE} with persisted recommendation "${decision.query}". CJ qualification run NOT started (250-pt spend requires separate owner authorization).`);
+      } else {
+        console.log(`MARKET NOT QUALIFIED — ${decision.reason}. No CJ research points spent.`);
+      }
+      console.log(`[result] ${JSON.stringify({
+        winner: 'NONE',
+        concept: { label: sofaBed.label, pids: sofaBed.memberPids.length, suitability: sofaBed.suitabilityScore },
+        query: q1,
+        renderedEvidence: { pool, renderedHosts: ['macys.com', 'streamdalefurniture.com'], jinaFetches, renderedFetches },
         comparablePrices,
         market: { marketScore: mi.marketScore, diagnostic: mi.diagnosticDeterministicScore, evidenceQuality: ev.evidenceQuality, evidence: ev, miJobId: mi.jobId },
         conditionalRun: decision,

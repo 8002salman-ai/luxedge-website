@@ -130,6 +130,10 @@ h1, h2, h3, h4, h5, h6 {
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-luxe-gold); }
 
+/* Hide the horizontal scrollbar on the mobile PDP swipe gallery */
+.scrollbar-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 /* Focus visibility — blue ring everywhere */
 :focus-visible {
   outline: 2px solid var(--color-luxe-gold);

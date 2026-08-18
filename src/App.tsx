@@ -9,15 +9,15 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
 import { loadStorefrontCatalog, type CatalogProduct, type CatalogCategory } from './services/catalog';
 import {
-  ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
-  Shield, Star, Truck, RotateCcw, Zap, ArrowRight, Mail, Phone,
-  MapPin, Plus, Minus, Trash2, Lock, Loader2, CheckCircle, CreditCard,
-  LayoutDashboard, AlertTriangle, Eye,
-  ChevronDown, ChevronRight, ArrowLeft, Upload,
-  Globe, Clock, Send, Headphones, Sparkles,
-  PenLine, Calendar, Tag, BookOpen, EyeOff,
+  ShoppingBagOpen, List, X, MagnifyingGlass, User as UserIcon, SignOut, Package,
+  ShieldCheck, Star, Truck, ArrowCounterClockwise, Lightning, ArrowRight, Envelope, Phone,
+  MapPin, Plus, Minus, Trash, Lock, SpinnerGap, CheckCircle, CreditCard,
+  SquaresFour, Warning, Eye,
+  CaretDown, CaretRight, ArrowLeft, UploadSimple,
+  Globe, Clock, PaperPlaneRight, Headphones, Sparkle,
+  PencilSimpleLine, Calendar, Tag, BookOpen, EyeSlash,
   Moon, SlidersHorizontal,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 // ============================================================================
 // TYPES
@@ -53,6 +53,19 @@ export interface BlogPost {
   authorId: string; authorName: string;
   status: 'published' | 'draft' | 'pending';
   date: string;
+}
+
+// Branded image fallback (cream + Luxedge wordmark) so a failed image never
+// shows a broken-image icon. Inline SVG — no external asset dependency.
+const LUXEDGE_IMAGE_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><rect width='100%' height='100%' fill='#F6F3EE'/><text x='50%' y='50%' font-family='Georgia, serif' font-size='64' letter-spacing='6' fill='#1A2440' text-anchor='middle' dominant-baseline='middle'>LUXEDGE</text></svg>"
+);
+
+/** Swap a broken image to the branded fallback once (never loops). */
+function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  img.onerror = null;
+  if (img.src !== LUXEDGE_IMAGE_FALLBACK) img.src = LUXEDGE_IMAGE_FALLBACK;
 }
 
 
@@ -548,7 +561,7 @@ function Header() {
     <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
       <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Free Shipping $50+</span>
       <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RotateCcw size={12} /> Easy 30-Day Returns</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><ArrowCounterClockwise size={12} /> Easy 30-Day Returns</span>
       <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
       <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer Support</span>
     </div>
@@ -556,7 +569,7 @@ function Header() {
     {/* ── Main header ── */}
     <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_10px_34px_-14px_rgba(16,26,46,0.22)]' : 'bg-white/95 backdrop-blur-md'} border-b border-luxe-silver/70`}>
       <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
-        <button onClick={() => setMob(!mob)} aria-label="Menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
+        <button onClick={() => setMob(!mob)} aria-label="List" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X size={20} /> : <List size={20} />}</button>
         <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
           <img src="/luxedge-mark.svg" alt="" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
@@ -565,14 +578,14 @@ function Header() {
           </span>
         </Link>
 
-        {/* Search — refined pill */}
+        {/* MagnifyingGlass — refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
           <div className="flex items-center w-full bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-4 focus-within:ring-luxe-gold/10 transition-all">
-            <Search size={15} className="ml-4 text-luxe-gray shrink-0" />
-            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
+            <MagnifyingGlass size={15} className="ml-4 text-luxe-gray shrink-0" />
+            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="MagnifyingGlass beds, toys, grooming & more" aria-label="MagnifyingGlass products"
               className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
             <button type="submit" className="m-1 px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors">
-              Search
+              MagnifyingGlass
             </button>
           </div>
         </form>
@@ -586,9 +599,9 @@ function Header() {
               </button>
               {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
                 <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutDashboard size={14} className="text-luxe-gold" />Admin Panel</Link>}
+                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><SquaresFour size={14} className="text-luxe-gold" />Admin Panel</Link>}
                 <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package size={14} className="text-luxe-gray" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut size={14} />Log Out</button>
+                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><SignOut size={14} />Log Out</button>
               </div></>}
             </div>
           ) : (
@@ -597,7 +610,7 @@ function Header() {
             </Link>
           )}
           <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag size={19} />
+            <ShoppingBagOpen size={19} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
           </button>
         </div>
@@ -609,7 +622,7 @@ function Header() {
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
               <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                <span aria-hidden="true">{m.icon}</span>{m.label}<ChevronDown size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
+                <span aria-hidden="true">{m.icon}</span>{m.label}<CaretDown size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
                 <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
@@ -634,15 +647,15 @@ function Header() {
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
             <Link key={c.l} to={c.to} className="nav-underline px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap size={13} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Lightning size={13} /> Deals</Link>
         </div>
       </nav>
 
       {/* ── Mobile menu ── */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
         <form onSubmit={submitSearch} role="search" className="flex items-center bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden mb-2">
-          <Search size={15} className="ml-3 text-luxe-gray shrink-0" />
-          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
+          <MagnifyingGlass size={15} className="ml-3 text-luxe-gray shrink-0" />
+          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="MagnifyingGlass products..." aria-label="MagnifyingGlass products"
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
@@ -742,7 +755,7 @@ function Footer() {
             <h4 className={COLT}>Contact</h4>
             <div className="space-y-2.5">
               <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Mail size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Envelope size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
               <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
@@ -781,9 +794,9 @@ function Footer() {
             <div className="flex flex-wrap items-center gap-5">
               {[
                 { icon: Truck, text: 'Free Shipping $50+' },
-                { icon: RotateCcw, text: '30-Day Returns' },
+                { icon: ArrowCounterClockwise, text: '30-Day Returns' },
                 { icon: Headphones, text: 'Customer Support' },
-                { icon: Shield, text: 'Thoughtfully Curated' },
+                { icon: ShieldCheck, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
                   <b.icon size={14} className="text-luxe-gold-light" />
@@ -832,12 +845,16 @@ function PCard({ product }: { product: Product }) {
     <Link to={`/product/${product.id}`} className="block group focus-visible:outline-luxe-gold">
       <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
         <div className="relative bg-luxe-cream overflow-hidden">
-          <img src={product.images[0]} alt={product.name} loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" />
+          <img src={product.images[0] || LUXEDGE_IMAGE_FALLBACK} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="w-full aspect-square object-cover" />
+          {product.images[1] && (
+            <img src={product.images[1]} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
+              className="absolute inset-0 hidden sm:block w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          )}
           {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
           {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
             className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+            <ShoppingBagOpen size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
           </button>
         </div>
         <div className="px-3.5 py-3">
@@ -845,7 +862,7 @@ function PCard({ product }: { product: Product }) {
             <p className="eyebrow truncate">{product.category}</p>
             {verified.length > 0 && (
               <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
-                <Star size={10} className="text-star fill-star" aria-hidden="true" />
+                <Star size={10} weight="fill" className="text-star" aria-hidden="true" />
                 <span className="text-[10px] font-semibold text-luxe-charcoal">{verifiedAvg.toFixed(1)}</span>
               </div>
             )}
@@ -967,6 +984,15 @@ function ProductDetailPage() {
   const [selSize, setSelSize] = useState('');
   const [ctaVisible, setCtaVisible] = useState(true);
   const ctaRef = useRef<HTMLDivElement>(null);
+  const galleryRef = useRef<HTMLDivElement>(null);
+
+  // Sync the mobile swipe gallery indicator to the scrolled image index.
+  const onGalleryScroll = useCallback(() => {
+    const el = galleryRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+    setSelImg(Math.max(0, Math.min(idx, (product?.images.length || 1) - 1)));
+  }, [product?.images.length]);
 
   // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
   useEffect(() => {
@@ -1127,35 +1153,69 @@ function ProductDetailPage() {
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
         <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
-        <ChevronRight size={11} />
+        <CaretRight size={11} />
         <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
-        <ChevronRight size={11} />
+        <CaretRight size={11} />
         <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
-        <ChevronRight size={11} />
+        <CaretRight size={11} />
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
       <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
         {/* LEFT: Image Gallery */}
         <div className="lg:sticky lg:top-24 self-start">
-          <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
-            <div className="aspect-[4/3]">
-              <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
+          {/* Mobile: swipeable gallery with image indicator dots */}
+          <div
+            ref={galleryRef}
+            onScroll={onGalleryScroll}
+            aria-label={`${product.name} — image gallery`}
+            className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl border border-luxe-silver/70 bg-luxe-cream shadow-md"
+          >
+            {product.images.map((img, i) => (
+              <div key={i} className="w-full shrink-0 snap-center">
+                <div className="aspect-[4/3]">
+                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+                </div>
+              </div>
+            ))}
+          </div>
+          {product.images.length > 1 && (
+            <div className="flex lg:hidden justify-center gap-1.5 mt-3">
+              {product.images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => { const el = galleryRef.current; if (el) el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' }); }}
+                  aria-label={`Go to image ${i + 1}`}
+                  aria-current={selImg === i}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${selImg === i ? 'w-6 bg-luxe-gold' : 'w-1.5 bg-luxe-silver hover:bg-luxe-gray'}`}
+                />
+              ))}
             </div>
-            {discount > 0 && (
-              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
+          )}
+
+          {/* Desktop: large main image + thumbnail rail */}
+          <div className="hidden lg:block">
+            <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
+              <div className="aspect-[4/3]">
+                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+              </div>
+              {discount > 0 && (
+                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
+                </div>
+              )}
+              {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
+            </div>
+            {product.images.length > 1 && (
+              <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
+                {product.images.map((img, i) => (
+                  <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`} aria-current={selImg === i}
+                    className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
+                    <img src={img} alt="" onError={onImageError} className="w-full h-full object-cover" />
+                  </button>
+                ))}
               </div>
             )}
-            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
-          </div>
-          <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
-            {product.images.map((img, i) => (
-              <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`}
-                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
-                <img src={img} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
           </div>
         </div>
 
@@ -1172,7 +1232,7 @@ function ProductDetailPage() {
           {/* Rating — shown ONLY when verified user reviews exist */}
           {reviews.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star key={i} size={14} weight={i < Math.round(avgRating) ? 'fill' : 'regular'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
               <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} verified review{reviews.length !== 1 ? 's' : ''})</span>
             </div>
           ) : (
@@ -1192,10 +1252,10 @@ function ProductDetailPage() {
           {/* Stock + Shipping */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
             {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><Warning size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
             {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
             {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
-            <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />30-day easy returns</span>
+            <span className="text-gray-500"><ArrowCounterClockwise size={13} className="inline mr-1" />30-day easy returns</span>
           </div>
 
           {/* Short Desc */}
@@ -1236,7 +1296,7 @@ function ProductDetailPage() {
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
               className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
-              <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+              <ShoppingBagOpen size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
               className="flex-1 py-3 bg-luxe-black hover:bg-luxe-charcoal disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray text-white text-sm font-bold rounded-xl transition-colors">
@@ -1248,8 +1308,8 @@ function ProductDetailPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { icon: Truck, t: 'Free ship $50+' },
-              { icon: RotateCcw, t: '30-day returns' },
-              { icon: Shield, t: 'Thoughtfully curated' },
+              { icon: ArrowCounterClockwise, t: '30-day returns' },
+              { icon: ShieldCheck, t: 'Thoughtfully curated' },
               { icon: Lock, t: 'Secure checkout' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
@@ -1310,7 +1370,7 @@ function ProductDetailPage() {
           {reviews.length > 0 && (
             <div className="flex items-center gap-3 mb-4">
               <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} weight={i < Math.round(avgRating) ? 'fill' : 'regular'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
               <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
             </div>
           )}
@@ -1325,7 +1385,7 @@ function ProductDetailPage() {
             <form onSubmit={submitReview} className="bg-luxe-cream rounded-xl p-4 mb-5 space-y-3 border border-luxe-silver/70">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={18} className={s <= revForm.rating ? 'text-star fill-star' : 'text-gray-300'} />
+                  <Star size={18} weight={s <= revForm.rating ? 'fill' : 'regular'} className={s <= revForm.rating ? 'text-star' : 'text-gray-300'} />
                 </button>
               ))}</div>
               <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
@@ -1338,7 +1398,7 @@ function ProductDetailPage() {
               <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} weight={i < r.rating ? 'fill' : 'regular'} className={i < r.rating ? 'text-star' : 'text-gray-200'} />)}</div>
                   <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-gray-600">{r.comment}</p>
@@ -1365,7 +1425,7 @@ function ProductDetailPage() {
           </div>
           <button onClick={handleAddToCart} disabled={activeStock === 0}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold">
-            <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+            <ShoppingBagOpen size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
           </button>
         </div>
       </div>
@@ -1437,7 +1497,7 @@ function HomePage() {
           {/* Copy */}
           <div className="hero-stagger text-center lg:text-left">
             <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-luxe-gold/10 border border-luxe-gold/25 text-luxe-gold-dark text-[11px] font-bold uppercase tracking-[0.16em]">
-              <Sparkles size={12} /> Curated for Quality, Priced for Value
+              <Sparkle size={12} /> Curated for Quality, Priced for Value
             </span>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mt-6 mb-5 text-luxe-black">
               Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
@@ -1456,7 +1516,7 @@ function HomePage() {
             {/* Trust row — factual store policies only, no invented stats */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ArrowCounterClockwise size={14} className="text-luxe-gold" /> 30-day easy returns</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones size={14} className="text-luxe-gold" /> Real customer support</div>
             </div>
           </div>
@@ -1485,7 +1545,7 @@ function HomePage() {
               </div>
             </div>
             <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Shield size={16} /></span>
+              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><ShieldCheck size={16} /></span>
               <div>
                 <p className="text-[11px] font-bold text-luxe-black">Thoughtfully Curated</p>
                 <p className="text-[10px] text-luxe-gray">Selected for pet owners</p>
@@ -1560,7 +1620,7 @@ function HomePage() {
       <section className="py-14 sm:py-18 bg-white">
         <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
           <Reveal><Link to="/shop?max=30" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap size={11} /> Deal</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Lightning size={11} /> Deal</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
             <p className="text-xs text-luxe-gray mb-4">Everyday essentials under $30 — handpicked and priced fairly.</p>
             <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight size={12} /></span>
@@ -1572,7 +1632,7 @@ function HomePage() {
             <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
           </Link></Reveal>
           <Reveal delay={140}><Link to="/category/pet-toys" className="group relative block rounded-3xl overflow-hidden bg-luxe-cream border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Sparkles size={11} /> Play</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Sparkle size={11} /> Play</span>
             <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Playtime Essentials</h3>
             <p className="text-xs text-luxe-gray mb-4">Interactive toys & enrichment for happy pets.</p>
             <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
@@ -1587,13 +1647,13 @@ function HomePage() {
       {featured.length === 0 ? (
         <section className="py-16 sm:py-20 bg-luxe-cream">
           <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkles size={22} className="text-luxe-gold" /></div>
+            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkle size={22} className="text-luxe-gold" /></div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
             <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Free shipping over $50</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> 30-day easy returns</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Shield size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ArrowCounterClockwise size={14} className="text-luxe-gold" /> 30-day easy returns</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldCheck size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
             </div>
           </div>
         </section>
@@ -1660,8 +1720,8 @@ function HomePage() {
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
           {[
             { icon: Truck, title: 'Free Shipping $50+', desc: 'On every order over $50' },
-            { icon: RotateCcw, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
-            { icon: Shield, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
+            { icon: ArrowCounterClockwise, title: 'Easy 30-Day Returns', desc: 'No-hassle replacements' },
+            { icon: ShieldCheck, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
             { icon: Headphones, title: 'Customer Support', desc: 'Mon–Fri, 9AM–6PM CT' },
           ].map(t => (
             <div key={t.title} className="flex items-center gap-3.5">
@@ -1819,8 +1879,8 @@ function ShopPage() {
             <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
           </button>
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
-            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
+            <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
+            <input placeholder="MagnifyingGlass products..." value={q} onChange={e => setQ(e.target.value)} aria-label="MagnifyingGlass products"
               className="w-full pl-9 pr-3 py-2 border border-luxe-silver rounded-lg text-[13px] focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-luxe-cream/60" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
@@ -1874,14 +1934,14 @@ function ShopPage() {
               /* Phase 4E.1 — genuinely empty catalog (no published DB products):
                  premium curation notice, never fake cards or fake counts. */
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkles size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkle size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
                 <p className="text-sm text-luxe-gray mb-5">Every product is verified before it reaches your door. Please check back soon.</p>
                 <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
               </div>
             ) : (
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Search size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><MagnifyingGlass size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products found</p>
                 <p className="text-sm text-luxe-gray mb-5">Try adjusting your search or filters.</p>
                 <button onClick={clearAll} className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
@@ -1935,7 +1995,7 @@ function CartDrawer() {
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <ShoppingBag size={20} className="text-luxe-gold" />
+              <ShoppingBagOpen size={20} className="text-luxe-gold" />
               <h2 className="text-lg font-semibold text-luxe-black">Your Cart ({cart.length})</h2>
             </div>
             <button onClick={closeCart} aria-label="Close cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
@@ -1945,7 +2005,7 @@ function CartDrawer() {
 
           {cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBagOpen size={28} className="text-luxe-gold" /></div>
               <p className="text-luxe-black text-sm font-semibold">Your cart is empty</p>
               <p className="text-luxe-gray text-xs">Add some handpicked essentials to get started.</p>
               <button onClick={() => { closeCart(); nav('/shop'); }} className="mt-2 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">
@@ -1983,7 +2043,7 @@ function CartDrawer() {
                           <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
                           <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={12} /></button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash size={14} /></button>
                       </div>
                     </div>
                     <p className="text-sm font-bold text-luxe-black shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
@@ -2021,7 +2081,7 @@ function CartPage() {
   if (cart.length === 0) return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBagOpen size={28} className="text-luxe-gold" /></div>
         <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
         <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
         <Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
@@ -2049,7 +2109,7 @@ function CartPage() {
                       <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
                       <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={13} /></button>
                     </div>
-                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash2 size={15} /></button>
+                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash size={15} /></button>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -2186,7 +2246,7 @@ function CheckoutPage() {
   if (step === 3) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="text-center">
-        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-luxe-gold animate-spin" /></div>
+        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><SpinnerGap size={36} className="text-luxe-gold animate-spin" /></div>
         <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
         <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
       </div>
@@ -2319,7 +2379,7 @@ function CheckoutPage() {
 
                 {/* Demo notice — no real payment processor is connected yet */}
                 <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <Warning size={18} className="text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-amber-800">Demo checkout — no real payment is processed</p>
                     <p className="text-xs text-amber-700">Card details are not stored, logged, or transmitted anywhere. A real payment provider (Stripe/PayPal) will be connected in a future release.</p>
@@ -2375,8 +2435,8 @@ function CheckoutPage() {
               <div className="mt-6 pt-5 border-t space-y-2.5">
                 {[
                   { i: Truck, t: `${shipMethod === 'express' ? 'Express 2-4 days' : 'Standard 7-12 days'}` },
-                  { i: RotateCcw, t: '30-day hassle-free returns' },
-                  { i: Shield, t: 'Secure SSL checkout' },
+                  { i: ArrowCounterClockwise, t: '30-day hassle-free returns' },
+                  { i: ShieldCheck, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
                     <b.i size={14} className="text-luxe-gold shrink-0" />{b.t}
@@ -2450,7 +2510,7 @@ function LoginPage() {
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Envelope size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
@@ -2459,7 +2519,7 @@ function LoginPage() {
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
@@ -2473,7 +2533,7 @@ function LoginPage() {
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
+              {loading ? <SpinnerGap size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
             </button>
           </form>
 
@@ -2500,16 +2560,16 @@ function LoginPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBag size={15} className="text-luxe-gold" />
+            <ShoppingBagOpen size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-luxe-gold" /> Secure checkout</span>
           <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ArrowCounterClockwise size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
 
         {/* Admin link */}
@@ -2574,7 +2634,7 @@ function SignupPage() {
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Envelope size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
@@ -2583,13 +2643,13 @@ function SignupPage() {
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
+              {loading ? <SpinnerGap size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
             </button>
           </form>
 
@@ -2601,16 +2661,16 @@ function SignupPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBag size={15} className="text-luxe-gold" />
+            <ShoppingBagOpen size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-luxe-gold" /> Secure checkout</span>
           <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ArrowCounterClockwise size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
       </div>
     </div>
@@ -2640,7 +2700,7 @@ function AdminLoginPage() {
     <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Shield className="text-luxe-gold" size={28} />
+          <ShieldCheck className="text-luxe-gold" size={28} />
           <span className="text-xl font-bold">Admin Login</span>
         </div>
         <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
@@ -2653,7 +2713,7 @@ function AdminLoginPage() {
 
         {err && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-            <AlertTriangle size={16} />{err}
+            <Warning size={16} />{err}
           </div>
         )}
 
@@ -2667,12 +2727,12 @@ function AdminLoginPage() {
             <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
           <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
+            {loading ? <SpinnerGap size={16} className="animate-spin" /> : <Lock size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
           </button>
         </form>
 
         <div className="mt-6 flex items-center gap-2 text-xs text-gray-400 justify-center">
-          <Shield size={12} /> Protected admin area
+          <ShieldCheck size={12} /> Protected admin area
         </div>
 
         <Link to="/" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-700">← Back to Store</Link>
@@ -2729,7 +2789,7 @@ function PrivacyPage() {
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.</p></LS>
       <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment information (processed securely through our payment providers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Save billing and shipping information for faster future purchases.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
-      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
+      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>PaperPlaneRight promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payment Security"><p>Payments are processed securely through trusted third-party payment processors. Luxedge does not store your complete credit or debit card information on our servers.</p></LS>
       <LS t="Cookies"><p>Our website uses cookies to remember your preferences, improve website performance, analyze website traffic, and enhance your shopping experience. When you first visit our site, we ask for your consent to use advertising and analytics cookies. You may change your choice or disable cookies through your browser settings at any time, although some website features may not function properly.</p></LS>
       <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
@@ -2823,7 +2883,7 @@ function FAQPage() {
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-luxe-gold" />{section.c}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><CaretRight size={16} className="text-luxe-gold" />{section.c}</h2>
             <div className="space-y-2">
               {section.qs.map(faq => {
                 const key = faq.q;
@@ -2832,7 +2892,7 @@ function FAQPage() {
                   <div key={key} className="bg-white rounded-xl border overflow-hidden">
                     <button onClick={() => setOpen(isOpen ? null : key)} className="w-full flex items-center justify-between px-5 py-4 text-left">
                       <span className="text-sm font-medium text-gray-900 pr-4">{faq.q}</span>
-                      <ChevronDown size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <CaretDown size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {isOpen && <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t pt-3">{faq.a}</div>}
                   </div>
@@ -2843,7 +2903,7 @@ function FAQPage() {
         ))}
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail size={16} />Contact Support</Link>
+          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Envelope size={16} />Contact Support</Link>
         </div>
       </div>
     </div>
@@ -2862,7 +2922,7 @@ function ContactPage() {
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
-            { i: Mail, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
+            { i: Envelope, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
             { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Mon-Fri, 9AM-6PM CT' },
             { i: MapPin, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
@@ -2885,7 +2945,7 @@ function ContactPage() {
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-luxe-gold" /> Send Us a Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><PaperPlaneRight size={18} className="text-luxe-gold" /> PaperPlaneRight Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
@@ -2894,7 +2954,7 @@ function ContactPage() {
                 <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send size={16} />Send Message</button>
+              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><PaperPlaneRight size={16} />PaperPlaneRight Message</button>
             </form>
           )}
         </div>
@@ -2956,9 +3016,9 @@ function CareersPage() {
           </div>
 
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
-          <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
+          <p className="text-gray-600 leading-relaxed mb-4">PaperPlaneRight your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
           <Link to="/contact" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors">
-            <Mail size={16} /> Get in Touch
+            <Envelope size={16} /> Get in Touch
           </Link>
         </div>
       </div>
@@ -2989,7 +3049,7 @@ function BlogListPage() {
           {user && (
             <div className="flex justify-end mb-6">
               <Link to="/blog/write" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
-                <PenLine size={16} /> Write a Post
+                <PencilSimpleLine size={16} /> Write a Post
               </Link>
             </div>
           )}
@@ -3071,8 +3131,8 @@ function BlogDetailPage() {
         <div className="bg-white rounded-2xl shadow-xl border p-6 sm:p-10 mb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-            <Link to="/" className="hover:text-luxe-gold">Home</Link><ChevronRight size={12} />
-            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><ChevronRight size={12} />
+            <Link to="/" className="hover:text-luxe-gold">Home</Link><CaretRight size={12} />
+            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><CaretRight size={12} />
             <span className="text-gray-600 truncate max-w-[200px]">{post.title}</span>
           </nav>
 
@@ -3189,7 +3249,7 @@ function BlogWritePage() {
     <div className="py-10 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4">
         <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
-        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-luxe-gold" />Write a Blog Post</h1>
+        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PencilSimpleLine size={22} className="text-luxe-gold" />Write a Blog Post</h1>
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
@@ -3202,8 +3262,8 @@ function BlogWritePage() {
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold hover:bg-luxe-gold-soft/30 transition-all">
-                <Upload size={28} className="text-gray-400 mb-2" />
-                <span className="text-sm font-medium text-gray-600">Upload cover image</span>
+                <UploadSimple size={28} className="text-gray-400 mb-2" />
+                <span className="text-sm font-medium text-gray-600">UploadSimple cover image</span>
                 <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
                 <input type="file" accept="image/*" onChange={handleCover} className="hidden" />
               </label>
@@ -3226,7 +3286,7 @@ function BlogWritePage() {
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
-            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
+            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><UploadSimple size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
@@ -3239,7 +3299,7 @@ function BlogWritePage() {
           {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><PaperPlaneRight size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
             <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
           </div>
         </form>
@@ -3256,7 +3316,7 @@ function AdminFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-luxe-cream">
       <div className="flex flex-col items-center gap-3 text-gray-400">
-        <Loader2 size={28} className="animate-spin text-luxe-gold" />
+        <SpinnerGap size={28} className="animate-spin text-luxe-gold" />
         <span className="text-sm font-medium">Loading admin…</span>
       </div>
     </div>

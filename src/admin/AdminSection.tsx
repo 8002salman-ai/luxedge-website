@@ -21,14 +21,14 @@ import {
   savePreviewConfig, validateConfig, MarketingConfig, PlacementKey, DEFAULT_CONFIG,
 } from '../lib/marketing';
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Bot, CheckCircle, ChevronDown, ChevronRight, ChevronUp,
-  Clipboard, Code, Cpu, DollarSign, Download, Edit2, Eye, FileText, FolderTree, Globe,
-  History, ImageIcon, Layers, LayoutDashboard, Link2, Loader2, Lock, LogOut, Megaphone, Menu,
-  Monitor, Package, PenLine, Plus, RefreshCw, RotateCcw, Save, Search, Send, Settings,
-  Share2, Shield, ShoppingCart, Shuffle, Sliders, Smartphone, Sparkles, Star, Table2, Tag,
-  Target, ToggleLeft, ToggleRight, Trash2, TrendingUp, Upload, User as UserIcon,
-  Users as UsersIcon, Wand2, X, Zap,
-} from 'lucide-react';
+  Warning, ArrowLeft, ArrowRight, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
+  Clipboard, Code, Cpu, CurrencyDollar, Download, PencilSimple, Eye, FileText, TreeStructure, Globe,
+  ClockCounterClockwise, Image as ImageIcon, Stack, SquaresFour, LinkSimple, SpinnerGap, Lock, SignOut, Megaphone, List,
+  Monitor, Package, PencilSimpleLine, Plus, ArrowClockwise, ArrowCounterClockwise, FloppyDisk, MagnifyingGlass, PaperPlaneRight, GearSix,
+  ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
+  Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
+  Users as UsersIcon, MagicWand, X, Lightning,
+} from '@phosphor-icons/react';
 
 // Admin Blog Management
 function ABlogs() {
@@ -58,7 +58,7 @@ function ABlogs() {
                 <td className="px-6 py-4"><select value={b.status} onChange={e => updateStatus(b.id, e.target.value as BlogPost['status'])} className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 cursor-pointer ${statusColor[b.status]}`}><option value="published">Published</option><option value="pending">Pending</option><option value="draft">Draft</option></select></td>
                 <td className="px-6 py-4 flex gap-1">
                   <Link to={`/blog/${b.slug}`} className="p-2 hover:bg-luxe-gold-soft rounded text-luxe-gold"><Eye size={16} /></Link>
-                  <button onClick={() => setDelId(b.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={16} /></button>
+                  <button onClick={() => setDelId(b.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash size={16} /></button>
                 </td>
               </tr>
             ))}</tbody>
@@ -91,22 +91,22 @@ function AdminLayout({ children }: { children: ReactNode }) {
   if (!ready || !user || !isAdmin) return null;
 
   const links = [
-    { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/admin', icon: SquaresFour, label: 'Dashboard' },
     { to: '/admin/products', icon: Package, label: 'Products' },
     { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
     { to: '/admin/users', icon: UsersIcon, label: 'Users' },
-    { to: '/admin/categories', icon: FolderTree, label: 'Categories' },
+    { to: '/admin/categories', icon: TreeStructure, label: 'Categories' },
     { to: '/admin/reviews', icon: Star, label: 'Reviews' },
     { to: '/admin/blogs', icon: FileText, label: 'Blog Posts' },
-    { to: '/admin/seo-engine', icon: Search, label: 'SEO Engine ⭐' },
+    { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Engine ⭐' },
     { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
-    { to: '/admin/marketing-traffic', icon: TrendingUp, label: 'Marketing & Traffic' },
-    { to: '/admin/variant-gen', icon: Layers, label: 'Variant Gen ⭐' },
-    { to: '/admin/ai', icon: Bot, label: 'AI Hub ⭐' },
-    { to: '/admin/ai-import', icon: Bot, label: 'AI Import ⭐' },
+    { to: '/admin/marketing-traffic', icon: TrendUp, label: 'Marketing & Traffic' },
+    { to: '/admin/variant-gen', icon: Stack, label: 'Variant Gen ⭐' },
+    { to: '/admin/ai', icon: Robot, label: 'AI Hub ⭐' },
+    { to: '/admin/ai-import', icon: Robot, label: 'AI Import ⭐' },
     { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
     { to: '/admin/ai-control', icon: Cpu, label: 'AI Control ⭐' },
-    { to: '/admin/settings', icon: Settings, label: 'Settings' },
+    { to: '/admin/settings', icon: GearSix, label: 'GearSix' },
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
@@ -115,7 +115,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
       <div className="p-3 border-b border-white/5 flex items-center gap-2">
         <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-[10px]"
           style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
-          <Shield size={14} className="text-white" />
+          <ShieldCheck size={14} className="text-white" />
         </div>
         <span className="font-bold text-sm text-white tracking-tight">Luxedge</span>
         {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1 hover:bg-white/10 rounded-md"><X size={14} className="text-slate-400" /></button>}
@@ -141,7 +141,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
         </Link>
         <button onClick={() => { void signOut().then(() => nav('/admin/login')); }}
           className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 px-2.5 py-1 rounded-md hover:bg-red-500/10 w-full transition-colors">
-          <LogOut size={10} />Logout
+          <SignOut size={10} />Logout
         </button>
       </div>
     </aside>
@@ -153,7 +153,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
       {mobSide && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setMobSide(false)} /><div className="absolute left-0 top-0 h-full w-64"><Sidebar mobile /></div></div>}
       <div className="flex-1 flex flex-col">
         <header className="h-14 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40">
-          <button onClick={() => setMobSide(true)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg"><Menu size={18} /></button>
+          <button onClick={() => setMobSide(true)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg"><List size={18} /></button>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 hidden sm:block">{user?.name || 'Admin'}</span>
@@ -175,7 +175,7 @@ function ADashboard() {
   const lowStock = products.filter(p => p.stock <= 10).length;
 
   const stats = [
-    { l: 'Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: DollarSign, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
+    { l: 'Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: CurrencyDollar, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
     { l: 'Orders', v: orders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
     { l: 'Customers', v: users.length, i: UsersIcon, c1: '#8b5cf6', c2: '#7c3aed', bg: 'from-violet-500 to-purple-600' },
     { l: 'Products', v: products.length, i: Package, c1: '#0088ff', c2: '#00d2ff', bg: 'from-blue-500 to-cyan-400' },
@@ -189,7 +189,7 @@ function ADashboard() {
       </div>
       <Link to="/admin/ai-import" className="px-3 py-2 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-[1.03]"
         style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
-        <Wand2 size={12} /> AI Import
+        <MagicWand size={12} /> AI Import
       </Link>
     </div>
 
@@ -203,7 +203,7 @@ function ADashboard() {
               <s.i size={14} className="text-white" />
             </div>
             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5" style={{ color: s.c1, backgroundColor: `${s.c1}15` }}>
-              <TrendingUp size={9} /> +12%
+              <TrendUp size={9} /> +12%
             </span>
           </div>
           <p className="text-lg font-bold text-gray-900 leading-none">{s.v}</p>
@@ -217,7 +217,7 @@ function ADashboard() {
     <div className="grid lg:grid-cols-3 gap-2.5">
       <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {[
-          { on: lowStock > 0, grad: 'from-sky-50 to-orange-50', b: 'border-sky-100', i: AlertTriangle, ic: 'bg-sky-100', tc: 'text-blue-600', n: lowStock, l: 'Low stock items', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/products' },
+          { on: lowStock > 0, grad: 'from-sky-50 to-orange-50', b: 'border-sky-100', i: Warning, ic: 'bg-sky-100', tc: 'text-blue-600', n: lowStock, l: 'Low stock items', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/products' },
           { on: pending > 0, grad: 'from-blue-50 to-indigo-50', b: 'border-blue-100', i: ShoppingCart, ic: 'bg-blue-100', tc: 'text-blue-600', n: pending, l: 'Pending orders', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/orders' },
           { on: pendingR > 0, grad: 'from-purple-50 to-pink-50', b: 'border-purple-100', i: Star, ic: 'bg-purple-100', tc: 'text-purple-600', n: pendingR, l: 'Reviews pending', t: 'text-purple-800', s: 'text-purple-700', to: '/admin/reviews' },
         ].map((a, idx) => a.on ? (
@@ -231,13 +231,13 @@ function ADashboard() {
 
       {/* Quick AI Tools */}
       <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift">
-        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Zap size={11} className="text-blue-500" />Quick AI Tools</h3>
+        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Lightning size={11} className="text-blue-500" />Quick AI Tools</h3>
         <div className="grid grid-cols-2 gap-1.5">
           {[
-            { to: '/admin/ai-import', icon: Wand2, label: 'Import Product', color: '#8b5cf6' },
+            { to: '/admin/ai-import', icon: MagicWand, label: 'Import Product', color: '#8b5cf6' },
             { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
-            { to: '/admin/variant-gen', icon: Layers, label: 'Create Variants', color: '#0088ff' },
-            { to: '/admin/seo-engine', icon: Search, label: 'SEO Optimize', color: '#10b981' },
+            { to: '/admin/variant-gen', icon: Stack, label: 'Create Variants', color: '#0088ff' },
+            { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Optimize', color: '#10b981' },
           ].map(t => (
             <Link key={t.to} to={t.to}
               className="flex flex-col items-start gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium hover:bg-gray-50 transition-all group">
@@ -319,7 +319,7 @@ function AProducts() {
         <td className="px-6 py-4"><span className={`px-2 py-1 rounded-full text-xs font-medium ${p.stock <= 10 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{p.stock}</span></td>
         <td className="px-6 py-4 text-sm">{p.variants.length > 0 ? <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium">{p.variants.length}</span> : <span className="text-gray-400 text-xs">—</span>}</td>
         <td className="px-6 py-4"><button onClick={() => toggle(p.id)}>{p.isActive ? <ToggleRight size={22} className="text-green-500" /> : <ToggleLeft size={22} className="text-gray-400" />}</button></td>
-        <td className="px-6 py-4 flex gap-1"><button onClick={() => nav(`/admin/products/edit/${p.id}`)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><Edit2 size={16} /></button><button onClick={() => setDelId(p.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={16} /></button></td>
+        <td className="px-6 py-4 flex gap-1"><button onClick={() => nav(`/admin/products/edit/${p.id}`)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><PencilSimple size={16} /></button><button onClick={() => setDelId(p.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash size={16} /></button></td>
       </tr>)}</tbody>
     </table></div></div>
     <Modal open={!!delId} onClose={() => setDelId(null)} title="Delete Product"><p className="text-gray-600 mb-6">Delete this product permanently?</p><div className="flex gap-3"><button onClick={del} className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-medium">Delete</button><button onClick={() => setDelId(null)} className="flex-1 py-2.5 border rounded-lg">Cancel</button></div></Modal>
@@ -390,7 +390,7 @@ function AProductEdit() {
     notify(`${newVars.length} variants created!`);
   };
 
-  // Save
+  // FloppyDisk
   const handleSave = () => {
     if (!p.name) { notify('Product name required'); return; }
     if (p.images.length === 0) { notify('At least 1 image required'); return; }
@@ -422,7 +422,7 @@ function AProductEdit() {
         </div>
         <div className="flex gap-3">
           <button onClick={() => nav('/admin/products')} className="px-4 py-2.5 border rounded-lg text-sm font-medium hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2"><Save size={16} />{isNew ? 'Create Product' : 'Save Changes'}</button>
+          <button onClick={handleSave} className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2"><FloppyDisk size={16} />{isNew ? 'Create Product' : 'FloppyDisk Changes'}</button>
         </div>
       </div>
 
@@ -466,15 +466,15 @@ function AProductEdit() {
                 <div><label className={L}>Sale Price (USD) *</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span><input type="number" step="0.01" value={p.price || ''} onChange={e => setP({ ...p, price: +e.target.value })} className={I + ' pl-7'} placeholder="0.00" /></div></div>
                 <div><label className={L}>Compare / Original Price</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">$</span><input type="number" step="0.01" value={p.originalPrice || ''} onChange={e => setP({ ...p, originalPrice: +e.target.value })} className={I + ' pl-7'} placeholder="0.00" /></div></div>
               </div>
-              {discount > 0 && <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl"><DollarSign size={20} className="text-green-600" /><div><p className="font-semibold text-green-700">Discount: {discount}% OFF</p><p className="text-sm text-green-600">Customer saves ${(p.originalPrice - p.price).toFixed(2)}</p></div></div>}
-              <div><label className={L}>Global Stock (if no variants) *</label><input type="number" value={p.stock || ''} onChange={e => setP({ ...p, stock: +e.target.value })} className={I} placeholder="0" />{p.stock > 0 && p.stock <= 10 && <p className="text-xs text-blue-600 mt-1 flex items-center gap-1"><AlertTriangle size={12} />Low stock warning will appear</p>}</div>
+              {discount > 0 && <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl"><CurrencyDollar size={20} className="text-green-600" /><div><p className="font-semibold text-green-700">Discount: {discount}% OFF</p><p className="text-sm text-green-600">Customer saves ${(p.originalPrice - p.price).toFixed(2)}</p></div></div>}
+              <div><label className={L}>Global Stock (if no variants) *</label><input type="number" value={p.stock || ''} onChange={e => setP({ ...p, stock: +e.target.value })} className={I} placeholder="0" />{p.stock > 0 && p.stock <= 10 && <p className="text-xs text-blue-600 mt-1 flex items-center gap-1"><Warning size={12} />Low stock warning will appear</p>}</div>
             </div>
           )}
 
           {/* IMAGES TAB */}
           {tab === 'images' && (
             <div className="space-y-5 max-w-3xl">
-              <p className="text-sm text-gray-500">Upload up to 5 images. First image is the main product image. Click to set as main.</p>
+              <p className="text-sm text-gray-500">UploadSimple up to 5 images. First image is the main product image. Click to set as main.</p>
               {p.images.length > 0 && <div className="grid grid-cols-5 gap-4">{p.images.map((img, i) => (
                 <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border-2 border-gray-200 hover:border-blue-400 transition-all cursor-pointer" onClick={() => setMainImg(i)}>
                   <img src={img} alt="" className="w-full h-full object-cover" />
@@ -485,7 +485,7 @@ function AProductEdit() {
               ))}</div>}
               {p.images.length < 5 && (
                 <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-all">
-                  <Upload size={28} className="text-gray-400 mb-2" />
+                  <UploadSimple size={28} className="text-gray-400 mb-2" />
                   <span className="text-sm font-medium text-gray-600">Click to upload from PC</span>
                   <span className="text-xs text-gray-400 mt-1">PNG, JPG, WebP · Max 5MB each · {5 - p.images.length} slot{5 - p.images.length !== 1 ? 's' : ''} remaining</span>
                   <input type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
@@ -500,13 +500,13 @@ function AProductEdit() {
             <div className="space-y-6">
               {/* Auto-generate */}
               <div className="p-5 bg-blue-50 border border-blue-200 rounded-xl">
-                <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2"><Zap size={16} />Auto-Generate Combinations</h3>
+                <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2"><Lightning size={16} />Auto-Generate Combinations</h3>
                 <p className="text-xs text-blue-600 mb-3">Enter comma-separated values. All combinations will be created automatically.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div><label className="text-xs font-medium text-blue-700 mb-1 block">Colors</label><input value={genColors} onChange={e => setGenColors(e.target.value)} className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white" placeholder="Black, White, Blue" /></div>
                   <div><label className="text-xs font-medium text-blue-700 mb-1 block">Sizes</label><input value={genSizes} onChange={e => setGenSizes(e.target.value)} className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white" placeholder="S, M, L, XL" /></div>
                 </div>
-                <button type="button" onClick={autoGenerate} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-medium flex items-center gap-2"><Zap size={14} />Generate Variants</button>
+                <button type="button" onClick={autoGenerate} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-medium flex items-center gap-2"><Lightning size={14} />Generate Variants</button>
               </div>
 
               {/* Manual add */}
@@ -534,7 +534,7 @@ function AProductEdit() {
                           <td className="px-4 py-2"><input type="number" step="0.01" value={v.salePrice||''} onChange={e => updateVariant(v.id, { salePrice: +e.target.value })} className="w-20 px-2 py-1.5 border rounded text-sm" /></td>
                           <td className="px-4 py-2"><input type="number" value={v.stock||''} onChange={e => updateVariant(v.id, { stock: +e.target.value })} className="w-16 px-2 py-1.5 border rounded text-sm" /></td>
                           <td className="px-4 py-2"><input value={v.sku} onChange={e => updateVariant(v.id, { sku: e.target.value })} className="w-24 px-2 py-1.5 border rounded text-sm" placeholder="SKU" /></td>
-                          <td className="px-4 py-2"><button type="button" onClick={() => removeVariant(v.id)} className="p-1.5 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button></td>
+                          <td className="px-4 py-2"><button type="button" onClick={() => removeVariant(v.id)} className="p-1.5 hover:bg-red-50 rounded text-red-500"><Trash size={14} /></button></td>
                         </tr>
                       ))}</tbody>
                     </table>
@@ -570,14 +570,14 @@ function AProductEdit() {
         </div>
       </div>
 
-      {/* Bottom Save Bar */}
+      {/* Bottom FloppyDisk Bar */}
       <div className="bg-white rounded-xl shadow-sm border p-4 flex items-center justify-between sticky bottom-0">
         <p className="text-sm text-gray-500">
           {p.images.length} image{p.images.length !== 1 ? 's' : ''} · {p.variants.length} variant{p.variants.length !== 1 ? 's' : ''} · {p.tags.length} tag{p.tags.length !== 1 ? 's' : ''}
         </p>
         <div className="flex gap-3">
           <button onClick={() => nav('/admin/products')} className="px-4 py-2 border rounded-lg text-sm font-medium hover:bg-gray-50">Discard</button>
-          <button onClick={handleSave} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2"><Save size={16} />{isNew ? 'Create Product' : 'Save Changes'}</button>
+          <button onClick={handleSave} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2"><FloppyDisk size={16} />{isNew ? 'Create Product' : 'FloppyDisk Changes'}</button>
         </div>
       </div>
     </div>
@@ -663,24 +663,24 @@ function ACategories() {
     <div className="bg-white rounded-xl shadow-sm">
       {categories.map(c => <div key={c.id}>
         <div className="flex items-center gap-3 p-4 border-b hover:bg-gray-50">
-          <button onClick={() => toggle(c.id)} className="p-1">{c.subs.length > 0 ? (expanded.has(c.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} className="text-gray-400" />) : <span className="w-4" />}</button>
-          <FolderTree size={18} className={c.isActive ? 'text-blue-500' : 'text-gray-400'} />
+          <button onClick={() => toggle(c.id)} className="p-1">{c.subs.length > 0 ? (expanded.has(c.id) ? <CaretDown size={16} /> : <CaretRight size={16} className="text-gray-400" />) : <span className="w-4" />}</button>
+          <TreeStructure size={18} className={c.isActive ? 'text-blue-500' : 'text-gray-400'} />
           <div className="flex-1"><p className={`font-medium ${c.isActive ? '' : 'text-gray-400'}`}>{c.name}</p>{c.subs.length > 0 && <p className="text-xs text-gray-500">{c.subs.length} sub</p>}</div>
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{c.isActive ? 'Active' : 'Inactive'}</span>
           <button onClick={() => setSubModal(c.id)} className="p-2 hover:bg-blue-50 rounded text-blue-600" title="Add Sub"><Plus size={16} /></button>
           <button onClick={() => toggleStatus(c.id)} className="p-2 hover:bg-gray-100 rounded">{c.isActive ? <ToggleRight size={20} className="text-green-500" /> : <ToggleLeft size={20} className="text-gray-400" />}</button>
-          <button onClick={() => openEdit(c)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><Edit2 size={16} /></button>
-          <button onClick={() => setDelId(c.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={16} /></button>
+          <button onClick={() => openEdit(c)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><PencilSimple size={16} /></button>
+          <button onClick={() => setDelId(c.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash size={16} /></button>
         </div>
         {expanded.has(c.id) && c.subs.map(s => <div key={s.id} className="flex items-center gap-3 p-3 pl-14 border-b bg-gray-50/50">
           <span className="text-gray-400">└</span><p className={`flex-1 text-sm ${s.isActive ? '' : 'text-gray-400'}`}>{s.name}</p>
           <button onClick={() => toggleSub(c.id, s.id)} className="p-1">{s.isActive ? <ToggleRight size={18} className="text-green-500" /> : <ToggleLeft size={18} className="text-gray-400" />}</button>
-          <button onClick={() => delSub(c.id, s.id)} className="p-1 text-red-500"><Trash2 size={14} /></button>
+          <button onClick={() => delSub(c.id, s.id)} className="p-1 text-red-500"><Trash size={14} /></button>
         </div>)}
       </div>)}
     </div>
     <Modal open={modal} onClose={() => setModal(false)} title={edit ? 'Edit Category' : 'Add Category'}>
-      <form onSubmit={save} className="space-y-4"><input required placeholder="Category Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 border rounded-lg" /><label className="flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Active</label><div className="flex gap-3"><button type="submit" className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium">{edit ? 'Save' : 'Add'}</button><button type="button" onClick={() => setModal(false)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>
+      <form onSubmit={save} className="space-y-4"><input required placeholder="Category Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 border rounded-lg" /><label className="flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Active</label><div className="flex gap-3"><button type="submit" className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium">{edit ? 'FloppyDisk' : 'Add'}</button><button type="button" onClick={() => setModal(false)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>
     </Modal>
     <Modal open={!!subModal} onClose={() => setSubModal(null)} title="Add Subcategory">
       <form onSubmit={addSub} className="space-y-4"><input required placeholder="Subcategory Name" value={subName} onChange={e => setSubName(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg" /><div className="flex gap-3"><button type="submit" className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium">Add</button><button type="button" onClick={() => setSubModal(null)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>
@@ -728,7 +728,7 @@ function Accordion({ id, title, icon, borderClass, children, open, toggle }: {
     <div className={`bg-white rounded-xl border ${borderClass || ''}`}>
       <button type="button" onClick={() => toggle(id)} className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 rounded-xl transition-colors">
         <span className="font-semibold flex items-center gap-2">{icon}{title}</span>
-        {open[id] ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+        {open[id] ? <CaretUp size={18} className="text-gray-400" /> : <CaretDown size={18} className="text-gray-400" />}
       </button>
       {open[id] && <div className="px-5 pb-6 border-t border-gray-100">{children}</div>}
     </div>
@@ -781,15 +781,15 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <h1 className="text-2xl font-bold">Settings</h1>
+      <h1 className="text-2xl font-bold">GearSix</h1>
 
       {/* ── AI Providers ── */}
-      <Accordion id="ai" title="AI Providers" icon={<Bot size={18} className="text-purple-600" />} borderClass="border-purple-300" open={open} toggle={toggle}>
+      <Accordion id="ai" title="AI Providers" icon={<Robot size={18} className="text-purple-600" />} borderClass="border-purple-300" open={open} toggle={toggle}>
         <div className="pt-5 space-y-4">
           <p className="text-sm text-gray-500">For full AI provider management including API keys, model selection, credit tracking, and connection testing, visit the dedicated AI Hub.</p>
           <button type="button" onClick={() => navigate('/admin/ai')}
             className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <Bot size={16} /> Open AI Hub →
+            <Robot size={16} /> Open AI Hub →
           </button>
         </div>
       </Accordion>
@@ -801,7 +801,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
             <p className="font-semibold mb-1">🔒 Luxedge V2: keys live on the server, never in the browser</p>
             <p>AI provider keys and scraping tokens are read from environment variables by the /api serverless functions. They are never stored in localStorage, never shipped in the bundle, and never logged.</p>
           </div>
-          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → Settings → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.</p>
+          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → GearSix → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.</p>
           {envStatus ? (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Server status</p>
@@ -822,7 +822,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
       </Accordion>
 
       {/* ── Store Information ── */}
-      <Accordion id="store" title="Store Information" icon={<Settings size={18} className="text-blue-500" />} open={open} toggle={toggle}>
+      <Accordion id="store" title="Store Information" icon={<GearSix size={18} className="text-blue-500" />} open={open} toggle={toggle}>
         <div className="pt-5">
           <form onSubmit={e => { e.preventDefault(); notify('Store settings saved!'); }} className="grid sm:grid-cols-2 gap-4">
             <div><label className={L}>Store Name</label><input defaultValue="Luxedge" className={I} /></div>
@@ -831,7 +831,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
             <div><label className={L}>Address</label><input defaultValue="Irving, TX" className={I} /></div>
             <div className="sm:col-span-2">
               <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
-                <Save size={16} />Save Store Settings
+                <FloppyDisk size={16} />FloppyDisk Store GearSix
               </button>
             </div>
           </form>
@@ -844,7 +844,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
           <form onSubmit={handleProfile} className="space-y-4">
             <div><label className={L}>Name</label><input value={profName} onChange={e => setProfName(e.target.value)} className={I} placeholder="Admin name" /></div>
             <div><label className={L}>Email</label><input type="email" value={profEmail} onChange={e => setProfEmail(e.target.value)} className={I} placeholder="admin email" /></div>
-            <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"><Save size={16} />Save Profile</button>
+            <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"><FloppyDisk size={16} />FloppyDisk Profile</button>
           </form>
         </div>
       </Accordion>
@@ -853,7 +853,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
       <Accordion id="password" title="Change Password" icon={<Lock size={18} className="text-blue-500" />} open={open} toggle={toggle}>
         <div className="pt-5">
           {passOk && <div className="flex items-center gap-2 p-3 mb-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm"><CheckCircle size={16} /> Password updated! Use your new password next login.</div>}
-          {passError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"><AlertTriangle size={16} /> {passError}</div>}
+          {passError && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm"><Warning size={16} /> {passError}</div>}
           <form onSubmit={handlePassword} className="space-y-4">
             <div><label className={L}>Current Password *</label><input type="password" value={curPass} onChange={e => setCurPass(e.target.value)} className={I} placeholder="Enter current password" required /></div>
             <div><label className={L}>New Password *</label><input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className={I} placeholder="Minimum 6 characters" required minLength={6} /></div>
@@ -1004,7 +1004,7 @@ function parseJ<T>(raw: string, fb: T): T {
 
   async function generateAll() {
     if (!selectedProduct) { alert('Please select a product first.'); return; }
-    if (!activeProviders.length) { alert('Add an AI provider API key in Settings first.'); return; }
+    if (!activeProviders.length) { alert('Add an AI provider API key in GearSix first.'); return; }
     setGenerating(true); setGenSection('all');
     try {
       const raw = await callAI(buildPrompt('all'));
@@ -1049,7 +1049,7 @@ function parseJ<T>(raw: string, fb: T): T {
 
   const RegenBtn = ({ section, loading }: { section: MktTab; loading: boolean }) => (
     <button onClick={() => regenSection(section)} disabled={generating || !selectedProduct} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg font-medium disabled:opacity-50 transition-colors">
-      {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+      {loading ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
       {loading ? 'Generating…' : 'Regenerate'}
     </button>
   );
@@ -1070,7 +1070,7 @@ function parseJ<T>(raw: string, fb: T): T {
           <p className="text-gray-500 text-sm mt-1">AI-powered ads, social posts, email &amp; video scripts</p>
         </div>
         <button onClick={generateAll} disabled={generating || !selectedProductId} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:shadow-lg transition-all">
-          {generating && genSection === 'all' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+          {generating && genSection === 'all' ? <SpinnerGap size={16} className="animate-spin" /> : <Sparkle size={16} />}
           {generating && genSection === 'all' ? 'Generating All…' : '✨ Generate All'}
         </button>
       </div>
@@ -1118,9 +1118,9 @@ function parseJ<T>(raw: string, fb: T): T {
       {tab === 'google' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Search size={18} className="text-blue-600" /> Google Search Ads (RSA)</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><MagnifyingGlass size={18} className="text-blue-600" /> Google MagnifyingGlass Ads (RSA)</h2>
             <div className="flex gap-2">
-              <button onClick={() => { saveVault('google', JSON.stringify(googleAd, null, 2)); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <button onClick={() => { saveVault('google', JSON.stringify(googleAd, null, 2)); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><FloppyDisk size={12} /> FloppyDisk</button>
               <RegenBtn section="google" loading={generating && genSection === 'google'} />
             </div>
           </div>
@@ -1170,7 +1170,7 @@ function parseJ<T>(raw: string, fb: T): T {
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Final URL</h3>
               <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                <Link2 size={14} className="text-gray-400 flex-shrink-0" />
+                <LinkSimple size={14} className="text-gray-400 flex-shrink-0" />
                 <input value={googleAd.finalUrl} onChange={e => setGoogleAd({...googleAd, finalUrl: e.target.value})} placeholder="https://luxedge.com/products/..." className="flex-1 text-sm bg-transparent focus:outline-none" />
                 <CopyBtn text={googleAd.finalUrl} k="gfurl" />
               </div>
@@ -1228,7 +1228,7 @@ function parseJ<T>(raw: string, fb: T): T {
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-gray-900 flex items-center gap-2"><Target size={18} className="text-blue-700" /> Meta Ads (Facebook &amp; Instagram)</h2>
             <div className="flex gap-2">
-              <button onClick={() => saveVault('meta', JSON.stringify(metaAd, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <button onClick={() => saveVault('meta', JSON.stringify(metaAd, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><FloppyDisk size={12} /> FloppyDisk</button>
               <RegenBtn section="meta" loading={generating && genSection === 'meta'} />
             </div>
           </div>
@@ -1291,7 +1291,7 @@ function parseJ<T>(raw: string, fb: T): T {
 
             {/* Meta Ad Preview */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm h-fit">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Share2 size={14} /> Facebook Ad Preview</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><ShareNetwork size={14} /> Facebook Ad Preview</h3>
               <div className="border border-gray-200 rounded-xl overflow-hidden max-w-sm">
                 <div className="p-3 flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">L</div>
@@ -1315,9 +1315,9 @@ function parseJ<T>(raw: string, fb: T): T {
       {tab === 'social' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Share2 size={18} className="text-pink-600" /> Social Media Posts</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><ShareNetwork size={18} className="text-pink-600" /> Social Media Posts</h2>
             <div className="flex gap-2">
-              <button onClick={() => saveVault('social', JSON.stringify(social, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <button onClick={() => saveVault('social', JSON.stringify(social, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><FloppyDisk size={12} /> FloppyDisk</button>
               <RegenBtn section="social" loading={generating && genSection === 'social'} />
             </div>
           </div>
@@ -1416,9 +1416,9 @@ function parseJ<T>(raw: string, fb: T): T {
       {tab === 'email' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-green-600" /> Email Marketing</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><PaperPlaneRight size={18} className="text-green-600" /> Email Marketing</h2>
             <div className="flex gap-2">
-              <button onClick={() => saveVault('email', JSON.stringify(email, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <button onClick={() => saveVault('email', JSON.stringify(email, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><FloppyDisk size={12} /> FloppyDisk</button>
               <RegenBtn section="email" loading={generating && genSection === 'email'} />
             </div>
           </div>
@@ -1516,9 +1516,9 @@ function parseJ<T>(raw: string, fb: T): T {
       {tab === 'video' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Zap size={18} className="text-red-600" /> Video Scripts &amp; YouTube</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Lightning size={18} className="text-red-600" /> Video Scripts &amp; YouTube</h2>
             <div className="flex gap-2">
-              <button onClick={() => saveVault('video', JSON.stringify(video, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Save size={12} /> Save</button>
+              <button onClick={() => saveVault('video', JSON.stringify(video, null, 2))} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><FloppyDisk size={12} /> FloppyDisk</button>
               <RegenBtn section="video" loading={generating && genSection === 'video'} />
             </div>
           </div>
@@ -1584,10 +1584,10 @@ function parseJ<T>(raw: string, fb: T): T {
       {tab === 'vault' && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Wand2 size={18} className="text-gray-600" /> Copy Vault ({vault.length})</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><MagicWand size={18} className="text-gray-600" /> Copy Vault ({vault.length})</h2>
             <div className="flex gap-2">
-              <button onClick={() => { const blob = new Blob([JSON.stringify(vault, null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'luxedge-marketing-vault.json'; a.click(); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><Upload size={12} /> Export JSON</button>
-              {vault.length > 0 && <button onClick={() => { if (confirm('Clear all saved copies?')) { setVault([]); localStorage.removeItem('luxedge_mkt_vault'); } }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium"><Trash2 size={12} /> Clear All</button>}
+              <button onClick={() => { const blob = new Blob([JSON.stringify(vault, null, 2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'luxedge-marketing-vault.json'; a.click(); }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"><UploadSimple size={12} /> Export JSON</button>
+              {vault.length > 0 && <button onClick={() => { if (confirm('Clear all saved copies?')) { setVault([]); localStorage.removeItem('luxedge_mkt_vault'); } }} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium"><Trash size={12} /> Clear All</button>}
             </div>
           </div>
 
@@ -1595,7 +1595,7 @@ function parseJ<T>(raw: string, fb: T): T {
             <div className="text-center py-16 bg-white border border-dashed border-gray-200 rounded-xl">
               <Megaphone size={40} className="text-gray-200 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">No saved copies yet</p>
-              <p className="text-gray-400 text-sm">Click "Save" on any tab to archive marketing copy here</p>
+              <p className="text-gray-400 text-sm">Click "FloppyDisk" on any tab to archive marketing copy here</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1609,7 +1609,7 @@ function parseJ<T>(raw: string, fb: T): T {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</span>
                       <CopyBtn text={item.content} k={`v${item.id}`} />
-                      <button onClick={() => { const updated = vault.filter(v => v.id !== item.id); setVault(updated); localStorage.setItem('luxedge_mkt_vault', JSON.stringify(updated)); }} className="p-1 text-gray-300 hover:text-red-400 transition-colors"><Trash2 size={12} /></button>
+                      <button onClick={() => { const updated = vault.filter(v => v.id !== item.id); setVault(updated); localStorage.setItem('luxedge_mkt_vault', JSON.stringify(updated)); }} className="p-1 text-gray-300 hover:text-red-400 transition-colors"><Trash size={12} /></button>
                     </div>
                   </div>
                   <pre className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 overflow-auto max-h-32 whitespace-pre-wrap">{item.content.slice(0, 300)}{item.content.length > 300 ? '…' : ''}</pre>
@@ -2044,7 +2044,7 @@ Example: {"${fieldHint}": "your content here"}`;
   const RegenBtn = ({ section, field }: { section: string; field: string }) => (
     <button onClick={() => regenSection(section, field)} disabled={aiLoading}
       className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 px-2 py-1 border border-purple-200 rounded-lg hover:bg-purple-50 disabled:opacity-40 transition-colors">
-      {aiLoading && aiSection === section ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+      {aiLoading && aiSection === section ? <SpinnerGap size={11} className="animate-spin" /> : <ArrowClockwise size={11} />}
       Regen
     </button>
   );
@@ -2081,14 +2081,14 @@ Example: {"${fieldHint}": "your content here"}`;
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Search size={24} className="text-purple-600" /> Enterprise SEO & Content Engine
+            <MagnifyingGlass size={24} className="text-purple-600" /> Enterprise SEO & Content Engine
           </h1>
           <p className="text-gray-500 text-sm mt-1">AI-powered SEO · Structured Data · Social SEO · Content · Live Analysis</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={saveToProduct} disabled={!selId}
             className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <Save size={15} /> Save to Product
+            <FloppyDisk size={15} /> FloppyDisk to Product
           </button>
           <button onClick={() => navigate('/admin/products')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 px-3 py-2 border border-gray-200 rounded-xl transition-colors">
             <ArrowLeft size={15} /> Back
@@ -2115,7 +2115,7 @@ Example: {"${fieldHint}": "your content here"}`;
         </div>
         <button onClick={generateAll} disabled={aiLoading || !selId}
           className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50 transition-colors whitespace-nowrap">
-          {aiLoading && aiSection === 'all' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+          {aiLoading && aiSection === 'all' ? <SpinnerGap size={16} className="animate-spin" /> : <MagicWand size={16} />}
           {aiLoading && aiSection === 'all' ? aiStatus || 'Generating…' : 'Generate All with AI'}
         </button>
         {selProduct && (
@@ -2218,7 +2218,7 @@ Example: {"${fieldHint}": "your content here"}`;
             <h2 className="font-bold text-gray-900 flex items-center gap-2"><Code size={18} className="text-purple-600" /> JSON-LD Structured Data</h2>
             <button onClick={generateSchemas} disabled={!selId}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
-              <RefreshCw size={14} /> Generate All Schemas
+              <ArrowClockwise size={14} /> Generate All Schemas
             </button>
           </div>
           <div className="grid grid-cols-1 gap-4">
@@ -2251,7 +2251,7 @@ Example: {"${fieldHint}": "your content here"}`;
       {/* ── TAB: Social SEO ──────────────────────────────────────────────── */}
       {tab === 'social' && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2"><Share2 size={18} className="text-purple-600" /> Social SEO</h2>
+          <h2 className="font-bold text-gray-900 flex items-center gap-2"><ShareNetwork size={18} className="text-purple-600" /> Social SEO</h2>
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Open Graph (Facebook / LinkedIn)</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2294,7 +2294,7 @@ Example: {"${fieldHint}": "your content here"}`;
       {tab === 'content' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Sparkles size={18} className="text-purple-600" /> AI Content</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Sparkle size={18} className="text-purple-600" /> AI Content</h2>
             {aiLoading && aiSection !== 'all' && <p className="text-xs text-purple-600 animate-pulse">{aiStatus}</p>}
           </div>
           <div className="grid grid-cols-1 gap-4">
@@ -2430,7 +2430,7 @@ Example: {"${fieldHint}": "your content here"}`;
       {/* ── TAB: SEO Analysis ────────────────────────────────────────────── */}
       {tab === 'analysis' && (
         <div className="space-y-4">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2"><TrendingUp size={18} className="text-purple-600" /> Live SEO Analysis</h2>
+          <h2 className="font-bold text-gray-900 flex items-center gap-2"><TrendUp size={18} className="text-purple-600" /> Live SEO Analysis</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <ScoreCircle label="SEO Score" value={score.overall} />
             <ScoreCircle label="Readability" value={score.readability} />
@@ -2474,7 +2474,7 @@ Example: {"${fieldHint}": "your content here"}`;
           {/* Internal Link Suggestions */}
           {selProduct && (
             <div className="bg-white rounded-2xl border border-gray-200 p-5">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Link2 size={15} /> Internal Link Suggestions</h3>
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><LinkSimple size={15} /> Internal Link Suggestions</h3>
               <div className="space-y-2">
                 {products.filter(p => p.id !== selId && p.category === selProduct.category).slice(0,4).map(p => (
                   <div key={p.id} className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-gray-50">
@@ -2507,7 +2507,7 @@ Example: {"${fieldHint}": "your content here"}`;
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Monitor size={16} className="text-gray-400" />
-                <span className="text-sm font-medium text-gray-500">Google Search — Desktop</span>
+                <span className="text-sm font-medium text-gray-500">Google MagnifyingGlass — Desktop</span>
               </div>
               <div className="border border-gray-200 rounded-xl p-5 max-w-2xl bg-white font-sans">
                 <p className="text-xs text-gray-500 mb-1">https://luxedge.us › products › {seo.slug || 'product'}</p>
@@ -2522,8 +2522,8 @@ Example: {"${fieldHint}": "your content here"}`;
           {previewMode === 'mobile' && (
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Smartphone size={16} className="text-gray-400" />
-                <span className="text-sm font-medium text-gray-500">Google Search — Mobile</span>
+                <DeviceMobile size={16} className="text-gray-400" />
+                <span className="text-sm font-medium text-gray-500">Google MagnifyingGlass — Mobile</span>
               </div>
               <div className="max-w-sm mx-auto">
                 <div className="border border-gray-200 rounded-2xl p-4 bg-white font-sans shadow-sm">
@@ -2539,7 +2539,7 @@ Example: {"${fieldHint}": "your content here"}`;
           {previewMode === 'facebook' && (
             <div className="bg-white rounded-2xl border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Share2 size={16} className="text-gray-400" />
+                <ShareNetwork size={16} className="text-gray-400" />
                 <span className="text-sm font-medium text-gray-500">Facebook / Open Graph Preview</span>
               </div>
               <div className="max-w-lg mx-auto border border-gray-300 rounded-lg overflow-hidden bg-white shadow-sm">
@@ -2854,7 +2854,7 @@ Rules:
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Layers size={24} className="text-purple-600" /> Enterprise Variant Generator
+            <Stack size={24} className="text-purple-600" /> Enterprise Variant Generator
           </h1>
           <p className="text-gray-500 text-sm mt-1">Auto-detect attributes · AI suggestions · Complete variant matrix</p>
         </div>
@@ -2875,7 +2875,7 @@ Rules:
                 'text-gray-400 cursor-default'
               }`}
             >{s.label}</button>
-            {i < VG_STEPS.length - 1 && <ChevronRight size={16} className="text-gray-400 mx-1" />}
+            {i < VG_STEPS.length - 1 && <CaretRight size={16} className="text-gray-400 mx-1" />}
           </div>
         ))}
       </div>
@@ -2943,7 +2943,7 @@ Rules:
               }}
               className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
             >
-              Next: Configure Attributes <ChevronRight size={16} />
+              Next: Configure Attributes <CaretRight size={16} />
             </button>
           </div>
         </div>
@@ -2961,7 +2961,7 @@ Rules:
             </div>
             <button onClick={aiSuggest} disabled={aiLoading}
               className="flex items-center gap-2 bg-white text-purple-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-purple-50 disabled:opacity-60 transition-colors whitespace-nowrap flex-shrink-0">
-              {aiLoading ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+              {aiLoading ? <SpinnerGap size={16} className="animate-spin" /> : <MagicWand size={16} />}
               {aiLoading ? 'Analyzing…' : 'AI Suggest'}
             </button>
           </div>
@@ -2988,7 +2988,7 @@ Rules:
                     )}
                     <button onClick={() => removeAttr(attr.id)}
                       className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                      <Trash2 size={14} />
+                      <Trash size={14} />
                     </button>
                   </div>
                 </div>
@@ -3053,7 +3053,7 @@ Rules:
           {/* Matrix preview count */}
           {totalCombos > 0 && (
             <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 flex items-center gap-3">
-              <AlertTriangle size={18} className="text-blue-500 flex-shrink-0" />
+              <Warning size={18} className="text-blue-500 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-blue-800">
                   Will generate <strong>{totalCombos}</strong> variant{totalCombos !== 1 ? 's' : ''}
@@ -3097,7 +3097,7 @@ Rules:
 
           {dupCount > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 text-sm text-red-700">
-              <AlertTriangle size={16} className="flex-shrink-0" />
+              <Warning size={16} className="flex-shrink-0" />
               <span>{dupCount} duplicate combination{dupCount > 1 ? 's' : ''} detected — remove before saving</span>
             </div>
           )}
@@ -3105,7 +3105,7 @@ Rules:
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
             <div className="p-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Table2 size={18} className="text-purple-600" /> Variant Matrix ({variants.length})
+                <Table size={18} className="text-purple-600" /> Variant Matrix ({variants.length})
               </h3>
               <div className="flex gap-2">
                 <button onClick={() => setStep('attributes')}
@@ -3114,7 +3114,7 @@ Rules:
                 </button>
                 <button onClick={removeDuplicates} disabled={!dupCount}
                   className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1.5 px-3 py-1.5 border border-red-200 rounded-lg disabled:opacity-40 transition-colors">
-                  <Trash2 size={14} /> Remove Dupes
+                  <Trash size={14} /> Remove Dupes
                 </button>
               </div>
             </div>
@@ -3192,10 +3192,10 @@ Rules:
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => setEditId(isEd ? null : v.id)}
                               className={`p-1.5 rounded-lg transition-colors ${isEd ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}>
-                              {isEd ? <Save size={14} /> : <Edit2 size={14} />}
+                              {isEd ? <FloppyDisk size={14} /> : <PencilSimple size={14} />}
                             </button>
                             <button onClick={() => removeV(v.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                              <Trash2 size={14} />
+                              <Trash size={14} />
                             </button>
                           </div>
                         </td>
@@ -3253,7 +3253,7 @@ Rules:
                 </div>
                 <button onClick={() => setEditId(null)}
                   className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors">
-                  <Save size={14} /> Done Editing
+                  <FloppyDisk size={14} /> Done Editing
                 </button>
               </div>
             )}
@@ -3268,12 +3268,12 @@ Rules:
               {selId ? (
                 <button onClick={saveToProduct} disabled={!!dupCount || !variants.length}
                   className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-                  <Save size={16} /> Save All to Product
+                  <FloppyDisk size={16} /> FloppyDisk All to Product
                 </button>
               ) : (
                 <button onClick={() => { notify('Select a product to save variants', 'error'); setStep('product'); }}
                   className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-                  <AlertTriangle size={16} /> Select Product First
+                  <Warning size={16} /> Select Product First
                 </button>
               )}
             </div>
@@ -3375,7 +3375,7 @@ const providerIcons: Record<string, string> = {
     <div className="space-y-5 max-w-4xl">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-200">
-          <Bot size={26} className="text-white" />
+          <Robot size={26} className="text-white" />
         </div>
         <div>
           <h1 className="text-2xl font-bold">AI Hub</h1>
@@ -3383,7 +3383,7 @@ const providerIcons: Record<string, string> = {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => navigate('/admin/ai-import')} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <Wand2 size={16} /> AI Import
+            <MagicWand size={16} /> AI Import
           </button>
           <button onClick={() => navigate('/admin/marketing')} className="px-4 py-2 border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
             <Megaphone size={16} /> Marketing
@@ -3400,7 +3400,7 @@ const providerIcons: Record<string, string> = {
             </h2>
             <button onClick={checkOpenRouterCredits} disabled={checkingCredits}
               className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-xs font-medium text-purple-700 hover:bg-purple-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
-              {checkingCredits ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              {checkingCredits ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
               {checkingCredits ? 'Checking...' : 'Check Credits'}
             </button>
           </div>
@@ -3431,7 +3431,7 @@ const providerIcons: Record<string, string> = {
       {/* AI Providers */}
       <div className="bg-white rounded-2xl border border-purple-200 p-5">
         <h2 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
-          <Bot size={16} className="text-purple-500" /> AI Provider Configuration
+          <Robot size={16} className="text-purple-500" /> AI Provider Configuration
         </h2>
         <p className="text-sm text-gray-500 mb-5">Add API keys and select models for each provider. The default provider is used for all AI operations.</p>
         <div className="space-y-3">
@@ -3450,7 +3450,7 @@ const providerIcons: Record<string, string> = {
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => testProvider(provider)} disabled={testing === provider.id}
                     className="px-3 py-1.5 text-xs border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
-                    {testing === provider.id ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                    {testing === provider.id ? <SpinnerGap size={12} className="animate-spin" /> : <Lightning size={12} />}
                     Test
                   </button>
                   {!provider.isDefault && (
@@ -3468,7 +3468,7 @@ const providerIcons: Record<string, string> = {
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Server Key</label>
                   <div className={"flex items-center gap-2 text-xs px-3 py-2.5 rounded-xl border " + (serverStatus?.[provider.id]?.configured ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700')}>
-                    {serverStatus?.[provider.id]?.configured ? <CheckCircle size={14} className="shrink-0" /> : <AlertTriangle size={14} className="shrink-0" />}
+                    {serverStatus?.[provider.id]?.configured ? <CheckCircle size={14} className="shrink-0" /> : <Warning size={14} className="shrink-0" />}
                     {serverStatus?.[provider.id]?.configured
                       ? 'Configured on server — key is safe (env var only)'
                       : 'Not configured — add the provider key env var on the server (see .env.example)'}
@@ -3509,7 +3509,7 @@ const providerIcons: Record<string, string> = {
         )}
         <button type="button" onClick={() => save(aiProviders)}
           className="mt-4 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors w-full sm:w-auto justify-center">
-          <Save size={16} /> Save All AI Providers
+          <FloppyDisk size={16} /> FloppyDisk All AI Providers
         </button>
       </div>
 
@@ -3517,7 +3517,7 @@ const providerIcons: Record<string, string> = {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-2">
-            <Wand2 size={18} className="text-blue-600" />
+            <MagicWand size={18} className="text-blue-600" />
             <h3 className="font-bold text-sm">AI Product Import</h3>
           </div>
           <p className="text-xs text-gray-600 mb-3">Paste any product URL from AliExpress, Amazon, eBay, Etsy, Walmart, Temu — AI extracts all details.</p>
@@ -3537,7 +3537,7 @@ const providerIcons: Record<string, string> = {
         </div>
         <div className="bg-gradient-to-br from-sky-50 to-orange-50 border border-sky-200 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-2">
-            <Search size={18} className="text-blue-600" />
+            <MagnifyingGlass size={18} className="text-blue-600" />
             <h3 className="font-bold text-sm">SEO Engine</h3>
           </div>
           <p className="text-xs text-gray-600 mb-3">AI-powered SEO optimization: meta tags, structured data, keyword analysis, content scoring.</p>
@@ -3547,7 +3547,7 @@ const providerIcons: Record<string, string> = {
         </div>
         <div className="bg-gradient-to-br from-pink-50 to-rose-50 border border-pink-200 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-2">
-            <Layers size={18} className="text-pink-600" />
+            <Stack size={18} className="text-pink-600" />
             <h3 className="font-bold text-sm">Variant Generator</h3>
           </div>
           <p className="text-xs text-gray-600 mb-3">AI generates product variants (colors, sizes, materials) with SKUs and pricing.</p>
@@ -3560,7 +3560,7 @@ const providerIcons: Record<string, string> = {
       {/* Scraping Configuration */}
       <div className="bg-white rounded-2xl border border-green-200 p-5">
         <h2 className="font-bold text-sm text-gray-700 mb-4 flex items-center gap-2">
-          <Link2 size={16} className="text-green-500" /> Web Scraping Configuration
+          <LinkSimple size={16} className="text-green-500" /> Web Scraping Configuration
         </h2>
         <div className="rounded-xl border border-dashed border-green-300 bg-green-50 p-4 space-y-3">
           <div>
@@ -3643,7 +3643,7 @@ function AAIImport() {
     return loadAIProviders();
   });
 
-  // History
+  // ClockCounterClockwise
   const [history, setHistory] = useState<ImportHistoryEntry[]>(() => {
     try { return JSON.parse(localStorage.getItem('luxedge_import_history')||'[]'); }
     catch { return []; }
@@ -3740,7 +3740,7 @@ function AAIImport() {
       setSelectedImgs(allImages.slice(0, 6));
       setHeroImg(allImages[0] || '');
 
-      // Save history
+      // FloppyDisk history
       const activeProvider = aiProviders.find(p => p.isDefault && p.enabled) || aiProviders.find(p => p.enabled);
       const entry: ImportHistoryEntry = {
         id: `imp-${Date.now()}`, source: source === 'url' ? urlInput : source, sourceType: source,
@@ -3800,24 +3800,24 @@ function AAIImport() {
   // ── SOURCE SELECTION ──
   if (step === 'source') {
     const sources = [
-      { id:'url', icon:<Link2 size={24}/>, label:'URL Import', desc:'Paste any product URL', color:'bg-blue-50 border-blue-200 hover:border-blue-400', iconColor:'text-blue-600' },
+      { id:'url', icon:<LinkSimple size={24}/>, label:'URL Import', desc:'Paste any product URL', color:'bg-blue-50 border-blue-200 hover:border-blue-400', iconColor:'text-blue-600' },
       { id:'html', icon:<FileText size={24}/>, label:'HTML Import', desc:'Paste copied HTML', color:'bg-orange-50 border-orange-200 hover:border-orange-400', iconColor:'text-orange-600' },
-      { id:'text', icon:<PenLine size={24}/>, label:'Text Import', desc:'Paste product description', color:'bg-green-50 border-green-200 hover:border-green-400', iconColor:'text-green-600' },
+      { id:'text', icon:<PencilSimpleLine size={24}/>, label:'Text Import', desc:'Paste product description', color:'bg-green-50 border-green-200 hover:border-green-400', iconColor:'text-green-600' },
       { id:'clipboard', icon:<Clipboard size={24}/>, label:'Clipboard', desc:'Ctrl+V anywhere to paste', color:'bg-purple-50 border-purple-200 hover:border-purple-400', iconColor:'text-purple-600' },
-      { id:'image', icon:<ImageIcon size={24}/>, label:'Image Upload', desc:'JPG, PNG, WEBP, GIF', color:'bg-pink-50 border-pink-200 hover:border-pink-400', iconColor:'text-pink-600' },
+      { id:'image', icon:<ImageIcon size={24}/>, label:'Image UploadSimple', desc:'JPG, PNG, WEBP, GIF', color:'bg-pink-50 border-pink-200 hover:border-pink-400', iconColor:'text-pink-600' },
     ];
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center">
-            <Bot size={22} className="text-white" />
+            <Robot size={22} className="text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-bold">AI Product Import Engine</h1>
             <p className="text-sm text-gray-500">Import any product in under 60 seconds using AI</p>
           </div>
           <button onClick={() => setStep('history')} className="ml-auto flex items-center gap-2 px-4 py-2 border rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            <History size={16} /> History ({history.length})
+            <ClockCounterClockwise size={16} /> ClockCounterClockwise ({history.length})
           </button>
         </div>
         <div>
@@ -3850,11 +3850,11 @@ function AAIImport() {
         <div className="flex items-center gap-3">
           <button onClick={() => setStep('source')} className="p-2 hover:bg-gray-100 rounded-xl transition-colors"><ArrowLeft size={20}/></button>
           <h1 className="text-xl font-bold">
-            {source==='url'?'URL Import':source==='html'?'HTML Import':source==='clipboard'?'Clipboard Import':source==='image'?'Image Upload':'Text Import'}
+            {source==='url'?'URL Import':source==='html'?'HTML Import':source==='clipboard'?'Clipboard Import':source==='image'?'Image UploadSimple':'Text Import'}
           </h1>
         </div>
 
-        {error && <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><div><p className="font-semibold">Import Failed</p><p>{error}</p></div></div>}
+        {error && <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"><Warning size={18} className="mt-0.5 shrink-0"/><div><p className="font-semibold">Import Failed</p><p>{error}</p></div></div>}
 
         {source === 'url' && (
           <div className="space-y-4">
@@ -3872,7 +3872,7 @@ function AAIImport() {
                 </div>
                 <button onClick={handleImport} disabled={!urlInput.trim()}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap transition-colors">
-                  <Wand2 size={16}/> Import
+                  <MagicWand size={16}/> Import
                 </button>
               </div>
             </div>
@@ -3899,7 +3899,7 @@ function AAIImport() {
               className={inputCls + ' min-h-[200px] font-mono text-xs'} placeholder="Paste the HTML of the product page here..." />
             <button onClick={handleImport} disabled={!htmlInput.trim()}
               className="mt-3 px-5 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-              <Wand2 size={16}/> Analyze HTML
+              <MagicWand size={16}/> Analyze HTML
             </button>
           </div>
         )}
@@ -3915,7 +3915,7 @@ function AAIImport() {
             {source==='clipboard' && textInput && <p className="text-xs text-green-600 mt-1">✓ Content pasted ({textInput.length} chars)</p>}
             <button onClick={handleImport} disabled={!textInput.trim()}
               className="mt-3 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-              <Wand2 size={16}/> {source==='clipboard'?'Import from Clipboard':'Analyze Text'}
+              <MagicWand size={16}/> {source==='clipboard'?'Import from Clipboard':'Analyze Text'}
             </button>
           </div>
         )}
@@ -3925,7 +3925,7 @@ function AAIImport() {
             <div onDrop={handleImageDrop} onDragOver={e=>{e.preventDefault();setIsDragging(true)}} onDragLeave={()=>setIsDragging(false)}
               onClick={()=>fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${isDragging?'border-blue-400 bg-blue-50':'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}>
-              <Upload size={32} className="mx-auto text-gray-400 mb-3"/>
+              <UploadSimple size={32} className="mx-auto text-gray-400 mb-3"/>
               <p className="font-semibold text-gray-700">Drop image here or click to upload</p>
               <p className="text-xs text-gray-500 mt-1">PNG, JPG, JPEG, WEBP supported</p>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect}/>
@@ -3937,7 +3937,7 @@ function AAIImport() {
             )}
             <button onClick={handleImport} disabled={!textInput.includes('[Image')}
               className="mt-3 px-5 py-2.5 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-              <Bot size={16}/> Analyze Image with AI
+              <Robot size={16}/> Analyze Image with AI
             </button>
           </div>
         )}
@@ -3948,7 +3948,7 @@ function AAIImport() {
             const active = aiProviders.find(p=>p.isDefault&&p.enabled) || aiProviders.find(p=>p.enabled);
             return active
               ? <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}</p>
-              : <p className="text-xs text-red-600">No AI provider configured! <button onClick={()=>navigate('/admin/settings')} className="underline">Go to Settings → AI Providers</button></p>;
+              : <p className="text-xs text-red-600">No AI provider configured! <button onClick={()=>navigate('/admin/settings')} className="underline">Go to GearSix → AI Providers</button></p>;
           })()}
         </div>
       </div>
@@ -3961,7 +3961,7 @@ function AAIImport() {
       <div className="space-y-6 max-w-lg">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center animate-pulse">
-            <Bot size={22} className="text-white"/>
+            <Robot size={22} className="text-white"/>
           </div>
           <div>
             <h1 className="text-xl font-bold">AI is analyzing your product…</h1>
@@ -3975,7 +3975,7 @@ function AAIImport() {
               <span>{p.msg}</span>
             </div>
           ))}
-          {loading && <div className="flex items-center gap-2 text-blue-400"><Loader2 size={14} className="animate-spin"/><span>Processing…</span></div>}
+          {loading && <div className="flex items-center gap-2 text-blue-400"><SpinnerGap size={14} className="animate-spin"/><span>Processing…</span></div>}
         </div>
         {error && (
           <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
@@ -4012,7 +4012,7 @@ function AAIImport() {
             <p className="text-sm text-gray-500">AI extracted {Object.keys(extracted).length} fields — edit any before saving</p>
           </div>
           <button onClick={handleSave} className="ml-auto px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
-            <CheckCircle size={16}/> Save as Draft Product
+            <CheckCircle size={16}/> FloppyDisk as Draft Product
           </button>
         </div>
 
@@ -4034,7 +4034,7 @@ function AAIImport() {
             </div>
 
             <div className="bg-white rounded-2xl border p-5 space-y-4">
-              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><DollarSign size={16} className="text-green-500"/>Pricing</h2>
+              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><CurrencyDollar size={16} className="text-green-500"/>Pricing</h2>
               <div className="grid grid-cols-3 gap-3">
                 <PreviewField label="Sell Price ($)" field="sellingPrice" conf={conf.price}/>
                 <PreviewField label="Compare Price ($)" field="comparePrice"/>
@@ -4100,7 +4100,7 @@ function AAIImport() {
 
             {/* Features & Tags */}
             <div className="bg-white rounded-2xl border p-5 space-y-3">
-              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><Sparkles size={16} className="text-blue-500"/>Features & Tags</h2>
+              <h2 className="font-bold text-sm text-gray-700 flex items-center gap-2"><Sparkle size={16} className="text-blue-500"/>Features & Tags</h2>
               {extracted.features?.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-500 mb-1">Features</p>
@@ -4160,11 +4160,11 @@ function AAIImport() {
           </div>
         </div>
 
-        {/* Save Button */}
+        {/* FloppyDisk Button */}
         <div className="sticky bottom-0 bg-white border-t p-4 -mx-6 flex items-center justify-between gap-4">
           <p className="text-sm text-gray-500">Product will be saved as <span className="font-semibold text-gray-700">Draft</span> — you can publish it from Products page.</p>
           <button onClick={handleSave} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
-            <CheckCircle size={18}/> Save Product
+            <CheckCircle size={18}/> FloppyDisk Product
           </button>
         </div>
       </div>
@@ -4188,7 +4188,7 @@ function AAIImport() {
           </button>
           <button onClick={()=>{ setStep('source'); setExtracted(null); setEditField({}); setSelectedImgs([]); setUrlInput(''); setTextInput(''); setHtmlInput(''); }}
             className="px-6 py-2.5 border rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-            <RefreshCw size={16}/> Import Another
+            <ArrowClockwise size={16}/> Import Another
           </button>
         </div>
       </div>
@@ -4201,11 +4201,11 @@ function AAIImport() {
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <button onClick={()=>setStep('source')} className="p-2 hover:bg-gray-100 rounded-xl"><ArrowLeft size={20}/></button>
-          <h1 className="text-xl font-bold">Import History</h1>
+          <h1 className="text-xl font-bold">Import ClockCounterClockwise</h1>
         </div>
         {history.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
-            <History size={40} className="mx-auto mb-3 opacity-40"/>
+            <ClockCounterClockwise size={40} className="mx-auto mb-3 opacity-40"/>
             <p>No imports yet</p>
           </div>
         ) : (
@@ -4213,7 +4213,7 @@ function AAIImport() {
             {history.map(h => (
               <div key={h.id} className="bg-white border rounded-xl p-4 flex items-center gap-4">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${h.status==='success'?'bg-green-100':'bg-red-100'}`}>
-                  {h.status==='success'?<CheckCircle size={18} className="text-green-600"/>:<AlertTriangle size={18} className="text-red-500"/>}
+                  {h.status==='success'?<CheckCircle size={18} className="text-green-600"/>:<Warning size={18} className="text-red-500"/>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-gray-900 truncate">{h.productTitle}</p>
@@ -4226,7 +4226,7 @@ function AAIImport() {
         )}
         {history.length > 0 && (
           <button onClick={()=>{ setHistory([]); localStorage.removeItem('luxedge_import_history'); }}
-            className="text-sm text-red-500 hover:text-red-700">Clear History</button>
+            className="text-sm text-red-500 hover:text-red-700">Clear ClockCounterClockwise</button>
         )}
       </div>
     );
@@ -4366,7 +4366,7 @@ function AMarketingTraffic() {
       </div>
 
       {/* Traffic Overview */}
-      <Card title="Traffic Overview" icon={<TrendingUp size={18} className="text-blue-600" />}>
+      <Card title="Traffic Overview" icon={<TrendUp size={18} className="text-blue-600" />}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Google AdSense</p>
@@ -4449,7 +4449,7 @@ function AMarketingTraffic() {
       </Card>
 
       {/* Ad Placements */}
-      <Card title="Ad Placements" icon={<Layers size={18} className="text-blue-600" />} badge={<StatusPill ok={enabledPlacements.length > 0} text={enabledPlacements.length > 0 ? `${enabledPlacements.length} enabled` : 'None enabled'} />}>
+      <Card title="Ad Placements" icon={<Stack size={18} className="text-blue-600" />} badge={<StatusPill ok={enabledPlacements.length > 0} text={enabledPlacements.length > 0 ? `${enabledPlacements.length} enabled` : 'None enabled'} />}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold">Enable Manual Ad Units</p>
@@ -4546,29 +4546,29 @@ function AMarketingTraffic() {
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">
         <button onClick={handleSave} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-          <Save size={16} /> Save Settings
+          <FloppyDisk size={16} /> FloppyDisk GearSix
         </button>
         <button onClick={handleTest} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-blue-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-          <RefreshCw size={16} /> Test Configuration
+          <ArrowClockwise size={16} /> Test Configuration
         </button>
         <button onClick={exportConfig} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-blue-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
           <Download size={16} /> Export site-config.json
         </button>
         {hasPreview && (
           <button onClick={resetGlobal} className="px-6 py-2.5 bg-white border border-gray-200 hover:border-red-300 text-gray-700 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <RotateCcw size={16} /> Reset to Global
+            <ArrowCounterClockwise size={16} /> Reset to Global
           </button>
         )}
       </div>
 
       {saved && (
         <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
-          <CheckCircle size={16} /> Settings saved as a preview for this browser. Download site-config.json and commit it to the repo to make these settings global for all visitors.
+          <CheckCircle size={16} /> GearSix saved as a preview for this browser. Download site-config.json and commit it to the repo to make these settings global for all visitors.
         </div>
       )}
       {testResult && (
         <div className={`flex items-start gap-2 p-3 rounded-xl text-sm ${testResult.ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-          {testResult.ok ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+          {testResult.ok ? <CheckCircle size={16} className="mt-0.5 shrink-0" /> : <Warning size={16} className="mt-0.5 shrink-0" />}
           {testResult.msg}
         </div>
       )}
@@ -4602,7 +4602,7 @@ class AdminErrorBoundary extends Component<{ children: ReactNode }, { err: strin
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
           <div className="max-w-md w-full bg-white rounded-2xl border border-red-200 p-8 text-center shadow-sm">
-            <AlertTriangle size={32} className="mx-auto mb-4 text-red-500" />
+            <Warning size={32} className="mx-auto mb-4 text-red-500" />
             <h1 className="text-lg font-bold text-gray-900 mb-2">Something went wrong in the admin area</h1>
             <p className="text-sm text-gray-500 mb-4">{this.state.err}</p>
             <a href="#/admin" className="inline-block px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm font-semibold rounded-xl transition-colors">Retry</a>

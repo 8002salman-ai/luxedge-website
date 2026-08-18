@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
       output: {
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
-          icons: ["lucide-react"],
+          icons: ["@phosphor-icons/react"],
         },
       },
     },

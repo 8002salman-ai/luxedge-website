@@ -15,9 +15,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Ban, Brain, CheckCircle, Compass, Eye, FilePlus2, Loader2, Package, Play,
-  RefreshCw, Search, Shield, Siren, Target, Zap,
-} from 'lucide-react';
+  Warning, Prohibit, Brain, CheckCircle, Compass, Eye, FilePlus, SpinnerGap, Package, Play,
+  ArrowClockwise, MagnifyingGlass, ShieldCheck, Siren, Target, Lightning,
+} from '@phosphor-icons/react';
 import { useApp, Modal, fetchPageContent } from '../App';
 import { useNavigate } from 'react-router-dom';
 import { getDb } from '../services/db';
@@ -778,14 +778,14 @@ export default function ProductScout() {
             <Play size={16} /> Run Scout Run
           </button>
           <button onClick={() => void load()} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            <RefreshCw size={15} /> Refresh
+            <ArrowClockwise size={15} /> Refresh
           </button>
         </div>
       </div>
 
       {error && (
         <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Load failed</p><p>{error}</p></div>
+          <Warning size={18} className="mt-0.5 shrink-0" /><div><p className="font-semibold">Load failed</p><p>{error}</p></div>
         </div>
       )}
 
@@ -794,9 +794,9 @@ export default function ProductScout() {
         {[
           { label: 'Candidates', value: stats.candidates, color: 'text-blue-600', icon: <Target size={18} className="text-blue-500" /> },
           { label: 'Shortlisted', value: stats.qualified, color: 'text-green-600', icon: <CheckCircle size={18} className="text-green-500" /> },
-          { label: 'Approved', value: stats.approved, color: 'text-emerald-600', icon: <Shield size={18} className="text-emerald-500" /> },
-          { label: 'Rejected', value: stats.rejected, color: 'text-red-600', icon: <Ban size={18} className="text-red-500" /> },
-          { label: 'Scout Runs', value: 'DB', color: 'text-gray-600', icon: <Zap size={18} className="text-gray-400" /> },
+          { label: 'Approved', value: stats.approved, color: 'text-emerald-600', icon: <ShieldCheck size={18} className="text-emerald-500" /> },
+          { label: 'Rejected', value: stats.rejected, color: 'text-red-600', icon: <Prohibit size={18} className="text-red-500" /> },
+          { label: 'Scout Runs', value: 'DB', color: 'text-gray-600', icon: <Lightning size={18} className="text-gray-400" /> },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
@@ -811,7 +811,7 @@ export default function ProductScout() {
       {/* Job audit trail — real agent_jobs rows (RESEARCH → SCORE → QA) */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          <Zap size={14} /> Job Audit Trail <span className="font-normal normal-case text-gray-400">· PRODUCT_RESEARCH → PRODUCT_SCORE → PRODUCT_QA</span>
+          <Lightning size={14} /> Job Audit Trail <span className="font-normal normal-case text-gray-400">· PRODUCT_RESEARCH → PRODUCT_SCORE → PRODUCT_QA</span>
         </div>
         {jobs.length === 0 ? (
           <p className="text-sm text-gray-400">No scout jobs recorded yet. Run a Scout Run to create one.</p>
@@ -854,7 +854,7 @@ export default function ProductScout() {
       {/* Autonomy policy — guarded autonomy control center */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          <Shield size={14} /> Autonomy Policy <span className="font-normal normal-case text-gray-400">· guarded autonomy — AUTO never overrides hard safety gates</span>
+          <ShieldCheck size={14} /> Autonomy Policy <span className="font-normal normal-case text-gray-400">· guarded autonomy — AUTO never overrides hard safety gates</span>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -911,9 +911,9 @@ export default function ProductScout() {
       {/* Owner attention queue — exception-based owner review */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          <AlertTriangle size={14} /> Owner Attention Queue <span className="font-normal normal-case text-gray-400">· only meaningful decisions surface here</span>
+          <Warning size={14} /> Owner Attention Queue <span className="font-normal normal-case text-gray-400">· only meaningful decisions surface here</span>
           <button onClick={scanAttention} disabled={scanning} className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-black text-white rounded-lg text-[11px] font-semibold disabled:opacity-50">
-            {scanning ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Scan candidates
+            {scanning ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />} Scan candidates
           </button>
         </div>
         {attention.length === 0 ? (
@@ -922,7 +922,7 @@ export default function ProductScout() {
           <div className="space-y-2">
             {attention.filter((a) => a.status === 'pending').map((a) => (
               <div key={a.id} className="flex items-start gap-3 p-3 bg-amber-50/60 border border-amber-200 rounded-xl">
-                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                <Warning size={16} className="mt-0.5 shrink-0 text-amber-600" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800">{a.title}</p>
                   <p className="text-xs text-gray-600 mt-0.5"><span className="font-semibold">Why:</span> {a.reason}</p>
@@ -940,7 +940,7 @@ export default function ProductScout() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          <Search size={14} /> Filters
+          <MagnifyingGlass size={14} /> Filters
         </div>
         <div className="flex flex-wrap gap-2">
           <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={inputCls}>
@@ -969,7 +969,7 @@ export default function ProductScout() {
       {/* Candidates table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 p-12 text-gray-500"><Loader2 size={18} className="animate-spin" /> Loading candidates…</div>
+          <div className="flex items-center justify-center gap-2 p-12 text-gray-500"><SpinnerGap size={18} className="animate-spin" /> Loading candidates…</div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-gray-400">
             <Target size={40} className="mx-auto mb-3 text-gray-200" />
@@ -1052,7 +1052,7 @@ export default function ProductScout() {
                               disabled={acting === c.id}
                               className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 disabled:opacity-50"
                               title="Reject candidate"
-                            ><Ban size={15} /></button>
+                            ><Prohibit size={15} /></button>
                           )}
                           {c.status !== 'rejected' && c.status !== 'failed' && (
                             <button
@@ -1060,14 +1060,14 @@ export default function ProductScout() {
                               disabled={generating === c.id}
                               className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-50"
                               title="Prepare listing (generate → factual QA → draft) — one-product test, DRAFT ONLY"
-                            >{generating === c.id ? <Loader2 size={15} className="animate-spin" /> : <Brain size={15} />}</button>
+                            >{generating === c.id ? <SpinnerGap size={15} className="animate-spin" /> : <Brain size={15} />}</button>
                           )}
                           <button
                             onClick={() => void createDraft(v)}
                             disabled={drafting === c.id}
                             className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 disabled:opacity-50"
                             title="Create product draft"
-                          ><FilePlus2 size={15} /></button>
+                          ><FilePlus size={15} /></button>
                           <button onClick={() => setEvidenceFor(v)} className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500" title="View evidence"><Eye size={15} /></button>
                         </div>
                       </td>
@@ -1154,7 +1154,7 @@ export default function ProductScout() {
                 disabled={discovering}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
               >
-                {discovering ? <Loader2 size={15} className="animate-spin" /> : <Compass size={15} />} {discovering ? 'Searching…' : 'Discover URLs'}
+                {discovering ? <SpinnerGap size={15} className="animate-spin" /> : <Compass size={15} />} {discovering ? 'Searching…' : 'Discover URLs'}
               </button>
             </div>
             {discoverNote && <p className="text-xs text-blue-700">{discoverNote}</p>}
@@ -1164,7 +1164,7 @@ export default function ProductScout() {
           {/* Supplier API mode (CJ official API — server proxy, admin JWT) */}
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wide">
-              <Package size={14} /> Official Supplier Search (CJ)
+              <Package size={14} /> Official Supplier MagnifyingGlass (CJ)
               <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${cjHealth === 'online' || cjHealth === 'configured' ? 'bg-green-100 text-green-700' : cjHealth === 'rate_limited' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
                 {cjHealth === 'not_configured' ? 'NOT CONFIGURED' : cjHealth === 'online' || cjHealth === 'configured' ? 'ONLINE' : cjHealth === 'rate_limited' ? 'RATE LIMITED' : 'OFFLINE'}
               </span>
@@ -1190,7 +1190,7 @@ export default function ProductScout() {
                 disabled={cjRunning}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
               >
-                {cjRunning ? <Loader2 size={15} className="animate-spin" /> : <Package size={15} />} {cjRunning ? 'Searching CJ…' : 'Search CJ'}
+                {cjRunning ? <SpinnerGap size={15} className="animate-spin" /> : <Package size={15} />} {cjRunning ? 'Searching CJ…' : 'MagnifyingGlass CJ'}
               </button>
             </div>
             {/* Market-grounded mode: link the CJ run to a REAL persisted MI job */}
@@ -1251,7 +1251,7 @@ export default function ProductScout() {
               disabled={running}
               className="flex items-center gap-2 flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold justify-center disabled:opacity-50"
             >
-              {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} {running ? 'Researching…' : 'Run Research'}
+              {running ? <SpinnerGap size={16} className="animate-spin" /> : <Play size={16} />} {running ? 'Researching…' : 'Run Research'}
             </button>
             <button onClick={() => setRunOpen(false)} disabled={running} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">Cancel</button>
           </div>
@@ -1282,7 +1282,7 @@ export default function ProductScout() {
               disabled={miRunning}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
             >
-              {miRunning ? <Loader2 size={15} className="animate-spin" /> : <Brain size={15} />} {miRunning ? 'Analyzing…' : 'Run Analysis'}
+              {miRunning ? <SpinnerGap size={15} className="animate-spin" /> : <Brain size={15} />} {miRunning ? 'Analyzing…' : 'Run Analysis'}
             </button>
           </div>
           <label className="flex items-center gap-2 text-xs text-gray-600">
