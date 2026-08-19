@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, ReactNode, Component } from '
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
+import { getAccessToken } from '../services/supabase';
 import ProductScout from './ProductScout';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
@@ -589,15 +590,53 @@ export function _AProductEdit() { // superseded by CatalogAdmin.CatalogProductEd
   );
 }
 
+interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; created_at: string; items?: unknown[]; }
+
 function AOrders() {
   const { orders, setOrders, notify } = useApp();
   const [view, setView] = useState<Order | null>(null);
+  const [stripeOrders, setStripeOrders] = useState<StripeOrderRow[]>([]);
   const statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
   const statusColor: Record<string, string> = { Pending: 'bg-yellow-100 text-yellow-700', Processing: 'bg-blue-100 text-blue-700', Shipped: 'bg-purple-100 text-purple-700', Delivered: 'bg-green-100 text-green-700', Cancelled: 'bg-red-100 text-red-700' };
   const updateStatus = (id: string, status: string) => { setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o)); notify(`Order ${status}`); };
 
+  // Authoritative persisted orders (created by the Stripe webhook).
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : []))
+      .catch(() => setStripeOrders([]));
+  }, []);
+
   return <div className="space-y-6">
     <h1 className="text-2xl font-bold">Orders</h1>
+
+    {stripeOrders.length > 0 && (
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-sm text-gray-800">Stripe Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
+            <p className="text-[11px] text-gray-400">Persisted from the Stripe webhook — real payment records.</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto"><table className="w-full">
+          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Order</th><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Stripe Session</th><th className="px-6 py-4">Date</th></tr></thead>
+          <tbody>{stripeOrders.map(o => (
+            <tr key={o.id} className="border-t hover:bg-gray-50">
+              <td className="px-6 py-4"><p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p></td>
+              <td className="px-6 py-4 text-sm text-gray-600">{o.customer_email || '—'}</td>
+              <td className="px-6 py-4 font-semibold">${Number(o.total || 0).toFixed(2)}</td>
+              <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${o.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{o.status}</span></td>
+              <td className="px-6 py-4 text-xs text-gray-400 font-mono">{o.stripe_session_id ? o.stripe_session_id.slice(0, 18) + '…' : '—'}</td>
+              <td className="px-6 py-4 text-xs text-gray-500">{new Date(o.created_at).toLocaleString()}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </div>
+    )}
+
     <div className="bg-white rounded-xl shadow-sm overflow-hidden"><div className="overflow-x-auto"><table className="w-full">
       <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Order</th><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
       <tbody>{orders.map(o => <tr key={o.id} className="border-t hover:bg-gray-50">

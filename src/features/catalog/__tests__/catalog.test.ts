@@ -14,7 +14,7 @@ import {
 import {
   buildProductJsonLd, buildFeedRow, buildFeedCsv, buildProductMeta, altTextFor, productUrl,
 } from '../seo';
-import type { CatalogProduct } from '../types';
+import type { CatalogProduct, CatalogStatus } from '../types';
 
 function reset() {
   // LocalStorageAdapter reads window.localStorage — install an in-memory
@@ -321,7 +321,9 @@ describe('catalog repository (pre-0010 live schema degradation)', () => {
   // columns (no featured/tags/coupons) — exactly the live pre-0010 state.
   function mockLegacySupabase() {
     const db: Record<string, unknown[]> = {};
-    const legacyCols = ['id', 'slug', 'name', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at'];
+    // Live pre-0010 products has BOTH name + title (title NOT NULL — the
+    // legacy column the repository must mirror on write) plus the core V2 set.
+    const legacyCols = ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'description', 'short_description', 'compare_at_price', 'stock_status', 'low_stock_threshold', 'supplier_source', 'supplier_product_ref', 'delivery_min_days', 'delivery_max_days', 'shipping_note', 'us_inventory'];
     const openApi = {
       components: { schemas: {
         products: { properties: Object.fromEntries(legacyCols.map((c) => [c, { type: 'string' }])) },
@@ -396,5 +398,161 @@ describe('catalog repository (pre-0010 live schema degradation)', () => {
     __resetCatalogSchemaCacheForTests();
     expect(await listCoupons()).toEqual([]);
     expect(await listOffers()).toEqual([]);
+  });
+
+  it('writes the legacy NOT NULL title column on create and update (live products.title)', async () => {
+    const { db } = mockLegacySupabase();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    const p = await createProduct({ ...base });
+    const stored = db['products'][0] as Record<string, unknown>;
+    expect(stored.title).toBe(base.name); // legacy NOT NULL column satisfied
+    await updateProduct(p.id, { name: 'Renamed Toy' });
+    const after = db['products'][0] as Record<string, unknown>;
+    expect(after.title).toBe('Renamed Toy'); // title follows name
+    expect(after.description).toBe(base.description); // untouched fields preserved
+  });
+
+  it('pre-0010: an unknown status is fail-closed to DRAFT (never silently stored)', async () => {
+    const { db } = mockLegacySupabase();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    await createProduct({ ...base });
+    const id = (db['products'][0] as { id: string }).id;
+    await updateProduct(id, { status: 'bogus' as CatalogStatus });
+    const after = db['products'][0] as Record<string, unknown>;
+    expect(after.status).toBe('draft'); // clamped, never 'bogus'
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Full-schema (post-0010) legacy-column handling for images/variants/settings
+// ---------------------------------------------------------------------------
+describe('catalog repository (post-0010 live schema: legacy NOT NULL mirrors)', () => {
+  afterEach(() => {
+    __setDbConfigForTests(undefined);
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    vi.unstubAllGlobals();
+  });
+
+  // Simulates the REAL live schema: products has both name + title; product_images
+  // requires storage_path/public_url/created_at; product_variants requires
+  // title/price_amount/option_values/created_at/updated_at; store_settings PK = key.
+  function mockFullSchema() {
+    const db: Record<string, unknown[]> = { products: [], product_images: [], product_variants: [], coupons: [], store_offers: [], store_settings: [], categories: [{ id: 'cat-toys', name: 'Pet Toys', slug: 'pet-toys' }] };
+    const schemas: Record<string, Record<string, unknown>> = {
+      products: { properties: Object.fromEntries(['id', 'slug', 'name', 'title', 'status', 'price', 'compare_at_price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'short_description', 'description', 'tags', 'featured', 'new_arrival', 'free_shipping', 'stock_status', 'low_stock_threshold', 'us_inventory', 'supplier_source', 'supplier_product_ref', 'delivery_min_days', 'delivery_max_days', 'shipping_note', 'seo_title', 'seo_description', 'seo_keywords', 'published_at', 'owner_notes', 'evidence_notes', 'sort_order'].map((c) => [c, {}])) },
+      product_images: { properties: Object.fromEntries(['id', 'product_id', 'url', 'storage_path', 'public_url', 'alt_text', 'kind', 'is_primary', 'sort_order', 'variant_id', 'created_at'].map((c) => [c, {}])) },
+      product_variants: { properties: Object.fromEntries(['id', 'product_id', 'attributes', 'sku', 'price', 'compare_at_price', 'cost_price', 'inventory_qty', 'status', 'low_stock_threshold', 'title', 'price_amount', 'option_values', 'created_at', 'updated_at'].map((c) => [c, {}])) },
+      coupons: { properties: {} },
+      store_offers: { properties: {} },
+      store_settings: { properties: { key: {}, value: {}, updated_at: {} } },
+      categories: { properties: {} },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.split('?')[0].endsWith('/rest/v1/')) {
+        // OpenAPI schema probe (no table suffix)
+        return new Response(JSON.stringify({ components: { schemas } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      const path = url.split('?')[0];
+      const table = path.split('/rest/v1/')[1]?.split('/')[0] || '';
+      const rows = (db[table] ||= []) as Record<string, unknown>[];
+      const qs = url.split('?')[1] || '';
+      const parseEq = (): Record<string, string> => {
+        const out: Record<string, string> = {};
+        for (const part of qs.split('&')) {
+          const m = part.match(/^([a-z_]+)=eq\.([^&]+)$/);
+          if (m) out[m[1]] = decodeURIComponent(m[2]);
+        }
+        return out;
+      };
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        rows.push(body);
+        return new Response(JSON.stringify([body]), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (init?.method === 'PATCH') {
+        const eq = parseEq();
+        const body = JSON.parse(String(init.body));
+        const idx = rows.findIndex((r) => eq.column ? r[eq.column] === eq.value : r[Object.keys(eq)[0]] === eq[Object.keys(eq)[0]]);
+        if (idx >= 0) rows[idx] = { ...rows[idx], ...body };
+        return new Response(JSON.stringify([rows[idx]]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (init?.method === 'DELETE') {
+        const eq = parseEq();
+        const key = Object.keys(eq)[0];
+        db[table] = rows.filter((r) => r[key] !== eq[key]);
+        return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      const eq = parseEq();
+      if (Object.keys(eq).length) {
+        const key = Object.keys(eq)[0];
+        return new Response(JSON.stringify(rows.filter((r) => r[key] === eq[key])), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    return { db };
+  }
+
+  it('satisfies legacy product_images NOT NULL storage_path/public_url/created_at', async () => {
+    const { db } = mockFullSchema();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    const p = await createProduct({ ...base });
+    await saveProductImages(p.id, [{ url: 'https://img/a.jpg', altText: 'A', isPrimary: true, sortOrder: 0 }]);
+    const img = (db['product_images'][0] as Record<string, unknown>);
+    expect(img.storage_path).toContain('catalog/');
+    expect(img.public_url).toBe('https://img/a.jpg');
+    expect(img.created_at).toBeTruthy();
+  });
+
+  it('updateProduct is a TRUE partial update — unspecified fields are preserved, never nulled', async () => {
+    const { db } = mockFullSchema();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    await createProduct({ ...base, status: 'active' as CatalogStatus });
+    // Editing ONLY the price must not touch status, description, title, etc.
+    await updateProduct((db['products'][0] as { id: string }).id, { price: 99.99 });
+    const after = db['products'][0] as Record<string, unknown>;
+    expect(after.price).toBe(99.99);
+    expect(after.status).toBe('active'); // NOT reset to draft
+    expect(after.description).toBe(base.description);
+    expect(after.title).toBe(base.name);
+    expect(after.sku).toBe(base.sku);
+  });
+
+  it('satisfies legacy product_variants NOT NULL title/price_amount/option_values/created_at', async () => {
+    const { db } = mockFullSchema();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    const p = await createProduct({ ...base });
+    await saveProductVariants(p.id, [{ attributes: { size: 'S' }, sku: 'S-1', price: 10, inventoryQty: 2 }]);
+    const v = db['product_variants'][0] as Record<string, unknown>;
+    expect(v.title).toBe('size: S');
+    expect(v.price_amount).toBe(1000); // cents mirror of $10
+    expect(v.option_values).toEqual({ size: 'S' });
+    expect(v.created_at).toBeTruthy();
+    expect(v.updated_at).toBeTruthy();
+  });
+
+  it('store_settings round-trips via its key PK (insertRaw + updateBy)', async () => {
+    const { db } = mockFullSchema();
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    await saveStoreSettings({ freeShippingEnabled: true, freeShippingThreshold: 75, defaultDeliveryMinDays: 5, defaultDeliveryMaxDays: 12 });
+    expect((db['store_settings'] as Record<string, unknown>[]).length).toBe(1);
+    await saveStoreSettings({ freeShippingEnabled: false, freeShippingThreshold: 60, defaultDeliveryMinDays: null, defaultDeliveryMaxDays: null });
+    const rows = db['store_settings'] as Record<string, unknown>[];
+    expect(rows.length).toBe(1); // updated, not duplicated
+    expect((rows[0].value as Record<string, unknown>).freeShippingThreshold).toBe(60);
+    expect((await getStoreSettings()).freeShippingEnabled).toBe(false);
   });
 });

@@ -28,7 +28,11 @@ export interface DbAdapter {
   /** First row matching `column = value`, or null. Used for identity lookups. */
   findFirst<T>(table: string, column: string, value: string): Promise<T | null>;
   insert<T extends { id: string }>(table: string, row: T): Promise<T>;
+  /** Insert a row whose PK is NOT `id` (e.g. store_settings.key). */
+  insertRaw<T>(table: string, row: T): Promise<T>;
   update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null>;
+  /** Update the first row where `column = value` (tables whose PK is not `id`). */
+  updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null>;
   remove(table: string, id: string): Promise<void>;
   /** Honest connectivity check — never claims success it cannot prove. */
   testConnection(): Promise<DbConnectionResult>;
@@ -88,11 +92,22 @@ export class LocalStorageAdapter implements DbAdapter {
     return row;
   }
 
-  async update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null> {
+  async insertRaw<T>(table: string, row: T): Promise<T> {
     const rows = this.readTable<T>(table);
-    const idx = rows.findIndex((r) => r.id === id);
+    rows.push(row);
+    this.writeTable(table, rows);
+    return row;
+  }
+
+  async update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null> {
+    return this.updateBy(table, 'id', id, patch);
+  }
+
+  async updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null> {
+    const rows = this.readTable<T>(table);
+    const idx = rows.findIndex((r) => (r as Record<string, unknown>)[column] === value);
     if (idx < 0) return null;
-    rows[idx] = { ...rows[idx], ...patch, id } as T;
+    rows[idx] = { ...rows[idx], ...patch } as T;
     this.writeTable(table, rows);
     return rows[idx];
   }
@@ -199,8 +214,24 @@ export class SupabaseAdapter implements DbAdapter {
     return rows[0] || row;
   }
 
+  async insertRaw<T>(table: string, row: T): Promise<T> {
+    const res = await fetch(this.endpoint(table), {
+      method: 'POST',
+      headers: this.headers('POST'),
+      body: JSON.stringify(row),
+    });
+    const rows = await this.handle<T[]>(res);
+    return rows[0] || row;
+  }
+
   async update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null> {
-    const res = await fetch(this.endpoint(table, id), {
+    return this.updateBy(table, 'id', id, patch);
+  }
+
+  async updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null> {
+    const url = new URL(this.endpoint(table));
+    url.searchParams.append(column, `eq.${value}`);
+    const res = await fetch(url.toString(), {
       method: 'PATCH',
       headers: this.headers('PATCH'),
       body: JSON.stringify(patch),

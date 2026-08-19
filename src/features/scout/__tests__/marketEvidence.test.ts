@@ -51,10 +51,18 @@ class FakeDb implements DbAdapter {
     this.rows.get(table)?.push({ ...row });
     return row;
   }
+  async insertRaw<T>(table: string, row: T): Promise<T> {
+    this.assertAdmin();
+    this.rows.get(table)?.push({ ...(row as Record<string, unknown>) });
+    return row;
+  }
   async update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null> {
+    return this.updateBy(table, 'id', id, patch);
+  }
+  async updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null> {
     this.assertAdmin();
     const list = this.rows.get(table) || [];
-    const idx = list.findIndex((r) => r.id === id);
+    const idx = list.findIndex((r) => r[column] === value);
     if (idx < 0) return null;
     list[idx] = { ...list[idx], ...patch };
     return list[idx] as T;

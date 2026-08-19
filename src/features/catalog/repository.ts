@@ -30,25 +30,31 @@ import {
 // fields only; after 0010 the full product manager works. Probes that fail
 // are treated as "assume full schema" (never block a working post-0010 env).
 // ---------------------------------------------------------------------------
-let cachedProductCols: Set<string> | null | undefined;
+const cachedTableCols = new Map<string, Set<string> | null>();
 
-async function liveProductColumns(): Promise<Set<string> | null> {
-  if (cachedProductCols !== undefined) return cachedProductCols;
+async function liveTableColumns(table: string): Promise<Set<string> | null> {
+  if (cachedTableCols.has(table)) return cachedTableCols.get(table) ?? null;
   try {
     const d = getDb() as DbAdapter & { mode?: string };
-    if (d.mode !== 'supabase') { cachedProductCols = null; return null; }
+    if (d.mode !== 'supabase') { cachedTableCols.set(table, null); return null; }
     const url = (d as unknown as { url?: string }).url || '';
     const h = (d as unknown as { headers?: (m: string) => Record<string, string> }).headers;
-    if (!url || !h) { cachedProductCols = null; return null; }
+    if (!url || !h) { cachedTableCols.set(table, null); return null; }
     const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, { headers: { ...h.call(d, 'GET'), Accept: 'application/openapi+json' } });
-    if (!res.ok) { cachedProductCols = null; return null; }
+    if (!res.ok) { cachedTableCols.set(table, null); return null; }
     const openApi = await res.json();
-    const props = (openApi?.components?.schemas?.products || openApi?.definitions?.products || {}).properties || {};
-    cachedProductCols = new Set(Object.keys(props));
+    const props = (openApi?.components?.schemas?.[table] || openApi?.definitions?.[table] || {}).properties || {};
+    const cols = new Set(Object.keys(props));
+    cachedTableCols.set(table, cols);
+    return cols;
   } catch {
-    cachedProductCols = null;
+    cachedTableCols.set(table, null);
+    return null;
   }
-  return cachedProductCols;
+}
+
+async function liveProductColumns(): Promise<Set<string> | null> {
+  return liveTableColumns('products');
 }
 
 /** Columns this environment can actually write; null = assume full schema. */
@@ -65,7 +71,13 @@ async function writableColumns(full: Record<string, unknown>): Promise<Record<st
  * 'ready' — only 'draft' and the pipeline statuses. Post-0010 all catalog
  * statuses are allowed. Returns the effective status for this environment.
  */
+const CATALOG_STATUSES: readonly CatalogStatus[] = ['draft', 'ready', 'active', 'inactive', 'archived'];
+
 async function effectiveStatus(status: CatalogStatus): Promise<CatalogStatus> {
+  if (!CATALOG_STATUSES.includes(status)) {
+    // Unknown statuses are fail-closed to DRAFT — never silently stored.
+    return 'draft';
+  }
   const cols = await liveProductColumns();
   if (cols && !cols.has('featured') && ['active', 'inactive', 'ready'].includes(status)) {
     // Pre-0010: never silently publish to 'published' (AUTO PUBLISH = OFF).
@@ -77,7 +89,7 @@ async function effectiveStatus(status: CatalogStatus): Promise<CatalogStatus> {
 
 /** Test-only hook: forget the probed live schema (restores re-probing). */
 export function __resetCatalogSchemaCacheForTests(): void {
-  cachedProductCols = undefined;
+  cachedTableCols.clear();
 }
 
 export function uid(): string {
@@ -103,6 +115,8 @@ interface ProductRow {
   id: string;
   slug: string;
   name: string;
+  /** Legacy live column (NOT NULL) — V2 reads `name`, but the row carries both. */
+  title?: string | null;
   short_title?: string | null;
   subtitle?: string | null;
   short_description?: string | null;
@@ -252,7 +266,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
   return {
     id: row.id,
     slug: row.slug,
-    name: row.name,
+    name: row.name || row.title || '',
     shortTitle: row.short_title || undefined,
     subtitle: row.subtitle || undefined,
     shortDescription: row.short_description || row.long_description ? (row.short_description || '') : '',
@@ -420,6 +434,10 @@ export interface ProductInput {
 export function productToRow(input: ProductInput): Record<string, unknown> {
   const row: Record<string, unknown> = {
     name: input.name,
+    // Legacy live schema requires `title` NOT NULL (V2 writes `name`; both
+    // must be set — the seed script always did this). writableColumns drops
+    // it only where the column truly does not exist.
+    title: input.name,
     short_title: input.shortTitle ?? null,
     subtitle: input.subtitle ?? null,
     short_description: input.shortDescription ?? null,
@@ -485,15 +503,81 @@ export async function createProduct(input: ProductInput): Promise<CatalogProduct
   return getProduct(row.id).then((p) => p!);
 }
 
-export async function updateProduct(id: string, input: ProductInput): Promise<CatalogProduct | null> {
+// Maps a ProductInput field to the product column(s) it writes. Used to make
+// updateProduct a TRUE partial update: only columns whose input field was
+// explicitly provided are patched — everything else keeps its existing value
+// (editing one field must never null out NOT NULL columns or reset status).
+const INPUT_FIELD_TO_COLUMNS: Record<keyof ProductInput, string[]> = {
+  name: ['name', 'title'],
+  shortTitle: ['short_title'],
+  subtitle: ['subtitle'],
+  shortDescription: ['short_description'],
+  description: ['description'],
+  features: ['features'],
+  specifications: ['specifications'],
+  categoryId: ['category_id'],
+  brand: ['brand'],
+  status: ['status'],
+  price: ['price'],
+  compareAtPrice: ['compare_at_price'],
+  costPrice: ['cost_price'],
+  landedCost: ['landed_cost'],
+  currency: ['currency'],
+  sku: ['sku'],
+  inventoryQty: ['inventory_qty'],
+  stockStatus: ['stock_status'],
+  lowStockThreshold: ['low_stock_threshold'],
+  shippingCost: ['shipping_cost'],
+  freeShipping: ['free_shipping'],
+  deliveryMinDays: ['delivery_min_days'],
+  deliveryMaxDays: ['delivery_max_days'],
+  shippingNote: ['shipping_note'],
+  usInventory: ['us_inventory'],
+  supplierSource: ['supplier_source'],
+  supplierProductRef: ['supplier_product_ref'],
+  tags: ['tags'],
+  featured: ['featured'],
+  newArrival: ['new_arrival'],
+  trending: ['trending'],
+  bestRated: ['best_rated'],
+  bestSeller: ['best_seller'],
+  promoted: ['promoted'],
+  saleEnabled: ['sale_enabled'],
+  discountType: ['discount_type'],
+  discountValue: ['discount_value'],
+  seoTitle: ['seo_title'],
+  seoDescription: ['seo_description'],
+  seoKeywords: ['seo_keywords'],
+  canonicalSlug: ['canonical_slug'],
+  ogImage: ['og_image'],
+  ownerNotes: ['owner_notes'],
+  evidenceNotes: ['evidence_notes'],
+  sortOrder: ['sort_order'],
+};
+
+export async function updateProduct(id: string, input: Partial<ProductInput>): Promise<CatalogProduct | null> {
   const db = getDb();
   const existing = await db.get<ProductRow>('products', id);
   if (!existing) return null;
-  const status = await effectiveStatus(input.status ?? 'draft');
-  const patch = await writableColumns(productToRow({ ...input, status }));
-  if (input.name !== existing.name) patch.slug = await uniqueSlug(db, input.name, id);
-  if (status === 'active' && !existing.published_at) patch.published_at = new Date().toISOString();
-  await db.update('products', id, patch);
+  // Only fields present in the partial input are read below (field in input).
+  const full = productToRow(input as ProductInput);
+  const patch: Record<string, unknown> = {};
+  for (const field of Object.keys(INPUT_FIELD_TO_COLUMNS) as (keyof ProductInput)[]) {
+    if (field in input) {
+      for (const col of INPUT_FIELD_TO_COLUMNS[field]) patch[col] = full[col];
+    }
+  }
+  // Status changes go through the fail-closed gate (pre-0010 clamp), and an
+  // explicit status is only applied when the caller actually provided one.
+  if ('status' in input && typeof input.status === 'string') {
+    patch.status = await effectiveStatus(input.status as CatalogStatus);
+    if (patch.status === 'active' && !existing.published_at) patch.published_at = new Date().toISOString();
+  }
+  const effectivePatch = await writableColumns(patch);
+  if ('name' in input && input.name && input.name !== existing.name) {
+    effectivePatch.slug = await uniqueSlug(db, input.name, id);
+  }
+  await db.update('products', id, effectivePatch);
   return getProduct(id);
 }
 
@@ -536,22 +620,24 @@ export async function duplicateProduct(id: string): Promise<CatalogProduct | nul
     updated_at: now,
     published_at: null,
   });
+  const legacy = await legacyImageColumns();
   for (const img of src.images) {
-    await db.insert('product_images', {
-      id: uid(),
-      product_id: newId,
+    const payload: Record<string, unknown> = {
       url: img.url,
       alt_text: img.altText,
       kind: img.kind,
       is_primary: img.isPrimary,
       sort_order: img.sortOrder,
       variant_id: null,
-    });
+    };
+    if (legacy.storagePath) payload.storage_path = imageStoragePath(newId, img.url, img.sortOrder);
+    if (legacy.publicUrl) payload.public_url = img.url;
+    if (legacy.createdAt) payload.created_at = now;
+    await db.insert('product_images', { id: uid(), product_id: newId, ...payload });
   }
+  const legacyV = await legacyVariantColumns();
   for (const v of src.variants) {
-    await db.insert('product_variants', {
-      id: uid(),
-      product_id: newId,
+    const payload: Record<string, unknown> = {
       attributes: v.attributes,
       sku: v.sku,
       price: v.price,
@@ -560,7 +646,15 @@ export async function duplicateProduct(id: string): Promise<CatalogProduct | nul
       inventory_qty: v.inventoryQty,
       status: v.status,
       low_stock_threshold: v.lowStockThreshold,
-    });
+    };
+    if (legacyV.title) {
+      const parts = Object.entries(v.attributes || {}).map(([k, val]) => `${k}: ${val}`);
+      payload.title = parts.length ? parts.join(' · ') : (v.sku ? `Variant ${v.sku}` : 'Variant');
+    }
+    if (legacyV.priceAmount) payload.price_amount = v.price != null ? Math.round(v.price * 100) : 0;
+    if (legacyV.optionValues) payload.option_values = v.attributes;
+    if (legacyV.timestamps) { payload.created_at = now; payload.updated_at = now; }
+    await db.insert('product_variants', { id: uid(), product_id: newId, ...payload });
   }
   return getProduct(newId);
 }
@@ -579,8 +673,32 @@ export interface CatalogImageInput {
 }
 
 /** Replace the full image set of a product (admin image manager). */
+/**
+ * Legacy live schema requires product_images.storage_path + public_url NOT
+ * NULL (V2 writes `url`). We do not use Supabase Storage for supplier-sourced
+ * images: public_url carries the real image URL; storage_path is a synthetic
+ * per-image path (unique, honest, identifies the source) so rows satisfy the
+ * constraint. Only applied when those columns exist in the live schema.
+ */
+async function legacyImageColumns(): Promise<{ storagePath?: boolean; publicUrl?: boolean; createdAt?: boolean }> {
+  const cols = await liveTableColumns('product_images');
+  if (!cols) return {};
+  return {
+    storagePath: cols.has('storage_path'),
+    publicUrl: cols.has('public_url'),
+    createdAt: cols.has('created_at'),
+  };
+}
+
+function imageStoragePath(productId: string, url: string, order: number): string {
+  const base = String(url || 'image').split(/[?#]/)[0].split('/').pop() || 'image';
+  return `catalog/${productId}/${order}-${base}`;
+}
+
+/** Replace the full image set of a product (admin image manager). */
 export async function saveProductImages(productId: string, images: CatalogImageInput[]): Promise<CatalogProduct | null> {
   const db = getDb();
+  const legacy = await legacyImageColumns();
   const all = (await db.list<ImageRow>('product_images', { limit: 2000 })) || [];
   const existing = all.filter((i) => i.product_id === productId);
   const incomingIds = new Set(images.filter((i) => i.id).map((i) => i.id as string));
@@ -589,7 +707,7 @@ export async function saveProductImages(productId: string, images: CatalogImageI
   }
   let order = 0;
   for (const img of images) {
-    const payload = {
+    const payload: Record<string, unknown> = {
       url: img.url,
       alt_text: img.altText ?? null,
       kind: img.kind ?? 'product',
@@ -597,6 +715,9 @@ export async function saveProductImages(productId: string, images: CatalogImageI
       sort_order: img.sortOrder ?? order,
       variant_id: img.variantId ?? null,
     };
+    if (legacy.storagePath) payload.storage_path = imageStoragePath(productId, img.url, img.sortOrder ?? order);
+    if (legacy.publicUrl) payload.public_url = img.url;
+    if (legacy.createdAt) payload.created_at = new Date().toISOString();
     if (img.id && existing.some((e) => e.id === img.id)) {
       await db.update<{ id: string } & Record<string, unknown>>('product_images', img.id, payload);
     } else {
@@ -622,18 +743,39 @@ export interface CatalogVariantInput {
   lowStockThreshold?: number;
 }
 
+/**
+ * Legacy live schema requires product_variants.title + price_amount +
+ * option_values + created_at/updated_at NOT NULL. These are faithful mirrors
+ * of the V2 fields (the storefront reads attributes/price/sku — never these
+ * legacy mirrors). title is derived from the real option attributes; price
+ * is never invented — null price maps to price_amount 0 (legacy only).
+ */
+async function legacyVariantColumns(): Promise<{ title?: boolean; priceAmount?: boolean; optionValues?: boolean; timestamps?: boolean }> {
+  const cols = await liveTableColumns('product_variants');
+  if (!cols) return {};
+  return {
+    title: cols.has('title'),
+    priceAmount: cols.has('price_amount'),
+    optionValues: cols.has('option_values'),
+    timestamps: cols.has('created_at') || cols.has('updated_at'),
+  };
+}
+
 /** Replace the full variant set of a product (admin variant manager). */
 export async function saveProductVariants(productId: string, variants: CatalogVariantInput[]): Promise<CatalogProduct | null> {
   const db = getDb();
+  const legacy = await legacyVariantColumns();
   const all = (await db.list<VariantRow>('product_variants', { limit: 2000 })) || [];
   const existing = all.filter((v) => v.product_id === productId);
   const incomingIds = new Set(variants.filter((v) => v.id).map((v) => v.id as string));
   for (const old of existing) {
     if (!incomingIds.has(old.id)) await db.remove('product_variants', old.id);
   }
+  const now = new Date().toISOString();
   for (const v of variants) {
-    const payload = {
-      attributes: v.attributes ?? {},
+    const attrs = v.attributes ?? {};
+    const payload: Record<string, unknown> = {
+      attributes: attrs,
       sku: v.sku ?? null,
       price: v.price ?? null,
       compare_at_price: v.compareAtPrice ?? null,
@@ -642,6 +784,13 @@ export async function saveProductVariants(productId: string, variants: CatalogVa
       status: v.status ?? 'active',
       low_stock_threshold: v.lowStockThreshold ?? 0,
     };
+    if (legacy.title) {
+      const parts = Object.entries(attrs).map(([k, val]) => `${k}: ${val}`);
+      payload.title = parts.length ? parts.join(' · ') : (v.sku ? `Variant ${v.sku}` : 'Variant');
+    }
+    if (legacy.priceAmount) payload.price_amount = v.price != null ? Math.round(v.price * 100) : 0;
+    if (legacy.optionValues) payload.option_values = attrs;
+    if (legacy.timestamps) { payload.created_at = now; payload.updated_at = now; }
     if (v.id && existing.some((e) => e.id === v.id)) {
       await db.update<{ id: string } & Record<string, unknown>>('product_variants', v.id, payload);
     } else {
@@ -934,13 +1083,13 @@ export async function getStoreSettings(): Promise<StoreSettings> {
 }
 
 export async function saveStoreSettings(settings: StoreSettings): Promise<StoreSettings> {
-  const db = getDb();
-  const now = new Date().toISOString();
+  const db = getDb();    const now = new Date().toISOString();
   const existing = await db.findFirst<{ key: string }>('store_settings', 'key', FREE_SHIPPING_KEY).catch(() => null);
   if (existing) {
-    await db.update<{ id: string } & Record<string, unknown>>('store_settings', existing.key, { value: settings, updated_at: now });
+    // store_settings PK is `key`, not `id` — update by the real column.
+    await db.updateBy('store_settings', 'key', FREE_SHIPPING_KEY, { value: settings, updated_at: now });
   } else {
-    await db.insert('store_settings', { key: FREE_SHIPPING_KEY, value: settings, updated_at: now, id: FREE_SHIPPING_KEY });
+    await db.insertRaw('store_settings', { key: FREE_SHIPPING_KEY, value: settings, updated_at: now });
   }
   return settings;
 }

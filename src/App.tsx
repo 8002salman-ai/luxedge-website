@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
@@ -9,10 +9,11 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { parseStoredCart, reconcileCart, isCartOrderable, CART_STORAGE_KEY } from './services/cartSafety';
+import { createCheckoutSession, fetchCheckoutSessionStatus } from './services/checkout';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
-  MarkerPin01, Plus, Minus, Trash01, Lock01, Loading01, CheckCircle, CreditCard01,
+  MarkerPin01,  Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
   LayoutGrid01, AlertTriangle, Eye,
   ChevronDown, ChevronRight, ArrowLeft, Upload01,
   Globe01, Clock, Send01, Headphones01, Stars01,
@@ -837,7 +838,7 @@ function Footer() {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-luxe-white/45">Online payments are in demo mode — a real provider is being integrated.</p>
+            <p className="text-[11px] text-luxe-white/45">{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</p>
           </div>
         </div>
       </div>
@@ -869,7 +870,7 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user, reviews } = useApp(); const nav = useNavigate();
+  const { addToCart, reviews } = useApp();
   const d = product.originalPrice > product.price ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
   // Ratings come ONLY from verified user reviews — never the catalog stub rating.
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
@@ -885,9 +886,9 @@ function PCard({ product }: { product: Product }) {
           )}
           {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
           {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart(product); }}
             className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag01 strokeWidth={1.5} size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
+            <ShoppingBag01 strokeWidth={1.5} size={12} /> Add to Cart
           </button>
         </div>
         <div className="px-3.5 py-3">
@@ -1049,7 +1050,7 @@ function ProductDetailPage() {
       el.setAttribute('content', content);
     };
     const setCanonical = () => {
-      const href = `https://luxedge.us/#/product/${product.id}`;
+      const href = `https://luxedge.us/product/${product.id}`;
       let el = document.head.querySelector('link[rel="canonical"]');
       if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
       el.setAttribute('href', href);
@@ -1067,8 +1068,8 @@ function ProductDetailPage() {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us/' },
-        { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://luxedge.us/#/shop' },
-        { '@type': 'ListItem', position: 3, name: product.name, item: `https://luxedge.us/#/product/${product.id}` },
+        { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://luxedge.us/shop' },
+        { '@type': 'ListItem', position: 3, name: product.name, item: `https://luxedge.us/product/${product.id}` },
       ],
     }];
     const offers: Record<string, unknown> = {
@@ -1158,14 +1159,12 @@ function ProductDetailPage() {
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
 
   const handleAddToCart = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     notify(`${qty}× ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     nav('/checkout');
@@ -2062,7 +2061,7 @@ function ShopPage() {
 }
 
 function CartDrawer() {
-  const { cart, cartOpen, closeCart, updateQty, removeFromCart, user, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, notify } = useApp();
+  const { cart, cartOpen, closeCart, updateQty, removeFromCart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, notify } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const [codeInput, setCodeInput] = useState('');
@@ -2082,7 +2081,7 @@ function CartDrawer() {
 
   const checkout = () => {
     closeCart();
-    nav(user ? '/checkout' : '/login');
+    nav('/checkout');
   };
 
   return (
@@ -2197,7 +2196,7 @@ function CartDrawer() {
                   <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
                 </div>
                 <button onClick={checkout} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-gold">
-                  <Lock01 strokeWidth={1.5} size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+                  <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
                 </button>
                 <button onClick={() => { closeCart(); nav('/cart'); }} className="w-full py-2.5 text-xs text-gray-500 hover:text-luxe-black transition-colors">
                   View Full Cart
@@ -2212,7 +2211,7 @@ function CartDrawer() {
 }
 
 function CartPage() {
-  const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
+  const { cart, updateQty, removeFromCart } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
   const remaining = 50 - sub;
 
@@ -2277,8 +2276,8 @@ function CartPage() {
               <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`font-medium ${sh === 0 ? 'text-luxe-success' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
               <div className="flex justify-between text-lg font-bold pt-3 border-t border-luxe-silver/70"><span className="text-luxe-black">Total</span><span className="text-luxe-black">${tot.toFixed(2)}</span></div>
             </div>
-            <button onClick={() => nav(user ? '/checkout' : '/login')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
-              <Lock01 strokeWidth={1.5} size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+            <button onClick={() => nav('/checkout')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
+              <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
             </button>
             <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
           </div>
@@ -2289,32 +2288,27 @@ function CartPage() {
 }
 
 function CheckoutPage() {
-  const { cart, placeOrder, user, coupon, freeShippingEnabled, freeShippingThreshold } = useApp();
+  const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify } = useApp();
   const nav = useNavigate();
-
-  const [step, setStep] = useState(1); // 1=info, 2=payment, 3=processing, 4=done
-  const [orderId, setOrderId] = useState('');
-  const [payMethod, setPayMethod] = useState<'card'|'paypal'>('card');
-  const [shipMethod, setShipMethod] = useState<'standard'|'express'>('standard');
+  const [searchParams] = useSearchParams();
+  const cancelled = searchParams.get('cancelled') === '1';
+  const [submitting, setSubmitting] = useState(false);
+  const [payError, setPayError] = useState('');
+  const [couponInput, setCouponInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const [f, setF] = useState({ firstName: user?.name.split(' ')[0] || '', lastName: user?.name.split(' ').slice(1).join(' ') || '', email: user?.email || '', phone: '', address: '', city: '', state: '', zip: '', cardNum: '', cardExp: '', cardCvc: '', cardName: '' });
-
-  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  useEffect(() => { window.scrollTo(0, 0); }, [step]);
+  const [f, setF] = useState({ email: user?.email || '', firstName: user?.name?.split(' ')[0] || '', lastName: user?.name?.split(' ').slice(1).join(' ') || '', phone: '', address: '', city: '', state: '', zip: '' });
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
   const discountedSub = Math.max(0, sub - couponDisc);
-  const shipCost = shipMethod === 'express' ? 9.99 : (freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99);
-  const tax = +(discountedSub * 0.0825).toFixed(2); // TX 8.25% (demo — real tax in a later payment phase)
+  const shipCost = freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99;
+  const tax = +(discountedSub * 0.0825).toFixed(2);
   const total = +(discountedSub + shipCost + tax).toFixed(2);
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
-  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
-  const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
+  useEffect(() => { if (cart.length === 0) nav('/shop'); }, [cart.length, nav]);
+  if (cart.length === 0) return null;
 
-  const validateStep1 = () => {
+  const validate = () => {
     const e: Record<string, string> = {};
     if (!f.firstName.trim()) e.firstName = 'Required';
     if (!f.lastName.trim()) e.lastName = 'Required';
@@ -2328,226 +2322,97 @@ function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const validateStep2 = () => {
-    if (payMethod === 'paypal') return true;
-    const e: Record<string, string> = {};
-    if (f.cardNum.replace(/\s/g, '').length < 16) e.cardNum = 'Valid card number required';
-    if (!/^\d{2}\/\d{2}$/.test(f.cardExp)) e.cardExp = 'MM/YY format';
-    if (f.cardCvc.length < 3) e.cardCvc = '3-4 digits';
-    if (!f.cardName.trim()) e.cardName = 'Required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const handleCoupon = () => {
+    if (!couponInput.trim()) return;
+    const errMsg = applyCoupon(couponInput);
+    if (errMsg) notify(errMsg, 'error'); else notify('Coupon applied!');
+    setCouponInput('');
   };
 
-  const handleNext = () => { if (step === 1 && validateStep1()) { trackEvent('begin_checkout', { currency: 'USD', value: total, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); setStep(2); } };
-  const handlePay = async () => {
-    if (step === 2 && validateStep2()) {
-      setStep(3);
-      await new Promise(r => setTimeout(r, 2500));
-      const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
-      const oid = placeOrder(addr);
-      // Sensitive card fields are discarded immediately after the (demo) payment.
-      setF(p => ({ ...p, cardNum: '', cardExp: '', cardCvc: '', cardName: '' }));
-      setOrderId(oid);
-      setStep(4);
+  const handleCheckout = async () => {
+    if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    setSubmitting(true);
+    setPayError('');
+    try {
+      trackEvent('begin_checkout', { currency: 'USD', value: total, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+      const res = await createCheckoutSession({
+        items: cart.map(i => ({ id: i.product.id, quantity: i.quantity })),
+        couponCode: coupon?.code || undefined,
+        customer: { email: f.email, name: `${f.firstName} ${f.lastName}`.trim(), phone: f.phone, address: f.address, city: f.city, state: f.state, zip: f.zip },
+      });
+      // Stripe-hosted checkout — the browser is redirected to Stripe. Luxedge
+      // never sees or stores card details.
+      window.location.assign(res.url);
+    } catch (e) {
+      setPayError((e as Error).message);
+      setSubmitting(false);
     }
   };
 
-  const fmtCard = (v: string) => v.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19);
-  const fmtExp = (v: string) => { const d = v.replace(/\D/g, ''); return d.length >= 2 ? d.slice(0, 2) + '/' + d.slice(2, 4) : d; };
-
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
+  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
+  const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
   const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 
-  // Redirect to cart (in an effect — never call navigate() during render).
-  useEffect(() => { if (cart.length === 0 && step < 4) nav('/cart'); }, [cart.length, step, nav]);
-  if (cart.length === 0 && step < 4) return null;
-
-  // ── Success ──
-  if (step === 4) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle strokeWidth={1.5} size={40} className="text-green-500" /></div>
-        <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
-        <p className="text-gray-500 mb-1">Order <span className="font-mono font-semibold text-gray-700">#{orderId}</span></p>
-        <p className="text-sm text-gray-400 mb-6">Confirmation sent to {f.email}</p>
-        <div className="bg-white rounded-xl border p-5 text-left mb-6">
-          <h3 className="font-semibold text-sm mb-3">Shipping to:</h3>
-          <p className="text-sm text-gray-600">{f.firstName} {f.lastName}</p>
-          <p className="text-sm text-gray-600">{f.address}</p>
-          <p className="text-sm text-gray-600">{f.city}, {f.state} {f.zip}</p>
-          <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
-        </div>
-        <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-center text-sm transition-colors">View Orders</Link>
-          <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Processing ──
-  if (step === 3) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="text-center">
-        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><Loading01 strokeWidth={1.5} size={36} className="text-luxe-gold animate-spin" /></div>
-        <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
-        <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
-      </div>
-    </div>
-  );
-
-  // ── Main Checkout ──
   return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Progress */}
-      <div className="bg-white border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-center gap-3">
-            {[{ n: 1, l: 'Information' }, { n: 2, l: 'Payment' }, { n: 3, l: 'Confirm' }].map((s, i) => (
-              <div key={s.n} className="flex items-center gap-3">
-                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-luxe-gold' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ring-2 ${step > s.n ? 'bg-luxe-success text-white ring-luxe-success/30' : step === s.n ? 'bg-luxe-gold text-white ring-luxe-gold/30' : 'bg-luxe-silver/60 text-luxe-gray ring-transparent'}`}>
-                    {step > s.n ? '✓' : s.n}
-                  </div>
-                  <span className="text-sm font-medium hidden sm:block">{s.l}</span>
-                </div>
-                {i < 2 && <div className={`w-8 sm:w-16 h-0.5 ${step > s.n ? 'bg-green-400' : 'bg-gray-200'}`} />}
-              </div>
-            ))}
+    <div className="bg-luxe-cream min-h-screen">
+      {cancelled && (
+        <div className="max-w-5xl mx-auto px-4 pt-6">
+          <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Payment cancelled</p>
+              <p className="text-xs text-amber-700">Your cart is still saved. No payment was taken — you can try again whenever you're ready.</p>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      )}
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <p className="eyebrow mb-2">Secure Checkout</p>
+        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Checkout</h1>
         <div className="grid lg:grid-cols-5 gap-8">
-
-          {/* ──── LEFT SIDE: Forms ──── */}
+          {/* ──── LEFT: Contact + Shipping ──── */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Step 1: Shipping */}
-            {step === 1 && (
-              <>
-                {/* Contact */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
-                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
-                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({...f, email: e.target.value})} className={I} placeholder="john@example.com" />{ER('email')}</div>
-                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({...f, phone: e.target.value})} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
-                  </div>
+            {payError && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle strokeWidth={1.5} size={18} className="text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">Checkout could not start</p>
+                  <p className="text-xs text-red-700">{payError}</p>
                 </div>
-
-                {/* Shipping Address */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
-                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({...f, state: e.target.value})} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
-                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({...f, zip: e.target.value})} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Shipping Method */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Method</h2>
-                  <div className="space-y-3">
-                    {[
-                      { id: 'standard' as const, label: 'Standard Shipping', time: '7-12 business days', price: sub >= 50 ? 'FREE' : '$4.99', badge: sub >= 50 ? '🎉 Free!' : '' },
-                      { id: 'express' as const, label: 'Express Shipping', time: '2-4 business days', price: '$9.99', badge: '' },
-                    ].map(o => (
-                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-luxe-gold border-gray-300" />
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{o.label}</p>
-                          <p className="text-xs text-gray-500">{o.time}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`font-bold text-sm ${o.price === 'FREE' ? 'text-green-600' : ''}`}>{o.price}</span>
-                          {o.badge && <p className="text-[10px] text-green-600 font-medium">{o.badge}</p>}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <button onClick={handleNext} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-gold">
-                  Continue to Payment <ArrowRight strokeWidth={1.5} size={16} />
-                </button>
-              </>
+              </div>
             )}
-
-            {/* Step 2: Payment */}
-            {step === 2 && (
-              <>
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-2"><ArrowLeft strokeWidth={1.5} size={14} /> Back to Information</button>
-
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Payment Method</h2>
-
-                  {/* Method Toggle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">STRIPE</span></div>
-                        <div><p className="font-semibold text-sm">Credit / Debit</p><p className="text-[10px] text-gray-500">Visa, MC, Amex</p></div>
-                      </div>
-                    </button>
-                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-7 bg-[#003087] rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">PayPal</span></div>
-                        <div><p className="font-semibold text-sm">PayPal</p><p className="text-[10px] text-gray-500">Fast & secure</p></div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {payMethod === 'card' ? (
-                    <div className="space-y-4">
-                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF({...f, cardNum: fmtCard(e.target.value)})} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF({...f, cardExp: fmtExp(e.target.value)})} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
-                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF({...f, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)})} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
-                      </div>
-                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF({...f, cardName: e.target.value})} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 bg-gray-50 rounded-xl">
-                      <p className="text-sm text-gray-600 mb-2">You'll be redirected to PayPal to complete payment.</p>
-                      <p className="text-xs text-gray-400">Secure. Fast. Easy.</p>
-                    </div>
-                  )}
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({ ...f, firstName: e.target.value })} className={I} placeholder="John" />{ER('firstName')}</div>
+                <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} className={I} placeholder="Doe" />{ER('lastName')}</div>
+                <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} className={I} placeholder="john@example.com" />{ER('email')}</div>
+                <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({ ...f, address: e.target.value })} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
+                <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({ ...f, city: e.target.value })} className={I} placeholder="Irving" />{ER('city')}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({ ...f, state: e.target.value })} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
+                  <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({ ...f, zip: e.target.value })} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
                 </div>
-
-                {/* Demo notice — no real payment processor is connected yet */}
-                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-semibold text-amber-800">Demo checkout — no real payment is processed</p>
-                    <p className="text-xs text-amber-700">Card details are not stored, logged, or transmitted anywhere. A real payment provider (Stripe/PayPal) will be connected in a future release.</p>
-                  </div>
-                </div>
-
-                <button onClick={handlePay} className="w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
-                  <Lock01 strokeWidth={1.5} size={16} />
-                  {payMethod === 'paypal' ? `Pay with PayPal · $${total.toFixed(2)}` : `Complete Purchase · $${total.toFixed(2)}`}
-                </button>
-              </>
-            )}
+              </div>
+            </div>
           </div>
 
-          {/* ──── RIGHT SIDE: Order Summary ──── */}
+          {/* ──── RIGHT: Order Summary ──── */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border p-6 sticky top-20">
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm sticky top-20">
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
-
-              {/* Items */}
               <div className="space-y-4 mb-6 max-h-64 overflow-y-auto pr-1">
                 {cart.map(item => (
                   <div key={item.product.id} className="flex gap-3">
                     <div className="relative shrink-0">
-                      <img src={item.product.images[0]} alt="" className="w-16 h-16 object-cover rounded-lg border" />
+                      <img src={(Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK} alt="" onError={onImageError} className="w-16 h-16 object-cover rounded-lg border" />
                       <span className="absolute -top-2 -right-2 w-5 h-5 bg-gray-700 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -2558,15 +2423,29 @@ function CheckoutPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Totals */}
+              {/* Coupon — real active store coupons only (e.g. WELCOME10) */}
+              <div className="mb-4">
+                {coupon ? (
+                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-green-700">{coupon.code} applied</p>
+                      <p className="text-[10px] text-green-600">{coupon.discountType === 'percent' ? `${coupon.discountValue}% off` : `$${coupon.discountValue} off`}</p>
+                    </div>
+                    <button onClick={removeCoupon} className="text-[11px] text-green-700 underline">Remove</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input value={couponInput} onChange={e => setCouponInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCoupon())} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Coupon code (e.g. WELCOME10)" />
+                    <button onClick={handleCoupon} className="px-4 py-2 bg-luxe-charcoal text-white rounded-lg text-xs font-semibold">Apply</button>
+                  </div>
+                )}
+              </div>
               <div className="border-t pt-4 space-y-2.5 text-sm">
-                <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">−${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {freeShippingEnabled && shipCost > 0 && discountedSub < freeShippingThreshold && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
+                {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
@@ -2575,11 +2454,15 @@ function CheckoutPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Trust Badges */}
-              <div className="mt-6 pt-5 border-t space-y-2.5">
+              <button onClick={handleCheckout} disabled={submitting}
+                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
+                {submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
+                {submitting ? 'Starting secure checkout…' : `Secure Checkout · $${total.toFixed(2)}`}
+              </button>
+              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details.</p>
+              <div className="mt-4 pt-4 border-t space-y-2.5">
                 {[
-                  { i: Truck01, t: `${shipMethod === 'express' ? 'Express 2-4 days' : 'Standard 7-12 days'}` },
+                  { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Standard shipping 7–14 days' },
                   { i: RefreshCcw01, t: '30-day hassle-free returns' },
                   { i: ShieldTick, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
@@ -2588,13 +2471,79 @@ function CheckoutPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Demo note — mirrors the explicit notice shown on the payment step */}
-              <div className="mt-5 pt-4 border-t">
-                <p className="text-[10px] text-amber-600 text-center">Demo checkout — no real payment is processed.</p>
-              </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// PAYMENT RESULT (real status from Stripe — never a fake success)
+// ============================================================================
+function CheckoutSuccessPage() {
+  const { clearCart, removeCoupon } = useApp();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('session_id') || '';
+  const [status, setStatus] = useState<'loading' | 'paid' | 'unpaid' | 'error'>('loading');
+  const [info, setInfo] = useState<{ orderNumber: string | null; total: number | null; currency: string | null; email: string | null }>({ orderNumber: null, total: null, currency: null, email: null });
+
+  useEffect(() => {
+    if (!sessionId) { setStatus('error'); return; }
+    let active = true;
+    (async () => {
+      try {
+        const r = await fetchCheckoutSessionStatus(sessionId);
+        if (!active) return;
+        setInfo({ orderNumber: r.order?.orderNumber ?? null, total: r.order?.total ?? r.session?.amountTotal ?? null, currency: r.order?.currency ?? r.session?.currency ?? null, email: r.session?.customerEmail ?? null });
+        setStatus(r.session?.paymentStatus === 'paid' ? 'paid' : 'unpaid');
+        if (r.session?.paymentStatus === 'paid') { clearCart(); removeCoupon(); }
+      } catch {
+        if (active) setStatus('error');
+      }
+    })();
+    return () => { active = false; };
+  }, [sessionId, clearCart, removeCoupon]);
+
+  if (status === 'loading') return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center">
+        <Loading01 strokeWidth={1.5} size={36} className="text-luxe-gold animate-spin mx-auto mb-4" />
+        <p className="text-sm text-luxe-gray">Verifying your payment with Stripe…</p>
+      </div>
+    </div>
+  );
+
+  if (status === 'error' || status === 'unpaid') {
+    const unpaid = status === 'unpaid';
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ${unpaid ? 'bg-amber-100' : 'bg-gray-100'}`}>
+            {unpaid ? <Clock strokeWidth={1.5} size={38} className="text-amber-500" /> : <AlertTriangle strokeWidth={1.5} size={38} className="text-gray-400" />}
+          </div>
+          <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">{unpaid ? 'Payment not completed' : 'Could not verify payment'}</h1>
+          <p className="text-sm text-luxe-gray mb-6">{unpaid ? 'Your payment has not been completed yet. If you were charged, the order will be confirmed shortly.' : 'We could not confirm your payment status right now. Check your email for a receipt.'}</p>
+          <div className="flex gap-3 justify-center">
+            <Link to="/cart" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Back to Cart</Link>
+            <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle strokeWidth={1.5} size={40} className="text-green-600" /></div>
+        <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">Thank you for your order!</h1>
+        {info.orderNumber && <p className="text-gray-600 mb-1">Order <span className="font-mono font-semibold text-gray-800">{info.orderNumber}</span></p>}
+        <p className="text-sm text-gray-400 mb-6">{info.email ? `A receipt is on its way to ${info.email}.` : 'Your payment was confirmed by Stripe.'}</p>
+        <div className="flex gap-3 justify-center">
+          <Link to="/orders" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">View Orders</Link>
+          <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
         </div>
       </div>
     </div>
@@ -3473,7 +3422,7 @@ function AdminFallback() {
 export default function App() {
   return (
     <AppProvider>
-      <HashRouter>
+      <BrowserRouter>
         <MarketingManager />
         <RouteTitle />
         <Routes>
@@ -3484,6 +3433,7 @@ export default function App() {
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
           <Route path="/checkout" element={<SLayout><CheckoutPage /></SLayout>} />
+          <Route path="/checkout/success" element={<SLayout><CheckoutSuccessPage /></SLayout>} />
           <Route path="/orders" element={<SLayout><OrdersPage /></SLayout>} />
           <Route path="/about" element={<SLayout><AboutPage /></SLayout>} />
           <Route path="/contact" element={<SLayout><ContactPage /></SLayout>} />
@@ -3507,7 +3457,7 @@ export default function App() {
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>
         <Toast />
-      </HashRouter>
+      </BrowserRouter>
     </AppProvider>
   );
 }
