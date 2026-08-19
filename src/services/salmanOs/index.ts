@@ -12,5 +12,5 @@
 export * from './types.js';
 export {
   salmanOsStatus, getProjectStatus, getIntelligence, getJobs, runJob, pauseJob, resumeJob,
-  CONTRACT_FILE, PROJECT_SLUG, ENVIRONMENT,
+  CONTRACT_VERSION, CONTRACT_DOC_VERSION, CONTRACT_DOC_PATH, PROJECT_SLUG,
 } from './contract.js';
