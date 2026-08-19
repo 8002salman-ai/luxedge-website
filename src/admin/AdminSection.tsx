@@ -10,6 +10,7 @@ import { useAuthStore } from '../store/authStore';
 import ProductScout from './ProductScout';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
+import HermesIntel from './HermesIntel';
 import type {
   Product, ProductVariant, Order, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
@@ -108,6 +109,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/ai-import', icon: Robot, label: 'AI Import ⭐' },
     { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
     { to: '/admin/ai-control', icon: Cpu, label: 'AI Control ⭐' },
+    { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence ⭐' },
     { to: '/admin/settings', icon: GearSix, label: 'GearSix' },
   ];
 
@@ -240,6 +242,7 @@ function ADashboard() {
             { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
             { to: '/admin/variant-gen', icon: Stack, label: 'Create Variants', color: '#0088ff' },
             { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Optimize', color: '#10b981' },
+            { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence', color: '#8b5cf6' },
           ].map(t => (
             <Link key={t.to} to={t.to}
               className="flex flex-col items-start gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium hover:bg-gray-50 transition-all group">
@@ -4659,6 +4662,7 @@ export default function AdminSection() {
       <Route path="ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
       <Route path="scout" element={<AdminLayout><ProductScout /></AdminLayout>} />
       <Route path="ai-control" element={<AdminLayout><AiControlCenter /></AdminLayout>} />
+      <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
