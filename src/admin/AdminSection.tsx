@@ -13,7 +13,7 @@ import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
 import type {
-  Product, ProductVariant, Order, BlogPost, AdminCategory,
+  Product, ProductVariant, BlogPost, AdminCategory,
   AIProvider, AIExtractedProduct, EnterpriseVariant, VariantAttribute,
   SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas, ImportHistoryEntry,
   ProviderStatus, ProviderStatusMap,
@@ -111,7 +111,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
     { to: '/admin/ai-control', icon: Cpu, label: 'AI Control ⭐' },
     { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence ⭐' },
-    { to: '/admin/settings', icon: GearSix, label: 'GearSix' },
+    { to: '/admin/settings', icon: GearSix, label: 'Settings' },
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
@@ -172,16 +172,28 @@ function AdminLayout({ children }: { children: ReactNode }) {
   );
 }
 
+interface DashOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
+
 function ADashboard() {
-  const { products, orders, users, reviews } = useApp();
-  const rev = orders.reduce((s, o) => s + o.total, 0);
-  const pending = orders.filter(o => o.status === 'Pending').length;
+  const { products, users, reviews } = useApp();
+  const [realOrders, setRealOrders] = useState<DashOrderRow[]>([]);
+  // REAL orders only (Stripe webhook → luxedge_orders). No demo numbers.
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { orders?: DashOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
+      .catch(() => setRealOrders([]));
+  }, []);
+  const rev = realOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+  const pending = realOrders.filter(o => o.status === 'awaiting_payment' || o.status === 'pending').length;
   const pendingR = reviews.filter(r => r.status === 'pending').length;
   const lowStock = products.filter(p => p.stock <= 10).length;
 
   const stats = [
     { l: 'Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: CurrencyDollar, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
-    { l: 'Orders', v: orders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
+    { l: 'Orders', v: realOrders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
     { l: 'Customers', v: users.length, i: UsersIcon, c1: '#8b5cf6', c2: '#7c3aed', bg: 'from-violet-500 to-purple-600' },
     { l: 'Products', v: products.length, i: Package, c1: '#0088ff', c2: '#00d2ff', bg: 'from-blue-500 to-cyan-400' },
   ];
@@ -207,9 +219,6 @@ function ADashboard() {
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-md`}>
               <s.i size={14} className="text-white" />
             </div>
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5" style={{ color: s.c1, backgroundColor: `${s.c1}15` }}>
-              <TrendUp size={9} /> +12%
-            </span>
           </div>
           <p className="text-lg font-bold text-gray-900 leading-none">{s.v}</p>
           <p className="text-[10px] text-gray-500 font-medium mt-1">{s.l}</p>
@@ -274,32 +283,28 @@ function ADashboard() {
           </tr>
         </thead>
         <tbody>
-          {orders.slice(0,5).map(o => (
+          {realOrders.slice(0,5).map(o => (
             <tr key={o.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
               <td className="px-4 py-2">
                 <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold ${
-                    o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                    o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                    o.status === 'Processing' ? 'bg-sky-100 text-blue-700' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>#{String(orders.indexOf(o)+1).padStart(2,'0')}</div>
-                  <span className="font-semibold text-[11px] text-gray-900">{o.id}</span>
+                  <span className="font-mono font-semibold text-[11px] text-gray-900">{o.order_number}</span>
                 </div>
               </td>
-              <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.userName}</td>
-              <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{o.date.slice(0,10)}</td>
-              <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${o.total.toFixed(2)}</td>
+              <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.customer_email || '—'}</td>
+              <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{new Date(o.created_at).toLocaleDateString()}</td>
+              <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${Number(o.total || 0).toFixed(2)}</td>
               <td className="px-4 py-2 text-right">
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${
-                  o.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                  o.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                  o.status === 'Processing' ? 'bg-sky-100 text-blue-700' :
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold capitalize ${
+                  o.status === 'paid' ? 'bg-green-100 text-green-700' :
+                  String(o.status || '').includes('refund') ? 'bg-amber-100 text-amber-700' :
                   'bg-gray-100 text-gray-600'
-                }`}>{o.status}</span>
+                }`}>{String(o.status || '').replace('_', ' ')}</span>
               </td>
             </tr>
           ))}
+          {realOrders.length === 0 && (
+            <tr><td colSpan={5} className="px-4 py-6 text-center text-[11px] text-gray-400">No orders yet — completed Stripe payments will appear here.</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -593,34 +598,38 @@ export function _AProductEdit() { // superseded by CatalogAdmin.CatalogProductEd
 interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; created_at: string; items?: unknown[]; }
 
 function AOrders() {
-  const { orders, setOrders, notify } = useApp();
-  const [view, setView] = useState<Order | null>(null);
   const [stripeOrders, setStripeOrders] = useState<StripeOrderRow[]>([]);
-  const statuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
-  const statusColor: Record<string, string> = { Pending: 'bg-yellow-100 text-yellow-700', Processing: 'bg-blue-100 text-blue-700', Shipped: 'bg-purple-100 text-purple-700', Delivered: 'bg-green-100 text-green-700', Cancelled: 'bg-red-100 text-red-700' };
-  const updateStatus = (id: string, status: string) => { setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o)); notify(`Order ${status}`); };
+  const [loaded, setLoaded] = useState(false);
 
-  // Authoritative persisted orders (created by the Stripe webhook).
+  // Authoritative persisted orders ONLY (created by the Stripe webhook). No
+  // demo order history — the legacy demo table was removed for truthfulness.
   useEffect(() => {
     const token = getAccessToken();
-    if (!token) return;
+    if (!token) { setLoaded(true); return; }
     fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : []))
-      .catch(() => setStripeOrders([]));
+      .catch(() => setStripeOrders([]))
+      .finally(() => setLoaded(true));
   }, []);
 
   return <div className="space-y-6">
     <h1 className="text-2xl font-bold">Orders</h1>
-
-    {stripeOrders.length > 0 && (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-sm text-gray-800">Stripe Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
-            <p className="text-[11px] text-gray-400">Persisted from the Stripe webhook — real payment records.</p>
-          </div>
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-sm text-gray-800">Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
+          <p className="text-[11px] text-gray-400">Persisted from the Stripe webhook — real payment records only.</p>
         </div>
+      </div>
+      {!loaded ? (
+        <div className="px-6 py-10 text-center text-sm text-gray-400">Loading orders…</div>
+      ) : stripeOrders.length === 0 ? (
+        <div className="px-6 py-10 text-center">
+          <p className="text-sm text-gray-500 mb-1">No orders yet</p>
+          <p className="text-xs text-gray-400">Completed Stripe payments will appear here automatically.</p>
+        </div>
+      ) : (
         <div className="overflow-x-auto"><table className="w-full">
           <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Order</th><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Stripe Session</th><th className="px-6 py-4">Date</th></tr></thead>
           <tbody>{stripeOrders.map(o => (
@@ -628,34 +637,14 @@ function AOrders() {
               <td className="px-6 py-4"><p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p></td>
               <td className="px-6 py-4 text-sm text-gray-600">{o.customer_email || '—'}</td>
               <td className="px-6 py-4 font-semibold">${Number(o.total || 0).toFixed(2)}</td>
-              <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${o.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{o.status}</span></td>
+              <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${o.status === 'paid' ? 'bg-green-100 text-green-700' : o.status?.includes('refund') ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{String(o.status || '').replace('_', ' ')}</span></td>
               <td className="px-6 py-4 text-xs text-gray-400 font-mono">{o.stripe_session_id ? o.stripe_session_id.slice(0, 18) + '…' : '—'}</td>
               <td className="px-6 py-4 text-xs text-gray-500">{new Date(o.created_at).toLocaleString()}</td>
             </tr>
           ))}</tbody>
         </table></div>
-      </div>
-    )}
-
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden"><div className="overflow-x-auto"><table className="w-full">
-      <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Order</th><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
-      <tbody>{orders.map(o => <tr key={o.id} className="border-t hover:bg-gray-50">
-        <td className="px-6 py-4"><p className="font-medium text-sm">{o.id}</p><p className="text-xs text-gray-500">{new Date(o.date).toLocaleDateString()}</p></td>
-        <td className="px-6 py-4 text-sm">{o.userName}</td>
-        <td className="px-6 py-4 font-semibold">${o.total.toFixed(2)}</td>
-        <td className="px-6 py-4"><select value={o.status} onChange={e => updateStatus(o.id, e.target.value)} className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 cursor-pointer ${statusColor[o.status] || 'bg-gray-100'}`}>{statuses.map(s => <option key={s}>{s}</option>)}</select></td>
-        <td className="px-6 py-4"><button onClick={() => setView(o)} className="p-2 hover:bg-blue-50 rounded text-blue-600"><Eye size={16} /></button></td>
-      </tr>)}</tbody>
-    </table></div></div>
-
-    <Modal open={!!view} onClose={() => setView(null)} title={`Order ${view?.id}`}>
-      {view && <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm"><div><p className="text-gray-500">Customer</p><p className="font-medium">{view.userName}</p></div><div><p className="text-gray-500">Status</p><p className="font-medium">{view.status}</p></div></div>
-        {view.address && <div className="bg-gray-50 p-3 rounded-lg text-sm"><p className="text-gray-500 text-xs mb-1">Shipping Address</p><p>{view.address}</p></div>}
-        <div className="space-y-2">{view.items.map(i => <div key={i.product.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium text-sm">{i.product.name}</p><p className="text-xs text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}</div>
-        <div className="pt-3 border-t flex justify-between font-bold"><span>Total</span><span>${view.total.toFixed(2)}</span></div>
-      </div>}
-    </Modal>
+      )}
+    </div>
   </div>;
 }
 
@@ -997,6 +986,7 @@ const META_CTA_OPTIONS = ['Shop Now','Learn More','Get Offer','Order Now','Sign 
 
 function AMarketingGen() {
   const { products } = useApp();
+  const nav = useNavigate();
   const [tab, setTab] = useState<MktTab>('google');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [aiProvider, setAiProvider] = useState('');
@@ -1097,13 +1087,13 @@ function parseJ<T>(raw: string, fb: T): T {
     setGenerating(false); setGenSection('');
   }
 
-  const MKT_TABS: { key: MktTab; label: string }[] = [
-    { key: 'google', label: '🔍 Google Ads' },
-    { key: 'meta', label: '📘 Meta Ads' },
-    { key: 'social', label: '📱 Social Posts' },
-    { key: 'email', label: '📧 Email' },
-    { key: 'video', label: '🎬 Video' },
-    { key: 'vault', label: '🗄️ Vault' },
+  const MKT_TABS: { key: MktTab; label: string; icon: typeof MagnifyingGlass }[] = [
+    { key: 'google', label: 'Google Ads', icon: MagnifyingGlass },
+    { key: 'meta', label: 'Meta Ads', icon: Megaphone },
+    { key: 'social', label: 'Social Posts', icon: ShareNetwork },
+    { key: 'email', label: 'Email', icon: PaperPlaneRight },
+    { key: 'video', label: 'Video', icon: DeviceMobile },
+    { key: 'vault', label: 'Vault', icon: Star },
   ];
 
   const CopyBtn = ({ text, k }: { text: string; k: string }) => (
@@ -1170,11 +1160,24 @@ function parseJ<T>(raw: string, fb: T): T {
         </div>
       </div>
 
+      {/* Honest provider state — never fake AI output */}
+      {activeProviders.length === 0 && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm">
+          <p className="font-semibold text-amber-800 mb-1 flex items-center gap-2"><Cpu size={15} /> No AI provider configured</p>
+          <p className="text-amber-700">Marketing Generator needs an AI provider to create copy — nothing will be generated until one is set up. Open{' '}
+            <button onClick={() => nav('/admin/ai-control')} className="underline font-medium text-amber-800">AI Control</button>
+            {' '}or{' '}
+            <button onClick={() => nav('/admin/ai')} className="underline font-medium text-amber-800">AI Hub</button>
+            {' '}to configure a provider (settings are stored server-side, never in the browser).
+          </p>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl overflow-x-auto">
         {MKT_TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-            {t.label}
+          <button key={t.key} onClick={() => setTab(t.key)} className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all inline-flex items-center gap-1.5 ${tab === t.key ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+            <t.icon size={14} /> {t.label}
           </button>
         ))}
       </div>

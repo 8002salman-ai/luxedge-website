@@ -6,9 +6,9 @@ import AdSenseAd from './components/AdSenseAd';
 import CookieConsent from './components/CookieConsent';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
-import { isSupabaseConfigured, updatePassword, updateUserMetadata } from './services/supabase';
+import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
-import { parseStoredCart, reconcileCart, isCartOrderable, CART_STORAGE_KEY } from './services/cartSafety';
+import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus } from './services/checkout';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
@@ -18,7 +18,7 @@ import {
   ChevronDown, ChevronRight, ArrowLeft, Upload01,
   Globe01, Clock, Send01, Headphones01, Stars01,
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
-  Moon01, Sliders01,
+  Moon01, Sliders01, Droplets01, Scissors01, Luggage01,
 } from '@untitledui/icons';
 
 // ============================================================================
@@ -113,36 +113,8 @@ export {
 
 // ============================================================================
 // DATA
-// ============================================================================
-const DP: Omit<Product,'id'|'name'|'description'|'price'|'originalPrice'|'category'|'stock'|'images'|'rating'|'reviews'|'isActive'> = { shortDesc:'', brand:'Luxedge', condition:'New', tags:[], weight:'', dimensions:'', origin:'China', freeShipping:true, shippingCost:'0', variants:[], imageAlts:[] };
-const INIT_PRODUCTS: Product[] = [
-  { ...DP, id:'1', name:'Orthopedic Memory Foam Dog Bed', shortDesc:'Joint-supporting dog bed', description:'Orthopedic memory foam dog bed with a washable, removable cover. Supports joints and relieves pressure points so your dog sleeps deeply and wakes up refreshed.', price:49.99, originalPrice:89.99, category:'Pet Beds', stock:64, images:['https://upload.wikimedia.org/wikipedia/commons/f/f4/Dog_sleeping_in_a_dog_bed.JPG'], rating:4.9, reviews:1123, isActive:true, brand:'LuxePaws', weight:'4.2 lbs', tags:['dog bed','memory foam','orthopedic'], variants:[{id:'v1',color:'Gray',size:'Medium',price:49.99,salePrice:49.99,stock:30,sku:'PB-M-GY'},{id:'v2',color:'Gray',size:'Large',price:62.99,salePrice:62.99,stock:34,sku:'PB-L-GY'}] },
-  { ...DP, id:'2', name:'Interactive Cat Feather Toy', shortDesc:'Motion-activated cat teaser', description:'Motion-activated interactive feather toy that mimics prey movement. Keeps indoor cats active, entertained, and mentally stimulated for hours.', price:24.99, originalPrice:44.99, category:'Pet Toys', stock:132, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg'], rating:4.7, reviews:876, isActive:true, brand:'WhiskerWand', weight:'0.6 lbs', tags:['cat toy','interactive','feather'] },
-  { ...DP, id:'3', name:'Stainless Steel Pet Water Fountain', shortDesc:'Triple-filter fountain', description:'3-liter stainless steel pet water fountain with triple filtration and a quiet pump. Encourages pets to drink more fresh, filtered water every day.', price:34.99, originalPrice:59.99, category:'Feeding & Water', stock:76, images:['https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg'], rating:4.8, reviews:521, isActive:true, brand:'AquaPure', weight:'2.3 lbs', tags:['water fountain','hydration','stainless steel'] },
-  { ...DP, id:'4', name:'Adjustable No-Pull Dog Harness', shortDesc:'Reflective walking harness', description:'No-pull reflective dog harness with padded chest and fully adjustable straps. Ensures comfortable, secure walks for dogs of all sizes.', price:29.99, originalPrice:54.99, category:'Dog Supplies', stock:98, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Dog_in_a_harness.jpg/960px-Dog_in_a_harness.jpg'], rating:4.8, reviews:654, isActive:true, brand:'TrailMate', weight:'0.8 lbs', tags:['dog harness','walking','reflective'], variants:[{id:'v3',color:'Black',size:'Medium',price:29.99,salePrice:29.99,stock:50,sku:'DH-M-BK'},{id:'v4',color:'Black',size:'Large',price:32.99,salePrice:32.99,stock:48,sku:'DH-L-BK'}] },
-  { ...DP, id:'5', name:'Self-Cleaning Slicker Grooming Brush', shortDesc:'Deshedding grooming brush', description:'Self-cleaning slicker brush with retractable bristles for easy cleanup. Gently removes loose fur, tangles, and mats while massaging your pet\u2019s skin.', price:19.99, originalPrice:39.99, category:'Grooming', stock:210, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG'], rating:4.6, reviews:432, isActive:true, brand:'FurFresh', weight:'1.1 lbs', tags:['grooming','brush','deshedding'] },
-  { ...DP, id:'6', name:'Premium Cat Scratching Post', shortDesc:'Sturdy sisal scratch tower', description:'Premium sisal scratching post with a cozy perch and dangling toy. Satisfies your cat\u2019s natural scratching instinct while protecting your furniture.', price:45.99, originalPrice:79.99, category:'Cat Supplies', stock:57, images:['https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg'], rating:4.8, reviews:389, isActive:true, brand:'CatHaven', weight:'8.5 lbs', tags:['scratching post','sisal','cat furniture'] },
-  { ...DP, id:'7', name:'Slow Feeder Dog Bowl', shortDesc:'Anti-gulp puzzle bowl', description:'Non-slip slow feeder bowl with raised ridges that slows down fast eaters. Reduces bloating and improves digestion for happier mealtimes.', price:17.99, originalPrice:29.99, category:'Feeding & Water', stock:143, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg/960px-Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg'], rating:4.7, reviews:298, isActive:true, brand:'BowlWell', weight:'0.9 lbs', tags:['slow feeder','bowl','anti-gulp'] },
-  { ...DP, id:'8', name:'Portable Pet Travel Water Bottle', shortDesc:'Leak-proof one-hand dispenser', description:'Portable pet travel water bottle with a one-hand dispensing cup and leak-proof design. Perfect for walks, hikes, and road trips with your furry friend.', price:15.99, originalPrice:27.99, category:'Pet Accessories', stock:188, images:['https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:245, isActive:true, brand:'TravelPaw', weight:'0.7 lbs', tags:['travel','water bottle','portable'] },
-  { ...DP, id:'9', name:'Durable Rope Dog Toy Set', shortDesc:'Chew & fetch rope toys', description:'Set of 3 durable cotton rope dog toys designed for chewing, tug-of-war, and fetch. Helps clean teeth and satisfies natural chewing instincts.', price:14.99, originalPrice:24.99, category:'Pet Toys', stock:201, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Maltipoo_with_rope_toy_%2895554%29.jpg/960px-Maltipoo_with_rope_toy_%2895554%29.jpg'], rating:4.7, reviews:512, isActive:true, brand:'PlayBone', weight:'0.5 lbs', tags:['rope toy','chew','fetch'] },
-  { ...DP, id:'10', name:'Cozy Calming Cat Bed', shortDesc:'Cuddler donut cat bed', description:'Cozy donut-shaped cat bed with a raised rim for security and warmth. Machine-washable plush design gives cats a calm, snug place to curl up.', price:32.99, originalPrice:54.99, category:'Pet Beds', stock:84, images:['https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg'], rating:4.9, reviews:734, isActive:true, brand:'SnugglePet', weight:'1.8 lbs', tags:['cat bed','calming','cuddler'] },
-  { ...DP, id:'11', name:'Automatic Pet Food Dispenser', shortDesc:'Programmable meal feeder', description:'Automatic pet food dispenser with programmable portions and a built-in voice recorder. Keeps your pet on a consistent feeding schedule even when you are away.', price:54.99, originalPrice:89.99, category:'Feeding & Water', stock:46, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG'], rating:4.7, reviews:318, isActive:true, brand:'SmartFeed', weight:'3.6 lbs', tags:['food dispenser','automatic','programmable'] },
-  { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
-  { ...DP, id:'13', name:'SonicGlow Electric Toothbrush', shortDesc:'Sonic toothbrush, 5 modes', description:'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A hygiene bestseller across AliExpress and Amazon.', price:26.99, originalPrice:54.99, category:'Wellness', stock:88, images:['https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2456, isActive:false, brand:'SonicGlow', weight:'0.3 lbs', tags:['toothbrush','electric','oral care'], variants:[{id:'v13a',color:'White',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-WHT'},{id:'v13b',color:'Black',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-BLK'}] },
-  { ...DP, id:'14', name:'FlexCore Adjustable Dumbbell', shortDesc:'5-in-1 adjustable dumbbell', description:'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.', price:64.99, originalPrice:119.99, category:'Wellness', stock:42, images:['https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:1367, isActive:false, brand:'FlexCore', weight:'25 lbs', tags:['dumbbell','home gym','fitness'] },
-  { ...DP, id:'15', name:'AuroraCharge 3-in-1 Wireless Station', shortDesc:'3-in-1 wireless charger', description:'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.', price:33.99, originalPrice:59.99, category:'Tech & Gadgets', stock:130, images:['https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2078, isActive:false, brand:'AuroraCharge', weight:'0.5 lbs', tags:['wireless charger','magsafe','desk'] },
-  { ...DP, id:'16', name:'ZenMist Ultrasonic Aroma Diffuser', shortDesc:'300ml essential-oil diffuser', description:'300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.', price:21.99, originalPrice:39.99, category:'Home & Living', stock:156, images:['https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:3945, isActive:false, brand:'ZenMist', weight:'0.8 lbs', tags:['diffuser','aromatherapy','home'] },
-  { ...DP, id:'17', name:'CoreFlex Non-Slip Yoga Mat', shortDesc:'6mm TPE yoga mat', description:'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.', price:19.99, originalPrice:36.99, category:'Wellness', stock:187, images:['https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2611, isActive:false, brand:'CoreFlex', weight:'2.2 lbs', tags:['yoga mat','fitness','non-slip'], variants:[{id:'v17a',color:'Blue',size:'6mm',price:19.99,salePrice:19.99,stock:94,sku:'CF-BLU'},{id:'v17b',color:'Pink',size:'6mm',price:19.99,salePrice:19.99,stock:93,sku:'CF-PNK'}] },
-  { ...DP, id:'18', name:'ClarityPro Blue-Light Glasses', shortDesc:'Anti-blue-light computer glasses', description:'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.', price:17.99, originalPrice:34.99, category:'Accessories', stock:164, images:['https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:1743, isActive:false, brand:'ClarityPro', weight:'0.05 lbs', tags:['glasses','blue light','eye care'] },
-  { ...DP, id:'19', name:'ChillBreeze Portable Neck Fan', shortDesc:'Bladeless hands-free neck fan', description:'Hands-free bladeless neck fan with 3 speed settings, 360° airflow, and a rechargeable 4000mAh battery lasting up to 16 hours. Lightweight, whisper-quiet, and hair-safe — perfect for commutes, travel, and outdoor work. A viral summer bestseller on TikTok and Amazon.', price:23.99, originalPrice:42.99, category:'Tech & Gadgets', stock:140, images:['https://images.pexels.com/photos/4491881/pexels-photo-4491881.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2734, isActive:false, brand:'ChillBreeze', weight:'0.4 lbs', tags:['neck fan','portable','bladeless','summer'], variants:[{id:'v19a',color:'White',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-WHT'},{id:'v19b',color:'Black',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-BLK'}] },
-  { ...DP, id:'20', name:'RelaxEye Heated Eye Massager', shortDesc:'Bluetooth heated eye massager', description:'Rechargeable heated eye massager with air-compression, gentle vibration, and soothing warmth to relieve eye strain, puffiness, and headaches. Built-in Bluetooth music, 5 modes, and a foldable travel design. A top self-care gadget trending on Amazon and AliExpress.', price:38.99, originalPrice:74.99, category:'Wellness', stock:82, images:['https://images.pexels.com/photos/3865711/pexels-photo-3865711.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:1988, isActive:false, brand:'RelaxEye', weight:'0.7 lbs', tags:['eye massager','relaxation','self care','bluetooth'] },
-  { ...DP, id:'21', name:'PostureFix Smart Posture Corrector', shortDesc:'Vibrating smart posture trainer', description:'Discreet smart posture corrector that gently vibrates when you slouch, retraining your back and shoulders for a healthier posture. Adjustable, breathable, and unisex — pairs with a free app to track progress. A viral wellness bestseller for desk workers.', price:27.99, originalPrice:49.99, category:'Wellness', stock:110, images:['https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1524, isActive:false, brand:'PostureFix', weight:'0.3 lbs', tags:['posture corrector','back support','wellness','smart'] },
-  { ...DP, id:'22', name:'AquaTrack Smart Water Bottle', shortDesc:'LED reminder insulated bottle', description:'Smart insulated stainless-steel water bottle with an LED hydration reminder and temperature display in the cap. Keeps drinks cold 24h / hot 12h, 500ml, BPA-free, and leak-proof. A trending health-and-fitness gadget across Amazon and TikTok.', price:25.99, originalPrice:46.99, category:'Wellness', stock:125, images:['https://images.pexels.com/photos/1000084/pexels-photo-1000084.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2103, isActive:false, brand:'AquaTrack', weight:'0.6 lbs', tags:['water bottle','smart','hydration','insulated'], variants:[{id:'v22a',color:'Silver',size:'500ml',price:25.99,salePrice:25.99,stock:63,sku:'AT-SLV'},{id:'v22b',color:'Black',size:'500ml',price:25.99,salePrice:25.99,stock:62,sku:'AT-BLK'}] },
-  { ...DP, id:'23', name:'LumaStrip RGB LED Light Strip', shortDesc:'App & music-sync LED strip 16ft', description:'16ft app-controlled RGB LED light strip with 16 million colors, music sync, and voice control (Alexa & Google). Easy peel-and-stick install, remote included, and dimmable scenes for gaming setups and bedrooms. One of the top-selling home-decor items on Amazon.', price:18.99, originalPrice:35.99, category:'Home & Living', stock:198, images:['https://images.pexels.com/photos/1616403/pexels-photo-1616403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:4562, isActive:false, brand:'LumaStrip', weight:'0.5 lbs', tags:['led strip','rgb','home decor','gaming'] },
-  { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:false, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
-];
-
-// (demo catalog constants removed — the storefront is DB-driven only; INIT_PRODUCTS stays as an admin/dev fixture)
+// (demo catalog constants removed — the storefront is DB-driven only; no fake
+// products, fake ratings, or fake orders anywhere in the customer path)
 
 // (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
 
@@ -199,25 +171,14 @@ function mapCatalogCategory(c: CatalogCategory): AdminCategory {
 }
 // Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
 // users come from Supabase Auth and are never represented with passwords).
-const INIT_USERS: AppUser[] = [
-  { id: 'u1', email: 'john@test.com', name: 'John Smith', role: 'buyer', joined: '2024-01-15' },
-  { id: 'u2', email: 'sarah@test.com', name: 'Sarah Johnson', role: 'buyer', joined: '2024-02-20' },
-  { id: 'u3', email: 'mike@test.com', name: 'Mike Williams', role: 'buyer', joined: '2024-03-01' },
-];
+// No fake customers — real users come from Supabase auth. Admin lists show
+// real profiles only (empty until they exist).
+const INIT_USERS: AppUser[] = [];
 
-const INIT_ORDERS: Order[] = [
-  { id: 'ORD-001', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[0], quantity: 1 }], total: 49.99, status: 'Delivered', date: '2024-03-01', address: '123 Main St, Austin TX' },
-  { id: 'ORD-002', userId: 'u2', userName: 'Sarah Johnson', items: [{ product: INIT_PRODUCTS[2], quantity: 2 }], total: 69.98, status: 'Shipped', date: '2024-03-10', address: '456 Oak Ave, Dallas TX' },
-  { id: 'ORD-003', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[4], quantity: 1 }], total: 19.99, status: 'Processing', date: '2024-03-14', address: '123 Main St, Austin TX' },
-  { id: 'ORD-004', userId: 'u3', userName: 'Mike Williams', items: [{ product: INIT_PRODUCTS[6], quantity: 1 }, { product: INIT_PRODUCTS[7], quantity: 1 }], total: 33.98, status: 'Pending', date: '2024-03-15', address: '789 Pine St, Houston TX' },
-];
-
-const INIT_REVIEWS: Review[] = [
-  { id: 'r1', productId: '1', productName: 'Orthopedic Memory Foam Dog Bed', userName: 'John Smith', rating: 5, comment: 'Best dog bed ever! My pup sleeps great.', status: 'approved', date: '2024-03-05' },
-  { id: 'r2', productId: '3', productName: 'Stainless Steel Pet Water Fountain', userName: 'Sarah Johnson', rating: 4, comment: 'Great fountain, my cat drinks way more now.', status: 'approved', date: '2024-03-08' },
-  { id: 'r3', productId: '5', productName: 'Self-Cleaning Slicker Grooming Brush', userName: 'Mike Williams', rating: 5, comment: 'Sleek and functional! Shedding is under control.', status: 'pending', date: '2024-03-14' },
-  { id: 'r4', productId: '6', productName: 'Premium Cat Scratching Post', userName: 'Sarah Johnson', rating: 5, comment: 'Furniture is safe now. Kitty loves the perch!', status: 'pending', date: '2024-03-15' },
-];
+// No fake order history or reviews: real orders come from the Stripe webhook
+// (luxedge_orders, shown in Admin → Orders) and real reviews do not exist
+// yet. The storefront must never display invented customers or ratings.
+const INIT_REVIEWS: Review[] = [];
 
 const INIT_CATEGORIES: AdminCategory[] = [
   { id: 'c1', name: 'Dog Supplies', isActive: true, subs: [{ id: 'c1s1', name: 'Dogs', isActive: true }, { id: 'c1s2', name: 'Puppies', isActive: true }] },
@@ -261,7 +222,7 @@ const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'Al
 // CONTEXT
 // ============================================================================
 interface Ctx {
-  user: AppUser | null; cart: CartItem[]; orders: Order[];
+  user: AppUser | null; cart: CartItem[];
   products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
   login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
@@ -271,9 +232,7 @@ interface Ctx {
   updateAdminProfile: (name: string, email: string) => void;
   addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
   updateQty: (id: string, q: number) => void; clearCart: () => void;
-  placeOrder: (addr: string) => string;
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
@@ -321,7 +280,6 @@ function loadSession(): AppUser | null {
 function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
-  const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
   // Phase 4E.1 — the storefront catalog starts EMPTY. Demo/fallback products
   // must NEVER appear when the database has no published products; only the
   // qualified/approved pipeline may populate the customer-facing catalog.
@@ -375,14 +333,6 @@ function AppProvider({ children }: { children: ReactNode }) {
     return null;
   };
   const removeCoupon = () => setCoupon(null);
-
-  // Coupon discount on the current cart (percent or fixed, min-cart respected).
-  const cartSubtotal = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const couponDiscount = coupon && coupon.minCartValue <= cartSubtotal
-    ? (coupon.discountType === 'percent'
-        ? Math.round(cartSubtotal * (coupon.discountValue / 100) * 100) / 100
-        : Math.min(cartSubtotal, coupon.discountValue))
-    : 0;
 
   // Persist the cart so items survive a page refresh.
   useEffect(() => {
@@ -478,29 +428,12 @@ function AppProvider({ children }: { children: ReactNode }) {
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
-  const placeOrder = (addr: string) => {
-    // Hotfix safety (Phase 4E.2A): never place an order containing a product
-    // that is not in the current customer-visible catalog. Empty/stale carts
-    // are rejected and cleared — no fake success, no purchase conversion.
-    if (!isCartOrderable(cart, products)) {
-      clearCart();
-      removeCoupon();
-      notify('Your cart is empty or contains items that are no longer available.', 'error');
-      return '';
-    }
-    const oid = `ORD-${Date.now()}`;
-    const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-    const t = Math.max(0, Math.round((sub - couponDiscount) * 100) / 100);
-    setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]);
-    trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
-    clearCart();
-    removeCoupon();
-    return oid;
-  };
+  // NOTE: real orders are created server-side by the Stripe webhook into
+  // luxedge_orders (Admin → Orders). No client-side fake order path exists.
   const freeShippingEnabled = promotions.freeShippingEnabled;
   const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -528,9 +461,9 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
 // HEADER + FOOTER (STORE)
 // ============================================================================
 // ── Header mega menu data (maps to real category routes) ──
-const MEGA_MENU: { label: string; to: string; icon: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
+const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
   {
-    label: 'Dog', to: '/category/dog-supplies', icon: '🐶',
+    label: 'Dog', to: '/category/dog-supplies',
     groups: [
       { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
       { title: 'Comfort', links: [{ label: 'Beds', to: '/category/pet-beds' }, { label: 'Blankets & Mats', to: '/category/pet-beds' }] },
@@ -540,7 +473,7 @@ const MEGA_MENU: { label: string; to: string; icon: string; groups: { title: str
     ],
   },
   {
-    label: 'Cat', to: '/category/cat-supplies', icon: '🐱',
+    label: 'Cat', to: '/category/cat-supplies',
     groups: [
       { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }, { label: 'Scratching', to: '/category/cat-supplies' }] },
       { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches & Towers', to: '/category/cat-supplies' }] },
@@ -605,7 +538,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
         <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.svg" alt="" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
+          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
             <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.18em] text-luxe-black">LUXEDGE</span>
             <span className="hidden sm:block text-[7.5px] tracking-[0.3em] text-luxe-gold mt-1.5">PREMIUM PET ESSENTIALS</span>
@@ -656,13 +589,13 @@ function Header() {
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
               <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                <span aria-hidden="true">{m.icon}</span>{m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
+                {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
                 <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
                   <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
-                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">{m.icon} Shop {m.label}</p>
+                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">Shop {m.label}</p>
                       <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -722,7 +655,7 @@ function Footer() {
           {/* Col 1 — Brand */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-5 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.svg" alt="" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
+              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-brand text-xl font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
                 <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1.5">PREMIUM PET ESSENTIALS</span>
@@ -925,7 +858,9 @@ function RouteTitle() {
   useEffect(() => {
     const brand = "Luxedge";
     const segs = pathname.split("/").filter(Boolean);
-    const set = (t: string) => { document.title = t + " | " + brand; };
+    // Normalize seo_title values that already carry the brand suffix so the
+    // brand is never duplicated ("… | Luxedge | Luxedge").
+    const set = (t: string) => { document.title = t.replace(/\s*\|\s*Luxedge\s*$/i, '') + " | " + brand; };
     const full = (t: string) => { document.title = t; };
     const setMeta = (name: string, content: string) => {
       let el = document.head.querySelector(`meta[name="${name}"]`);
@@ -938,7 +873,8 @@ function RouteTitle() {
       el.setAttribute('content', content);
     };
     const setCanonical = () => {
-      const href = `https://luxedge.us/#${pathname}`;
+      // BrowserRouter clean URLs — never hash (#/) canonicals.
+      const href = `https://luxedge.us${pathname}`;
       let el = document.head.querySelector('link[rel="canonical"]');
       if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
       el.setAttribute('href', href);
@@ -971,7 +907,7 @@ function RouteTitle() {
     else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
     else if (segs[0] === "admin") { set("Admin Dashboard"); }
     else set("Luxedge");
-  }, [pathname]);
+  }, [pathname, products]); // products re-run so PDP titles resolve once the catalog loads
   return null;
 }
 
@@ -1610,15 +1546,14 @@ function HomePage() {
           </Reveal>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
             {[
-              { emoji: '🐶', label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more', img: CAT_META['Dog Supplies'].img },
-              { emoji: '🐱', label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more', img: CAT_META['Cat Supplies'].img },
+              { label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more', img: CAT_META['Dog Supplies'].img },
+              { label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more', img: CAT_META['Cat Supplies'].img },
             ].map(p => (
               <Reveal key={p.label} delay={80}>
                 <Link to={p.to} className="group relative block rounded-3xl overflow-hidden ring-1 ring-luxe-silver/80 hover:ring-luxe-gold/60 shadow-sm hover:shadow-xl transition-all duration-300">
                   <img src={p.img} alt={p.label} loading="lazy" className="w-full aspect-[4/3] object-cover group-hover:scale-[1.05] transition-transform duration-700" />
                   <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/80 via-luxe-black/20 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-6 text-center">
-                    <span className="text-3xl block mb-1.5">{p.emoji}</span>
                     <span className="font-serif text-2xl font-bold text-luxe-white block">{p.label}</span>
                     <span className="text-xs text-luxe-white/75">{p.desc}</span>
                     <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
@@ -1642,7 +1577,9 @@ function HomePage() {
                 return (
                   <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-32 sm:w-auto">
                     <div className="bg-white rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-4 text-center">
-                      <div className="w-14 h-14 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center text-2xl group-hover:scale-110 group-hover:bg-luxe-gold/15 transition-transform duration-300">{meta?.emoji || '🐾'}</div>
+                      <div className="w-14 h-14 mx-auto rounded-2xl overflow-hidden ring-1 ring-luxe-gold/20 group-hover:scale-105 transition-transform duration-300">
+                        <img src={meta?.img || ''} alt="" loading="lazy" className="w-full h-full object-cover" />
+                      </div>
                       <p className="text-center text-[12px] font-semibold text-luxe-black mt-3 leading-tight">{c}</p>
                       <p className="text-center text-[10px] text-luxe-gray mt-0.5">{count} items</p>
                     </div>
@@ -1771,14 +1708,14 @@ function HomePage() {
           <Reveal delay={60}>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {[
-                { emoji: '🍽️', label: 'Feeding Time', to: '/category/feeding-water' },
-                { emoji: '😴', label: 'Better Sleep', to: '/category/pet-beds' },
-                { emoji: '🧸', label: 'Play & Enrichment', to: '/category/pet-toys' },
-                { emoji: '✂️', label: 'Grooming', to: '/category/grooming' },
-                { emoji: '🎒', label: 'Walking & Travel', to: '/category/pet-accessories' },
+                { icon: Droplets01, label: 'Feeding Time', to: '/category/feeding-water' },
+                { icon: Moon01, label: 'Better Sleep', to: '/category/pet-beds' },
+                { icon: Star01, label: 'Play & Enrichment', to: '/category/pet-toys' },
+                { icon: Scissors01, label: 'Grooming', to: '/category/grooming' },
+                { icon: Luggage01, label: 'Walking & Travel', to: '/category/pet-accessories' },
               ].map(n => (
                 <Link key={n.label} to={n.to} className="group rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-5 text-center bg-white">
-                  <span className="text-3xl block mb-2.5 group-hover:scale-110 transition-transform duration-300">{n.emoji}</span>
+                  <span className="w-10 h-10 mx-auto mb-2.5 rounded-xl bg-luxe-gold-soft ring-1 ring-luxe-gold/15 text-luxe-gold flex items-center justify-center group-hover:scale-110 transition-transform duration-300"><n.icon strokeWidth={1.5} size={18} /></span>
                   <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
                 </Link>
               ))}
@@ -1830,7 +1767,7 @@ function HomePage() {
           <p className="text-luxe-white/65 text-sm mb-8 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
           {nlDone ? (
             <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
-              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list! 🐾</p>
+              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list!</p>
               <p className="text-xs text-luxe-white/65">We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> locally and will let you know when email updates go live.</p>
             </div>
           ) : (
@@ -2551,9 +2488,53 @@ function CheckoutSuccessPage() {
   );
 }
 
-function OrdersPage() { const { orders, user } = useApp(); const nav = useNavigate(); useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
-  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-luxe-gold">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
+interface RealOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
+
+function OrdersPage() {
+  const { user } = useApp();
+  const nav = useNavigate();
+  const [realOrders, setRealOrders] = useState<RealOrderRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
+  // Real orders only: created server-side by the Stripe webhook. Buyers have
+  // no customer-orders endpoint yet — the honest state is "No Orders Yet".
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== 'admin') { setLoaded(true); return; }
+    const token = getAccessToken();
+    if (!token) { setLoaded(true); return; }
+    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { orders?: RealOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
+      .catch(() => setRealOrders([]))
+      .finally(() => setLoaded(true));
+  }, [user]);
+
+  const empty = <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
+  if (!user) return null;
+  if (user.role !== 'admin') return empty;
+  if (!loaded) return <div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading orders…</div>;
+  if (realOrders.length === 0) return empty;
+  return (
+    <div className="py-12 bg-gray-50 min-h-screen">
+      <div className="max-w-4xl mx-auto px-4">
+        <h1 className="text-3xl font-serif font-bold mb-2">Orders</h1>
+        <p className="text-sm text-luxe-gray mb-8">Real payment records persisted by the Stripe webhook.</p>
+        {realOrders.map(o => (
+          <div key={o.id} className="bg-white rounded-xl border p-6 mb-4">
+            <div className="flex justify-between mb-4">
+              <div><p className="font-semibold">{o.order_number}</p><p className="text-sm text-gray-500">{new Date(o.created_at).toLocaleString()}</p></div>
+              <span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm capitalize">{o.status.replace('_', ' ')}</span>
+            </div>
+            <div className="pt-4 mt-4 border-t flex justify-between">
+              <span className="font-semibold text-sm text-gray-500">{o.customer_email || '—'}</span>
+              <span className="font-semibold">Total <span className="text-lg font-bold text-luxe-gold">${Number(o.total || 0).toFixed(2)}</span></span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function LoginPage() {
@@ -3076,13 +3057,13 @@ function CareersPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Our Culture</h2>
           <div className="grid sm:grid-cols-2 gap-4 mb-8">
             {[
-              { emoji: '🚀', title: 'Growth-Focused', desc: 'We invest in our people. Learn, grow, and level up with us.' },
-              { emoji: '🤝', title: 'Collaborative', desc: 'Small team, big impact. Every voice matters here.' },
-              { emoji: '🌍', title: 'Remote-Friendly', desc: 'Work from anywhere. We care about results, not locations.' },
-              { emoji: '💡', title: 'Innovation-Driven', desc: 'We encourage new ideas and creative problem-solving.' },
+              { icon: Star01, title: 'Growth-Focused', desc: 'We invest in our people. Learn, grow, and level up with us.' },
+              { icon: Send01, title: 'Collaborative', desc: 'Small team, big impact. Every voice matters here.' },
+              { icon: Globe01, title: 'Remote-Friendly', desc: 'Work from anywhere. We care about results, not locations.' },
+              { icon: Zap, title: 'Innovation-Driven', desc: 'We encourage new ideas and creative problem-solving.' },
             ].map((v, i) => (
               <div key={i} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <span className="text-2xl">{v.emoji}</span>
+                <span className="w-9 h-9 rounded-lg bg-luxe-gold-soft ring-1 ring-luxe-gold/15 text-luxe-gold flex items-center justify-center"><v.icon strokeWidth={1.5} size={16} /></span>
                 <h3 className="font-bold text-gray-900 mt-2">{v.title}</h3>
                 <p className="text-sm text-gray-600 mt-1">{v.desc}</p>
               </div>
