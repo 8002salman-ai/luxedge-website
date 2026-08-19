@@ -990,6 +990,18 @@ Consequence: the sofa-bed concept's suitability rose 10 → **14/15** (complete:
 
 **Tests — 603 pass, 8 skipped** (13 rewritten adapter tests incl. contract-mismatch + paused-policy + no-token-leak; 8 new consolidated-route tests incl. 401/403/405/400/503-WAITING/dispatch). `npx tsc --noEmit` clean · `npm run build` clean · secret scan clean (changed files + dist bundle: no SALMAN_OS_TOKEN / Stripe / service-role values). CJ points 0 · Stripe UNTOUCHED · Hermes untouched · Telegram duplication NO · AI auto-publish NO · `main b62090f` untouched.
 
+## PREMIUM EDITORIAL STOREFRONT VISUAL REDESIGN (2026-08-19)
+
+**Customer-facing presentation pass completed on `luxedge-v2`; commerce truth is unchanged.** No Supabase schema, catalog readiness/source/economics data, Salman OS adapter, Stripe, checkout logic, admin functionality, or product source records were modified.
+
+**Homepage:** replaced the template-like hero collage with a 45/55 editorial hero using the real commerce-ready Waterproof Silicone Pet Placemat image on a warm-neutral studio frame; restrained ink/navy typography with one blue accent word; concise premium copy; modest-radius CTAs; quiet factual information row. Replaced external Wikimedia dog/cat category photography and all emoji merchandising with real verified catalog imagery: Comfortable Everyday Dog Bed + Sisal Cat Scratch Board editorial pet panels; a visual category grid uses Pet Carrier Backpack, cropped Silicone Flying Disc, Waterproof Silicone Pet Placemat, Comfortable Everyday Dog Bed, and Sisal Cat Scratch Board. Weak/collage-heavy supplier images are not promoted into homepage editorial/product slots, while the real catalog remains available in Shop.
+
+**Presentation system:** product cards now use neutral editorial image fields, contained product presentation, verified second-image hover when available, restrained NEW label only from the real `newArrival` flag, honest pricing, and no fake reviews/urgency. Added one `Designed for everyday life` editorial collection block using the real Pet Carrier Backpack image. Replaced floating hero trust bubbles and four-card trust grid with a restrained three-item value strip. Header utility/search styling is calmer and less pill-like; mobile nav category links are quieter text links.
+
+**QA:** local storefront visually checked across Home, Shop, Dog, Cat, and PDP routes; homepage image sources resolved with 0 broken images, 0 emoji in premium sections, 0 visible `0 items` labels, and no horizontal overflow at the available preview viewport. Reduced-motion rules cover the new hover/reveal motion. `npm test` 603 pass / 8 skipped · tsc clean · build clean · changed-file secret scan clean · dist bundle secret scan clean. Stripe, Salman OS, CJ, catalog truth, and main remain untouched.
+
+**STATUS:** READY FOR OWNER VISUAL REVIEW. Do not merge main or start Stripe from this visual pass.
+
 ## Exact recommended next task
 
 **COMMERCE FOUNDATION COMPLETE + SALMAN OS ADAPTER READY (66 total / 17 COMMERCE_READY customer-visible / 38 KONG SOURCE_PENDING preserved).** Migration 0016 is APPLIED and the classification is persisted; the Salman OS server adapter boundary is built and contract-gated; Admin (products + AI Control + AI Intelligence) is the owner's practical control center. The storefront shows ONLY genuinely sellable products (17 CJ-backed with real cost + list-level US inventory), zero KONG.

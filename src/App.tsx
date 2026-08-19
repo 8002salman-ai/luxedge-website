@@ -18,7 +18,7 @@ import {
   ChevronDown, ChevronRight, ArrowLeft, Upload01,
   Globe01, Clock, Send01, Headphones01, Stars01,
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
-  Moon01, Sliders01, Droplets01, Scissors01, Luggage01,
+  Sliders01,
 } from '@untitledui/icons';
 
 // ============================================================================
@@ -210,15 +210,19 @@ const INIT_BLOGS: BlogPost[] = [
 ];
 
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories'];
-const CAT_META: Record<string, { icon: string; emoji: string; desc: string; img: string }> = {
-  'Dog Supplies': { icon: '🐕', emoji: '🐶', desc: 'Harnesses, training & dog essentials', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Dog_in_a_harness.jpg/960px-Dog_in_a_harness.jpg' },
-  'Cat Supplies': { icon: '🐈', emoji: '🐱', desc: 'Scratchers, towers & cat must-haves', img: 'https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg' },
-  'Pet Beds': { icon: '🛏️', emoji: '😴', desc: 'Orthopedic & cozy beds for deep sleep', img: 'https://upload.wikimedia.org/wikipedia/commons/f/f4/Dog_sleeping_in_a_dog_bed.JPG' },
-  'Pet Toys': { icon: '🧸', emoji: '🪀', desc: 'Interactive toys for play & enrichment', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg' },
-  'Feeding & Water': { icon: '🍽️', emoji: '🥣', desc: 'Bowls, fountains & smart feeders', img: 'https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg' },
-  'Grooming': { icon: '✂️', emoji: '🐾', desc: 'Brushes, clippers & coat care', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG' },
-  'Pet Accessories': { icon: '🎒', emoji: '🐾', desc: 'Travel, car care & everyday extras', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg' },
+const CAT_META: Record<string, { desc: string }> = {
+  'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
+  'Cat Supplies': { desc: 'Play, comfort & everyday cat essentials' },
+  'Pet Beds': { desc: 'Comfort-led pieces for deeper rest' },
+  'Pet Toys': { desc: 'Interactive play and everyday enrichment' },
+  'Feeding & Water': { desc: 'Considered pieces for daily mealtimes' },
+  'Grooming': { desc: 'Simple tools for everyday care' },
+  'Pet Accessories': { desc: 'Useful pieces for life together' },
 };
+
+function firstUsableImage(product: Product | undefined): string | undefined {
+  return product?.images.find((image) => Boolean(image));
+}
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';
 
@@ -529,7 +533,7 @@ function Header() {
 
   return (<>
     {/* ── Top utility bar ── */}
-    <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
+    <div className="site-utility-bar">
       <span className="inline-flex items-center gap-1.5 text-white/95"><Truck01 strokeWidth={1.5} size={12} /> Free Shipping $50+</span>
       <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
       <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RefreshCcw01 strokeWidth={1.5} size={12} /> Easy 30-Day Returns</span>
@@ -538,7 +542,7 @@ function Header() {
     </div>
 
     {/* ── Main header ── */}
-    <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_10px_34px_-14px_rgba(16,26,46,0.22)]' : 'bg-white/95 backdrop-blur-md'} border-b border-luxe-silver/70`}>
+    <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
       <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
         <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
@@ -551,11 +555,11 @@ function Header() {
 
         {/* Search — refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
-          <div className="flex items-center w-full bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-4 focus-within:ring-luxe-gold/10 transition-all">
+          <div className="site-search">
             <SearchMd strokeWidth={1.5} size={18} className="ml-4 text-luxe-gray shrink-0" />
             <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
               className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-            <button type="submit" className="m-1 px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors">
+            <button type="submit" className="site-search-submit">
               Search
             </button>
           </div>
@@ -624,15 +628,15 @@ function Header() {
 
       {/* ── Mobile menu ── */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={submitSearch} role="search" className="flex items-center bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden mb-2">
+        <form onSubmit={submitSearch} role="search" className="site-search mobile-site-search mb-2">
           <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
           <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
         <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-3 py-1.5 rounded-full bg-luxe-cream text-[11px] font-semibold text-luxe-charcoal hover:bg-luxe-gold hover:text-white transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" className="px-3 py-1.5 rounded-full bg-luxe-gold-soft text-[11px] font-bold text-luxe-gold-dark hover:bg-luxe-gold hover:text-white transition-colors">Deals</Link>
+          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1.5 py-1.5 text-[11px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
+          <Link to="/shop?q=deal" className="px-1.5 py-1.5 text-[11px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
         </div>
         {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
         {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
@@ -808,44 +812,46 @@ function Footer() {
 
 function PCard({ product }: { product: Product }) {
   const { addToCart, reviews } = useApp();
-  const d = product.originalPrice > product.price ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
-  // Ratings come ONLY from verified user reviews — never the catalog stub rating.
+  const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
+  const secondImage = product.images.find((candidate) => candidate && candidate !== image);
+  const hasCompareAt = product.originalPrice > product.price;
+  // Ratings come ONLY from verified user reviews — never the catalog stub.
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
-    <Link to={`/product/${product.id}`} className="block group focus-visible:outline-luxe-gold">
-      <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
-        <div className="relative bg-luxe-cream overflow-hidden">
-          <img src={product.images[0] || LUXEDGE_IMAGE_FALLBACK} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="w-full aspect-square object-cover" />
-          {product.images[1] && (
-            <img src={product.images[1]} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
-              className="absolute inset-0 hidden sm:block w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+    <article className="product-card group">
+      <Link to={`/product/${product.id}`} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
+        <div className="product-card-media">
+          <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
+          {secondImage && (
+            <img src={secondImage} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
+              className="product-card-image product-card-image-secondary" />
           )}
-          {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
-          {product.usInventory && product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart(product); }}
-            className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag01 strokeWidth={1.5} size={12} /> Add to Cart
+          {product.newArrival && <span className="product-card-label">New</span>}
+          <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
+        </div>
+      </Link>
+      <div className="product-card-info">
+        <div className="flex items-start justify-between gap-3">
+          <Link to={`/product/${product.id}`} className="min-w-0">
+            <p className="product-card-category">{product.category}</p>
+            <h3 className="product-card-title">{product.name}</h3>
+          </Link>
+          {verified.length > 0 && (
+            <span className="product-card-rating" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
+              <Star01 strokeWidth={1.5} size={11} fill="currentColor" aria-hidden="true" /> {verifiedAvg.toFixed(1)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-baseline justify-between gap-3 mt-2.5">
+          <span className="product-card-price">${product.price.toFixed(2)}</span>
+          {hasCompareAt && <span className="product-card-compare">${product.originalPrice.toFixed(2)}</span>}
+          <button type="button" onClick={() => addToCart(product)} className="product-card-add" aria-label={`Add ${product.name} to cart`}>
+            Add to cart <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
           </button>
         </div>
-        <div className="px-3.5 py-3">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="eyebrow truncate">{product.category}</p>
-            {verified.length > 0 && (
-              <div className="flex items-center gap-1 shrink-0" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
-                <Star01 strokeWidth={1.5} size={10} fill="currentColor" className="text-star" aria-hidden="true" />
-                <span className="text-[10px] font-semibold text-luxe-charcoal">{verifiedAvg.toFixed(1)}</span>
-              </div>
-            )}
-          </div>
-          <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem] group-hover:text-luxe-gold-dark transition-colors">{product.name}</h3>
-          <div className="flex items-baseline gap-1.5 mt-1.5">
-            <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[11px] text-luxe-gray line-through">${product.originalPrice.toFixed(2)}</span>}
-          </div>
-        </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -1457,115 +1463,117 @@ function HomePage() {
   const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
-  // Catalog Launch Phase — every section is REAL catalog data (no hard-coded
-  // product arrays, no fake counts). Merchandising flags are admin decisions.
+  // Catalog Launch Phase — every section remains REAL catalog data. The
+  // homepage is intentionally art-directed: weak/collage-heavy supplier
+  // images stay available in Shop but are not promoted into editorial slots.
   const featured = products.filter(p => p.isActive);
-  const topPicks = featured.filter(p => p.featured);
-  const newArrivals = featured.filter(p => p.newArrival);
-  const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
-  const dogEssentials = featured.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
-  const catEssentials = featured.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
-  const hero = (topPicks.length >= 4 ? topPicks : featured).slice(0, 4);
+  const homepageVisualProducts = featured.filter((p) => !/(collar|leash|shoes|apparel|shirt|bowl|nest|flying disc|cooling)/i.test(p.name));
+  const topPicks = homepageVisualProducts.filter(p => p.featured);
+  const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
+  const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
+  const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
+  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
+  const dogVisual = featured.find((p) => firstUsableImage(p) && /dog\s+(bed|mat|sofa)/i.test(p.name))
+    || featured.find((p) => firstUsableImage(p) && p.category === 'Pet Beds')
+    || featured.find((p) => firstUsableImage(p) && (p.category === 'Dog Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('dog'))));
+  const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
+  const categoryVisuals = [
+    { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
+    { label: 'Play', to: '/category/pet-toys', product: featured.find((p) => p.category === 'Pet Toys' && firstUsableImage(p)) },
+    { label: 'Feeding', to: '/category/feeding-water', product: featured.find((p) => p.category === 'Feeding & Water' && firstUsableImage(p)) },
+    { label: 'Comfort', to: '/category/pet-beds', product: featured.find((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p)) || featured.find((p) => p.category === 'Pet Beds' && firstUsableImage(p)) },
+    { label: 'Cat essentials', to: '/category/cat-supplies', product: catVisual },
+  ].filter((tile): tile is { label: string; to: string; product: Product } => Boolean(tile.product && firstUsableImage(tile.product)))
+    .filter((tile, index, all) => all.findIndex((candidate) => candidate.product.id === tile.product.id) === index);
+  const editorialProduct = featured.find((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name) && firstUsableImage(p))
+    || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
+    || catVisual
+    || heroProduct;
   const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
 
   return (
     <div className="bg-white">
-      {/* ════════ HERO — light, premium blue ════════ */}
-      <section className="relative bg-gradient-to-br from-luxe-light via-white to-white text-luxe-black overflow-hidden">
-        {/* Ambient glow + texture */}
-        <div aria-hidden="true" className="absolute inset-0">
-          <div className="absolute -top-40 -right-32 w-[36rem] h-[36rem] rounded-full bg-luxe-gold/12 blur-[130px]" />
-          <div className="absolute -bottom-48 -left-32 w-[30rem] h-[30rem] rounded-full bg-luxe-gold/8 blur-[120px]" />
-          <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '34px 34px' }} />
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 pt-14 pb-16 sm:pt-18 sm:pb-20 lg:pt-24 lg:pb-24 grid lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-14">
-          {/* Copy */}
+      {/* ════════ EDITORIAL HERO ════════ */}
+      <section className="home-hero">
+        <div className="home-hero-wash" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 py-14 sm:py-20 lg:py-24 grid lg:grid-cols-[0.84fr_1.16fr] items-center gap-12 lg:gap-16">
           <div className="hero-stagger text-center lg:text-left">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-luxe-gold/10 border border-luxe-gold/25 text-luxe-gold-dark text-[11px] font-bold uppercase tracking-[0.16em]">
-              <Stars01 strokeWidth={1.5} size={12} /> Curated for Quality, Priced for Value
-            </span>
-            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mt-6 mb-5 text-luxe-black">
-              Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
+            <p className="eyebrow mb-5">Premium pet essentials</p>
+            <h1 className="home-hero-title">
+              <span className="block">Everything Your Pet Loves,</span>
+              <span className="block">Thoughtfully <em>Curated.</em></span>
             </h1>
-            <p className="text-luxe-gray text-sm sm:text-base max-w-lg mx-auto lg:mx-0 mb-8 leading-relaxed">
-              Handpicked essentials for feeding, comfort, play, and grooming — thoughtfully curated for pet parents and delivered to your door.
+            <p className="home-hero-copy">
+              Premium essentials for everyday walks, play, comfort, feeding and care — chosen to look good in your home and work beautifully for your pet.
             </p>
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
-              <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">
-                Shop Pet Essentials <ArrowRight strokeWidth={1.5} size={16} />
+              <Link to="/shop" className="editorial-button editorial-button-dark">
+                Shop essentials <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
               </Link>
-              <Link to="/shop?q=deal" className="inline-flex items-center gap-2 px-7 py-3.5 border border-luxe-silver text-luxe-charcoal font-semibold rounded-full text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all bg-white/70">
-                Explore Deals
+              <Link to="/shop" className="editorial-button editorial-button-light">
+                Explore categories
               </Link>
             </div>
-            {/* Trust row — factual store policies only, no invented stats */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Headphones01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Real customer support</div>
+            <div className="home-hero-notes" aria-label="Luxedge shopping information">
+              <span><Truck01 strokeWidth={1.5} size={14} aria-hidden="true" /> {shipCopy}</span>
+              <span><RefreshCcw01 strokeWidth={1.5} size={14} aria-hidden="true" /> Returns &amp; support</span>
+              <span><Headphones01 strokeWidth={1.5} size={14} aria-hidden="true" /> Real customer support</span>
             </div>
           </div>
 
-          {/* Photo collage */}
-          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              {hero[0] && (
-                <Link to={`/product/${hero[0].id}`} className="relative row-span-2 group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-lg shadow-luxe-gold/10">
-                  <img src={hero[0].images[0]} alt={hero[0].name} aria-hidden="true" loading="eager" fetchPriority="high" decoding="async" className="w-full h-full min-h-[22rem] object-cover group-hover:scale-[1.04] transition-transform duration-700" />
-                  <span className="absolute bottom-3 left-3 right-3 px-3 py-2 glass rounded-lg text-[11px] font-semibold text-luxe-black">{hero[0].name}</span>
-                </Link>
-              )}
-              {hero.slice(1, 3).map(p => (
-                <Link key={p.id} to={`/product/${p.id}`} className="group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-md shadow-luxe-gold/5">
-                  <img src={p.images[0]} alt={p.name} loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.04] transition-transform duration-700" />
-                </Link>
-              ))}
-            </div>
-            {/* Floating trust chips */}
-            <div className="absolute -left-3 sm:-left-6 top-6 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl animate-float">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck01 strokeWidth={1.5} size={16} /></span>
-              <div>
-                <p className="text-[11px] font-bold text-luxe-black">Free Shipping</p>
-                <p className="text-[10px] text-luxe-gray">{freeShippingEnabled ? `On orders $${freeShippingThreshold}+` : 'Available on select items'}</p>
-              </div>
-            </div>
-            <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><ShieldTick strokeWidth={1.5} size={16} /></span>
-              <div>
-                <p className="text-[11px] font-bold text-luxe-black">Thoughtfully Curated</p>
-                <p className="text-[10px] text-luxe-gray">Selected for pet owners</p>
-              </div>
-            </div>
+          <div className="home-hero-visual">
+            <div className="home-hero-accent" aria-hidden="true" />
+            {heroProduct ? (
+              <Link to={`/product/${heroProduct.id}`} className="home-hero-frame group">
+                <img
+                  src={firstUsableImage(heroProduct) || LUXEDGE_IMAGE_FALLBACK}
+                  alt={heroProduct.name}
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  onError={onImageError}
+                  className="home-hero-image"
+                />
+                <div className="home-hero-caption">
+                  <span className="home-hero-caption-kicker">From the collection</span>
+                  <span className="home-hero-caption-title">{heroProduct.name}</span>
+                  <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
+                </div>
+              </Link>
+            ) : (
+              <div className="home-hero-empty" aria-label="Luxedge collection preview">Luxedge</div>
+            )}
           </div>
         </div>
-        {/* Blue baseline */}
-        <div aria-hidden="true" className="h-px bg-gradient-to-r from-transparent via-luxe-gold/50 to-transparent" />
       </section>
 
       {/* ════════ Ad: After Hero ════════ */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
       {/* ════════ SHOP BY PET ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal className="text-center mb-9">
-            <p className="eyebrow mb-2">Start Here</p>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Who are you shopping for?</h2>
+      <section className="editorial-section bg-white">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
+          <Reveal className="mb-8 sm:mb-10">
+            <p className="eyebrow mb-3">Shop by pet</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <h2 className="section-title">Who are you shopping for?</h2>
+              <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
+            </div>
           </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+          <div className="editorial-pet-grid">
             {[
-              { label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more', img: CAT_META['Dog Supplies'].img },
-              { label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more', img: CAT_META['Cat Supplies'].img },
-            ].map(p => (
-              <Reveal key={p.label} delay={80}>
-                <Link to={p.to} className="group relative block rounded-3xl overflow-hidden ring-1 ring-luxe-silver/80 hover:ring-luxe-gold/60 shadow-sm hover:shadow-xl transition-all duration-300">
-                  <img src={p.img} alt={p.label} loading="lazy" className="w-full aspect-[4/3] object-cover group-hover:scale-[1.05] transition-transform duration-700" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/80 via-luxe-black/20 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-6 text-center">
-                    <span className="font-serif text-2xl font-bold text-luxe-white block">{p.label}</span>
-                    <span className="text-xs text-luxe-white/75">{p.desc}</span>
-                    <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
+              { label: 'Dog', to: '/category/dog-supplies', desc: 'Walk, play, rest & more', product: dogVisual },
+              { label: 'Cat', to: '/category/cat-supplies', desc: 'Play, comfort, feeding & more', product: catVisual },
+            ].filter((panel) => panel.product).map((panel, index) => (
+              <Reveal key={panel.label} delay={index * 80}>
+                <Link to={panel.to} className="editorial-pet-panel group">
+                  <img src={firstUsableImage(panel.product) || LUXEDGE_IMAGE_FALLBACK} alt={panel.product?.name || panel.label} loading="lazy" decoding="async" onError={onImageError} />
+                  <div className="editorial-pet-overlay" aria-hidden="true" />
+                  <div className="editorial-pet-copy">
+                    <span className="editorial-pet-label">{panel.label}</span>
+                    <span className="editorial-pet-desc">{panel.desc}</span>
+                    <span className="editorial-link">Shop {panel.label} <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></span>
                   </div>
                 </Link>
               </Reveal>
@@ -1574,27 +1582,26 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ POPULAR CATEGORIES ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Browse" title="Shop Popular Categories" to="/shop" /></Reveal>
+      {/* ════════ SHOP BY CATEGORY ════════ */}
+      <section className="editorial-section bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
+          <Reveal className="mb-8 sm:mb-10">
+            <p className="eyebrow mb-3">Shop by category</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+              <h2 className="section-title">Essentials for better everyday moments.</h2>
+              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></Link>
+            </div>
+          </Reveal>
           <Reveal delay={60}>
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:mx-0 sm:px-0 sm:overflow-visible">
-              {CAT_LIST.filter(c => c !== 'All').map(c => {
-                const meta = CAT_META[c];
-                const count = featured.filter(p => p.category === c).length;
-                return (
-                  <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-32 sm:w-auto">
-                    <div className="bg-white rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-4 text-center">
-                      <div className="w-14 h-14 mx-auto rounded-2xl overflow-hidden ring-1 ring-luxe-gold/20 group-hover:scale-105 transition-transform duration-300">
-                        <img src={meta?.img || ''} alt="" loading="lazy" className="w-full h-full object-cover" />
-                      </div>
-                      <p className="text-center text-[12px] font-semibold text-luxe-black mt-3 leading-tight">{c}</p>
-                      <p className="text-center text-[10px] text-luxe-gray mt-0.5">{count} items</p>
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="editorial-category-grid">
+              {categoryVisuals.map((tile, index) => (
+                <Link key={`${tile.label}-${tile.product.id}`} to={tile.to} className={`editorial-category-tile group ${index < 4 ? 'editorial-category-large' : 'editorial-category-small'} ${index === 1 ? 'editorial-category-crop' : ''}`}>
+                  <img src={firstUsableImage(tile.product) || LUXEDGE_IMAGE_FALLBACK} alt={tile.product.name} loading="lazy" decoding="async" onError={onImageError} />
+                  <div className="editorial-category-overlay" aria-hidden="true" />
+                  <span className="editorial-category-name">{tile.label}</span>
+                  <ArrowRight strokeWidth={1.5} size={15} className="editorial-category-arrow" aria-hidden="true" />
+                </Link>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -1603,29 +1610,6 @@ function HomePage() {
       {/* ════════ Ad: After Categories ════════ */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
 
-      {/* ════════ PROMO BANNERS ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
-          <Reveal><Link to="/shop?max=30" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap strokeWidth={1.5} size={11} /> Deal</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
-            <p className="text-xs text-luxe-gray mb-4">Everyday essentials under $30 — handpicked and priced fairly.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
-          </Link></Reveal>
-          <Reveal delay={70}><Link to="/category/pet-beds" className="group relative block rounded-3xl overflow-hidden bg-luxe-gold-soft border border-luxe-gold/25 p-7 hover:shadow-xl hover:shadow-luxe-gold/15 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-4"><Moon01 strokeWidth={1.5} size={11} /> Comfort</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Better Sleep for Your Pet</h3>
-            <p className="text-xs text-luxe-gray mb-4">Orthopedic beds & cozy caves for deep rest.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
-          </Link></Reveal>
-          <Reveal delay={140}><Link to="/category/pet-toys" className="group relative block rounded-3xl overflow-hidden bg-luxe-cream border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Stars01 strokeWidth={1.5} size={11} /> Play</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Playtime Essentials</h3>
-            <p className="text-xs text-luxe-gray mb-4">Interactive toys & enrichment for happy pets.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight strokeWidth={1.5} size={12} /></span>
-          </Link></Reveal>
-        </div>
-      </section>
 
       {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
       {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
@@ -1707,31 +1691,26 @@ function HomePage() {
         </>
       )}
 
-      {/* ════════ SHOP BY NEED ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal className="text-center mb-9">
-            <p className="eyebrow mb-2">Solutions</p>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Shop by Need</h2>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {[
-                { icon: Droplets01, label: 'Feeding Time', to: '/category/feeding-water' },
-                { icon: Moon01, label: 'Better Sleep', to: '/category/pet-beds' },
-                { icon: Star01, label: 'Play & Enrichment', to: '/category/pet-toys' },
-                { icon: Scissors01, label: 'Grooming', to: '/category/grooming' },
-                { icon: Luggage01, label: 'Walking & Travel', to: '/category/pet-accessories' },
-              ].map(n => (
-                <Link key={n.label} to={n.to} className="group rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-5 text-center bg-white">
-                  <span className="w-10 h-10 mx-auto mb-2.5 rounded-xl bg-luxe-gold-soft ring-1 ring-luxe-gold/15 text-luxe-gold flex items-center justify-center group-hover:scale-110 transition-transform duration-300"><n.icon strokeWidth={1.5} size={18} /></span>
-                  <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
-                </Link>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
+      {/* ════════ EDITORIAL COLLECTION ════════ */}
+      {editorialProduct && (
+        <section className="editorial-section bg-white">
+          <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
+            <Reveal>
+              <div className="editorial-story">
+                <div className="editorial-story-media">
+                  <img src={firstUsableImage(editorialProduct) || LUXEDGE_IMAGE_FALLBACK} alt={editorialProduct.name} loading="lazy" decoding="async" onError={onImageError} />
+                </div>
+                <div className="editorial-story-copy">
+                  <p className="eyebrow mb-4">Designed for everyday life</p>
+                  <h2 className="section-title">Pet essentials that belong in your home.</h2>
+                  <p className="section-intro mt-5">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space without getting in the way of life.</p>
+                  <Link to="/shop" className="editorial-link mt-7 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></Link>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
 
       {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
       {deals.length > 0 && (
@@ -1747,20 +1726,19 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ TRUST BAR — truthful store policies only ════════ */}
-      <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* ════════ VALUE STRIP — truthful store information only ════════ */}
+      <section className="value-strip" aria-label="Luxedge store information">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 grid sm:grid-cols-3">
           {[
-            { icon: Truck01, title: freeShippingEnabled ? `Free Shipping $${freeShippingThreshold}+` : 'Fair Shipping', desc: freeShippingEnabled ? `On orders over $${freeShippingThreshold}` : 'Shipping calculated at checkout' },
-            { icon: RefreshCcw01, title: 'Returns & Support', desc: 'Help when you need it' },
-            { icon: ShieldTick, title: 'Thoughtfully Curated', desc: 'Selected for pet owners' },
-            { icon: Headphones01, title: 'Customer Support', desc: 'Real people, by email' },
-          ].map(t => (
-            <div key={t.title} className="flex items-center gap-3.5">
-              <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon strokeWidth={1.5} size={20} /></span>
+            { icon: Truck01, title: freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Fair shipping', desc: freeShippingEnabled ? 'On qualifying orders' : 'Calculated at checkout' },
+            { icon: ShieldTick, title: 'Thoughtfully curated', desc: 'Selected for pet owners' },
+            { icon: Headphones01, title: 'Customer support', desc: 'Real people, by email' },
+          ].map((item) => (
+            <div key={item.title} className="value-item">
+              <item.icon strokeWidth={1.5} size={18} className="value-item-icon" aria-hidden="true" />
               <div>
-                <p className="text-sm font-bold text-luxe-black">{t.title}</p>
-                <p className="text-[11px] text-luxe-gray">{t.desc}</p>
+                <p className="value-item-title">{item.title}</p>
+                <p className="value-item-copy">{item.desc}</p>
               </div>
             </div>
           ))}
