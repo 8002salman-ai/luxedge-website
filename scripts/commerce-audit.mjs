@@ -57,7 +57,8 @@ function classify(p) {
   const src = String(p.supplier_source || '').toLowerCase();
   const ev = p.product_source_evidence || {};
   const notes = String(p.evidence_notes || '');
-  const isKong = /kong|official manufacturer/i.test(src) || (ev && /kong/i.test(String(ev.provider || '')));
+  const skuLower = String(p.sku || '').toLowerCase();
+  const isKong = /kong|official manufacturer/i.test(src) || (ev && /kong/i.test(String(ev.provider || ''))) || /^kong-/.test(skuLower) || /kong classic/i.test(skuLower);
   const isCj = /cj/.test(src) || /^cj/i.test(String(p.supplier_product_ref || '')) ||
     (ev && /cj/i.test(String(ev.provider || ''))) || /cj list|listv2|list-level cj/i.test(notes) || /CJ[A-Z0-9]{4,}/.test(String(p.sku || ''));
 
@@ -75,9 +76,11 @@ function classify(p) {
   if (sourceType === 'CJ_DROPSHIPPING' && (p.us_inventory === true || usInvEvidence)) inventorySource = 'SUPPLIER_VERIFIED';
   else if (p.stock_status && p.stock_status !== 'unknown' && p.stock_status !== 'out_of_stock') inventorySource = 'INTERNAL_STOCK';
 
-  // Readiness is fact-based first; lifecycle DRAFT only for genuinely
-  // non-material states. KONG retail-reference stays SOURCE_PENDING even when
-  // moved to draft for safety (the readiness column keeps the reason).
+  // Readiness is fact-based first; lifecycle DRAFT for genuinely non-material
+  // states. KONG retail-reference stays SOURCE_PENDING even when drafted for
+  // safety (the readiness column keeps the reason). Battery/power-unknown
+  // electronics are RISK_REVIEW. Everything else that is drafted (business/
+  // market decision, e.g. bulky beds) is DRAFT — not COMMERCE_READY.
   let readiness;
   if (sourceType === 'RETAIL_REFERENCE_ONLY' || sourceType === 'UNKNOWN') readiness = 'SOURCE_PENDING';
   else if (!hasCost) readiness = 'ECONOMICS_PENDING';
@@ -86,12 +89,11 @@ function classify(p) {
 
   if (p.status === 'inactive' || p.status === 'archived') readiness = 'DRAFT';
   else if (p.status === 'draft' || p.status === 'ready') {
-    // Battery/power-unknown electronics are RISK_REVIEW (they need owner/
-    // battery resolution). Never-sourced drafts (source UNKNOWN) are DRAFT.
-    // KONG retail-reference products keep SOURCE_PENDING even though drafted
-    // for storefront safety — the readiness column documents the reason.
+    // Battery/power-unknown electronics are RISK_REVIEW (owner/battery
+    // resolution needed). KONG retail-reference products keep SOURCE_PENDING.
+    // Other drafted products (market/business decision) are DRAFT.
     if (/led|battery|electric|electronic|motion|rechargeable/i.test(String(p.name || '') + ' ' + notes)) readiness = 'RISK_REVIEW';
-    else if (sourceType === 'UNKNOWN') readiness = 'DRAFT';
+    else if (sourceType !== 'RETAIL_REFERENCE_ONLY') readiness = 'DRAFT';
   }
 
   return { sourceType, inventorySource, readiness, usInvEvidence, isCj, isKong };

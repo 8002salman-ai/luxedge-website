@@ -18,6 +18,7 @@ import {
   Pulse, Warning, Robot, CheckCircle, Cpu, ListChecks, Power, ArrowClockwise, ShieldCheck, ShieldWarning, XCircle,
 } from '@phosphor-icons/react';
 import { useApp, serverProviderStatus } from '../App';
+import SalmanOsPanel from './SalmanOsPanel';
 import {
   AI_TASKS, CONTROL_MODES, COST_STRATEGIES, DEFAULT_MODEL_HELP, SECOND_OPINION_MODES,
   FEATURE_KEYS, FEATURE_LABELS, loadAiControlConfig, saveAiControlConfig,
@@ -236,6 +237,9 @@ export default function AiControlCenter() {
           </table>
         </div>
       </div>
+
+      {/* SALMAN OS / HERMES — AI BACKEND */}
+      <SalmanOsPanel />
 
       {/* FEATURES + ROUTING */}
       <div className="grid lg:grid-cols-2 gap-4">

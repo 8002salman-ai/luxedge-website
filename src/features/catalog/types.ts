@@ -215,3 +215,18 @@ export function deriveMarginPercent(price: number, landedCost: number): number |
   if (!(price > 0) || !(landedCost > 0)) return null;
   return Math.round(((price - landedCost) / price) * 1000) / 10;
 }
+
+/**
+ * Species classification (DOG / CAT / BOTH) derived from category + tags.
+ * There is no species column — this is a deterministic label, not stored
+ * commerce truth. Returns null when the evidence is ambiguous.
+ */
+export function speciesOf(p: Pick<CatalogProduct, 'categoryName' | 'name' | 'tags'>): 'DOG' | 'CAT' | 'BOTH' | null {
+  const hay = `${p.categoryName || ''} ${p.name} ${(p.tags || []).join(' ')}`.toLowerCase();
+  const dog = /\bdog\b|dogs|puppy|canine|k9/.test(hay);
+  const cat = /\bcat\b|cats|kitten|feline/.test(hay);
+  if (dog && cat) return 'BOTH';
+  if (dog) return 'DOG';
+  if (cat) return 'CAT';
+  return null;
+}

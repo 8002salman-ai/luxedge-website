@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, CaretUp, CaretDown, X, Download, List, Megaphone, Warning,
+  GearSix, CaretUp, CaretDown, X, Download, List, Megaphone, Warning, Brain,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -23,8 +23,11 @@ import {
   listOffers, createOffer, updateOffer, deleteOffer, getStoreSettings, saveStoreSettings,
   uid,
 } from '../features/catalog/repository';
-import type {
-  CatalogProduct, CatalogCategory, CatalogImage, CatalogVariant, Coupon, StoreOffer, StoreSettings,
+import { listRecommendations } from '../features/hermes/repository';
+import type { HermesRecommendationRow } from '../features/hermes/types';
+import {
+  type CatalogProduct, type CatalogCategory, type CatalogImage, type CatalogVariant, type Coupon, type StoreOffer, type StoreSettings,
+  speciesOf,
 } from '../features/catalog/types';
 import { buildFeedCsv, buildProductJsonLd, buildProductMeta } from '../features/catalog/seo';
 import {
@@ -82,6 +85,8 @@ export function CatalogProductsPage() {
   const [fFlag, setFFlag] = useState('all');
   const [fReady, setFReady] = useState('all');
   const [fSource, setFSource] = useState('all');
+  const [fSpecies, setFSpecies] = useState('all');
+  const [fImage, setFImage] = useState('all');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
 
@@ -121,12 +126,16 @@ export function CatalogProductsPage() {
     if (fFlag === 'sale' && !(p.compareAtPrice > p.price)) return false;
     if (fFlag === 'free-shipping' && !p.freeShipping) return false;
     if (fFlag === 'low-stock' && !(p.inventoryQty <= p.lowStockThreshold)) return false;
+    if (fSpecies !== 'all' && speciesOf(p) !== fSpecies) return false;
+    if (fImage === 'no-image' && p.images.length > 0) return false;
+    if (fImage === 'has-image' && p.images.length === 0) return false;
+    if (fImage === 'single-image' && p.images.length <= 1) return false;
     if (q) {
       const needle = q.toLowerCase();
       return [p.name, p.brand, p.sku, p.categoryName, ...p.tags].join(' ').toLowerCase().includes(needle);
     }
     return true;
-  }), [products, fStatus, fCat, fFlag, fReady, fSource, q]);
+  }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, q]);
 
   const toggleActive = async (p: CatalogProduct) => {
     try {
@@ -237,6 +246,18 @@ export function CatalogProductsPage() {
           <option value="low-margin">Low margin (&lt;40%)</option>
           <option value="stock-unknown">Stock unknown</option>
         </select>
+        <select value={fSpecies} onChange={(e) => setFSpecies(e.target.value)} className={I} aria-label="Filter by species">
+          <option value="all">All species</option>
+          <option value="DOG">Dog</option>
+          <option value="CAT">Cat</option>
+          <option value="BOTH">Both</option>
+        </select>
+        <select value={fImage} onChange={(e) => setFImage(e.target.value)} className={I} aria-label="Filter by image status">
+          <option value="all">All images</option>
+          <option value="no-image">No images</option>
+          <option value="has-image">Has image</option>
+          <option value="single-image">Single image only</option>
+        </select>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -245,7 +266,8 @@ export function CatalogProductsPage() {
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
               <tr>
                 <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Category</th>
+                <th className="px-4 py-3">Species / Category</th>
+                <th className="px-4 py-3">Visible</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Cost</th>
                 <th className="px-4 py-3">Margin</th>
@@ -271,7 +293,15 @@ export function CatalogProductsPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{p.categoryName || '—'}</td>
+                  <td className="px-4 py-3 text-xs">
+                    <span className="font-semibold text-gray-600">{speciesOf(p) ?? '—'}</span>
+                    <span className="text-gray-400"> · {p.categoryName || '—'}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY'
+                      ? <a href={`/#/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
+                      : <span className="text-[10px] text-gray-400" title={p.status !== 'active' ? 'Not active' : p.commerceReadiness === 'COMMERCE_READY' ? '' : 'Active but not commerce-ready'}>{p.status !== 'active' ? `not active` : `active · ${p.commerceReadiness || 'unclassified'}`}</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="font-semibold text-sm">${p.price.toFixed(2)}</span>
                     {p.compareAtPrice > p.price && <span className="text-xs text-gray-400 line-through ml-1">${p.compareAtPrice.toFixed(2)}</span>}
@@ -316,7 +346,7 @@ export function CatalogProductsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={11} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
+                <tr><td colSpan={12} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -333,6 +363,63 @@ export function CatalogProductsPage() {
           <button onClick={() => setDelId(null)} className="flex-1 py-2.5 border rounded-lg">Cancel</button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ============================================================================
+// AI INTELLIGENCE PANEL (Phase L — product-level research evidence)
+//
+// Shows Hermes / Salman OS research evidence that references this product.
+// AI can NEVER change commerce readiness: readiness/source/economics stay
+// authoritative from the Commerce Truth model. This panel is read-only
+// research context (last research, confidence, source URLs, risks, and the
+// recorded SEO/marketing opportunities from the suggestion).
+// ============================================================================
+function AiIntelPanel({ product }: { product: CatalogProduct }) {
+  const [rows, setRows] = useState<HermesRecommendationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    listRecommendations()
+      .then((all) => {
+        if (!alive) return;
+        const hay = `${product.name} ${product.brand} ${product.sku} ${product.supplierProductRef || ''}`.toLowerCase();
+        const matched = all.filter((r) => {
+          const n = String(r.product_name || '').toLowerCase();
+          return n && (hay.includes(n) || n.includes(product.name.toLowerCase()) || (r.source_ref && hay.includes(String(r.source_ref).toLowerCase())));
+        });
+        setRows(matched.slice(0, 6));
+      })
+      .catch(() => { if (alive) setRows([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [product.name, product.brand, product.sku, product.supplierProductRef]);
+
+  return (
+    <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 p-4">
+      <p className="text-xs font-bold text-indigo-800 mb-2 flex items-center gap-1.5"><Brain size={13} />AI INTELLIGENCE — research evidence only</p>
+      {loading ? <p className="text-[11px] text-gray-400">Loading research…</p> : rows.length === 0 ? (
+        <p className="text-[11px] text-gray-500">No Hermes / Salman OS research references this product yet. AI can never change COMMERCE_READY / SOURCE_PENDING / ECONOMICS_PENDING / FULFILLMENT_PENDING / RISK_REVIEW — those are Commerce Truth decisions.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.id} className="bg-white rounded-lg border border-indigo-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[12px] font-semibold text-gray-800">{r.product_name}</p>
+                <span className="text-[10px] text-gray-400">confidence {r.confidence === null ? '—' : `${Math.round(r.confidence * 100)}%`} · {r.source}</span>
+              </div>
+              {r.benefits && <p className="text-[11px] text-gray-600 mt-1"><b>SEO/marketing opportunity:</b> {r.benefits}</p>}
+              {r.marketing_potential && <p className="text-[11px] text-gray-600 mt-0.5"><b>Marketing:</b> {r.marketing_potential}</p>}
+              {r.risks && <p className="text-[11px] text-amber-700 mt-0.5"><b>Risks (research claim):</b> {r.risks}</p>}
+              {r.source_url && <p className="text-[10px] mt-1"><a href={r.source_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all">{r.source_url}</a></p>}
+              <p className="text-[9px] text-gray-400 mt-1">Received {new Date(r.created_at).toLocaleString()} · research claims require Luxedge verification before use.</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -734,6 +821,8 @@ export function CatalogProductEditor() {
             <div className="bg-blue-50 rounded-lg p-4 text-xs text-gray-600">
               <p><strong>Readiness rule:</strong> storefront visibility requires status active AND commerce_readiness = COMMERCE_READY. A manufacturer retail page alone (no wholesale/dropship purchasing path) is <strong>Retail Reference Only → Source Pending</strong>. Do not treat internal quantity as supplier stock.</p>
             </div>
+
+            <AiIntelPanel product={p} />
           </div>
         )}
 
