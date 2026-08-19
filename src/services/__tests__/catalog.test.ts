@@ -46,16 +46,17 @@ describe('loadStorefrontCatalog', () => {
     expect(cat!.categories[0].name).toBe('Pet Toys');
   });
 
-  it('filters to published products with prices (V2 schema: name/price)', async () => {
+  it('filters to published commerce-ready products (V2 schema: name/price)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) {
         return Promise.resolve(jsonResponse([{ id: 'c1', name: 'Pet Beds', slug: 'pet-beds', is_active: true, sort_order: 0 }]));
       }
       if (url.includes('/products')) {
         return Promise.resolve(jsonResponse([
-          { id: 'p1', name: 'Dog Bed', slug: 'dog-bed', status: 'published', price: 49.99, category_id: 'c1', inventory_qty: 10 },
+          { id: 'p1', name: 'Dog Bed', slug: 'dog-bed', status: 'published', price: 49.99, category_id: 'c1', inventory_qty: 10, supplier_source: 'CJ', cost_price: 12, us_inventory: true, stock_status: 'in_stock' },
           { id: 'p2', name: 'Draft Item', slug: 'draft', status: 'draft', price: 9.99 },
-          { id: 'p3', name: 'Free Item', slug: 'free', status: 'published', price: 0, price_amount: 0 },
+          { id: 'p3', name: 'Free Item', slug: 'free', status: 'published', price: 0, price_amount: 0, supplier_source: 'CJ', cost_price: 1 },
+          { id: 'p4', name: 'Retail-Ref Only', slug: 'ref', status: 'published', price: 29.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0 },
         ]));
       }
       if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
@@ -64,11 +65,35 @@ describe('loadStorefrontCatalog', () => {
     const cat = await loadStorefrontCatalog();
     expect(cat).not.toBeNull();
     expect(cat!.source).toBe('supabase');
+    // p1 (real supplier + cost + US stock) is visible; p3 has no price; p4 is
+    // retail-reference-only (no cost basis) → never storefront-visible.
     expect(cat!.products.map((p) => p.id)).toEqual(['p1']);
     expect(cat!.products[0].name).toBe('Dog Bed');
     expect(cat!.products[0].price).toBe(49.99);
     expect(cat!.products[0].category).toBe('Pet Beds');
+    expect(cat!.products[0].commerceReadiness).toBe('COMMERCE_READY');
     expect(cat!.categories.length).toBe(1);
+  });
+
+  it('hides ACTIVE products without a verified purchasing path (commerce readiness gate)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          // Manufacturer retail-reference page: authenticity proven, but no
+          // wholesale/dropship path and no cost basis → SOURCE_PENDING → hidden.
+          { id: 'p1', name: 'KONG Classic Toy', status: 'active', price: 8.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0, us_inventory: true, stock_status: 'in_stock', inventory_qty: 25 },
+          // Real CJ supply + cost + list-level US inventory → COMMERCE_READY.
+          { id: 'p2', name: 'CJ Scratch Board', status: 'active', price: 5.99, supplier_source: 'CJ', supplier_product_ref: 'CJYD2060792', cost_price: 1.99, us_inventory: true, stock_status: 'in_stock', inventory_qty: 4 },
+        ]));
+      }
+      if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/product_variants')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const cat = await loadStorefrontCatalog();
+    expect(cat!.products.map((p) => p.id)).toEqual(['p2']);
+    expect(cat!.products[0].commerceReadiness).toBe('COMMERCE_READY');
   });
 
   it('handles the legacy schema (title + integer cents) defensively', async () => {
@@ -76,7 +101,7 @@ describe('loadStorefrontCatalog', () => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
         return Promise.resolve(jsonResponse([
-          { id: 'p1', title: 'Legacy Bed', status: 'published', price_amount: 4999, compare_at_amount: 8999, image_url: 'https://img/x.jpg' },
+          { id: 'p1', title: 'Legacy Bed', status: 'published', price_amount: 4999, compare_at_amount: 8999, image_url: 'https://img/x.jpg', supplier_source: 'CJ', cost_price: 12, us_inventory: true, stock_status: 'in_stock' },
         ]));
       }
       if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
@@ -94,7 +119,7 @@ describe('loadStorefrontCatalog', () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
-        return Promise.resolve(jsonResponse([{ id: 'p1', name: 'Bed', status: 'published', price: 10 }]));
+        return Promise.resolve(jsonResponse([{ id: 'p1', name: 'Bed', status: 'published', price: 10, supplier_source: 'CJ', cost_price: 3, us_inventory: true, stock_status: 'in_stock' }]));
       }
       if (url.includes('/product_images')) return Promise.resolve(jsonResponse({ code: 'PGRST205' }, 404));
       return Promise.resolve(jsonResponse([]));
@@ -109,8 +134,8 @@ describe('loadStorefrontCatalog', () => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
         return Promise.resolve(jsonResponse([
-          { id: 'p1', name: 'Active Bed', status: 'active', price: 39.99, featured: true, new_arrival: true, free_shipping: true, sale_enabled: true, discount_type: 'percent', discount_value: 10, price_amount: 3999 },
-          { id: 'p2', name: 'Published Legacy', status: 'published', price: 19.99 },
+          { id: 'p1', name: 'Active Bed', status: 'active', price: 39.99, featured: true, new_arrival: true, free_shipping: true, sale_enabled: true, discount_type: 'percent', discount_value: 10, price_amount: 3999, supplier_source: 'CJ', cost_price: 10, us_inventory: true, stock_status: 'in_stock' },
+          { id: 'p2', name: 'Published Legacy', status: 'published', price: 19.99, supplier_source: 'CJ', cost_price: 5, us_inventory: true, stock_status: 'in_stock' },
           { id: 'p3', name: 'Draft Item', status: 'draft', price: 9.99 },
           { id: 'p4', name: 'Inactive Item', status: 'inactive', price: 8.99 },
         ]));

@@ -18,6 +18,10 @@ import {
   StoreOffer, StoreSettings, DEFAULT_STORE_SETTINGS, deriveMarginPercent,
   deriveStockStatus, CatalogStatus,
 } from './types';
+import {
+  deriveCommerceReadiness, deriveInventorySource, deriveSourceType,
+  type CommerceReadiness, type SourceType, type InventorySource,
+} from './commerceReadiness';
 
 // ---------------------------------------------------------------------------
 // Live-schema awareness
@@ -145,6 +149,14 @@ interface ProductRow {
   us_inventory?: boolean | null;
   supplier_source?: string | null;
   supplier_product_ref?: string | null;
+  // Migration 0016 — commerce readiness model
+  commerce_readiness?: string | null;
+  source_type?: string | null;
+  inventory_source?: string | null;
+  fulfillment_method?: string | null;
+  supplier_url?: string | null;
+  supplier_stock_status?: string | null;
+  risk_flags?: unknown;
   tags?: unknown;
   featured?: boolean | null;
   new_arrival?: boolean | null;
@@ -295,6 +307,37 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     usInventory: !!row.us_inventory,
     supplierSource: row.supplier_source || undefined,
     supplierProductRef: row.supplier_product_ref || undefined,
+    // Prefer the persisted 0016 classification; derive honestly when absent
+    // (pre-migration the column does not exist yet).
+    commerceReadiness: (row.commerce_readiness as CatalogProduct['commerceReadiness']) || deriveCommerceReadiness({
+      status: row.status,
+      supplierSource: row.supplier_source,
+      supplierProductRef: row.supplier_product_ref,
+      supplierUrl: row.supplier_url,
+      costPrice: cost,
+      landedCost: landed,
+      shippingCost: num(row.shipping_cost),
+      freeShipping: !!row.free_shipping,
+      deliveryMinDays: row.delivery_min_days != null ? num(row.delivery_min_days) : null,
+      deliveryMaxDays: row.delivery_max_days != null ? num(row.delivery_max_days) : null,
+      usInventory: !!row.us_inventory,
+      stockStatus: row.stock_status || null,
+      inventoryQty: num(row.inventory_qty),
+      riskFlags: Array.isArray(row.risk_flags) ? (row.risk_flags as string[]) : [],
+    }) as CommerceReadiness,
+    sourceType: (row.source_type as CatalogProduct['sourceType']) || deriveSourceType({
+      supplierSource: row.supplier_source,
+      supplierProductRef: row.supplier_product_ref,
+      supplierUrl: row.supplier_url,
+    }) as SourceType,
+    inventorySource: (row.inventory_source as CatalogProduct['inventorySource']) || deriveInventorySource({
+      usInventory: !!row.us_inventory,
+      stockStatus: row.stock_status || null,
+    }) as InventorySource,
+    fulfillmentMethod: row.fulfillment_method || null,
+    supplierUrl: row.supplier_url || null,
+    supplierStockStatus: row.supplier_stock_status || null,
+    riskFlags: Array.isArray(row.risk_flags) ? row.risk_flags.filter((x): x is string => typeof x === 'string') : [],
     tags: strArr(row.tags),
     featured: !!row.featured,
     newArrival: !!row.new_arrival,
@@ -411,6 +454,14 @@ export interface ProductInput {
   usInventory?: boolean;
   supplierSource?: string;
   supplierProductRef?: string;
+  /** Commerce-readiness model fields (migration 0016). */
+  commerceReadiness?: CatalogProduct['commerceReadiness'];
+  sourceType?: CatalogProduct['sourceType'];
+  inventorySource?: CatalogProduct['inventorySource'];
+  fulfillmentMethod?: string | null;
+  supplierUrl?: string | null;
+  supplierStockStatus?: string | null;
+  riskFlags?: string[];
   tags?: string[];
   featured?: boolean;
   newArrival?: boolean;
@@ -464,6 +515,13 @@ export function productToRow(input: ProductInput): Record<string, unknown> {
     us_inventory: input.usInventory ?? false,
     supplier_source: input.supplierSource ?? null,
     supplier_product_ref: input.supplierProductRef ?? null,
+    commerce_readiness: input.commerceReadiness ?? null,
+    source_type: input.sourceType ?? null,
+    inventory_source: input.inventorySource ?? null,
+    fulfillment_method: input.fulfillmentMethod ?? null,
+    supplier_url: input.supplierUrl ?? null,
+    supplier_stock_status: input.supplierStockStatus ?? null,
+    risk_flags: input.riskFlags ?? [],
     tags: input.tags ?? [],
     featured: input.featured ?? false,
     new_arrival: input.newArrival ?? false,
@@ -535,6 +593,13 @@ const INPUT_FIELD_TO_COLUMNS: Record<keyof ProductInput, string[]> = {
   usInventory: ['us_inventory'],
   supplierSource: ['supplier_source'],
   supplierProductRef: ['supplier_product_ref'],
+  commerceReadiness: ['commerce_readiness'],
+  sourceType: ['source_type'],
+  inventorySource: ['inventory_source'],
+  fulfillmentMethod: ['fulfillment_method'],
+  supplierUrl: ['supplier_url'],
+  supplierStockStatus: ['supplier_stock_status'],
+  riskFlags: ['risk_flags'],
   tags: ['tags'],
   featured: ['featured'],
   newArrival: ['new_arrival'],

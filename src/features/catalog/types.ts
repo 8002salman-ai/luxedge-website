@@ -17,6 +17,25 @@ export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'on_backor
 export type DiscountType = 'percent' | 'fixed';
 export type ImageKind = 'product' | 'lifestyle' | 'creative' | 'video' | 'ugc';
 
+export type CommerceReadiness =
+  | 'COMMERCE_READY'
+  | 'SOURCE_PENDING'
+  | 'ECONOMICS_PENDING'
+  | 'FULFILLMENT_PENDING'
+  | 'RISK_REVIEW'
+  | 'DRAFT';
+
+export type SourceType =
+  | 'CJ_DROPSHIPPING'
+  | 'AUTHORIZED_WHOLESALE'
+  | 'MANUFACTURER_DIRECT'
+  | 'RETAIL_REFERENCE_ONLY'
+  | 'OWNER_STOCK'
+  | 'OTHER_VERIFIED'
+  | 'UNKNOWN';
+
+export type InventorySource = 'SUPPLIER_VERIFIED' | 'INTERNAL_STOCK' | 'UNTRACKED' | 'UNKNOWN';
+
 export interface CatalogImage {
   id: string;
   productId: string;
@@ -79,6 +98,14 @@ export interface CatalogProduct {
   usInventory: boolean;
   supplierSource?: string;
   supplierProductRef?: string;
+  /** Commerce-readiness model (migration 0016). null/unknown = not yet classified. */
+  commerceReadiness?: CommerceReadiness | null;
+  sourceType?: SourceType | null;
+  inventorySource?: InventorySource | null;
+  fulfillmentMethod?: string | null;
+  supplierUrl?: string | null;
+  supplierStockStatus?: string | null;
+  riskFlags?: string[];
   tags: string[];
   featured: boolean;
   newArrival: boolean;

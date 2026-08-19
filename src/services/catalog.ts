@@ -30,6 +30,7 @@
 // ============================================================================
 
 import { getDb, getDbMode } from './db';
+import { deriveCommerceReadiness, deriveInventorySource, deriveSourceType, type CommerceReadiness } from '../features/catalog/commerceReadiness';
 
 export interface CatalogProduct {
   id: string;
@@ -57,6 +58,10 @@ export interface CatalogProduct {
   deliveryMaxDays: number | null;
   stockStatus: string;
   usInventory: boolean;
+  /** Commerce-readiness (migration 0016 or derived from persisted evidence). */
+  commerceReadiness: CommerceReadiness;
+  sourceType?: string;
+  inventorySource?: string;
   variants: CatalogVariant[];
   seoTitle?: string;
   seoDescription?: string;
@@ -140,6 +145,14 @@ interface DbProductRow {
   seo_description?: string | null;
   seo_keywords?: unknown;
   supplier_source?: string | null;
+  supplier_product_ref?: string | null;
+  cost_price?: number | null;
+  landed_cost?: number | null;
+  shipping_cost?: number | null;
+  // Migration 0016 — commerce readiness (may be absent pre-migration)
+  commerce_readiness?: string | null;
+  source_type?: string | null;
+  inventory_source?: string | null;
   [k: string]: unknown;
 }
 
@@ -239,8 +252,12 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       }));
 
     const published = (prodRows as DbProductRow[])
-      // Catalog Launch Phase: storefront visibility = status IN ('active','published').
-      .filter((p) => p && typeof p.id === 'string' && (p.status === 'published' || p.status === 'active'));
+      // Storefront visibility = status active/published AND commerce-ready.
+      // The readiness gate is resilient: it uses the stored 0016 column when
+      // present and derives from persisted evidence (real supplier + cost
+      // basis) otherwise, so RETAIL_REFERENCE_ONLY products (e.g. manufacturer
+      // MSRP without a verified purchasing path) can never become visible.
+      .filter((p) => p && typeof p.id === 'string' && (p.status === 'published' || p.status === 'active') && isStorefrontReady(p));
 
     // Products without any price info are not ready for the storefront.
     const usable = published.filter((p) => num(p.price) > 0 || num(p.price_amount) > 0);
@@ -350,6 +367,24 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
         stockStatus: typeof p.stock_status === 'string' ? p.stock_status : (num(p.inventory_qty) > 0 ? 'in_stock' : 'out_of_stock'),
         usInventory: p.us_inventory === true,
+        commerceReadiness: (typeof p.commerce_readiness === 'string' && p.commerce_readiness)
+          ? (p.commerce_readiness as CommerceReadiness)
+          : deriveCommerceReadiness({
+              status: p.status || 'active',
+              supplierSource: p.supplier_source,
+              supplierProductRef: p.supplier_product_ref,
+              costPrice: num(p.cost_price),
+              landedCost: num(p.landed_cost),
+              shippingCost: num(p.shipping_cost),
+              freeShipping: p.free_shipping === true,
+              deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
+              deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
+              usInventory: p.us_inventory === true,
+              stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null,
+              inventoryQty: num(p.inventory_qty),
+            }),
+        sourceType: (typeof p.source_type === 'string' && p.source_type as string) || deriveSourceType({ supplierSource: p.supplier_source, supplierProductRef: p.supplier_product_ref }),
+        inventorySource: (typeof p.inventory_source === 'string' && p.inventory_source as string) || deriveInventorySource({ usInventory: p.us_inventory === true, stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null }),
         variants,
         seoTitle: p.seo_title || undefined,
         seoDescription: p.seo_description || undefined,
@@ -366,6 +401,38 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // empty (Phase 4E.1/4E.2).
     return null;
   }
+}
+
+/**
+ * Commerce-readiness gate for storefront visibility.
+ *
+ * Resilient to the 0016 migration state:
+ *   - When `commerce_readiness` exists and is non-null, it is authoritative.
+ *   - Otherwise derive from persisted evidence: a real supplier source PLUS a
+ *     real cost basis is required. Manufacturer retail-reference products
+ *     (e.g. KONG official pages — authenticity proven, purchasing path NOT
+ *     proven) have no cost basis and therefore never qualify.
+ */
+function isStorefrontReady(p: DbProductRow): boolean {
+  const stored = p.commerce_readiness as string | null | undefined;
+  if (typeof stored === 'string' && stored) {
+    return stored === 'COMMERCE_READY';
+  }
+  const readiness = deriveCommerceReadiness({
+    status: p.status || 'active',
+    supplierSource: p.supplier_source,
+    supplierProductRef: p.supplier_product_ref,
+    costPrice: num(p.cost_price),
+    landedCost: num(p.landed_cost),
+    shippingCost: num(p.shipping_cost),
+    freeShipping: p.free_shipping === true,
+    deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
+    deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
+    usInventory: p.us_inventory === true,
+    stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null,
+    inventoryQty: num(p.inventory_qty),
+  });
+  return readiness === 'COMMERCE_READY';
 }
 
 /**

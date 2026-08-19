@@ -41,6 +41,7 @@ export interface Product {
   stockStatus?: string; usInventory?: boolean;
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   supplierSource?: string;
+  commerceReadiness?: string; sourceType?: string; inventorySource?: string;
 }
 interface CartItem { product: Product; quantity: number; }
 interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
@@ -149,6 +150,9 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     saleEnabled: p.saleEnabled,
     stockStatus: p.stockStatus,
     usInventory: p.usInventory,
+    commerceReadiness: p.commerceReadiness,
+    sourceType: p.sourceType,
+    inventorySource: p.inventorySource,
     seoTitle: p.seoTitle,
     seoDescription: p.seoDescription,
     seoKeywords: p.seoKeywords,
@@ -818,7 +822,7 @@ function PCard({ product }: { product: Product }) {
               className="absolute inset-0 hidden sm:block w-full h-full object-cover opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           )}
           {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
+          {product.usInventory && product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 left-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
           <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToCart(product); }}
             className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
             <ShoppingBag01 strokeWidth={1.5} size={12} /> Add to Cart
@@ -1012,7 +1016,9 @@ function ProductDetailPage() {
       '@type': 'Offer',
       price: product.price,
       priceCurrency: 'USD',
-      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      // Honest availability: only claim InStock for real supplier-verified stock.
+      availability: product.stockStatus === 'in_stock' || (product.usInventory && product.stock > 0)
+        ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     };
     if (product.variants[0]?.sku) offers.sku = product.variants[0].sku;
     const prodSchema: Record<string, unknown> = {
@@ -1219,11 +1225,14 @@ function ProductDetailPage() {
             {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
           </div>
 
-          {/* Stock + Shipping */}
+          {/* Stock + Shipping — honest: only real supplier-verified stock is
+              presented as In Stock / Low Stock; otherwise availability is
+              confirmed at checkout. No invented scarcity. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
-            {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
-            {activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
+            {product.usInventory && activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />In Stock</span>}
+            {product.usInventory && activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {product.usInventory && activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
+            {!product.usInventory && activeStock > 0 && <span className="text-gray-500"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />Availability confirmed at checkout</span>}
             {product.freeShipping && <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>}
             <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
           </div>

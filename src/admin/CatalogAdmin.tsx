@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, CaretUp, CaretDown, X, Download, List, Megaphone,
+  GearSix, CaretUp, CaretDown, X, Download, List, Megaphone, Warning,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -27,6 +27,10 @@ import type {
   CatalogProduct, CatalogCategory, CatalogImage, CatalogVariant, Coupon, StoreOffer, StoreSettings,
 } from '../features/catalog/types';
 import { buildFeedCsv, buildProductJsonLd, buildProductMeta } from '../features/catalog/seo';
+import {
+  COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
+  type CommerceReadiness,
+} from '../features/catalog/commerceReadiness';
 
 const I = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
 const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
@@ -38,8 +42,22 @@ const BADGE: Record<string, string> = {
   archived: 'bg-red-100 text-red-600',
 };
 
+const READINESS_BADGE: Record<CommerceReadiness, string> = {
+  COMMERCE_READY: 'bg-green-100 text-green-700',
+  SOURCE_PENDING: 'bg-red-100 text-red-600',
+  ECONOMICS_PENDING: 'bg-orange-100 text-orange-700',
+  FULFILLMENT_PENDING: 'bg-amber-100 text-amber-700',
+  RISK_REVIEW: 'bg-purple-100 text-purple-700',
+  DRAFT: 'bg-gray-100 text-gray-600',
+};
+
 function StatusBadge({ status }: { status: string }) {
   return <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${BADGE[status] || BADGE.draft}`}>{status}</span>;
+}
+
+function ReadinessBadge({ readiness }: { readiness?: CommerceReadiness | null }) {
+  if (!readiness) return <span className="text-xs text-gray-300">—</span>;
+  return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${READINESS_BADGE[readiness] || BADGE.draft}`}>{COMMERCE_READINESS_LABELS[readiness] || readiness}</span>;
 }
 
 function useDbToken() {
@@ -62,6 +80,8 @@ export function CatalogProductsPage() {
   const [fStatus, setFStatus] = useState('all');
   const [fCat, setFCat] = useState('all');
   const [fFlag, setFFlag] = useState('all');
+  const [fReady, setFReady] = useState('all');
+  const [fSource, setFSource] = useState('all');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
 
@@ -83,6 +103,19 @@ export function CatalogProductsPage() {
   const filtered = useMemo(() => products.filter((p) => {
     if (fStatus !== 'all' && p.status !== fStatus) return false;
     if (fCat !== 'all' && p.categoryId !== fCat) return false;
+    if (fReady !== 'all' && (p.commerceReadiness ?? null) !== (fReady === 'none' ? null : fReady)) return false;
+    if (fSource !== 'all') {
+      const src = (p.supplierSource || '').toLowerCase();
+      const st = p.sourceType || null;
+      if (fSource === 'kong' && !(/kong/.test(src) || st === 'RETAIL_REFERENCE_ONLY')) return false;
+      if (fSource === 'cj' && !(/cj/.test(src) || st === 'CJ_DROPSHIPPING')) return false;
+      if (fSource === 'other' && (/kong/.test(src) || /cj/.test(src))) return false;
+      if (fSource === 'unknown' && (src || st)) return false;
+      if (fSource === 'cost-unknown' && (p.costPrice > 0 || p.landedCost > 0)) return false;
+      if (fSource === 'shipping-unknown' && !(p.shippingCost > 0 || p.freeShipping)) return false;
+      if (fSource === 'low-margin' && !(p.costPrice > 0 && p.marginPercent != null && p.marginPercent < 40)) return false;
+      if (fSource === 'stock-unknown' && !(p.stockStatus === 'unknown' || p.stockStatus == null)) return false;
+    }
     if (fFlag === 'featured' && !p.featured) return false;
     if (fFlag === 'new' && !p.newArrival) return false;
     if (fFlag === 'sale' && !(p.compareAtPrice > p.price)) return false;
@@ -93,7 +126,7 @@ export function CatalogProductsPage() {
       return [p.name, p.brand, p.sku, p.categoryName, ...p.tags].join(' ').toLowerCase().includes(needle);
     }
     return true;
-  }), [products, fStatus, fCat, fFlag, q]);
+  }), [products, fStatus, fCat, fFlag, fReady, fSource, q]);
 
   const toggleActive = async (p: CatalogProduct) => {
     try {
@@ -150,7 +183,7 @@ export function CatalogProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Products</h1>
-          <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active').length} active on storefront</p>
+          <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} commerce-ready on storefront · {products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} active but not commerce-ready</p>
         </div>
         <button onClick={() => nav('/admin/products/new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2">
           <Plus size={16} />Add Product
@@ -158,7 +191,7 @@ export function CatalogProductsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+      <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
         <div className="relative lg:col-span-2">
           <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, SKU, tag…" className={`${I} pl-9`} aria-label="Search products" />
@@ -183,6 +216,27 @@ export function CatalogProductsPage() {
           <option value="free-shipping">Free shipping</option>
           <option value="low-stock">Low stock</option>
         </select>
+        <select value={fReady} onChange={(e) => setFReady(e.target.value)} className={I} aria-label="Filter by commerce readiness">
+          <option value="all">All readiness</option>
+          <option value="COMMERCE_READY">Commerce Ready</option>
+          <option value="SOURCE_PENDING">Source Pending</option>
+          <option value="ECONOMICS_PENDING">Economics Pending</option>
+          <option value="FULFILLMENT_PENDING">Fulfillment Pending</option>
+          <option value="RISK_REVIEW">Risk Review</option>
+          <option value="DRAFT">Draft</option>
+          <option value="none">Unclassified</option>
+        </select>
+        <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={I} aria-label="Filter by source / economics">
+          <option value="all">All sources</option>
+          <option value="kong">KONG</option>
+          <option value="cj">CJ</option>
+          <option value="other">Other source</option>
+          <option value="unknown">Source unknown</option>
+          <option value="cost-unknown">Cost unknown</option>
+          <option value="shipping-unknown">Shipping unknown</option>
+          <option value="low-margin">Low margin (&lt;40%)</option>
+          <option value="stock-unknown">Stock unknown</option>
+        </select>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -194,7 +248,10 @@ export function CatalogProductsPage() {
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Price</th>
                 <th className="px-4 py-3">Cost</th>
+                <th className="px-4 py-3">Margin</th>
                 <th className="px-4 py-3">Stock</th>
+                <th className="px-4 py-3">Readiness</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Flags</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Actions</th>
@@ -221,7 +278,20 @@ export function CatalogProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{p.costPrice > 0 ? `$${p.costPrice.toFixed(2)}` : '—'}</td>
                   <td className="px-4 py-3 text-xs">
+                    {p.marginPercent != null
+                      ? <span className={p.marginPercent < 40 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>{p.marginPercent.toFixed(0)}%</span>
+                      : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs">
                     <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''}>{p.inventoryQty}</span>
+                    <span className="text-[10px] text-gray-400 ml-1">({INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']})</span>
+                  </td>
+                  <td className="px-4 py-3"><ReadinessBadge readiness={p.commerceReadiness} /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-medium text-gray-600">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : '—'}</span>
+                      {p.supplierSource && <span className="text-[10px] text-gray-400 max-w-[140px] truncate" title={p.supplierSource}>{p.supplierSource}</span>}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
@@ -246,7 +316,7 @@ export function CatalogProductsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
+                <tr><td colSpan={11} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -270,7 +340,7 @@ export function CatalogProductsPage() {
 // ============================================================================
 // PRODUCT EDITOR
 // ============================================================================
-type EditorTab = 'general' | 'pricing' | 'inventory' | 'shipping' | 'images' | 'variants' | 'seo' | 'promotions';
+type EditorTab = 'general' | 'pricing' | 'inventory' | 'shipping' | 'images' | 'variants' | 'seo' | 'promotions' | 'commerce';
 
 const TABS: { id: EditorTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <Package size={14} /> },
@@ -281,6 +351,7 @@ const TABS: { id: EditorTab; label: string; icon: React.ReactNode }[] = [
   { id: 'variants', label: 'Variants', icon: <List size={14} /> },
   { id: 'seo', label: 'SEO', icon: <Globe size={14} /> },
   { id: 'promotions', label: 'Promotions', icon: <Tag size={14} /> },
+  { id: 'commerce', label: 'Commerce', icon: <Truck size={14} /> },
 ];
 
 export function CatalogProductEditor() {
@@ -313,6 +384,8 @@ export function CatalogProductEditor() {
           freeShipping: false, deliveryMinDays: null, deliveryMaxDays: null, usInventory: false,
           tags: [], featured: false, newArrival: false, trending: false, bestRated: false, bestSeller: false,
           promoted: false, saleEnabled: false, seoTitle: '', seoDescription: '', seoKeywords: [],
+          commerceReadiness: null, sourceType: null, inventorySource: null, fulfillmentMethod: null,
+          supplierUrl: null, supplierStockStatus: null, riskFlags: [],
           images: [], variants: [], createdAt: '', updatedAt: '', publishedAt: null,
         });
       }
@@ -364,6 +437,13 @@ export function CatalogProductEditor() {
         usInventory: p.usInventory,
         supplierSource: p.supplierSource,
         supplierProductRef: p.supplierProductRef,
+        commerceReadiness: p.commerceReadiness,
+        sourceType: p.sourceType,
+        inventorySource: p.inventorySource,
+        fulfillmentMethod: p.fulfillmentMethod,
+        supplierUrl: p.supplierUrl,
+        supplierStockStatus: p.supplierStockStatus,
+        riskFlags: p.riskFlags,
         tags: p.tags,
         featured: p.featured,
         newArrival: p.newArrival,
@@ -569,6 +649,90 @@ export function CatalogProductEditor() {
                 <p className="text-xs text-gray-600 mt-1">{meta.description}</p>
                 <details className="mt-2"><summary className="text-xs text-blue-700 cursor-pointer">Product JSON-LD</summary><pre className="mt-1 text-[10px] bg-white rounded p-2 overflow-auto max-h-40">{JSON.stringify(jsonLd, null, 1)}</pre></details>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── COMMERCE / READINESS ── */}
+        {tab === 'commerce' && (
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Final readiness</p>
+                <ReadinessBadge readiness={p.commerceReadiness} />
+                <p className="text-[11px] text-gray-500 mt-2">COMMERCE_READY is the only state that appears on the storefront.</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Source type</p>
+                <p className="text-sm font-medium">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : 'Unknown'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Inventory source</p>
+                <p className="text-sm font-medium">{p.inventorySource ? INVENTORY_SOURCE_LABELS[p.inventorySource] : 'Unknown'}</p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div><label className={L}>Supplier / source</label><input value={p.supplierSource || ''} onChange={(e) => set('supplierSource', e.target.value)} className={I} placeholder="e.g. CJ / Authorized wholesaler" /></div>
+              <div><label className={L}>Supplier product ref / SKU</label><input value={p.supplierProductRef || ''} onChange={(e) => set('supplierProductRef', e.target.value)} className={I} placeholder="e.g. CJ PID" /></div>
+              <div><label className={L}>Supplier URL</label><input value={p.supplierUrl || ''} onChange={(e) => set('supplierUrl', e.target.value)} className={I} placeholder="https://… (verified supplier page)" /></div>
+              <div><label className={L}>Fulfillment method</label><input value={p.fulfillmentMethod || ''} onChange={(e) => set('fulfillmentMethod', e.target.value)} className={I} placeholder="e.g. CJ US warehouse dropship" /></div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div><label className={L}>Source type</label>
+                <select value={p.sourceType || ''} onChange={(e) => set('sourceType', (e.target.value || null) as CatalogProduct['sourceType'])} className={I}>
+                  <option value="">— Auto / unknown —</option>
+                  <option value="CJ_DROPSHIPPING">CJ Dropshipping</option>
+                  <option value="AUTHORIZED_WHOLESALE">Authorized Wholesale</option>
+                  <option value="MANUFACTURER_DIRECT">Manufacturer Direct</option>
+                  <option value="RETAIL_REFERENCE_ONLY">Retail Reference Only</option>
+                  <option value="OWNER_STOCK">Owner Stock</option>
+                  <option value="OTHER_VERIFIED">Other Verified</option>
+                  <option value="UNKNOWN">Unknown</option>
+                </select>
+              </div>
+              <div><label className={L}>Inventory source</label>
+                <select value={p.inventorySource || ''} onChange={(e) => set('inventorySource', (e.target.value || null) as CatalogProduct['inventorySource'])} className={I}>
+                  <option value="">— Auto / unknown —</option>
+                  <option value="SUPPLIER_VERIFIED">Supplier Verified</option>
+                  <option value="INTERNAL_STOCK">Internal Stock</option>
+                  <option value="UNTRACKED">Untracked</option>
+                  <option value="UNKNOWN">Unknown</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Economics</p>
+                <dl className="text-sm space-y-1">
+                  <div className="flex justify-between"><dt className="text-gray-500">Sell price</dt><dd className="font-semibold">${p.price.toFixed(2)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Supplier cost</dt><dd>{p.costPrice > 0 ? `$${p.costPrice.toFixed(2)}` : <span className="text-amber-600">UNKNOWN</span>}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Landed cost</dt><dd>{p.landedCost > 0 ? `$${p.landedCost.toFixed(2)}` : <span className="text-amber-600">UNKNOWN</span>}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Gross margin</dt><dd>{p.marginPercent != null ? `${p.marginPercent.toFixed(1)}%` : <span className="text-amber-600">UNKNOWN</span>}</dd></div>
+                </dl>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Supply / evidence</p>
+                <dl className="text-sm space-y-1">
+                  <div className="flex justify-between"><dt className="text-gray-500">USA inventory</dt><dd>{p.usInventory ? 'Verified' : 'No'}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Supplier stock</dt><dd>{p.supplierStockStatus || (p.stockStatus || 'unknown')}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Shipping</dt><dd>{p.shippingCost > 0 ? `$${p.shippingCost.toFixed(2)}` : p.freeShipping ? 'Free' : <span className="text-amber-600">UNKNOWN</span>}</dd></div>
+                  <div className="flex justify-between"><dt className="text-gray-500">Delivery</dt><dd>{p.deliveryMinDays != null && p.deliveryMaxDays != null ? `${p.deliveryMinDays}–${p.deliveryMaxDays} days` : <span className="text-amber-600">UNKNOWN</span>}</dd></div>
+                </dl>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Risk flags</p>
+                {p.riskFlags && p.riskFlags.length > 0
+                  ? <ul className="text-xs space-y-1">{p.riskFlags.map((r) => <li key={r} className="flex items-start gap-1.5"><Warning className="text-amber-500 shrink-0 mt-0.5" size={13} />{r}</li>)}</ul>
+                  : <p className="text-xs text-gray-400">No unresolved risk flags recorded.</p>}
+                {p.evidenceNotes && <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-200 pt-2">Evidence: {p.evidenceNotes.slice(0, 220)}{p.evidenceNotes.length > 220 ? '…' : ''}</p>}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 text-xs text-gray-600">
+              <p><strong>Readiness rule:</strong> storefront visibility requires status active AND commerce_readiness = COMMERCE_READY. A manufacturer retail page alone (no wholesale/dropship purchasing path) is <strong>Retail Reference Only → Source Pending</strong>. Do not treat internal quantity as supplier stock.</p>
             </div>
           </div>
         )}

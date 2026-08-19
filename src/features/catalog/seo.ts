@@ -59,7 +59,11 @@ export function buildProductJsonLd(p: CatalogProduct, reviews?: ReviewFacts): Re
     '@type': 'Offer',
     price,
     priceCurrency: p.currency || 'USD',
-    availability: p.inventoryQty > 0 || p.stockStatus === 'in_stock' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    // Honest availability: InStock only for real supplier-verified stock
+    // (list-level US inventory or explicit supplier in_stock), never from an
+    // internal placeholder quantity.
+    availability: p.usInventory === true || p.stockStatus === 'in_stock'
+      ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition: 'https://schema.org/NewCondition',
   };
   if (p.sku) offer.sku = p.sku;
@@ -109,7 +113,7 @@ export function buildStoreJsonLd(): Record<string, unknown> {
 export function buildFeedRow(p: CatalogProduct): Record<string, string | number> {
   const price = effectivePrice(p);
   const image = p.images.find((i) => i.isPrimary)?.url || p.images[0]?.url || '';
-  const availability = p.inventoryQty > 0 || p.stockStatus === 'in_stock' ? 'in stock' : 'out of stock';
+  const availability = p.usInventory === true || p.stockStatus === 'in_stock' ? 'in stock' : 'out of stock';
   const row: Record<string, string | number> = {
     id: p.id,
     title: p.name,
