@@ -26,11 +26,15 @@ export interface CheckoutTotals {
   subtotal: number;
   discount: number;
   shipping: number;
+  /** Always 0 from Luxedge — Stripe automatic tax computes the real amount at checkout. */
   tax: number;
+  /** Pre-tax total. The final charged total (incl. Stripe-computed tax) is decided by Stripe. */
   total: number;
   currency: string;
   freeShippingApplied: boolean;
   couponCode: string | null;
+  /** True: the payment provider (Stripe automatic tax) calculates tax — Luxedge never fabricates a rate. */
+  taxHandledByProvider?: boolean;
 }
 
 export interface CreateCheckoutResponse {

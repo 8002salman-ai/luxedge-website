@@ -86,33 +86,44 @@ describe('/api/checkout', () => {
     if (original.stripe === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = original.stripe;
   });
 
-  it('creates a Stripe session charged at the SERVER-computed total (tampering rejected)', async () => {
+  it('creates a Stripe session charged at the SERVER-computed total (tampering rejected), tax delegated to Stripe', async () => {
     const calls = makeEnv();
     const { server, cap } = res();
     // Client tries to send price 0.01 — the server must ignore it.
     await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 1, price: 0.01 }], customer: { email: 'a@b.com' } }), server);
     expect(cap.status).toBe(200);
-    const body = cap.body as { url: string; totals: { total: number } };
+    const body = cap.body as { url: string; totals: { total: number; tax: number; taxHandledByProvider: boolean } };
     expect(body.url).toContain('checkout.stripe.com');
-    // 25 subtotal + 4.99 shipping (below $50) + 2.06 tax = 32.05
-    expect(body.totals.total).toBe(32.05);
+    // 25 subtotal + 4.99 shipping (below $50). NO tax — Stripe automatic tax adds it at checkout.
+    expect(body.totals.total).toBe(29.99);
+    expect(body.totals.tax).toBe(0);
+    expect(body.totals.taxHandledByProvider).toBe(true);
     const stripeCall = calls.find((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST');
     expect(stripeCall).toBeTruthy();
-    expect(String(stripeCall!.body)).toContain('unit_amount%5D=3205');
+    const stripeBody = String(stripeCall!.body);
+    expect(stripeBody).toContain('automatic_tax%5Benabled%5D=true');
+    expect(stripeBody).toContain('shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US');
+    // goods line = catalog price; shipping is a separate Stripe shipping option.
+    expect(stripeBody).toContain('unit_amount%5D=2500');
+    expect(stripeBody).toContain('shipping_options%5B0%5D%5Bshipping_rate_data%5D%5Bfixed_amount%5D%5Bamount%5D=499');
   });
 
-  it('applies WELCOME10 and free shipping at/above the threshold', async () => {
+  it('applies WELCOME10 and free shipping at/above the threshold (pre-tax)', async () => {
     const calls = makeEnv();
     const { server, cap } = res();
-    // qty 2 × $25 = $50 → free shipping; WELCOME10 10% → $5 discount; tax on $45 = 3.71
+    // qty 2 × $25 = $50 → free shipping; WELCOME10 10% → $5 discount; NO tax (Stripe adds it).
     await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 2 }], couponCode: 'WELCOME10', customer: { email: 'a@b.com' } }), server);
     expect(cap.status).toBe(200);
-    const body = cap.body as { totals: { discount: number; shipping: number; total: number } };
+    const body = cap.body as { totals: { discount: number; shipping: number; total: number; tax: number } };
     expect(body.totals.discount).toBe(5);
     expect(body.totals.shipping).toBe(0);
-    expect(body.totals.total).toBe(48.71);
+    expect(body.totals.tax).toBe(0);
+    expect(body.totals.total).toBe(45);
     const stripeCall = calls.find((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST');
-    expect(String(stripeCall!.body)).toContain('unit_amount%5D=4871');
+    const stripeBody = String(stripeCall!.body);
+    // discounted goods line: qty 2 × $22.50 = $45 → 2250 cents; shipping option free = 0.
+    expect(stripeBody).toContain('unit_amount%5D=2250');
+    expect(stripeBody).toContain('shipping_options%5B0%5D%5Bshipping_rate_data%5D%5Bfixed_amount%5D%5Bamount%5D=0');
   });
 
   it('rejects an invalid coupon (400) with no Stripe call', async () => {

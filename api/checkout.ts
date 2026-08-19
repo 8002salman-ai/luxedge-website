@@ -12,7 +12,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, readJsonBody, rateLimited, clientIp } from './_lib/providers.js';
 import { requireAdmin } from './_lib/auth.js';
-import { computeCheckoutTotals, validateCheckoutRequest, appBaseUrl, type CheckoutDataLoader } from './_lib/checkout.js';
+import { computeCheckoutTotals, validateCheckoutRequest, buildStripeLineItems, appBaseUrl, type CheckoutDataLoader } from './_lib/checkout.js';
 import { stripeConfigured, createCheckoutSession, retrieveCheckoutSession, safeSessionSummary } from './_lib/stripe.js';
 
 interface ServerProductRow {
@@ -171,13 +171,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const { totals } = decision;
   const base = appBaseUrl(req);
+  // Compact, bounded snapshot for the webhook: product ids + quantities only
+  // (Stripe metadata values are capped at 500 chars; carts are capped at 10
+  // distinct products). The webhook joins these with Stripe's authoritative
+  // line items for the persisted purchase snapshot.
   const metadata: Record<string, string> = {
-    items_count: String(totals.lines.length),
+    ids: totals.lines.map((l) => l.id).join(','),
+    qtys: totals.lines.map((l) => String(l.quantity)).join(','),
     coupon: totals.couponCode || 'none',
   };
 
   const session = await createCheckoutSession({
-    lineItems: [{ name: 'Luxedge order', unitAmountCents: Math.round(totals.total * 100), quantity: 1 }],
+    lineItems: buildStripeLineItems(totals).map((li) => ({ name: li.name, unitAmountCents: li.unitAmountCents, quantity: li.quantity, image: li.imageUrl || undefined })),
+    shippingCents: Math.round(totals.shipping * 100),
     successUrl: `${base}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${base}/checkout?cancelled=1`,
     customerEmail: parsed.request.customer?.email || undefined,
@@ -192,11 +198,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       subtotal: totals.subtotal,
       discount: totals.discount,
       shipping: totals.shipping,
-      tax: totals.tax,
-      total: totals.total,
+      tax: totals.tax, // 0 — Stripe automatic tax computes the real amount at checkout
+      total: totals.total, // pre-tax total; Stripe adds tax on top
       currency: totals.currency,
       freeShippingApplied: totals.freeShippingApplied,
       couponCode: totals.couponCode,
+      taxHandledByProvider: totals.taxHandledByProvider,
     },
   });
 }

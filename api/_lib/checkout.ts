@@ -15,7 +15,11 @@
 import type { IncomingMessage } from 'node:http';
 
 export const DEFAULT_SHIPPING_RATE = 4.99;
-export const TAX_RATE = 0.0825; // TX 8.25% estimate — matches the storefront cart display
+
+// NO hard-coded sales tax. Luxedge never computes tax: Stripe automatic tax
+// (Stripe Tax) calculates the applicable rate at checkout from the collected
+// shipping address. Charging a fabricated universal rate (e.g. TX 8.25%) for
+// every US order would be wrong — tax is determined by Stripe, not here.
 
 export interface CheckoutItemInput {
   id: string;
@@ -71,8 +75,11 @@ export interface CheckoutTotals {
   discountedSubtotal: number;
   shipping: number;
   freeShippingApplied: boolean;
+  /** Always 0 — Luxedge never fabricates tax. Stripe automatic tax adds it at checkout. */
   tax: number;
+  /** Total BEFORE tax. The final charged total (incl. Stripe-computed tax) is decided by Stripe. */
   total: number;
+  taxHandledByProvider: true;
   currency: 'USD';
 }
 
@@ -98,7 +105,9 @@ export function validateCheckoutRequest(body: unknown): { ok: true; request: Che
   const b = body as Record<string, unknown>;
   const rawItems = b.items;
   if (!Array.isArray(rawItems) || rawItems.length === 0) return { ok: false, message: 'Your cart is empty.' };
-  if (rawItems.length > 50) return { ok: false, message: 'Too many items in the cart.' };
+  // Bounded at 10 distinct products so the Stripe session metadata snapshot
+  // stays within Stripe's 500-char metadata limit. Quantities are still up to 99.
+  if (rawItems.length > 10) return { ok: false, message: 'Too many items in the cart (max 10 distinct products).' };
   const items: CheckoutItemInput[] = [];
   const seen = new Set<string>();
   for (const raw of rawItems) {
@@ -204,8 +213,8 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
   const freeShippingApplied = freeShippingEnabled && subtotal >= threshold;
   const shipping = freeShippingApplied ? 0 : DEFAULT_SHIPPING_RATE;
 
-  const tax = round2(discountedSubtotal * TAX_RATE);
-  const total = round2(discountedSubtotal + shipping + tax);
+  const tax = 0; // Stripe automatic tax computes the real rate at checkout.
+  const total = round2(discountedSubtotal + shipping); // pre-tax total
   if (total <= 0) return { ok: false, status: 400, code: 'EMPTY_TOTAL', message: 'Order total must be greater than zero.' };
 
   return {
@@ -221,10 +230,43 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
       freeShippingApplied,
       tax,
       total,
+      taxHandledByProvider: true,
       currency: 'USD',
     },
     products,
   };
+}
+
+/**
+ * Build the Stripe line items the server will actually charge. The coupon
+ * discount is prorated across the goods lines (cents-exact: the LAST line
+ * absorbs rounding) so the charged line sum == discountedSubtotal exactly.
+ * Stripe then adds automatic tax on top. The browser never sees these amounts.
+ */
+export function buildStripeLineItems(totals: CheckoutTotals): { name: string; unitAmountCents: number; quantity: number; imageUrl: string | null }[] {
+  const lines = totals.lines;
+  if (lines.length === 0) return [];
+  const subtotal = totals.subtotal;
+  const discountedCents = Math.round(totals.discountedSubtotal * 100);
+  if (totals.discount <= 0 || subtotal <= 0) {
+    return lines.map((l) => ({ name: l.name, unitAmountCents: Math.round(l.unitPrice * 100), quantity: l.quantity, imageUrl: l.imageUrl }));
+  }
+  // Distribute the discount proportionally in whole cents.
+  const lineCents: number[] = [];
+  let remaining = discountedCents;
+  lines.forEach((l, i) => {
+    if (i === lines.length - 1) { lineCents.push(remaining); return; }
+    const share = Math.round((l.lineTotal / subtotal) * discountedCents);
+    lineCents.push(share);
+    remaining -= share;
+  });
+  return lines.map((l, i) => {
+    // unit = share / qty, with the last unit absorbing cent-rounding so
+    // sum(unit * qty) === lineCents[i] exactly.
+    const base = Math.floor(lineCents[i] / l.quantity);
+    const unit = i === lines.length - 1 ? lineCents[i] - base * (l.quantity - 1) : base;
+    return { name: l.name, unitAmountCents: Math.max(1, unit), quantity: l.quantity, imageUrl: l.imageUrl };
+  });
 }
 
 /** Safe base URL for Stripe success/cancel redirects (never expose secrets). */

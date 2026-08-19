@@ -8,7 +8,7 @@
 // ============================================================================
 import { describe, it, expect } from 'vitest';
 import {
-  validateCheckoutRequest, computeCheckoutTotals, DEFAULT_SHIPPING_RATE,
+  validateCheckoutRequest, computeCheckoutTotals, buildStripeLineItems, DEFAULT_SHIPPING_RATE,
   type CheckoutDataLoader, type ServerProduct,
 } from '../checkout.js';
 
@@ -129,6 +129,54 @@ describe('computeCheckoutTotals — server prices are authoritative', () => {
     if (d.ok) {
       expect(d.totals.discount).toBeLessThanOrEqual(d.totals.subtotal);
       expect(d.totals.total).toBeGreaterThan(0);
+    }
+  });
+
+  it('NEVER computes tax — tax is 0 and delegated to the payment provider', async () => {
+    const d = await computeCheckoutTotals(makeLoader([product({ price: 25 })]), { items: [{ id: PID, quantity: 1 }] });
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      expect(d.totals.tax).toBe(0);
+      expect(d.totals.taxHandledByProvider).toBe(true);
+      expect(d.totals.total).toBe(29.99); // pre-tax: 25 + 4.99 shipping, rounded — never a fabricated tax
+    }
+  });
+});
+
+describe('buildStripeLineItems — cents-exact discounted lines for Stripe', () => {
+  it('passes through undiscounted lines at the catalog unit price', async () => {
+    const d = await computeCheckoutTotals(makeLoader([product({ price: 25 })]), { items: [{ id: PID, quantity: 2 }] });
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      const lines = buildStripeLineItems(d.totals);
+      expect(lines).toHaveLength(1);
+      expect(lines[0].unitAmountCents).toBe(2500);
+      expect(lines[0].quantity).toBe(2);
+      expect(lines[0].unitAmountCents * 2).toBe(d.totals.discountedSubtotal * 100);
+    }
+  });
+
+  it('prorates a percent discount exactly across lines (last line absorbs rounding)', async () => {
+    // two lines: $30.00 and $10.00 → subtotal $40; WELCOME10 10% → discounted $36
+    const d = await computeCheckoutTotals(
+      makeLoader([product({ price: 30, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }), product({ price: 10, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' })], WELCOME10),
+      { items: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', quantity: 1 }, { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', quantity: 1 }], couponCode: 'WELCOME10' }
+    );
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      const lines = buildStripeLineItems(d.totals);
+      const sum = lines.reduce((s, l) => s + l.unitAmountCents * l.quantity, 0);
+      expect(sum).toBe(3600); // exactly $36.00 — no cent drift
+      expect(lines.map((l) => l.unitAmountCents).sort((a, b) => b - a)).toEqual([2700, 900]);
+    }
+  });
+
+  it('never emits a zero/negative unit amount even with a large fixed discount', async () => {
+    const d = await computeCheckoutTotals(makeLoader([product({ price: 10 })], { ...WELCOME10, discount_value: 999 }), { items: [{ id: PID, quantity: 1 }], couponCode: 'WELCOME10' });
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      const lines = buildStripeLineItems(d.totals);
+      expect(lines[0].unitAmountCents).toBeGreaterThanOrEqual(1);
     }
   });
 });

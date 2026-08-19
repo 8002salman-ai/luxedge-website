@@ -85,9 +85,17 @@ export interface CheckoutSessionResult {
   metadata?: Record<string, string> | null;
 }
 
-/** Create a Stripe-hosted Checkout Session (server-trusted amounts only). */
+/**
+ * Create a Stripe-hosted Checkout Session (server-trusted amounts only).
+ *
+ * TAX IS NOT COMPUTED BY LUXEDGE. `automatic_tax[enabled]=true` makes Stripe
+ * collect the shipping address and calculate the applicable tax with Stripe
+ * Tax. Luxedge only ever sets the pre-tax goods amounts and shipping; the
+ * customer's final total (incl. tax) is decided by Stripe at checkout.
+ */
 export async function createCheckoutSession(params: {
   lineItems: { name: string; unitAmountCents: number; quantity: number; image?: string }[];
+  shippingCents: number;
   successUrl: string;
   cancelUrl: string;
   customerEmail?: string;
@@ -98,18 +106,64 @@ export async function createCheckoutSession(params: {
   parts.set('success_url', params.successUrl);
   parts.set('cancel_url', params.cancelUrl);
   if (params.customerEmail) parts.set('customer_email', params.customerEmail);
+
+  // Stripe computes tax (never a hard-coded store rate). Address is required
+  // for tax + shipping. USA-only for launch (expandable later).
+  parts.set('automatic_tax[enabled]', 'true');
+  parts.set('shipping_address_collection[allowed_countries][0]', 'US');
+
+  // Shipping as a proper Stripe shipping option (taxed by Stripe Tax).
+  parts.set('shipping_options[0][shipping_rate_data][type]', 'fixed_amount');
+  parts.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(Math.max(0, Math.round(params.shippingCents))));
+  parts.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]', 'usd');
+  parts.set('shipping_options[0][shipping_rate_data][display_name]', 'Standard shipping (7–14 days)');
+
   for (const [k, v] of Object.entries(params.metadata || {})) {
     parts.set(`metadata[${k}]`, v);
   }
   params.lineItems.forEach((li, i) => {
     parts.set(`line_items[${i}][quantity]`, String(li.quantity));
     parts.set(`line_items[${i}][price_data][currency]`, 'usd');
-    parts.set(`line_items[${i}][price_data][unit_amount]`, String(Math.round(li.unitAmountCents)));
+    parts.set(`line_items[${i}][price_data][unit_amount]`, String(Math.max(1, Math.round(li.unitAmountCents))));
+    parts.set(`line_items[${i}][price_data][tax_behavior]`, 'exclusive');
     parts.set(`line_items[${i}][price_data][product_data][name]`, li.name);
     if (li.image) parts.set(`line_items[${i}][price_data][product_data][images][0]`, li.image);
   });
   const r = await stripeRequest<CheckoutSessionResult>('/checkout/sessions', { method: 'POST', body: parts.toString() });
   return r;
+}
+
+export interface DetailedLineItem {
+  id: string;
+  description: string | null;
+  quantity: number | null;
+  price: { unit_amount: number | null } | null;
+}
+
+/** Full session with line items + totals — used by the webhook for the REAL purchase snapshot. */
+export interface DetailedCheckoutSession extends CheckoutSessionResult {
+  amount_subtotal: number;
+  customer_details?: { email?: string | null; name?: string | null; phone?: string | null } | null;
+  shipping_details?: {
+    name?: string | null;
+    phone?: string | null;
+    address?: { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null } | null;
+  } | null;
+  total_details?: { amount_discount?: number; amount_shipping?: number; amount_tax?: number } | null;
+  payment_intent?: string | null;
+  line_items?: { data: DetailedLineItem[] } | null;
+}
+
+/**
+ * Retrieve a Checkout Session WITH its line items (Stripe-authoritative
+ * snapshot: names, unit amounts, quantities) — used only by the webhook.
+ */
+export async function retrieveCheckoutSessionDetailed(sessionId: string): Promise<StripeResult<DetailedCheckoutSession>> {
+  if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) {
+    return { ok: false, status: 400, code: 'invalid_session_id', message: 'Invalid checkout session id.' };
+  }
+  const q = '?expand%5B%5D=line_items.data.price';
+  return stripeRequest<DetailedCheckoutSession>(`/checkout/sessions/${encodeURIComponent(sessionId)}${q}`);
 }
 
 /** Retrieve a Checkout Session (used by the success page — real status only). */

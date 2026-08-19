@@ -2302,8 +2302,9 @@ function CheckoutPage() {
   const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
   const discountedSub = Math.max(0, sub - couponDisc);
   const shipCost = freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99;
-  const tax = +(discountedSub * 0.0825).toFixed(2);
-  const total = +(discountedSub + shipCost + tax).toFixed(2);
+  // NO hard-coded tax. Stripe automatic tax computes the real rate from the
+  // collected shipping address at checkout. This is the pre-tax total.
+  const totalBeforeTax = +(discountedSub + shipCost).toFixed(2);
 
   useEffect(() => { if (cart.length === 0) nav('/shop'); }, [cart.length, nav]);
   if (cart.length === 0) return null;
@@ -2334,7 +2335,7 @@ function CheckoutPage() {
     setSubmitting(true);
     setPayError('');
     try {
-      trackEvent('begin_checkout', { currency: 'USD', value: total, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+      trackEvent('begin_checkout', { currency: 'USD', value: totalBeforeTax, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
       const res = await createCheckoutSession({
         items: cart.map(i => ({ id: i.product.id, quantity: i.quantity })),
         couponCode: coupon?.code || undefined,
@@ -2444,20 +2445,20 @@ function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">−${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Tax</span><span className="font-medium text-gray-400">calculated at checkout</span></div>
                 {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
-                  <span className="font-bold text-lg">Total</span>
+                  <span className="font-bold text-lg">Total before tax</span>
                   <div className="text-right">
-                    <span className="font-bold text-xl text-gray-900">${total.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-400">USD</p>
+                    <span className="font-bold text-xl text-gray-900">${totalBeforeTax.toFixed(2)}</span>
+                    <p className="text-[10px] text-gray-400">USD · tax added by Stripe at checkout</p>
                   </div>
                 </div>
               </div>
               <button onClick={handleCheckout} disabled={submitting}
                 className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
                 {submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
-                {submitting ? 'Starting secure checkout…' : `Secure Checkout · $${total.toFixed(2)}`}
+                {submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
               </button>
               <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details.</p>
               <div className="mt-4 pt-4 border-t space-y-2.5">
