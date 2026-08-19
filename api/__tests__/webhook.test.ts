@@ -1,11 +1,16 @@
 // ============================================================================
 // LUXEDGE — /api/webhook ROUTE TESTS
 //
-// Verifies: invalid signatures rejected with NO database write; completed
-// sessions persist the REAL purchase snapshot (line items + Stripe totals +
-// customer) and decrement inventory EXACTLY once; replays never duplicate an
-// order and never double-decrement; charge.refunded syncs refunded /
-// partially_refunded; non-completion events are acked.
+// Verifies:
+//   - invalid signatures rejected with NO database write
+//   - completed + payment_status=paid → REAL purchase snapshot persisted,
+//     reservation CONSUMED exactly once, no legacy decrement
+//   - completed + payment_status!=paid → awaiting_payment, NO inventory change
+//   - async_payment_succeeded → awaiting order promoted to paid + consume
+//   - async_payment_failed / expired → reservation RELEASED (+ status sync)
+//   - replays → no duplicate order, no double consume / no double release
+//   - legacy session without a reservation → atomic decrement fallback
+//   - charge.refunded syncs refunded / partially_refunded
 // ============================================================================
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -35,7 +40,7 @@ const SESSION = {
   customer_details: { email: 'buyer@example.com', name: 'Jane Smith', phone: '(555) 123-4567' },
   shipping_details: { name: 'Jane Smith', address: { line1: '456 Elm St', line2: null, city: 'Dallas', state: 'TX', postal_code: '75201', country: 'US' } },
   total_details: { amount_discount: 0, amount_shipping: 499, amount_tax: 201 },
-  metadata: { ids: '11111111-1111-4111-8111-111111111111', qtys: '1', coupon: 'none' },
+  metadata: { ids: '11111111-1111-4111-8111-111111111111', qtys: '1', coupon: 'none', reservation: 'res-1' },
   line_items: { data: [{ id: 'li_1', description: 'Test Product', quantity: 1, price: { unit_amount: 2500 } }] },
 };
 
@@ -62,42 +67,59 @@ function sign(body: string, timestamp = Math.floor(Date.now() / 1000)): string {
 
 function makeEnv() {
   const calls: { url: string; method: string; body?: unknown }[] = [];
-  let orderExists = false;
-  let inventoryCalls = 0;
+  const state = {
+    orderStatus: null as string | null,
+    inventoryCalls: 0,
+    consumeCalls: 0,
+    releaseCalls: 0,
+    // The webhook uses the RETRIEVED session's payment_status/metadata, so
+    // tests override the Stripe GET response to mirror the event.
+    sessionOverride: {} as Record<string, unknown>,
+  };
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, method: init?.method || 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined });
 
     // Stripe: retrieve detailed session (webhook snapshot source).
     if (url.startsWith('https://api.stripe.com/v1/checkout/sessions/') && (init?.method || 'GET') === 'GET') {
-      return new Response(JSON.stringify(SESSION), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ ...SESSION, ...state.sessionOverride }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Inventory RPC — atomic decrement.
+    // Reservation RPCs (migration 0015).
+    if (url.includes('/rest/v1/rpc/consume_reservation')) {
+      state.consumeCalls += 1;
+      return new Response(JSON.stringify({ ok: true, consumed: 1, group_size: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.includes('/rest/v1/rpc/release_reservation')) {
+      state.releaseCalls += 1;
+      return new Response(JSON.stringify({ ok: true, released: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    // Legacy atomic decrement fallback (migration 0014).
     if (url.includes('/rest/v1/rpc/decrement_inventory')) {
-      inventoryCalls += 1;
+      state.inventoryCalls += 1;
       return new Response(JSON.stringify({ ok: true, remaining: 9 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // Orders.
     if (url.includes('/rest/v1/luxedge_orders')) {
       if (init?.method === 'POST') {
-        if (orderExists) {
+        if (state.orderStatus) {
           return new Response(JSON.stringify({ code: '23505', message: 'duplicate key value violates unique constraint "luxedge_orders_stripe_session_id_key"' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
         }
-        orderExists = true;
+        state.orderStatus = (JSON.parse(String(init.body)) as { status: string }).status;
         return new Response(JSON.stringify([{ id: 'ord_1', ...JSON.parse(String(init.body)) }]), { status: 201, headers: { 'Content-Type': 'application/json' } });
       }
       if (init?.method === 'PATCH') {
+        state.orderStatus = (JSON.parse(String(init.body)) as { status: string }).status;
         return new Response(JSON.stringify([{ id: 'ord_1', ...JSON.parse(String(init.body)) }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       // GET (existence check)
-      return new Response(JSON.stringify(orderExists ? [{ id: 'ord_1' }] : []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(state.orderStatus ? [{ id: 'ord_1', status: state.orderStatus }] : []), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }));
-  return { calls, get inventoryCalls() { return inventoryCalls; } };
+  return { calls, state };
 }
 
 interface Cap { status: number; body: unknown }
@@ -151,7 +173,7 @@ describe('/api/webhook', () => {
     expect(env.calls.some((c) => c.url.includes('/rest/v1/luxedge_orders') || c.url.includes('/rest/v1/rpc'))).toBe(false);
   });
 
-  it('persists the REAL purchase snapshot on checkout.session.completed', async () => {
+  it('persists the REAL purchase snapshot + consumes the reservation on completed+paid (no legacy decrement)', async () => {
     const env = makeEnv();
     const body = sessionEvent();
     const { server, cap } = res();
@@ -168,23 +190,24 @@ describe('/api/webhook', () => {
     expect(row.stripe_session_id).toBe('cs_test_123');
     expect(row.status).toBe('paid');
     expect(row.order_number).toMatch(/^LX-/);
-    // Real snapshot from Stripe's authoritative session.
     expect(row.items).toEqual([{ id: '11111111-1111-4111-8111-111111111111', name: 'Test Product', unitPrice: 25, quantity: 1 }]);
     expect(row.subtotal).toBe(29.99);
     expect(row.discount).toBe(0);
     expect(row.shipping).toBe(4.99);
-    expect(row.tax).toBe(2.01); // Stripe-computed tax, not a Luxedge estimate
+    expect(row.tax).toBe(2.01);
     expect(row.total).toBe(33);
     expect(row.customer_email).toBe('buyer@example.com');
     expect(row.customer_name).toBe('Jane Smith');
     expect(row.shipping_address.state).toBe('TX');
-    // Inventory decremented exactly once (single line).
-    const decrements = env.calls.filter((c) => c.url.includes('/rest/v1/rpc/decrement_inventory'));
-    expect(decrements.length).toBe(1);
-    expect(decrements[0].body).toEqual({ p_product_id: '11111111-1111-4111-8111-111111111111', p_quantity: 1 });
+    // Reservation consumed exactly once; stock was already reduced at reserve,
+    // so the legacy decrement RPC must NOT be called.
+    expect(env.state.consumeCalls).toBe(1);
+    expect(env.state.inventoryCalls).toBe(0);
+    const consume = env.calls.find((c) => c.url.includes('/rest/v1/rpc/consume_reservation'));
+    expect(consume!.body).toEqual({ p_reservation_id: 'res-1' });
   });
 
-  it('is idempotent — a replayed completed event creates NO duplicate order and NO double decrement', async () => {
+  it('is idempotent — a replayed paid event creates NO duplicate order and consumes exactly once', async () => {
     const env = makeEnv();
     const body = sessionEvent();
     const sig = sign(body);
@@ -197,8 +220,69 @@ describe('/api/webhook', () => {
     expect((b.cap.body as { duplicate: boolean }).duplicate).toBe(true);
     const inserts = env.calls.filter((c) => c.url.includes('/rest/v1/luxedge_orders') && c.method === 'POST');
     expect(inserts.length).toBe(1);
-    const decrements = env.calls.filter((c) => c.url.includes('/rest/v1/rpc/decrement_inventory'));
-    expect(decrements.length).toBe(1); // never decremented twice
+    expect(env.state.consumeCalls).toBe(1); // never consumed twice
+  });
+
+  it('completed + payment_status != paid → awaiting_payment, NO inventory change', async () => {
+    const env = makeEnv();
+    env.state.sessionOverride = { payment_status: 'unpaid' };
+    const body = sessionEvent('checkout.session.completed', { payment_status: 'unpaid' });
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    const insert = env.calls.find((c) => c.url.includes('/rest/v1/luxedge_orders') && c.method === 'POST');
+    expect((insert!.body as { status: string }).status).toBe('awaiting_payment');
+    expect(env.state.consumeCalls).toBe(0);
+    expect(env.state.inventoryCalls).toBe(0);
+  });
+
+  it('async_payment_succeeded promotes an awaiting order to paid + consumes the reservation', async () => {
+    const env = makeEnv();
+    env.state.orderStatus = 'awaiting_payment';
+    const body = sessionEvent('checkout.session.async_payment_succeeded');
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    expect((cap.body as { promoted: boolean }).promoted).toBe(true);
+    const patch = env.calls.find((c) => c.url.includes('/rest/v1/luxedge_orders') && c.method === 'PATCH');
+    expect((patch!.body as { status: string }).status).toBe('paid');
+    expect(env.state.consumeCalls).toBe(1);
+  });
+
+  it('async_payment_failed releases the reservation and marks the order failed', async () => {
+    const env = makeEnv();
+    env.state.orderStatus = 'awaiting_payment';
+    const body = sessionEvent('checkout.session.async_payment_failed');
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    expect(env.state.releaseCalls).toBe(1);
+    const patch = env.calls.find((c) => c.url.includes('/rest/v1/luxedge_orders') && c.method === 'PATCH');
+    expect((patch!.body as { status: string }).status).toBe('failed');
+  });
+
+  it('checkout.session.expired releases the reservation (stock restored)', async () => {
+    const env = makeEnv();
+    const body = sessionEvent('checkout.session.expired');
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    expect((cap.body as { released: boolean }).released).toBe(true);
+    expect(env.state.releaseCalls).toBe(1);
+    expect(env.state.consumeCalls).toBe(0);
+  });
+
+  it('legacy session WITHOUT a reservation → atomic decrement fallback (exactly once)', async () => {
+    const env = makeEnv();
+    env.state.sessionOverride = { metadata: { ids: '11111111-1111-4111-8111-111111111111', qtys: '1', coupon: 'none' } };
+    const body = sessionEvent('checkout.session.completed');
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    expect(env.state.consumeCalls).toBe(0);
+    expect(env.state.inventoryCalls).toBe(1);
+    const decrement = env.calls.find((c) => c.url.includes('/rest/v1/rpc/decrement_inventory'));
+    expect(decrement!.body).toEqual({ p_product_id: '11111111-1111-4111-8111-111111111111', p_quantity: 1 });
   });
 
   it('marks a fully refunded charge as refunded with the Stripe-authoritative amount', async () => {
@@ -223,14 +307,14 @@ describe('/api/webhook', () => {
     expect(patch!.body).toMatchObject({ status: 'partially_refunded', refunded_amount: 10 });
   });
 
-  it('acks but ignores non-completion, non-refund events', async () => {
+  it('acks but ignores unrelated events', async () => {
     const env = makeEnv();
-    const body = sessionEvent('checkout.session.expired');
+    const body = sessionEvent('payment_intent.created');
     const { server, cap } = res();
     await handler(req(body, sign(body)), server);
     expect(cap.status).toBe(200);
-    expect((cap.body as { ignored: string }).ignored).toBe('checkout.session.expired');
-    expect(env.calls.some((c) => c.url.includes('/rest/v1/luxedge_orders'))).toBe(false);
+    expect((cap.body as { ignored: string }).ignored).toBe('payment_intent.created');
+    expect(env.calls.some((c) => c.url.includes('/rest/v1/luxedge_orders') || c.url.includes('/rest/v1/rpc'))).toBe(false);
   });
 
   it('fails closed (400) when the webhook secret is not configured', async () => {

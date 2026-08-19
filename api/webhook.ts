@@ -1,20 +1,37 @@
 // POST /api/webhook — Stripe webhook (Stripe calls this server-to-server).
 //
-// HANDLES:
-//   checkout.session.completed → persist the REAL purchase snapshot into
-//     luxedge_orders (retrieved from Stripe: line items + totals + customer),
-//     then atomically decrement inventory (migration 0014 RPC).
-//   charge.refunded           → sync order status: refunded / partially_refunded
-//                               + refunded_amount (Stripe-authoritative).
-//   everything else           → acked, ignored.
+// HANDLES (payment-status aware — a completed session is NOT blindly PAID):
+//   checkout.session.completed
+//     payment_status = paid        → persist paid order exactly once +
+//                                    consume the inventory reservation.
+//     payment_status != paid       → persist as awaiting_payment (NO
+//                                    inventory change — nothing was paid).
+//   checkout.session.async_payment_succeeded
+//     → complete the payment exactly once (promote awaiting → paid,
+//       insert paid if missing, consume reservation).
+//   checkout.session.async_payment_failed
+//     → release reservation + mark order failed (defensive: launch is
+//       card-only, but the account may expose delayed methods later).
+//   checkout.session.expired
+//     → release reservation + mark any pending order cancelled.
+//   charge.refunded → sync order status: refunded / partially_refunded
+//                     + refunded_amount (Stripe-authoritative).
+//   everything else → acked, ignored.
+//
+// INVENTORY (migration 0015):
+//   Stock is reduced ATOMICALLY at checkout-create (reserve_inventory). At
+//   payment the reservation is CONSUMED (status flip; released/expired rows
+//   restore-then-decrement so a late async payment still charges stock once).
+//   If a reservation id is missing entirely (legacy session), falls back to
+//   the 0014 atomic decrement_inventory RPC. Replays never double-consume.
 //
 // IDEMPOTENCY:
-//   - luxedge_orders.stripe_session_id is UNIQUE: a replayed completed event
+//   - luxedge_orders.stripe_session_id is UNIQUE: a replayed paid event
 //     finds the existing row and returns 200 — never a duplicate order and
-//     NEVER a double inventory decrement (decrement runs only after a fresh
-//     insert).
-//   - Refund updates set absolute values (refunded_amount), so replays are
-//     harmless.
+//     never a second inventory change.
+//   - consume/release RPCs are status-guarded (reserved→consumed/released
+//     only), so replays are harmless.
+//   - Refund updates set absolute values (refunded_amount).
 //
 // SECURITY:
 //   - Verifies the Stripe signature (constant-time HMAC) against
@@ -73,12 +90,31 @@ async function restFetch(table: string, query: string, init?: { method?: string;
   }
 }
 
-/** Atomic inventory decrement (migration 0014) — never oversells, replay-safe. */
+/** Service-role RPC call (inventory reservation functions — migration 0015). */
+async function rpcFetch(fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; status: number; data: unknown }> {
+  const base = supabaseBase();
+  const key = serviceRole();
+  if (!base || !key) return { ok: false, status: 503, data: { error: 'Database is not configured on this deployment.' } };
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) return { ok: false, status: res.status, data };
+    return { ok: true, status: res.status, data };
+  } catch {
+    return { ok: false, status: 502, data: { error: 'Database is unreachable right now.' } };
+  }
+}
+
+/** Atomic inventory decrement (migration 0014) — legacy fallback when no reservation exists. */
 async function decrementInventory(productId: string, quantity: number): Promise<{ ok: boolean; reason?: string }> {
-  const r = await restFetch('rpc/decrement_inventory', '', {
-    method: 'POST',
-    body: { p_product_id: productId, p_quantity: quantity },
-  });
+  const r = await rpcFetch('decrement_inventory', { p_product_id: productId, p_quantity: quantity });
   if (!r.ok || typeof r.data !== 'object' || r.data === null) return { ok: false, reason: 'db_unavailable' };
   const v = r.data as { ok?: boolean; reason?: string };
   return { ok: v.ok === true, reason: v.reason };
@@ -91,6 +127,7 @@ function orderNumberFromSession(sessionId: string): string {
 
 interface CompletedSessionShape {
   id: string;
+  payment_status?: string;
   amount_total: number;
   amount_subtotal: number;
   currency: string;
@@ -106,19 +143,16 @@ interface CompletedSessionShape {
   line_items?: { data: { description: string | null; quantity: number | null; price: { unit_amount: number | null } | null }[] } | null;
 }
 
-/** Persist the order from Stripe's authoritative session data. Returns null if already handled (duplicate). */
-async function persistCompletedOrder(session: CompletedSessionShape): Promise<{ status: number; body: Record<string, unknown> }> {
-  const sessionId = session.id;
-
-  // Idempotency gate 1: existing row → duplicate (no insert, no decrement).
-  const existing = await restFetch('luxedge_orders', `?stripe_session_id=eq.${encodeURIComponent(sessionId)}&select=id&limit=1`);
-  if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
-    return { status: 200, body: { received: true, duplicate: true } };
-  }
-
-  // Join our compact metadata (ids + qtys) with Stripe's authoritative line items.
+function sessionIdsAndQtys(session: CompletedSessionShape): { ids: string[]; qtys: number[] } {
   const ids = (session.metadata?.ids || '').split(',').map((s) => s.trim()).filter(Boolean);
   const qtys = (session.metadata?.qtys || '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+  return { ids, qtys };
+}
+
+/** Build the purchase snapshot row from Stripe's authoritative session data. */
+function buildOrderRow(session: CompletedSessionShape, status: string): Record<string, unknown> {
+  const sessionId = session.id;
+  const { ids, qtys } = sessionIdsAndQtys(session);
   const lineData = session.line_items?.data || [];
   const items = ids.map((id, i) => {
     const li = lineData[i];
@@ -136,7 +170,7 @@ async function persistCompletedOrder(session: CompletedSessionShape): Promise<{ 
   const addr = session.shipping_details?.address || null;
   const cd = session.customer_details || {};
 
-  const row = {
+  return {
     order_number: orderNumberFromSession(sessionId),
     customer_email: cd.email || session.customer_email || null,
     customer_name: cd.name || session.shipping_details?.name || null,
@@ -149,11 +183,56 @@ async function persistCompletedOrder(session: CompletedSessionShape): Promise<{ 
     tax: cents(session.total_details?.amount_tax),
     total: cents(session.amount_total),
     currency,
-    status: 'paid',
+    status,
     stripe_session_id: sessionId,
     stripe_payment_intent: session.payment_intent || null,
   };
+}
 
+/**
+ * Consume the reservation after a VERIFIED payment. Idempotent:
+ *   - consumed > 0  → handled now (stock already reduced at reserve, or
+ *                     restored-then-decremented for released/expired rows).
+ *   - consumed = 0 + group_size > 0 → already consumed (replay) → no-op.
+ *   - consumed = 0 + group_size = 0 → reservation missing entirely
+ *     (legacy session) → caller falls back to decrement_inventory.
+ */
+async function consumeReservation(reservationId: string): Promise<{ consumed: number; groupSize: number }> {
+  const r = await rpcFetch('consume_reservation', { p_reservation_id: reservationId });
+  if (!r.ok || typeof r.data !== 'object' || r.data === null) return { consumed: -1, groupSize: -1 };
+  const v = r.data as { consumed?: number; group_size?: number };
+  return { consumed: typeof v.consumed === 'number' ? v.consumed : -1, groupSize: typeof v.group_size === 'number' ? v.group_size : -1 };
+}
+
+async function releaseReservation(reservationId: string): Promise<void> {
+  await rpcFetch('release_reservation', { p_reservation_id: reservationId }).catch(() => null);
+}
+
+/** Persist/fulfill a PAID order exactly once, then consume the reservation. */
+async function fulfillPaidOrder(session: CompletedSessionShape): Promise<{ status: number; body: Record<string, unknown> }> {
+  const sessionId = session.id;
+  const reservationId = (session.metadata?.reservation || '').trim();
+
+  // Idempotency gate 1: existing row → already handled or awaiting promotion.
+  const existing = await restFetch('luxedge_orders', `?stripe_session_id=eq.${encodeURIComponent(sessionId)}&select=id,status&limit=1`);
+  if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
+    const row = existing.data[0] as { id: string; status?: string };
+    if (row.status === 'paid') {
+      return { status: 200, body: { received: true, duplicate: true } };
+    }
+    // awaiting_payment → payment completed (async path): promote to paid,
+    // then consume the reservation exactly once.
+    const up = await restFetch('luxedge_orders', `?id=eq.${encodeURIComponent(row.id)}`, {
+      method: 'PATCH',
+      body: { status: 'paid', stripe_payment_intent: session.payment_intent || null, updated_at: new Date().toISOString() },
+    });
+    if (!up.ok) return { status: up.status, body: { error: 'database update rejected', detail: up.status } };
+    const { consumed, groupSize } = reservationId ? await consumeReservation(reservationId) : { consumed: -1, groupSize: -1 };
+    if (consumed === 0 && groupSize === 0) await decrementFallback(session);
+    return { status: 200, body: { received: true, promoted: true } };
+  }
+
+  const row = buildOrderRow(session, 'paid');
   const inserted = await restFetch('luxedge_orders', '', { method: 'POST', body: row, prefer: 'return=representation' });
   if (!inserted.ok) {
     // 409 / 23505 = unique violation (race with a concurrent duplicate webhook) —
@@ -164,19 +243,60 @@ async function persistCompletedOrder(session: CompletedSessionShape): Promise<{ 
     return { status: inserted.status, body: { error: 'database write rejected', detail: inserted.status } };
   }
 
-  // Fresh insert → safe to decrement exactly once (replays hit the duplicate path).
-  const decrements = [];
-  for (let i = 0; i < ids.length; i++) {
-    const qty = qtys[i] ?? 1;
-    const d = await decrementInventory(ids[i], qty);
-    decrements.push({ id: ids[i], qty, ok: d.ok, reason: d.reason });
-  }
-  const oversell = decrements.filter((d) => !d.ok);
+  // Fresh paid order → consume the reservation exactly once.
+  const { consumed, groupSize } = reservationId ? await consumeReservation(reservationId) : { consumed: -1, groupSize: -1 };
+  // Legacy sessions carry no reservation (or the group is gone entirely) →
+  // atomic decrement fallback (0014). Already-consumed → no-op.
+  if (!reservationId || (consumed === 0 && groupSize === 0)) await decrementFallback(session);
 
-  return {
-    status: 200,
-    body: { received: true, orderNumber: row.order_number, inventory: decrements, oversell: oversell.length > 0 },
-  };
+  return { status: 200, body: { received: true, orderNumber: row.order_number as string } };
+}
+
+/** Legacy fallback: no reservation group exists → atomic decrement per line. */
+async function decrementFallback(session: CompletedSessionShape): Promise<void> {
+  const { ids, qtys } = sessionIdsAndQtys(session);
+  for (let i = 0; i < ids.length; i++) {
+    await decrementInventory(ids[i], qtys[i] ?? 1).catch(() => null);
+  }
+}
+
+/** completed + payment_status != paid → persist awaiting_payment, NO inventory change. */
+async function persistAwaitingOrder(session: CompletedSessionShape): Promise<{ status: number; body: Record<string, unknown> }> {
+  const sessionId = session.id;
+  const existing = await restFetch('luxedge_orders', `?stripe_session_id=eq.${encodeURIComponent(sessionId)}&select=id,status&limit=1`);
+  if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
+    return { status: 200, body: { received: true, duplicate: true } };
+  }
+  const row = buildOrderRow(session, 'awaiting_payment');
+  const inserted = await restFetch('luxedge_orders', '', { method: 'POST', body: row, prefer: 'return=representation' });
+  if (!inserted.ok) {
+    if (inserted.status === 409 || (inserted.data as { code?: string })?.code === '23505') {
+      return { status: 200, body: { received: true, duplicate: true } };
+    }
+    return { status: inserted.status, body: { error: 'database write rejected', detail: inserted.status } };
+  }
+  return { status: 200, body: { received: true, orderNumber: row.order_number as string, awaitingPayment: true } };
+}
+
+/**
+ * checkout.session.expired / async_payment_failed → release the held stock
+ * and (if an order row exists) reflect the terminal state honestly.
+ */
+async function releaseAndMark(obj: CompletedSessionShape, orderStatus: 'failed' | 'cancelled'): Promise<{ status: number; body: Record<string, unknown> }> {
+  const reservationId = (obj.metadata?.reservation || '').trim();
+  if (reservationId) await releaseReservation(reservationId);
+  // Only touch rows still pending — a paid order must never be downgraded.
+  const existing = await restFetch('luxedge_orders', `?stripe_session_id=eq.${encodeURIComponent(obj.id)}&select=id,status&limit=1`);
+  if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
+    const row = existing.data[0] as { id: string; status?: string };
+    if (row.status === 'awaiting_payment' || row.status === 'pending') {
+      await restFetch('luxedge_orders', `?id=eq.${encodeURIComponent(row.id)}`, {
+        method: 'PATCH',
+        body: { status: orderStatus, updated_at: new Date().toISOString() },
+      }).catch(() => null);
+    }
+  }
+  return { status: 200, body: { received: true, released: true, orderStatus } };
 }
 
 interface RefundEventShape {
@@ -228,7 +348,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const obj = event.data?.object as (CompletedSessionShape & RefundEventShape) | undefined;
   if (!obj?.id) { sendJson(res, 400, { error: 'Malformed webhook event.' }); return; }
 
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     // Pull the AUTHORITATIVE session (line items + totals) from Stripe — the
     // webhook event body alone has no line items.
     const detailed = await retrieveCheckoutSessionDetailed(obj.id);
@@ -237,7 +357,26 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, detailed.status, { error: detailed.message, code: detailed.code });
       return;
     }
-    const result = await persistCompletedOrder(detailed.data as CompletedSessionShape);
+    const session = detailed.data as CompletedSessionShape;
+    if (session.payment_status === 'paid') {
+      const result = await fulfillPaidOrder(session);
+      sendJson(res, result.status, result.body);
+      return;
+    }
+    // completed but NOT paid (async methods) → awaiting_payment, no inventory change.
+    const result = await persistAwaitingOrder(session);
+    sendJson(res, result.status, result.body);
+    return;
+  }
+
+  if (event.type === 'checkout.session.expired') {
+    const result = await releaseAndMark(obj as CompletedSessionShape, 'cancelled');
+    sendJson(res, result.status, result.body);
+    return;
+  }
+
+  if (event.type === 'checkout.session.async_payment_failed') {
+    const result = await releaseAndMark(obj as CompletedSessionShape, 'failed');
     sendJson(res, result.status, result.body);
     return;
   }

@@ -112,6 +112,12 @@ export async function createCheckoutSession(params: {
   parts.set('automatic_tax[enabled]', 'true');
   parts.set('shipping_address_collection[allowed_countries][0]', 'US');
 
+  // CARD-ONLY for launch: immediate payment methods only, so
+  // checkout.session.completed with payment_status=paid is the normal
+  // fulfillment path. The webhook still verifies payment_status and handles
+  // async events defensively (they should not occur in card-only mode).
+  parts.set('payment_method_types[0]', 'card');
+
   // Shipping as a proper Stripe shipping option (taxed by Stripe Tax).
   parts.set('shipping_options[0][shipping_rate_data][type]', 'fixed_amount');
   parts.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(Math.max(0, Math.round(params.shippingCents))));

@@ -25,13 +25,35 @@ const PRODUCT = { id: '11111111-1111-4111-8111-111111111111', slug: 'test-produc
 const WELCOME10 = { code: 'WELCOME10', discount_type: 'percent', discount_value: 10, min_cart_value: 0, is_active: true, start_at: null, end_at: null };
 const SETTINGS = { key: 'free_shipping', value: { freeShippingEnabled: true, freeShippingThreshold: 50 } };
 
-function makeEnv() {
+function makeEnv(overrides: { reserveOk?: boolean; stripeFail?: boolean } = {}) {
   const calls: { url: string; method: string; headers: Record<string, string>; body?: unknown }[] = [];
+  const controls = {
+    reserveOk: overrides.reserveOk ?? true,
+    stripeFail: overrides.stripeFail ?? false,
+    reserveCalls: 0,
+    releaseCalls: 0,
+  };
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, method: init?.method || 'GET', headers: (init?.headers || {}) as Record<string, string>, body: init?.body ? (() => { try { return JSON.parse(String(init.body)); } catch { return String(init.body); } })() : undefined });
+    // Inventory reservation RPCs (migration 0015).
+    if (url.includes('/rest/v1/rpc/reserve_inventory')) {
+      controls.reserveCalls += 1;
+      const body = (init?.body ? JSON.parse(String(init.body)) : {}) as { p_product_id?: string; p_quantity?: number };
+      if (!controls.reserveOk) {
+        return new Response(JSON.stringify({ ok: false, reason: 'out_of_stock_or_oversell' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ok: true, remaining: 10 - (body.p_quantity ?? 1) }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.includes('/rest/v1/rpc/release_reservation')) {
+      controls.releaseCalls += 1;
+      return new Response(JSON.stringify({ ok: true, released: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     if (url.startsWith('https://api.stripe.com/v1/checkout/sessions')) {
       if (init?.method === 'POST') {
+        if (controls.stripeFail) {
+          return new Response(JSON.stringify({ error: { type: 'invalid_request_error', code: 'resource_missing' } }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
         return new Response(JSON.stringify({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1', payment_status: 'unpaid', amount_total: 0, currency: 'usd', customer_email: null }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return new Response(JSON.stringify({ id: 'cs_test_1', url: 'https://checkout.stripe.com/c/pay/cs_test_1', payment_status: 'paid', amount_total: 3205, currency: 'usd', customer_email: 'a@b.com' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -42,6 +64,7 @@ function makeEnv() {
     if (url.includes('/rest/v1/luxedge_orders')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }));
+  (calls as unknown as { controls: typeof controls }).controls = controls;
   return calls;
 }
 
@@ -169,5 +192,45 @@ describe('/api/checkout', () => {
     const { server, cap } = res();
     await handler(req('GET', undefined, '/api/checkout'), server);
     expect(cap.status).toBe(400);
+  });
+
+  it('reserves inventory ATOMICALLY before creating the Stripe session (metadata carries the reservation id)', async () => {
+    const calls = makeEnv();
+    const { server, cap } = res();
+    await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 1 }], customer: { email: 'a@b.com' } }), server);
+    expect(cap.status).toBe(200);
+    const reserve = calls.find((c) => c.url.includes('/rest/v1/rpc/reserve_inventory'));
+    expect(reserve).toBeTruthy();
+    expect(reserve!.body).toMatchObject({ p_product_id: PRODUCT.id, p_quantity: 1 });
+    expect(reserve!.body).toHaveProperty('p_expires_at');
+    // Reservation happens BEFORE the Stripe session is created.
+    const stripeIdx = calls.findIndex((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST');
+    const reserveIdx = calls.findIndex((c) => c.url.includes('/rest/v1/rpc/reserve_inventory'));
+    expect(reserveIdx).toBeGreaterThan(-1);
+    expect(reserveIdx).toBeLessThan(stripeIdx);
+    // Reservation id is passed to Stripe as metadata so the webhook can consume it.
+    const stripeBody = String(calls[stripeIdx].body);
+    expect(stripeBody).toContain('metadata%5Breservation%5D');
+    expect((cap.body as { reservationId: string }).reservationId).toBeTruthy();
+  });
+
+  it('fails closed OUT_OF_STOCK (400) with NO Stripe call when stock cannot be reserved, and releases the attempt', async () => {
+    const calls = makeEnv({ reserveOk: false });
+    const { server, cap } = res();
+    await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 1 }], customer: { email: 'a@b.com' } }), server);
+    expect(cap.status).toBe(400);
+    expect((cap.body as { code: string }).code).toBe('OUT_OF_STOCK');
+    expect(calls.some((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST')).toBe(false);
+    const controls = (calls as unknown as { controls: { releaseCalls: number } }).controls;
+    expect(controls.releaseCalls).toBe(1); // rollback of the failed attempt
+  });
+
+  it('releases the reservation when Stripe session creation fails (stock returned immediately)', async () => {
+    const calls = makeEnv({ stripeFail: true });
+    const { server, cap } = res();
+    await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 1 }], customer: { email: 'a@b.com' } }), server);
+    expect(cap.status).toBe(400);
+    const controls = (calls as unknown as { controls: { releaseCalls: number } }).controls;
+    expect(controls.releaseCalls).toBe(1);
   });
 });

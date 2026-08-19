@@ -53,6 +53,27 @@ async function restFetch(table: string, query: string, key: string): Promise<{ o
   }
 }
 
+/** Service-role RPC call (inventory reservation functions — migration 0015). */
+async function rpcFetch(fn: string, body: Record<string, unknown>, key: string): Promise<{ ok: boolean; status: number; data: { ok?: boolean; reason?: string } | unknown }> {
+  const base = supabaseBase();
+  if (!base || !key) return { ok: false, status: 503, data: { error: 'Database is not configured on this deployment.' } };
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) return { ok: false, status: res.status, data: { error: 'rpc rejected' } };
+    return { ok: true, status: res.status, data };
+  } catch {
+    return { ok: false, status: 502, data: { error: 'Database is unreachable right now.' } };
+  }
+}
+
 const loader: CheckoutDataLoader = {
   async getProducts(ids) {
     const q = ids.map((i) => `"${i}"`).join(',');
@@ -171,6 +192,32 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const { totals } = decision;
   const base = appBaseUrl(req);
+  const key = serviceRole();
+
+  // -------------------------------------------------------------------------
+  // REAL INVENTORY RESERVATION (migration 0015) — reduce available stock
+  // ATOMICALLY BEFORE the customer is redirected to Stripe, so two customers
+  // can never both pay for the last unit. Released on Stripe failure below,
+  // and by the webhook on expiry / async-payment failure.
+  // -------------------------------------------------------------------------
+  const reservationId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // matches Stripe Checkout's 24h session expiry
+  for (const line of totals.lines) {
+    const r = await rpcFetch('reserve_inventory', {
+      p_reservation_id: reservationId,
+      p_product_id: line.id,
+      p_quantity: line.quantity,
+      p_expires_at: expiresAt,
+    }, key);
+    const v = (r.data ?? {}) as { ok?: boolean; reason?: string };
+    if (!r.ok || v.ok !== true) {
+      // Roll back whatever was reserved for this attempt, then fail closed.
+      await rpcFetch('release_reservation', { p_reservation_id: reservationId }, key).catch(() => null);
+      sendJson(res, 400, { error: 'Some items in your cart are no longer available in stock. Please review your cart.', code: 'OUT_OF_STOCK' });
+      return;
+    }
+  }
+
   // Compact, bounded snapshot for the webhook: product ids + quantities only
   // (Stripe metadata values are capped at 500 chars; carts are capped at 10
   // distinct products). The webhook joins these with Stripe's authoritative
@@ -179,6 +226,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     ids: totals.lines.map((l) => l.id).join(','),
     qtys: totals.lines.map((l) => String(l.quantity)).join(','),
     coupon: totals.couponCode || 'none',
+    reservation: reservationId,
   };
 
   const session = await createCheckoutSession({
@@ -189,11 +237,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     customerEmail: parsed.request.customer?.email || undefined,
     metadata,
   });
-  if (!session.ok) { sendJson(res, session.status, { error: session.message, code: session.code }); return; }
+  if (!session.ok) {
+    // The customer never reached Stripe — return the held stock immediately.
+    await rpcFetch('release_reservation', { p_reservation_id: reservationId }, key).catch(() => null);
+    sendJson(res, session.status, { error: session.message, code: session.code });
+    return;
+  }
 
   sendJson(res, 200, {
     url: session.data.url,
     sessionId: session.data.id,
+    reservationId,
     totals: {
       subtotal: totals.subtotal,
       discount: totals.discount,

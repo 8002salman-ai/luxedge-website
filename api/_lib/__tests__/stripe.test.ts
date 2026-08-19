@@ -71,6 +71,7 @@ describe('stripe helper', () => {
     expect(call.body).toContain('automatic_tax%5Benabled%5D=true');
     expect(call.body).toContain('shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US');
     expect(call.body).toContain('shipping_options%5B0%5D%5Bshipping_rate_data%5D%5Bfixed_amount%5D%5Bamount%5D=499');
+    expect(call.body).toContain('payment_method_types%5B0%5D=card'); // card-only for launch
     expect(call.body).toContain('line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=2500');
     expect(call.body).toContain('line_items%5B0%5D%5Bprice_data%5D%5Btax_behavior%5D=exclusive');
     expect(call.body).toContain('metadata%5Bids%5D=p1');
