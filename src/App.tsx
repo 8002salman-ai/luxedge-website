@@ -543,22 +543,22 @@ function Header() {
 
     {/* ── Main header ── */}
     <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
-      <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 h-14 lg:h-14 flex items-center justify-between gap-3">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
+        <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
+          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
-            <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.18em] text-luxe-black">LUXEDGE</span>
-            <span className="hidden sm:block text-[7.5px] tracking-[0.3em] text-luxe-gold mt-1.5">PREMIUM PET ESSENTIALS</span>
+            <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
+            <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
           </span>
         </Link>
 
         {/* Search — refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
           <div className="site-search">
-            <SearchMd strokeWidth={1.5} size={18} className="ml-4 text-luxe-gray shrink-0" />
+            <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
             <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
-              className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
+              className="flex-1 px-2.5 py-2 text-[13px] text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
             <button type="submit" className="site-search-submit">
               Search
             </button>
@@ -568,9 +568,9 @@ function Header() {
         <div className="flex items-center gap-0.5 sm:gap-1">
           {user ? (
             <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-                <span className="w-8 h-8 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[12px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
-                <span className="hidden lg:block text-xs font-medium">{user.name.split(' ')[0]}</span>
+              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+                <span className="w-7 h-7 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[11px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
+                <span className="hidden lg:block text-[11px] font-medium">{user.name.split(' ')[0]}</span>
               </button>
               {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
                 <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
@@ -580,23 +580,23 @@ function Header() {
               </div></>}
             </div>
           ) : (
-            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-              <UserIcon strokeWidth={1.5} size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
+            <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+              <UserIcon strokeWidth={1.5} size={16} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
             </Link>
           )}
-          <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag01 strokeWidth={1.5} size={19} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
+          <button onClick={openCart} className="relative p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
+            <ShoppingBag01 strokeWidth={1.5} size={17} />
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
           </button>
         </div>
       </div>
 
       {/* ── Pet navigation bar ── */}
       <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
-        <div className="max-w-7xl mx-auto px-4 flex items-center">
+        <div className="max-w-7xl mx-auto px-4 flex items-center h-9">
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
+              <Link to={m.to} className="nav-underline flex items-center gap-1 px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
                 {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
@@ -620,9 +620,9 @@ function Header() {
             </div>
           ))}
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="nav-underline px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
+            <Link key={c.l} to={c.to} className="nav-underline px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={13} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-3.5 py-2 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
       </nav>
 
@@ -634,9 +634,9 @@ function Header() {
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
-        <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1.5 py-1.5 text-[11px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" className="px-1.5 py-1.5 text-[11px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
+        <div className="flex flex-wrap gap-1 pt-1 pb-1.5 border-b border-luxe-silver/70">
+          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
+          <Link to="/shop?q=deal" className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
         </div>
         {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
         {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
@@ -657,8 +657,8 @@ function Footer() {
       <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
 
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-8">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2">
@@ -1447,13 +1447,13 @@ function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; 
 
 function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
   return (
-    <div className="flex items-end justify-between gap-4 mb-7">
+    <div className="flex items-end justify-between gap-3 mb-5">
       <div>
-        <p className="eyebrow mb-2">{eyebrow}</p>
-        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
+        <p className="eyebrow mb-1.5">{eyebrow}</p>
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
       </div>
-      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1.5 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
-        {linkLabel} <ArrowRight strokeWidth={1.5} size={14} className="transition-transform group-hover:translate-x-0.5" />
+      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
+        {linkLabel} <ArrowRight strokeWidth={1.5} size={13} className="transition-transform group-hover:translate-x-0.5" />
       </Link>}
     </div>
   );
@@ -1497,28 +1497,28 @@ function HomePage() {
       {/* ════════ EDITORIAL HERO ════════ */}
       <section className="home-hero">
         <div className="home-hero-wash" aria-hidden="true" />
-        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 py-14 sm:py-20 lg:py-24 grid lg:grid-cols-[0.84fr_1.16fr] items-center gap-12 lg:gap-16">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-14 grid lg:grid-cols-[0.42fr_0.58fr] items-center gap-8 lg:gap-10">
           <div className="hero-stagger text-center lg:text-left">
-            <p className="eyebrow mb-5">Premium pet essentials</p>
+            <p className="eyebrow mb-3">Premium pet essentials</p>
             <h1 className="home-hero-title">
               <span className="block">Everything Your Pet Loves,</span>
               <span className="block">Thoughtfully <em>Curated.</em></span>
             </h1>
             <p className="home-hero-copy">
-              Premium essentials for everyday walks, play, comfort, feeding and care — chosen to look good in your home and work beautifully for your pet.
+              Premium essentials for walks, play, comfort and care — chosen to look good and work beautifully.
             </p>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
               <Link to="/shop" className="editorial-button editorial-button-dark">
-                Shop essentials <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
+                Shop essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
               </Link>
               <Link to="/shop" className="editorial-button editorial-button-light">
                 Explore categories
               </Link>
             </div>
             <div className="home-hero-notes" aria-label="Luxedge shopping information">
-              <span><Truck01 strokeWidth={1.5} size={14} aria-hidden="true" /> {shipCopy}</span>
-              <span><RefreshCcw01 strokeWidth={1.5} size={14} aria-hidden="true" /> Returns &amp; support</span>
-              <span><Headphones01 strokeWidth={1.5} size={14} aria-hidden="true" /> Real customer support</span>
+              <span><Truck01 strokeWidth={1.5} size={12} aria-hidden="true" /> {shipCopy}</span>
+              <span><RefreshCcw01 strokeWidth={1.5} size={12} aria-hidden="true" /> Returns &amp; support</span>
+              <span><Headphones01 strokeWidth={1.5} size={12} aria-hidden="true" /> Real customer support</span>
             </div>
           </div>
 
@@ -1553,10 +1553,10 @@ function HomePage() {
 
       {/* ════════ SHOP BY PET ════════ */}
       <section className="editorial-section bg-white">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
-          <Reveal className="mb-8 sm:mb-10">
-            <p className="eyebrow mb-3">Shop by pet</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="mb-5">
+            <p className="eyebrow mb-2">Shop by pet</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
               <h2 className="section-title">Who are you shopping for?</h2>
               <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
             </div>
@@ -1584,12 +1584,12 @@ function HomePage() {
 
       {/* ════════ SHOP BY CATEGORY ════════ */}
       <section className="editorial-section bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
-          <Reveal className="mb-8 sm:mb-10">
-            <p className="eyebrow mb-3">Shop by category</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="mb-5">
+            <p className="eyebrow mb-2">Shop by category</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
               <h2 className="section-title">Essentials for better everyday moments.</h2>
-              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></Link>
+              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
             </div>
           </Reveal>
           <Reveal delay={60}>
@@ -1632,12 +1632,12 @@ function HomePage() {
         <>
           {/* New Arrivals — real newArrival flag, admin-set */}
           {newArrivals.length > 0 && (
-            <section className="py-14 sm:py-18 bg-luxe-cream">
+            <section className="py-8 sm:py-10 bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {newArrivals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {newArrivals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>
@@ -1646,12 +1646,12 @@ function HomePage() {
 
           {/* Top Picks — real featured flag (admin merchandising decision) */}
           {topPicks.length > 0 && (
-            <section className="py-14 sm:py-18 bg-white">
+            <section className="py-8 sm:py-10 bg-white">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {topPicks.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>
@@ -1663,12 +1663,12 @@ function HomePage() {
 
           {/* Dog Essentials — real category data */}
           {dogEssentials.length > 0 && (
-            <section className="py-14 sm:py-18 bg-luxe-cream">
+            <section className="py-8 sm:py-10 bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {dogEssentials.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {dogEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>
@@ -1677,12 +1677,12 @@ function HomePage() {
 
           {/* Cat Essentials — real category data */}
           {catEssentials.length > 0 && (
-            <section className="py-14 sm:py-18 bg-white">
+            <section className="py-8 sm:py-10 bg-white">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {catEssentials.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {catEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>
@@ -1694,17 +1694,17 @@ function HomePage() {
       {/* ════════ EDITORIAL COLLECTION ════════ */}
       {editorialProduct && (
         <section className="editorial-section bg-white">
-          <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Reveal>
               <div className="editorial-story">
                 <div className="editorial-story-media">
                   <img src={firstUsableImage(editorialProduct) || LUXEDGE_IMAGE_FALLBACK} alt={editorialProduct.name} loading="lazy" decoding="async" onError={onImageError} />
                 </div>
                 <div className="editorial-story-copy">
-                  <p className="eyebrow mb-4">Designed for everyday life</p>
+                  <p className="eyebrow mb-3">Designed for everyday life</p>
                   <h2 className="section-title">Pet essentials that belong in your home.</h2>
-                  <p className="section-intro mt-5">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space without getting in the way of life.</p>
-                  <Link to="/shop" className="editorial-link mt-7 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></Link>
+                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space.</p>
+                  <Link to="/shop" className="editorial-link mt-5 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
                 </div>
               </div>
             </Reveal>
@@ -1714,12 +1714,12 @@ function HomePage() {
 
       {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
       {deals.length > 0 && (
-        <section className="py-14 sm:py-18 bg-luxe-cream">
+        <section className="py-8 sm:py-10 bg-luxe-cream">
           <div className="max-w-7xl mx-auto px-4">
             <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
             <Reveal delay={60}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                {deals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
               </div>
             </Reveal>
           </div>
@@ -1728,14 +1728,15 @@ function HomePage() {
 
       {/* ════════ VALUE STRIP — truthful store information only ════════ */}
       <section className="value-strip" aria-label="Luxedge store information">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 lg:px-10 grid sm:grid-cols-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-4">
           {[
-            { icon: Truck01, title: freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Fair shipping', desc: freeShippingEnabled ? 'On qualifying orders' : 'Calculated at checkout' },
-            { icon: ShieldTick, title: 'Thoughtfully curated', desc: 'Selected for pet owners' },
-            { icon: Headphones01, title: 'Customer support', desc: 'Real people, by email' },
+            { icon: Truck01, title: freeShippingEnabled ? `Free ship $${freeShippingThreshold}+` : 'Fair shipping', desc: freeShippingEnabled ? 'Qualifying orders' : 'Calculated at checkout' },
+            { icon: RefreshCcw01, title: '30-day returns', desc: 'Hassle-free returns' },
+            { icon: ShieldTick, title: 'Curated quality', desc: 'Selected for pet owners' },
+            { icon: Headphones01, title: 'Support', desc: 'Real people, by email' },
           ].map((item) => (
             <div key={item.title} className="value-item">
-              <item.icon strokeWidth={1.5} size={18} className="value-item-icon" aria-hidden="true" />
+              <item.icon strokeWidth={1.5} size={14} className="value-item-icon" aria-hidden="true" />
               <div>
                 <p className="value-item-title">{item.title}</p>
                 <p className="value-item-copy">{item.desc}</p>
@@ -1747,11 +1748,11 @@ function HomePage() {
 
       {/* ════════ NEWSLETTER — dark bookend ════════ */}
       <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
-        <div aria-hidden="true" className="absolute -top-32 right-0 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/12 blur-[120px]" />
-        <div className="relative max-w-3xl mx-auto px-4 py-16 sm:py-20 text-center">
-          <p className="eyebrow mb-3 text-luxe-gold-light">Stay in the Loop</p>
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-white tracking-tight mb-3">Join the Luxedge Pet Family</h2>
-          <p className="text-luxe-white/65 text-sm mb-8 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
+        <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
+        <div className="relative max-w-3xl mx-auto px-4 py-10 sm:py-14 text-center">
+          <p className="eyebrow mb-2 text-luxe-gold-light">Stay in the Loop</p>
+          <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-white tracking-tight mb-2">Join the Luxedge Pet Family</h2>
+          <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
           {nlDone ? (
             <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
               <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list!</p>
