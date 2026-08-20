@@ -4,6 +4,7 @@ import {
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
+  isEmptyExtraction,
 } from '../importer';
 
 describe('extractProductJson', () => {
@@ -263,6 +264,25 @@ describe('AliExpress URL evidence (fetch-blocked fallback)', () => {
     expect(secondaryPrice).toBe(0.99);
     expect(parsePdpNpi(null)).toEqual({ listPrice: null, secondaryPrice: null });
     expect(parsePdpNpi('garbage')).toEqual({ listPrice: null, secondaryPrice: null });
+  });
+
+  it('parses the bare-number pdp_npi format (no CC+$ prefix)', () => {
+    const { listPrice, secondaryPrice } = parsePdpNpi('6@dis!USD!4.11!0.99!!!27.52!6.64!@2101ca9517872300755714122e1037!12000034351273366!sea!US');
+    expect(listPrice).toBe(4.11);
+    expect(secondaryPrice).toBe(0.99);
+  });
+
+  it('flags the AliExpress anti-bot punish page as a proxy/bot page', () => {
+    const punish = '<html><script src="//g.alicdn.com/bsop-static/sufei-punish/0.1.125/build/htmltocanvas.min.js"></script><div id="bx-pu-qrcode">punish-page</div></html>';
+    expect(isProxyErrorText(punish)).toBe(true);
+    const recaptchaPunish = '<html>punish?recaptcha=1&iframe=1&x5step=2</html>';
+    expect(isProxyErrorText(recaptchaPunish)).toBe(true);
+  });
+
+  it('detects an empty extraction (54 empty fields from a bot page)', () => {
+    expect(isEmptyExtraction(null)).toBe(true);
+    expect(isEmptyExtraction({ title: '', sellingPrice: 0, images: [], shortDescription: '', supplierItemId: undefined } as never)).toBe(true);
+    expect(isEmptyExtraction({ title: 'Cat Toy', sellingPrice: 12.13, images: [], shortDescription: '' } as never)).toBe(false);
   });
 
   it('extracts item id, ship-from and sku id from the shareable URL', () => {
