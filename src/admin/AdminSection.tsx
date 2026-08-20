@@ -118,7 +118,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-52 min-h-screen hidden lg:flex'}`}
+    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-52 h-screen sticky top-0 hidden lg:flex'}`}
       style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
       <div className="p-3 border-b border-white/5 flex items-center gap-2">
         <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-[10px]"

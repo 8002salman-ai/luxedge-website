@@ -89,6 +89,9 @@ export function CatalogProductsPage() {
   const [fImage, setFImage] = useState('all');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,6 +188,55 @@ export function CatalogProductsPage() {
     }
   };
 
+  const nonActive = useMemo(() => filtered.filter((p) => p.status !== 'active'), [filtered]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllNonActive = () => setSelectedIds(new Set(nonActive.map((p) => p.id)));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const onBulkHardDelete = async () => {
+    setBulkBusy(true);
+    try {
+      const ids = [...selectedIds];
+      for (const id of ids) {
+        await hardDeleteProduct(id);
+      }
+      notify(`${ids.length} product${ids.length === 1 ? '' : 's'} permanently deleted`);
+      setSelectedIds(new Set());
+      setBulkOpen(false);
+      await load();
+    } catch (e) {
+      notify(`Bulk delete stopped: ${(e as Error).message}`, 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const onBulkArchive = async () => {
+    setBulkBusy(true);
+    try {
+      const ids = [...selectedIds];
+      for (const id of ids) {
+        await archiveProduct(id);
+      }
+      notify(`${ids.length} product${ids.length === 1 ? '' : 's'} archived`);
+      setSelectedIds(new Set());
+      setBulkOpen(false);
+      await load();
+    } catch (e) {
+      notify(`Bulk archive stopped: ${(e as Error).message}`, 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   if (loading) return <div className="text-center py-20 text-gray-400">Loading catalog…</div>;
 
   return (
@@ -194,9 +246,24 @@ export function CatalogProductsPage() {
           <h1 className="text-2xl font-bold">Products</h1>
           <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} commerce-ready on storefront · {products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} active but not commerce-ready</p>
         </div>
-        <button onClick={() => nav('/admin/products/new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2">
-          <Plus size={16} />Add Product
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 ? (
+            <>
+              <span className="text-xs text-gray-500">{selectedIds.size} selected</span>
+              <button onClick={clearSelection} className="px-3 py-2 border text-sm rounded-lg">Clear</button>
+              <button onClick={() => setBulkOpen(true)} className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg flex items-center gap-2">
+                <Trash size={16} />Delete Selected
+              </button>
+            </>
+          ) : nonActive.length > 0 ? (
+            <button onClick={selectAllNonActive} title="Select every Draft / Inactive / Archived product currently in view" className="px-3 py-2 border text-sm rounded-lg text-gray-600 hover:bg-gray-50">
+              Select all Draft/Inactive ({nonActive.length})
+            </button>
+          ) : null}
+          <button onClick={() => nav('/admin/products/new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2">
+            <Plus size={16} />Add Product
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -265,6 +332,7 @@ export function CatalogProductsPage() {
           <table className="w-full">
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
               <tr>
+                <th className="px-4 py-3 w-8"></th>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Species / Category</th>
                 <th className="px-4 py-3">Visible</th>
@@ -282,6 +350,9 @@ export function CatalogProductsPage() {
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="border-t hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {p.images[0]
@@ -346,7 +417,7 @@ export function CatalogProductsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
+                <tr><td colSpan={13} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -361,6 +432,19 @@ export function CatalogProductsPage() {
           </button>
           <button onClick={onHardDelete} className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-medium">Hard Delete</button>
           <button onClick={() => setDelId(null)} className="flex-1 py-2.5 border rounded-lg">Cancel</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={bulkOpen} onClose={() => !bulkBusy && setBulkOpen(false)} title={`Archive / Delete ${selectedIds.size} Product${selectedIds.size === 1 ? '' : 's'}`}>
+        <p className="text-gray-600 mb-3">Archive keeps history and removes them from the storefront. Hard delete permanently removes the rows and their images/variants. This cannot be undone.</p>
+        <div className="flex gap-3">
+          <button onClick={onBulkArchive} disabled={bulkBusy} className="flex-1 py-2.5 bg-amber-500 text-white rounded-lg font-medium disabled:opacity-50">
+            {bulkBusy ? 'Working…' : 'Archive (recommended)'}
+          </button>
+          <button onClick={onBulkHardDelete} disabled={bulkBusy} className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-medium disabled:opacity-50">
+            {bulkBusy ? 'Working…' : 'Hard Delete'}
+          </button>
+          <button onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="flex-1 py-2.5 border rounded-lg disabled:opacity-50">Cancel</button>
         </div>
       </Modal>
     </div>

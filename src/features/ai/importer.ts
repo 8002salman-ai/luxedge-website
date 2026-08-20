@@ -54,6 +54,27 @@ export function isProxyErrorText(text: string): boolean {
   return JINA_ERROR_RE.test(text) || looksLikeBotPage(text) || looksLikeJinaBlockSnapshot(text);
 }
 
+/**
+ * Marketplace homepages/shells serve a generic site-wide og:description
+ * ("Smarter Shopping, Better Living! Aliexpress.com", "Shop the latest deals
+ * on Amazon", etc.) instead of real product copy when the product page itself
+ * didn't render (JS shell / anti-bot block). That boilerplate is not product
+ * evidence and must never be saved as the product's description — it reads
+ * as junk to a shopper and previously had to be caught and rewritten by hand
+ * on every single import.
+ */
+const GENERIC_PLATFORM_DESCRIPTION_RE = /\b(smarter shopping|better living|shop the latest deals|shop millions of products|world'?s? (largest|leading) (online )?marketplace|buy online|free shipping worldwide|download the app|sign up and save|new customer discount)\b/i;
+
+export function isGenericPlatformDescription(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  // Short + generic-marketing-language = a site slogan, not product copy.
+  if (t.length <= 140 && GENERIC_PLATFORM_DESCRIPTION_RE.test(t)) return true;
+  // A description that is literally just "<Platform>.com" or "<Platform>" is never product copy.
+  if (/^(aliexpress|amazon|ebay|walmart|temu|alibaba)(\.(com|us))?\.?$/i.test(t)) return true;
+  return false;
+}
+
 interface FetchedPage {
   text: string;
   images: string[];
@@ -244,7 +265,8 @@ export function parseHtmlPage(raw: string): FetchedPage {
   if (isHtml) {
     // Lightweight extraction — enough for product import prompts.
     const ogTitle = matchMeta(raw, 'og:title');
-    const ogDesc = matchMeta(raw, 'og:description');
+    const ogDescRaw = matchMeta(raw, 'og:description');
+    const ogDesc = isGenericPlatformDescription(ogDescRaw) ? '' : ogDescRaw;
     const ogImage = matchMeta(raw, 'og:image');
     const ld = parseJsonLdProduct(raw);
     const jsonLdRaw = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
@@ -325,6 +347,12 @@ TRUTH RULES (non-negotiable):
 - Do NOT invent stock. stock is 0/UNKNOWN unless a real quantity or "in stock" is shown.
 - Record the AliExpress item URL + numeric item ID under supplierUrl / supplierItemId (supplier identity evidence).
 - Record battery/electrical status and any counterfeit / medicine / supplement / weapon / medical-claim / copyrighted-character indicators under batteryElectrical and riskFlags.
+
+WHEN THE PAGE DIDN'T RENDER (JS shell / anti-bot block, so the only real evidence is the title + images):
+- NEVER copy the marketplace's own site-wide slogan or homepage tagline (e.g. "Smarter Shopping, Better Living! AliExpress.com", "Shop the latest deals on Amazon") into shortDescription/longDescription/metaDescription — that is not product copy and reads as broken to a shopper.
+- Instead, WRITE a short, honest, appealing description (2-3 sentences) derived ONLY from what the product TITLE itself states (its stated type, stated use, stated material/feature words already in the title). Do not add specs, counts, materials, or claims that are not literally present in the title.
+- Infer category/subcategory from the TITLE's stated product type (e.g. a title containing "cat tree" / "scratching post" → Cat Supplies) — this is a reasonable classification from shown text, not a fabrication.
+- Leave price/cost/stock at 0/UNKNOWN exactly as the truth rules above require — never invent those regardless of how good the title is.
 
 Return ONLY a valid JSON object with this EXACT shape (use "" / [] / 0 for missing values):
 {
@@ -718,8 +746,11 @@ export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedP
     const v = (aiVal || '').trim();
     return v ? v : scrapedVal.trim();
   };
-  const shortDesc = pick(ai?.shortDescription, scraped.shortDescription);
-  const longDesc = pick(ai?.longDescription, scraped.longDescription) || shortDesc;
+  // Defense in depth: even if a marketplace slogan slipped through scraping
+  // or the model echoed it back, never let it reach the saved product.
+  const cleanDesc = (v: string): string => (isGenericPlatformDescription(v) ? '' : v);
+  const shortDesc = cleanDesc(pick(ai?.shortDescription, scraped.shortDescription));
+  const longDesc = cleanDesc(pick(ai?.longDescription, scraped.longDescription)) || shortDesc;
   const title = pick(ai?.title, scraped.title) || scraped.title;
   return {
     ...scraped,
@@ -731,7 +762,7 @@ export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedP
     shortDescription: shortDesc,
     longDescription: longDesc,
     metaTitle: pick(ai?.metaTitle, scraped.metaTitle || scraped.title),
-    metaDescription: pick(ai?.metaDescription, scraped.metaDescription || shortDesc),
+    metaDescription: cleanDesc(pick(ai?.metaDescription, scraped.metaDescription || shortDesc)),
     sellingPrice: (ai?.sellingPrice && ai.sellingPrice > 0 ? ai.sellingPrice : scraped.sellingPrice) || scraped.sellingPrice || 0,
     images: mergedImages,
     supplierUrl: ai?.supplierUrl || scraped.supplierUrl,
@@ -886,9 +917,10 @@ export function buildStorageImageInputs(uploaded: StorageImportedImage[], heroUr
  * endpoint itself is unreachable (e.g. local Vite dev server with no /api).
  */
 export async function importProductImagesToStorage(productId: string, urls: string[]): Promise<StorageImportResult> {
+  const token = getAccessToken();
   const r = await fetch('/api/import-images', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ productId, urls }),
     signal: AbortSignal.timeout(90_000),
   });
