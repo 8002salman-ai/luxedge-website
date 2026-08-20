@@ -9,10 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:cloudflare": "vite build --mode cloudflare-public",
     "cf:types": "wrangler types",
-    "cf:check": "npm run build && wrangler deploy --dry-run --env staging",
-    "cf:dev": "npm run build && wrangler dev --env staging",
-    "cf:deploy:staging": "npm run build && wrangler deploy --env staging"
+    "cf:check": "npm run build:cloudflare && wrangler deploy --dry-run --env staging",
+    "cf:dev": "npm run build:cloudflare && wrangler dev --env staging",
+    "cf:deploy:staging": "npm run build:cloudflare && wrangler deploy --env staging"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
