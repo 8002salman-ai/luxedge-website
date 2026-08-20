@@ -125,10 +125,16 @@ async function fetchViaServerProxy(url: string): Promise<ServerFetchResult> {
       const ct = r.headers.get('content-type') || '';
       const text = await r.text();
       // The Vite dev server answers unknown /api routes with the SPA index.html,
-      // and serves the api/* source files themselves as JS modules. Neither is a
-      // fetched page: a real proxy success is plain text, never HTML or JS module code.
-      if (ct.includes('text/html') || ct.includes('javascript') || ct.includes('application/json')) return { text: null, diagnostics: `unexpected content-type (${ct})` };
-      if (/<!doctype html/i.test(text)) return { text: null, diagnostics: 'received HTML instead of page text' };
+      // and serves the api/* source files themselves as JS modules. Reject the
+      // source leak and JSON, but do NOT reject HTML: the server-side scraper
+      // intentionally returns the real supplier product HTML as text/plain, and
+      // some deployments may label that body text/html. A doctype is expected
+      // for a real product page; validate it later through parseHtmlPage + the
+      // title/image Review gate instead of treating it as a failure.
+      if (ct.includes('javascript') || ct.includes('application/json')) return { text: null, diagnostics: `unexpected content-type (${ct})` };
+      if (ct.includes('text/html') && (/<div[^>]+id=["']root["']/i.test(text) || /<script[^>]+src=["'][^"']*\/assets\//i.test(text))) {
+        return { text: null, diagnostics: 'received the application SPA shell instead of supplier HTML' };
+      }
       if (/^import\s+\{/.test(text.trim())) return { text: null, diagnostics: 'dev-server source leak' };
       // A bot/error page is NOT the requested page — retry (punish pages are transient).
       if (isProxyErrorText(text)) {
@@ -144,7 +150,7 @@ async function fetchViaServerProxy(url: string): Promise<ServerFetchResult> {
   return { text: null, diagnostics: attempts.join(' | ') };
 }
 
-/** Fetch a product page through the server proxy first, then public proxies. */
+/** Fetch a product page through the server proxy first; non-AliExpress pages may use public proxies. */
 export async function fetchPageContent(url: string): Promise<string> {
   const isAli = /aliexpress\.(com|us)/i.test(url);
 

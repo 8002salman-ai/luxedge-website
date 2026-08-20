@@ -455,6 +455,43 @@ describe('requireReviewEvidence (never open a blank Review)', () => {
 });
 
 describe('fetchPageContent — AliExpress never falls back to public proxies', () => {
+  it('accepts a real doctype HTML response from the server scraper', async () => {
+    const { fetchPageContent } = await import('../importer');
+    const html = '<!doctype html><html><head><meta property="og:title" content="Real AliExpress Pet Product" /><meta property="og:description" content="A real supplier description." /><meta property="og:image" content="https://cdn.example.com/product.jpg" /></head><body><p>A real supplier description with enough factual product detail to represent a real supplier page and exceed the minimum content threshold without inventing any unsupported specifications.</p></body></html>';
+    const orig = globalThis.fetch;
+    (globalThis as any).fetch = async (input: any) => {
+      if (String(input).includes('/api/fetch-page')) {
+        return new Response(html, { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      }
+      throw new Error('public proxy should not be called after a valid server scrape');
+    };
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('Real AliExpress Pet Product');
+      expect(parsed.images).toEqual(['https://cdn.example.com/product.jpg']);
+      expect(parsed.description).toBe('A real supplier description.');
+    } finally {
+      (globalThis as any).fetch = orig;
+    }
+  });
+
+  it('accepts HTML-labeled supplier content but rejects an HTML SPA shell', async () => {
+    const { fetchPageContent } = await import('../importer');
+    const orig = globalThis.fetch;
+    (globalThis as any).fetch = async (input: any) => {
+      if (String(input).includes('/api/fetch-page')) {
+        return new Response('<!doctype html><html><head><meta property="og:title" content="Real Product" /><meta property="og:image" content="https://cdn.example.com/product.jpg" /></head><body>Product details with enough factual content to represent a real supplier product page and exceed the minimum parser threshold without inventing claims, stock, cost, shipping, or specifications.</body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      }
+      throw new Error('public proxy should not be called after a valid server scrape');
+    };
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('Real Product');
+    } finally {
+      (globalThis as any).fetch = orig;
+    }
+  });
+
   it('throws with server diagnostics and makes no public-proxy calls when the server scrape fails', async () => {
     const { fetchPageContent } = await import('../importer');
     const calls: string[] = [];
