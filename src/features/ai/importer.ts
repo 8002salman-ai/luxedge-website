@@ -7,6 +7,8 @@
 // ============================================================================
 
 import type { AIExtractedProduct } from './types';
+import type { ProductInput, CatalogImageInput, CatalogVariantInput } from '../catalog/repository';
+import type { CommerceReadiness } from '../catalog/commerceReadiness';
 
 function looksLikeBotPage(raw: string): boolean {
   const lower = raw.toLowerCase();
@@ -254,6 +256,7 @@ Return ONLY a valid JSON object with this EXACT shape (use "" / [] / 0 for missi
   "reviewCount": "shown review count, else \"UNKNOWN\"",
   "batteryElectrical": "shown battery/electrical info, else \"UNKNOWN\"",
   "riskFlags": [],
+  "variants": [{"attributes":{"Color":"","Size":""},"sku":"","price":0,"image":""}],
   "evidence": {"title":"UNKNOWN","sellingPrice":"UNKNOWN","costPrice":"UNKNOWN","shipping":"UNKNOWN","delivery":"UNKNOWN","stock":"UNKNOWN","materials":"UNKNOWN","dimensions":"UNKNOWN","battery":"UNKNOWN"},
   "confidence": {"title": 0, "price": 0, "description": 0, "specifications": 0, "images": 0, "brand": 0, "category": 0, "tags": 0}
 }
@@ -329,4 +332,156 @@ export function assessAliExpressRisk(p: {
   if (has(['cure', 'heal', 'pain relief', 'anxiety relief', 'calming', 'therapeutic', 'medical grade'])) warnings.push('Medical/therapeutic claim — regulatory review');
   if (has(['treat', 'edible', 'food', 'chewable', 'ingestible'])) warnings.push('Ingestible — food safety review');
   return { blocked: [...new Set(blocked)], warnings: [...new Set(warnings)] };
+}
+
+// ---------------------------------------------------------------------------
+// AliExpress import → catalog persistence mapping (pure, no DB side effects)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the honest commerce-readiness for a freshly imported AliExpress draft.
+ * Safety risks are evaluated first; the product is never COMMERCE_READY unless
+ * source + cost + fulfillment + images are all actually evidenced.
+ */
+export function deriveImportReadiness(f: {
+  supplierUrl?: string;
+  supplierItemId?: string;
+  riskFlags?: string[];
+  costPrice?: number;
+  landedCost?: number;
+  hasUsShippingEvidence?: boolean;
+  hasStockEvidence?: boolean;
+  imageCount?: number;
+}): CommerceReadiness {
+  const risky = (f.riskFlags || []).some((r) => /battery|ip\b|trademark|regulatory|compliance|counterfeit|medicine|weapon|medical|ingestible/i.test(r));
+  if (risky) return 'RISK_REVIEW';
+  if (!f.supplierUrl && !f.supplierItemId) return 'SOURCE_PENDING';
+  const hasCost = (f.costPrice ?? 0) > 0 || (f.landedCost ?? 0) > 0;
+  if (!hasCost) return 'ECONOMICS_PENDING';
+  const hasFulfillment = f.hasUsShippingEvidence === true || f.hasStockEvidence === true;
+  if (!hasFulfillment) return 'FULFILLMENT_PENDING';
+  if ((f.imageCount ?? 0) === 0) return 'FULFILLMENT_PENDING';
+  return 'COMMERCE_READY';
+}
+
+/** Find an existing catalog row by supplier URL → item ID → normalized title. */
+export function findDuplicateProduct(
+  products: { id: string; name: string; supplierUrl?: string | null; supplierProductRef?: string | null; sku?: string | null }[],
+  { url, itemId, title }: { url?: string | null; itemId?: string | null; title?: string },
+): { id: string; name: string } | null {
+  const u = (url || '').trim();
+  const it = (itemId || '').trim();
+  for (const p of products) {
+    if (u && p.supplierUrl && p.supplierUrl.trim() === u) return p;
+    if (it && (p.supplierProductRef === it || p.sku === it)) return p;
+  }
+  const norm = normalizeProductTitle(title || '');
+  if (norm) {
+    for (const p of products) {
+      if (normalizeProductTitle(p.name) === norm) return p;
+    }
+  }
+  return null;
+}
+
+/** Deduplicate + order supplier images, strongest (hero) first. No fake fallback. */
+export function buildImportImages(images: string[], heroUrl?: string): CatalogImageInput[] {
+  const dedup = [...new Set((images || []).filter((u) => /^https?:\/\//i.test(u)))];
+  const ordered = heroUrl && dedup.includes(heroUrl) ? [heroUrl, ...dedup.filter((u) => u !== heroUrl)] : dedup;
+  return ordered.map((url, i) => ({ url, altText: '', isPrimary: i === 0, sortOrder: i }));
+}
+
+/** Persist only real supplier variants — never invent stock or price. */
+export function buildImportVariants(variants: { attributes?: Record<string, string>; sku?: string; price?: number }[]): CatalogVariantInput[] {
+  return (variants || []).map((v) => ({
+    attributes: v.attributes && Object.keys(v.attributes).length ? v.attributes : undefined,
+    sku: v.sku || undefined,
+    price: v.price && v.price > 0 ? v.price : null,
+    inventoryQty: 0,
+    status: 'draft',
+  }));
+}
+
+export interface ImportProductArgs {
+  title: string;
+  shortDescription?: string;
+  description?: string;
+  features?: string[];
+  specifications?: Record<string, string>;
+  brand?: string;
+  categoryId?: string | null;
+  /** Luxedge selling price (owner-confirmed, editable). */
+  price: number;
+  /** Supplier list price shown on the AliExpress page (evidence, not cost). */
+  supplierListPrice?: number;
+  comparePrice?: number;
+  costPrice?: number;
+  stock?: number;
+  tags?: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string[];
+  url: string;
+  itemId?: string | null;
+  riskFlags?: string[];
+  shippingToUsa?: string;
+  deliveryRangeUsa?: string;
+  usStockEvidence?: string;
+  ownerNotes?: string;
+  imageCount?: number;
+}
+
+/** Build the honest DRAFT ProductInput for an AliExpress import (no fabricated facts). */
+export function buildImportProductInput(a: ImportProductArgs): ProductInput {
+  const riskFlags = [...new Set((a.riskFlags || []).filter(Boolean))];
+  const cost = (a.costPrice ?? 0) > 0 ? a.costPrice : undefined;
+  const compare = (a.comparePrice ?? 0) > 0 ? a.comparePrice : undefined;
+  const stock = (a.stock ?? 0) > 0 ? a.stock : 0;
+  const hasShipping = !!(a.shippingToUsa && !/unknown/i.test(a.shippingToUsa));
+  const hasStock = !!(a.usStockEvidence && !/unknown/i.test(a.usStockEvidence));
+  const readiness = deriveImportReadiness({
+    supplierUrl: a.url,
+    supplierItemId: a.itemId || undefined,
+    riskFlags,
+    costPrice: cost,
+    hasUsShippingEvidence: hasShipping,
+    hasStockEvidence: hasStock,
+    imageCount: a.imageCount ?? 0,
+  });
+  const listPrice = (a.supplierListPrice ?? 0) > 0 ? `$${Number(a.supplierListPrice).toFixed(2)}` : 'UNKNOWN';
+  return {
+    name: a.title,
+    shortTitle: (a.title || '').slice(0, 60),
+    shortDescription: a.shortDescription || undefined,
+    description: a.description || undefined,
+    features: (a.features || []).slice(0, 6),
+    specifications: (a.specifications || {}) as Record<string, unknown>,
+    brand: a.brand || 'Luxedge',
+    categoryId: a.categoryId ?? null,
+    status: 'draft',
+    price: a.price > 0 ? a.price : 0,
+    compareAtPrice: compare,
+    costPrice: cost,
+    inventoryQty: stock,
+    freeShipping: false,
+    supplierSource: 'AliExpress',
+    supplierProductRef: a.itemId || undefined,
+    supplierUrl: a.url,
+    sourceType: 'OTHER_VERIFIED',
+    inventorySource: 'UNKNOWN',
+    commerceReadiness: readiness,
+    riskFlags,
+    tags: (a.tags || []).slice(0, 12),
+    seoTitle: a.seoTitle || undefined,
+    seoDescription: a.seoDescription || undefined,
+    seoKeywords: (a.seoKeywords || []).slice(0, 20),
+    ownerNotes: a.ownerNotes || undefined,
+    evidenceNotes: [
+      `AliExpress import (supplier list price ${listPrice}).`,
+      hasShipping ? `USA shipping: ${a.shippingToUsa}` : 'USA shipping: UNKNOWN — owner/browser verification required.',
+      a.deliveryRangeUsa && !/unknown/i.test(a.deliveryRangeUsa) ? `USA delivery: ${a.deliveryRangeUsa}` : 'USA delivery: UNKNOWN.',
+      hasStock ? `Stock: ${a.usStockEvidence}` : 'Stock: UNKNOWN.',
+      'Supplier list price is NOT treated as acquisition cost until the owner verifies the checkout/base price for the selected variant plus USA shipping.',
+    ].join(' '),
+  };
 }

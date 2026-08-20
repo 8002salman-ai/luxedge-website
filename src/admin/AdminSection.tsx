@@ -5,9 +5,10 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, normalizeProductTitle, extractAliExpressItemId, assessAliExpressRisk } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
+import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
 import ProductScout from './ProductScout';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
@@ -3677,7 +3678,7 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 function AAIImport() {
-  const { products, setProducts, notify } = useApp();
+  const { notify } = useApp();
   const navigate = useNavigate();
 
   type ImportSource = 'url'|'html'|'text'|'clipboard'|'image';
@@ -3705,6 +3706,8 @@ function AAIImport() {
   const [editField, setEditField] = useState<Partial<AIExtractedProduct>>({});
   const [selectedImgs, setSelectedImgs] = useState<string[]>([]);
   const [heroImg, setHeroImg] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [dupProduct, setDupProduct] = useState<{ id: string; name: string } | null>(null);
 
   // Providers
   const [aiProviders] = useState<AIProvider[]>(() => {
@@ -3830,10 +3833,12 @@ function AAIImport() {
     } finally { setLoading(false); stopTimer(); }
   };
 
-  const handleSave = () => {
-    if (!extracted) return;
+  const handleSave = async () => {
+    if (!extracted || saving) return;
     const ef = editField;
     const title = ef.title || extracted.title;
+    const url = extracted.supplierUrl || urlInput;
+    const itemId = extracted.supplierItemId || extractAliExpressItemId(urlInput) || null;
 
     // AliExpress safety gate — hard-restricted products are never imported.
     const risk = assessAliExpressRisk({
@@ -3848,44 +3853,71 @@ function AAIImport() {
       return;
     }
 
-    // Duplicate protection — normalized title already exists in the catalog.
-    const normTitle = normalizeProductTitle(title);
-    const dup = products.find((p) => normalizeProductTitle(p.name) === normTitle);
-    if (dup) {
-      notify(`Duplicate detected — "${dup.name}" already exists. Not saved.`, 'error');
-      return;
-    }
+    setSaving(true);
+    try {
+      // Admin writes flow through the signed-in JWT (RLS governs every mutation).
+      setDbToken(getAccessToken());
 
-    const product: any = {
-      id: `ai-${Date.now()}`,
-      name: title,
-      shortDesc: ef.shortDescription || extracted.shortDescription || '',
-      description: ef.longDescription || extracted.longDescription || '',
-      price: Number(ef.sellingPrice ?? extracted.sellingPrice) || 0,
-      // Never invent a "was" price — keep only a real supplier compare price.
-      originalPrice: Number(ef.comparePrice ?? extracted.comparePrice) > 0 ? Number(ef.comparePrice ?? extracted.comparePrice) : 0,
-      category: ef.category || extracted.category || 'Uncategorized',
-      // Never fabricate stock — 0/UNKNOWN unless the supplier actually showed it.
-      stock: Number(ef.stock ?? extracted.stock) || 0,
-      images: selectedImgs.length ? selectedImgs : [],
-      rating: 0, reviews: 0, isActive: false,
-      brand: ef.brand || extracted.brand || 'Luxedge',
-      condition: 'New',
-      tags: ef.tags || extracted.tags || [],
-      weight: ef.weight || extracted.weight || '',
-      dimensions: ef.dimensions || extracted.dimensions || '',
-      origin: ef.origin || extracted.origin || '',
-      // Shipping/cost are NOT verified at import — never claim free shipping or a cost.
-      freeShipping: false, shippingCost: '', variants: [],
-      supplierSource: extracted.supplierPlatform || 'AliExpress',
-      supplierUrl: extracted.supplierUrl || urlInput,
-      supplierItemId: extracted.supplierItemId || extractAliExpressItemId(urlInput) || '',
-      riskFlags: [...new Set([...(extracted.riskFlags || []), ...risk.warnings])],
-    };
-    setProducts(prev => [product, ...prev]);
-    const riskNote = risk.warnings.length ? ` Risk flags: ${risk.warnings.join('; ')}.` : '';
-    notify(`"${product.name}" saved as Draft — source evidence attached, not customer-visible.${riskNote}`);
-    setStep('done');
+      // DB-level duplicate check — supplier URL / item ID first, then title.
+      const allProducts = await listProducts();
+      const dup = findDuplicateProduct(allProducts, { url, itemId, title });
+      if (dup) {
+        setDupProduct({ id: dup.id, name: dup.name });
+        notify('DUPLICATE FOUND — open the existing product instead of saving.', 'error');
+        return;
+      }
+
+      // Resolve Luxedge category name → category id (best-effort; null is honest).
+      const cats = await listCategories();
+      const catName = String(ef.category || extracted.category || '').trim();
+      const categoryId = cats.find((c) => c.name.toLowerCase() === catName.toLowerCase())?.id || null;
+
+      const finalRiskFlags = [...new Set([...(extracted.riskFlags || []), ...risk.warnings])];
+      const created = await createProduct(buildImportProductInput({
+        title,
+        shortDescription: ef.shortDescription || extracted.shortDescription || undefined,
+        description: ef.longDescription || extracted.longDescription || undefined,
+        features: (extracted.features || []).slice(0, 6),
+        specifications: extracted.specifications,
+        brand: ef.brand || extracted.brand || 'Luxedge',
+        categoryId,
+        price: Number(ef.sellingPrice ?? extracted.sellingPrice) || 0,
+        supplierListPrice: Number(extracted.sellingPrice) || undefined,
+        comparePrice: Number(ef.comparePrice ?? extracted.comparePrice) || undefined,
+        costPrice: Number(ef.costPrice ?? extracted.costPrice) || undefined,
+        stock: Number(ef.stock ?? extracted.stock) || 0,
+        tags: ef.tags || extracted.tags || [],
+        seoTitle: ef.seoTitle || extracted.seoTitle || undefined,
+        seoDescription: ef.metaDescription || extracted.metaDescription || undefined,
+        seoKeywords: extracted.seoKeywords || [],
+        url,
+        itemId,
+        riskFlags: finalRiskFlags,
+        shippingToUsa: extracted.shippingToUsa,
+        deliveryRangeUsa: extracted.deliveryRangeUsa,
+        usStockEvidence: extracted.usStockEvidence,
+        imageCount: selectedImgs.length,
+      }));
+
+      // Images — strongest first, deduplicated, no fake fallback.
+      if (selectedImgs.length) {
+        await saveProductImages(created.id, buildImportImages(selectedImgs, heroImg || selectedImgs[0]));
+      }
+
+      // Variants — real only; never invent stock/price.
+      const variants = buildImportVariants((extracted.variants || []).map((v) => ({ attributes: v.attributes, sku: v.sku, price: v.price })));
+      if (variants.length) {
+        await saveProductVariants(created.id, variants);
+      }
+
+      const riskNote = risk.warnings.length ? ` Risk flags: ${risk.warnings.join('; ')}.` : '';
+      notify(`DRAFT saved to catalog (${created.name}) — readiness ${created.commerceReadiness || 'DRAFT'}.${riskNote}`);
+      setStep('done');
+    } catch (e) {
+      notify(`Save failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const EF = (field: keyof AIExtractedProduct) => ({
@@ -4110,10 +4142,23 @@ function AAIImport() {
             <h1 className="text-xl font-bold">Review & Edit</h1>
             <p className="text-sm text-gray-500">AI extracted {Object.keys(extracted).length} fields — edit any before saving</p>
           </div>
-          <button onClick={handleSave} className="ml-auto px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
-            <CheckCircle size={16}/> FloppyDisk as Draft Product
+          <button onClick={handleSave} disabled={saving} className="ml-auto px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
+            <CheckCircle size={16}/> {saving ? 'Saving…' : 'FloppyDisk as Draft Product'}
           </button>
         </div>
+
+        {dupProduct && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <Warning size={18} className="text-red-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-red-700">DUPLICATE FOUND</p>
+              <p className="text-xs text-red-600 truncate">{dupProduct.name} · {dupProduct.id}</p>
+            </div>
+            <button onClick={() => navigate(`/admin/products/edit/${dupProduct.id}`)} className="shrink-0 px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-red-600 hover:bg-red-700">
+              OPEN EXISTING PRODUCT
+            </button>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-5">
           {/* LEFT — Core Fields */}
@@ -4262,8 +4307,8 @@ function AAIImport() {
         {/* FloppyDisk Button */}
         <div className="sticky bottom-0 bg-white border-t p-4 -mx-6 flex items-center justify-between gap-4">
           <p className="text-sm text-gray-500">Product will be saved as <span className="font-semibold text-gray-700">Draft</span> — you can publish it from Products page.</p>
-          <button onClick={handleSave} className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
-            <CheckCircle size={18}/> FloppyDisk Product
+          <button onClick={handleSave} disabled={saving} className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-200">
+            <CheckCircle size={18}/> {saving ? 'Saving…' : 'FloppyDisk Product'}
           </button>
         </div>
       </div>

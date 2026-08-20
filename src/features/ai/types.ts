@@ -82,6 +82,14 @@ export interface AIExtractedProduct {
   batteryElectrical?: string;
   riskFlags?: string[];
   evidence?: Record<string, 'VERIFIED' | 'INFERRED' | 'UNKNOWN'>;
+  variants?: AIExtractedVariant[];
+}
+
+export interface AIExtractedVariant {
+  attributes: Record<string, string>;
+  sku?: string;
+  price?: number;
+  image?: string;
 }
 
 export interface EnterpriseVariant {
