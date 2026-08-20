@@ -821,6 +821,21 @@ function Footer() {
   );
 }
 
+/**
+ * Homepage product grids are curated (small, admin-flagged sets), so a fixed
+ * 5-column grid leaves huge empty tracks when a section only has 1-3 items —
+ * it reads as a broken/incomplete page rather than a real storefront. Cap the
+ * grid to the actual item count (up to 5) so cards sit close together instead
+ * of stretching across mostly-empty rows.
+ */
+function productGridClass(count: number): string {
+  if (count <= 1) return 'grid grid-cols-1 max-w-[220px] gap-2.5 sm:gap-3';
+  if (count === 2) return 'grid grid-cols-2 max-w-[460px] gap-2.5 sm:gap-3';
+  if (count === 3) return 'grid grid-cols-2 sm:grid-cols-3 max-w-[700px] gap-2.5 sm:gap-3';
+  if (count === 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-[940px] gap-2.5 sm:gap-3';
+  return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3';
+}
+
 function PCard({ product }: { product: Product }) {
   const { addToCart, reviews } = useApp();
   const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
@@ -1647,7 +1662,7 @@ function HomePage() {
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                  <div className={productGridClass(Math.min(newArrivals.length, 10))}>
                     {newArrivals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
@@ -1661,7 +1676,7 @@ function HomePage() {
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                  <div className={productGridClass(Math.min(topPicks.length, 10))}>
                     {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
@@ -1678,7 +1693,7 @@ function HomePage() {
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                  <div className={productGridClass(Math.min(dogEssentials.length, 10))}>
                     {dogEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
@@ -1692,7 +1707,7 @@ function HomePage() {
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                  <div className={productGridClass(Math.min(catEssentials.length, 10))}>
                     {catEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
@@ -1706,7 +1721,7 @@ function HomePage() {
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Collection" title="Shop All Products" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                  <div className={productGridClass(Math.min(homepageVisualProducts.length, 20))}>
                     {homepageVisualProducts.slice(0, 20).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
@@ -1743,7 +1758,7 @@ function HomePage() {
           <div className="max-w-7xl mx-auto px-4">
             <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
             <Reveal delay={60}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+              <div className={productGridClass(Math.min(deals.length, 10))}>
                 {deals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
               </div>
             </Reveal>
