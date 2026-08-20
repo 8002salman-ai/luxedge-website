@@ -65,19 +65,28 @@ interface FetchedPage {
  * Returns null when the endpoint is unreachable (e.g. Vite dev server).
  */
 async function fetchViaServerProxy(url: string): Promise<string | null> {
-  try {
-    // /api/fetch-page is admin-only (Phase 3A). Attach the signed-in admin
-    // access token so the server-side scrape path (SCRAPE_DO_TOKEN) actually
-    // runs on the deployed app instead of silently 401-ing and falling back
-    // to public proxies. Never logs the token.
-    const token = getAccessToken();
-    const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`, {
-      signal: AbortSignal.timeout(45_000),
-      headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (!r.ok) return null;
-    const ct = r.headers.get('content-type') || '';
-    const text = await r.text();
+  // AliExpress alternates between the real page, its anti-bot "punish" page,
+  // and transient 5xx. One request often fails even though the product IS
+  // retrievable, so retry a few times with backoff before falling back to
+  // public proxies (live finding: same URL returned 502 then the real page).
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      // /api/fetch-page is admin-only (Phase 3A). Attach the signed-in admin
+      // access token so the server-side scrape path (SCRAPE_DO_TOKEN) actually
+      // runs on the deployed app instead of silently 401-ing and falling back
+      // to public proxies. Never logs the token.
+      const token = getAccessToken();
+      const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(45_000),
+        headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!r.ok) {
+        if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
+        return null;
+      }
+      const ct = r.headers.get('content-type') || '';
+      const text = await r.text();
     // The Vite dev server answers unknown /api routes with the SPA index.html,
     // and serves the api/* source files themselves as JS modules (e.g.
     // /api/fetch-page → the transformed fetch-page.ts). Neither is a fetched
@@ -86,12 +95,19 @@ async function fetchViaServerProxy(url: string): Promise<string | null> {
     if (/<!doctype html/i.test(text)) return null;
     // Guard against the dev server leaking local source files (import statements).
     if (/^import\s+\{/.test(text.trim())) return null;
-    // A Jina/bot error page is NOT the requested page — treat as a proxy failure.
-    if (isProxyErrorText(text)) return null;
+    // A Jina/bot error page is NOT the requested page — treat as a proxy
+    // failure and retry (punish pages are transient).
+    if (isProxyErrorText(text)) {
+      if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
+      return null;
+    }
     return text;
-  } catch {
-    return null;
+    } catch {
+      if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
+      return null;
+    }
   }
+  return null;
 }
 
 /** Fetch a product page through the server proxy first, then public proxies. */

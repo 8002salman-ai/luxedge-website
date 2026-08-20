@@ -58,17 +58,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     : [{ label: 'Jina Reader', url: `https://r.jina.ai/${encodeURIComponent(url)}` }];
 
   let lastErr = 'no proxy available';
+  // AliExpress alternates between the real product page, its anti-bot
+  // "punish" page, and transient 5xx — a single attempt frequently fails even
+  // though the product IS retrievable. Retry a few times with backoff before
+  // giving up (live finding: same URL returned punish page then real page).
+  const MAX_ATTEMPTS = 3;
   for (const { label, url: proxyUrl } of targets) {
-    try {
-      const text = await fetchWithRedirectValidation(proxyUrl, MAX_REDIRECTS);
-      if (text === null) {
-        lastErr = `${label}: redirect blocked`;
-        continue;
-      }
-      if (text.trim().length < 100) {
-        lastErr = `${label}: too little content`;
-        continue;
-      }
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const text = await fetchWithRedirectValidation(proxyUrl, MAX_REDIRECTS);
+        if (text === null) {
+          lastErr = `${label}: redirect blocked`;
+          if (attempt < MAX_ATTEMPTS) { await sleep(1200 * attempt); continue; }
+          break;
+        }
+        if (text.trim().length < 100) {
+          lastErr = `${label}: too little content`;
+          if (attempt < MAX_ATTEMPTS) { await sleep(1200 * attempt); continue; }
+          break;
+        }
       // Jina Reader returns "Warning: <host> URL returned error <code>: ..."
       // for failed pages (429/403/404/…) and BLOCKED-SNAPSHOT pages (e.g.
       // "## www.target.com is blocked … ERR_BLOCKED_BY_CLIENT") when its own
@@ -85,15 +93,24 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // as successful page content.
       if (text.length < 15000 && (lower.includes('sufei-punish') || lower.includes('punish-page') || lower.includes('bx-pu-') || /punish\?recaptcha=1/i.test(lower))) {
         lastErr = `${label}: AliExpress anti-bot punish page (no product data)`;
-        continue;
+        // Punish pages are transient — the very next request often returns
+        // the real product page. Retry before declaring failure.
+        if (attempt < MAX_ATTEMPTS) { await sleep(1200 * attempt); continue; }
+        break;
       }
       sendText(res, 200, text);
       return;
     } catch (e) {
       lastErr = `${label}: ${(e as Error).message}`;
+      if (attempt < MAX_ATTEMPTS) { await sleep(1200 * attempt); continue; }
+    }
     }
   }
   sendJson(res, 502, { error: `Could not fetch page (${lastErr})` });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
