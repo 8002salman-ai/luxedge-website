@@ -27,5 +27,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "api", "vite.config.ts"]
+  "include": [
+    "worker","src", "api", "vite.config.ts"]
 }

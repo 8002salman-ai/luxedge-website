@@ -1,13 +1,29 @@
-# Wrangler configuration for the Luxedge Cloudflare staging Worker.
+# Wrangler configuration — Luxedge Cloudflare deployment (reproducible from repo).
 #
-# The Worker (luxedge-cloudflare-staging) is deployed externally and serves both
-# the Vite SPA bundle and the /api/* functions. This file only carries the
-# identity info needed for secret/env management (e.g. `wrangler secret put`).
-# No `main` is declared because the deployable Worker source does not live in
-# this repository yet.
-name = "luxedge-cloudflare-staging"
+# Default target: PRODUCTION worker (luxedge-production) — serves the Vite SPA
+# from dist/ via the ASSETS binding and runs the api/* handlers through
+# worker/index.ts. `wrangler deploy` = production; `wrangler deploy --env
+# staging` = luxedge-cloudflare-staging.
+name = "luxedge-production"
+main = "worker/index.ts"
 account_id = "f542683e97458480452b0b8ef37a898a"
-
-# The staging Worker runs on the Cloudflare runtime; Vercel-style Node APIs are
-# adapted for it. Compatibility date is pinned to the current runtime line.
 compatibility_date = "2026-08-20"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+# Plain-text env (non-secret). Secrets are set with `wrangler secret put`.
+[vars]
+VERCEL_ENV = "production"
+DEPLOYMENT_ENV = "production"
+
+[env.staging]
+name = "luxedge-cloudflare-staging"
+
+[env.staging.vars]
+VERCEL_ENV = "preview"
+DEPLOYMENT_ENV = "staging"
