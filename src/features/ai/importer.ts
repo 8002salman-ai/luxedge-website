@@ -76,62 +76,94 @@ interface FetchedPage {
  * uses SCRAPE_DO_TOKEN when configured (token never ships to the browser).
  * Returns null when the endpoint is unreachable (e.g. Vite dev server).
  */
-async function fetchViaServerProxy(url: string): Promise<string | null> {
+interface ServerFetchResult {
+  text: string | null;
+  /** Compact human-readable scrape diagnostics from the server (no secrets). */
+  diagnostics: string;
+}
+
+async function fetchViaServerProxy(url: string): Promise<ServerFetchResult> {
   // AliExpress alternates between the real page, its anti-bot "punish" page,
   // and transient 5xx. One request often fails even though the product IS
-  // retrievable, so retry a few times with backoff before falling back to
-  // public proxies (live finding: same URL returned 502 then the real page).
+  // retrievable, so retry a few times with backoff (live finding: same URL
+  // returned 502 then the real page).
   const MAX_ATTEMPTS = 3;
+  const attempts: string[] = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       // /api/fetch-page is admin-only (Phase 3A). Attach the signed-in admin
       // access token so the server-side scrape path (SCRAPE_DO_TOKEN) actually
-      // runs on the deployed app instead of silently 401-ing and falling back
-      // to public proxies. Never logs the token.
+      // runs on the deployed app instead of silently 401-ing. Never logs the token.
       const token = getAccessToken();
       const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`, {
         signal: AbortSignal.timeout(45_000),
         headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
       if (!r.ok) {
+        // Surface the server's structured per-attempt diagnostics (no secrets)
+        // so the admin log explains exactly why the scrape failed.
+        if (r.status === 502) {
+          const body = await r.text().catch(() => '');
+          try {
+            const j = JSON.parse(body);
+            if (Array.isArray(j?.diagnostics)) {
+              (j.diagnostics as { scraper_attempt?: number; http_status?: number; response_chars?: number; product_title_found?: boolean; product_image_found?: boolean; jsonld_product_found?: boolean; item_id_found?: boolean; product_evidence_valid?: boolean; scrape_mode?: string }[]).forEach((d) => {
+                attempts.push(`attempt ${d.scraper_attempt ?? '?'}: HTTP ${d.http_status ?? '?'}/chars=${d.response_chars ?? '?'}/title=${d.product_title_found ? 'yes' : 'no'}/img=${d.product_image_found ? 'yes' : 'no'}/item=${d.item_id_found ? 'yes' : 'no'}/valid=${d.product_evidence_valid ? 'yes' : 'no'} (${d.scrape_mode ?? '?'})`);
+              });
+            } else if (j?.error) {
+              attempts.push(`server: ${String(j.error).slice(0, 160)}`);
+            }
+          } catch {
+            attempts.push(`server error (HTTP ${r.status})`);
+          }
+        } else {
+          attempts.push(`server error (HTTP ${r.status})`);
+        }
         if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
-        return null;
+        return { text: null, diagnostics: attempts.join(' | ') || `HTTP ${r.status}` };
       }
       const ct = r.headers.get('content-type') || '';
       const text = await r.text();
-    // The Vite dev server answers unknown /api routes with the SPA index.html,
-    // and serves the api/* source files themselves as JS modules (e.g.
-    // /api/fetch-page → the transformed fetch-page.ts). Neither is a fetched
-    // page: a real proxy success is plain text, never HTML or JS module code.
-    if (ct.includes('text/html') || ct.includes('javascript') || ct.includes('application/json')) return null;
-    if (/<!doctype html/i.test(text)) return null;
-    // Guard against the dev server leaking local source files (import statements).
-    if (/^import\s+\{/.test(text.trim())) return null;
-    // A Jina/bot error page is NOT the requested page — treat as a proxy
-    // failure and retry (punish pages are transient).
-    if (isProxyErrorText(text)) {
-      if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
-      return null;
-    }
-    return text;
+      // The Vite dev server answers unknown /api routes with the SPA index.html,
+      // and serves the api/* source files themselves as JS modules. Neither is a
+      // fetched page: a real proxy success is plain text, never HTML or JS module code.
+      if (ct.includes('text/html') || ct.includes('javascript') || ct.includes('application/json')) return { text: null, diagnostics: `unexpected content-type (${ct})` };
+      if (/<!doctype html/i.test(text)) return { text: null, diagnostics: 'received HTML instead of page text' };
+      if (/^import\s+\{/.test(text.trim())) return { text: null, diagnostics: 'dev-server source leak' };
+      // A bot/error page is NOT the requested page — retry (punish pages are transient).
+      if (isProxyErrorText(text)) {
+        if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
+        return { text: null, diagnostics: attempts.join(' | ') || 'server returned a bot/error page' };
+      }
+      return { text, diagnostics: attempts.join(' | ') || 'server scrape succeeded' };
     } catch {
       if (attempt < MAX_ATTEMPTS) { await new Promise((res) => setTimeout(res, 1200 * attempt)); continue; }
-      return null;
+      return { text: null, diagnostics: attempts.join(' | ') || 'network error' };
     }
   }
-  return null;
+  return { text: null, diagnostics: attempts.join(' | ') };
 }
 
 /** Fetch a product page through the server proxy first, then public proxies. */
 export async function fetchPageContent(url: string): Promise<string> {
   const isAli = /aliexpress\.(com|us)/i.test(url);
 
-  const serverText = await fetchViaServerProxy(url);
-  if (serverText !== null) {
-    const parsed = parseHtmlPage(serverText);
-    if (parsed.text.trim().length >= 100 && !looksLikeBotPage(serverText)) {
+  const serverRes = await fetchViaServerProxy(url);
+  if (serverRes.text !== null) {
+    const parsed = parseHtmlPage(serverRes.text);
+    if (parsed.text.trim().length >= 100 && !looksLikeBotPage(serverRes.text)) {
       return JSON.stringify(parsed);
     }
+  }
+
+  if (isAli) {
+    // AliExpress is JS-rendered and blocks every public proxy — feeding a
+    // shell/junk page downstream is exactly what produced blank Review
+    // screens. Fail clearly instead; the admin shows the error and never
+    // opens a blank Review.
+    throw new Error(
+      `AliExpress blocked the automated fetch (anti-bot check). ${serverRes.diagnostics || 'All scrape attempts failed.'} Retry the import (AliExpress alternates between the real page and its bot check) or paste the product HTML/text instead.`
+    );
   }
 
   const timeout = isAli ? 35000 : 25000;
@@ -487,6 +519,32 @@ export function parsePdpNpi(param: string | null): { listPrice: number | null; s
  * e.g. the fetch delivered a bot/anti-crawler page that slipped through
  * detection. Used to fall back to URL evidence instead of a 54-field empty form.
  */
+export interface ReviewEvidenceGate {
+  ok: boolean;
+  reason: string;
+}
+
+/**
+ * A Review must never open blank. URL imports require a real title AND at
+ * least one usable image; paste/text imports only require a title (images can
+ * be added/imported manually). Returns a clear reason when the gate fails so
+ * the admin shows an error instead of an empty Review form.
+ */
+export function requireReviewEvidence(p: AIExtractedProduct | null | undefined, source: string): ReviewEvidenceGate {
+  if (!p) return { ok: false, reason: 'No product evidence could be extracted.' };
+  const title = (p.title || p.luxuryTitle || '').trim();
+  if (!title) {
+    return { ok: false, reason: 'No product title was extracted — the source page likely contains no readable product data (anti-bot check).' };
+  }
+  if (source === 'url') {
+    const images = (p.images || []).filter((u) => typeof u === 'string' && u.startsWith('http'));
+    if (images.length === 0) {
+      return { ok: false, reason: 'No product images were extracted — the source page was likely blocked by an anti-bot check. Retry the import or paste the product HTML/text.' };
+    }
+  }
+  return { ok: true, reason: '' };
+}
+
 export function isEmptyExtraction(p: AIExtractedProduct | null | undefined): boolean {
   if (!p) return true;
   const hasTitle = !!(p.title || '').trim() || !!(p.luxuryTitle || '').trim();
