@@ -17,7 +17,12 @@ function looksLikeBotPage(raw: string): boolean {
     lower.includes('just a moment') || lower.includes('cf-challenge') || lower.includes('challenge-platform') ||
     lower.includes('captcha') || lower.includes('unusual traffic') || lower.includes('access denied') ||
     lower.includes('are you a robot') || lower.includes('verify you are human') || lower.includes('one more step') ||
-    lower.includes('security check') || lower.includes('pardon our interruption') || lower.includes('robot check')
+    lower.includes('security check') || lower.includes('pardon our interruption') || lower.includes('robot check') ||
+    // AliExpress anti-bot "punish" page (sufei) — served to scrapers instead of
+    // the product page. Contains zero product data and must never count as
+    // page content (live finding: a 10KB punish page produced 54 empty fields).
+    lower.includes('sufei-punish') || lower.includes('punish-page') || lower.includes('bx-pu-') ||
+    /punish\?recaptcha=1/i.test(lower)
   );
 }
 
@@ -339,8 +344,11 @@ function decodeEmbeddedJson(value: string | null): Record<string, unknown> | nul
 }
 
 /**
- * Parse the AliExpress pdp_npi tracking param: `{n}@dis!CURRENCY!CC+$price!CC+$price2!...`.
- * Returns up to the first two `CC+$price` segments. Pure + unit-tested.
+ * Parse the AliExpress pdp_npi tracking param. Two real-world formats occur:
+ *   A) `{n}@dis!USD!US+$12.13!US+$0.99!...`  (country-prefixed prices)
+ *   B) `{n}@dis!USD!4.11!0.99!!!27.52!6.64!...` (bare prices after currency)
+ * Returns the first two prices found, classified as list (primary) and
+ * secondary (sale/shipping — semantics UNKNOWN). Pure + unit-tested.
  */
 export function parsePdpNpi(param: string | null): { listPrice: number | null; secondaryPrice: number | null } {
   if (!param) return { listPrice: null, secondaryPrice: null };
@@ -348,15 +356,34 @@ export function parsePdpNpi(param: string | null): { listPrice: number | null; s
   const idx = param.indexOf(marker);
   const rest = idx >= 0 ? param.slice(idx + marker.length) : param;
   const prices: number[] = [];
-  for (const seg of rest.split('!')) {
+  const segs = rest.split('!');
+  // Format A: first segment is the currency (e.g. USD); prices carry `CC+$`.
+  // Format B: first segment is also the currency; prices are bare decimals.
+  const startAt = segs[0] && /^[A-Z]{2,3}$/.test(segs[0].trim()) ? 1 : 0;
+  for (const seg of segs.slice(startAt)) {
+    let n = NaN;
     const m = /^[A-Z]{2}\+\$([\d.,]+)/.exec(seg.trim());
-    if (m) {
-      const n = Number(m[1].replace(/,/g, ''));
-      if (Number.isFinite(n)) prices.push(n);
-    }
+    if (m) n = Number(m[1].replace(/,/g, ''));
+    else if (/^\d{1,3}([.,]\d{2})?$/.test(seg.trim())) n = Number(seg.trim().replace(/,/g, ''));
+    if (Number.isFinite(n) && n > 0) prices.push(n);
     if (prices.length >= 2) break;
   }
   return { listPrice: prices[0] ?? null, secondaryPrice: prices[1] ?? null };
+}
+
+/**
+ * True when an AI extraction returned no usable product evidence at all —
+ * e.g. the fetch delivered a bot/anti-crawler page that slipped through
+ * detection. Used to fall back to URL evidence instead of a 54-field empty form.
+ */
+export function isEmptyExtraction(p: AIExtractedProduct | null | undefined): boolean {
+  if (!p) return true;
+  const hasTitle = !!(p.title || '').trim() || !!(p.luxuryTitle || '').trim();
+  const hasPrice = (p.sellingPrice ?? 0) > 0 || (p.costPrice ?? 0) > 0;
+  const hasImages = Array.isArray(p.images) && p.images.length > 0;
+  const hasDesc = !!(p.shortDescription || '').trim() || !!(p.longDescription || '').trim();
+  const hasMeta = !!(p.supplierUrl || '').trim() || !!(p.supplierItemId || '').trim();
+  return !hasTitle && !hasPrice && !hasImages && !hasDesc && !hasMeta;
 }
 
 /** Extract all real evidence from an AliExpress item URL (never fabricates). */

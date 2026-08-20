@@ -70,6 +70,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         lastErr = `${label}: proxy error/block page (target not retrievable)`;
         continue;
       }
+      // AliExpress anti-bot "punish" page (sufei) — served instead of the
+      // product page to scrapers. Contains zero product data; never serve it
+      // as successful page content.
+      if (text.length < 15000 && (lower.includes('sufei-punish') || lower.includes('punish-page') || lower.includes('bx-pu-') || /punish\?recaptcha=1/i.test(lower))) {
+        lastErr = `${label}: AliExpress anti-bot punish page (no product data)`;
+        continue;
+      }
       sendText(res, 200, text);
       return;
     } catch (e) {

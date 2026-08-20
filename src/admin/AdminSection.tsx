@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildUrlEvidenceProduct, extractAliExpressUrlEvidence } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildUrlEvidenceProduct, extractAliExpressUrlEvidence, isEmptyExtraction } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
@@ -3906,6 +3906,24 @@ function AAIImport() {
       const jsonMatch = aiText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('AI returned invalid response. Please try again.');
       const data = JSON.parse(jsonMatch[0]) as AIExtractedProduct;
+
+      // Empty-extraction guard: a bot/anti-crawler page that slipped through
+      // detection yields 54 empty fields. For AliExpress, fall back to the
+      // REAL evidence in the URL (item ID, pdp_npi prices, ship-from) so the
+      // owner gets a truthful starting draft instead of an empty form.
+      if (isEmptyExtraction(data) && source === 'url' && /aliexpress\.(com|us)/i.test(urlInput)) {
+        const urlEv = extractAliExpressUrlEvidence(urlInput.trim());
+        if (urlEv.itemId) {
+          const partial = buildUrlEvidenceProduct(urlInput.trim());
+          setExtracted(partial);
+          setEditField({ ...partial });
+          setSelectedImgs(partial.images || []);
+          setHeroImg((partial.images || [])[0] || '');
+          addLog('⚠ The scrape returned AliExpress’s anti-bot page (no product data) — import started from the real evidence in the URL (item ID + price params). Complete the rest from the live page before saving — stays DRAFT.', false);
+          setStep('preview');
+          return;
+        }
+      }
 
       // Merge page images with AI-found images
       const allImages = [...new Set([...(data.images||[]), ...pageImages])].filter(u => u.startsWith('http')).slice(0, 24);
