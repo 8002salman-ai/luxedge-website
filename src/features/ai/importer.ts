@@ -185,65 +185,83 @@ function stripHtml(html: string): string {
 }
 
 export function buildExtractionPrompt(rawContent: string, sourceType: string): string {
-  return `You are an expert e-commerce product data analyst for Luxedge, a premium US dropshipping store.
+  return `You are an expert e-commerce product data analyst for Luxedge, a premium US pet-supplies store. Extract ONLY what the source actually shows — nothing more.
 
-Extract ALL product information from this ${sourceType} content and return ONLY a valid JSON object.
+SOURCE TYPE: ${sourceType}
 
 CONTENT:
 ${rawContent.slice(0, 10000)}
 
-Return this EXACT JSON structure (use empty string/array/0 if not found):
+TRUTH RULES (non-negotiable):
+- Classify every field as VERIFIED (explicitly shown), INFERRED (reasonably deduced from shown text), or UNKNOWN (not present). Never guess a missing fact.
+- Never invent: cost, shipping, inventory/stock, delivery time, ratings, reviews, order counts, materials, dimensions, or battery/electrical information.
+- The supplier LIST price is the retail price shown to shoppers — it is NOT a wholesale/supplier cost. costPrice must be 0/UNKNOWN unless a real wholesale cost is shown.
+- Do NOT invent a "was"/compare price. comparePrice is 0/UNKNOWN unless the page shows a real regular/compare price.
+- Do NOT estimate a market price. sellingPrice is the supplier list price shown on the page; 0/UNKNOWN if not shown.
+- Do NOT invent stock. stock is 0/UNKNOWN unless a real quantity or "in stock" is shown.
+- Record the AliExpress item URL + numeric item ID under supplierUrl / supplierItemId (supplier identity evidence).
+- Record battery/electrical status and any counterfeit / medicine / supplement / weapon / medical-claim / copyrighted-character indicators under batteryElectrical and riskFlags.
+
+Return ONLY a valid JSON object with this EXACT shape (use "" / [] / 0 for missing values):
 {
-  "title": "exact product title",
-  "luxuryTitle": "premium rewritten title for luxury brand",
-  "seoTitle": "SEO optimized title with main keyword (60 chars max)",
+  "title": "exact supplier title",
+  "luxuryTitle": "professional, concise, premium rewrite of the title (factual, no unsupported claims)",
+  "seoTitle": "SEO title (60 chars max)",
   "slug": "url-friendly-slug",
-  "brand": "brand name",
-  "manufacturer": "manufacturer",
+  "brand": "brand ONLY if explicitly shown, else \"\"",
+  "manufacturer": "",
   "category": "best matching: Dog Supplies | Cat Supplies | Pet Beds | Pet Toys | Feeding & Water | Grooming | Pet Accessories",
-  "subcategory": "specific subcategory",
-  "collection": "product collection name",
-  "shortDescription": "2-3 sentence product summary",
-  "longDescription": "detailed 3-4 paragraph product description",
-  "features": ["feature 1", "feature 2", "feature 3"],
-  "benefits": ["benefit 1", "benefit 2"],
+  "subcategory": "",
+  "collection": "",
+  "shortDescription": "2-3 factual sentences",
+  "longDescription": "factual description paragraphs",
+  "features": ["3-6 factual points taken from the page"],
+  "benefits": [],
   "specifications": {"spec name": "value"},
-  "packageIncludes": ["item 1", "item 2"],
-  "weight": "e.g. 0.5 lbs",
-  "dimensions": "e.g. 10 x 5 x 2 inches",
-  "origin": "country of origin",
-  "materials": ["material 1"],
-  "colors": ["color 1", "color 2"],
-  "sizes": ["S", "M", "L"],
-  "sku": "suggested SKU",
+  "packageIncludes": [],
+  "weight": "shown weight or \"\"",
+  "dimensions": "shown dimensions or \"\"",
+  "origin": "shown origin or \"\"",
+  "materials": [],
+  "colors": [],
+  "sizes": [],
+  "sku": "",
   "barcode": "",
   "hsCode": "",
-  "stock": 100,
+  "stock": 0,
   "costPrice": 0,
   "sellingPrice": 0,
   "comparePrice": 0,
   "shippingWeight": "",
-  "tags": ["tag1", "tag2", "tag3"],
-  "seoKeywords": ["keyword1", "keyword2"],
+  "tags": [],
+  "seoKeywords": [],
   "metaTitle": "SEO meta title (60 chars)",
   "metaDescription": "SEO meta description (160 chars)",
   "focusKeyword": "primary SEO keyword",
   "images": [],
-  "faqs": [{"q": "question?", "a": "answer"}],
-  "warranty": "warranty info",
-  "careInstructions": "care instructions",
-  "safetyNotes": "safety notes",
-  "confidence": {
-    "title": 95, "price": 80, "description": 85, "specifications": 70, "images": 60, "brand": 75, "category": 90, "tags": 80
-  }
+  "faqs": [],
+  "warranty": "",
+  "careInstructions": "",
+  "safetyNotes": "",
+  "supplierPlatform": "AliExpress",
+  "supplierUrl": "the exact source URL",
+  "supplierItemId": "numeric item ID from the URL or page, else \"\"",
+  "shippingToUsa": "shown USA shipping cost, else \"UNKNOWN\"",
+  "deliveryRangeUsa": "shown USA delivery range, else \"UNKNOWN\"",
+  "usStockEvidence": "shown stock/availability, else \"UNKNOWN\"",
+  "ordersCount": "shown orders/sold count, else \"UNKNOWN\"",
+  "ratingValue": "shown rating, else \"UNKNOWN\"",
+  "reviewCount": "shown review count, else \"UNKNOWN\"",
+  "batteryElectrical": "shown battery/electrical info, else \"UNKNOWN\"",
+  "riskFlags": [],
+  "evidence": {"title":"UNKNOWN","sellingPrice":"UNKNOWN","costPrice":"UNKNOWN","shipping":"UNKNOWN","delivery":"UNKNOWN","stock":"UNKNOWN","materials":"UNKNOWN","dimensions":"UNKNOWN","battery":"UNKNOWN"},
+  "confidence": {"title": 0, "price": 0, "description": 0, "specifications": 0, "images": 0, "brand": 0, "category": 0, "tags": 0}
 }
 
 Rules:
-- luxuryTitle: make it sound premium, e.g. "Orthopedic Memory Foam Dog Bed" → "Luxe Joint-Support Memory Foam Bed | LuxePaws"
-- sellingPrice: use actual price from content; if not found estimate market price
-- comparePrice: 20-30% higher than sellingPrice (to show "was" price)
-- costPrice: 40-50% of sellingPrice
-- confidence: 0-100 how certain you are about each field
+- luxuryTitle: premium and concise, but never add a claim the source does not support.
+- riskFlags: list ONLY genuine flags from this set — ["counterfeit","branded copy","medicine","supplement","unsafe ingestible","battery","copyrighted character","weapon","medical claim"]. Use [] when none apply.
+- evidence: use ONLY "VERIFIED", "INFERRED" or "UNKNOWN" per field.
 - IMPORTANT: never invent factual specifications that are not present in the content. Leave unknown values empty.
 - Return ONLY the JSON, absolutely no other text`;
 }
@@ -265,4 +283,50 @@ export function extractProductJson(raw: string): AIExtractedProduct | null {
   } catch {
     return null;
   }
+}
+
+/** Normalize a product title for duplicate detection (lowercase, alnum only). */
+export function normalizeProductTitle(title: string): string {
+  return (title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Extract the numeric AliExpress item ID from a URL or free text, else null. */
+export function extractAliExpressItemId(url: string): string | null {
+  const s = String(url || '');
+  const m = s.match(/\/item\/(\d+)\.html/i) || s.match(/(?:itemId|item_id)[=/](\d+)/i);
+  return m ? m[1] : null;
+}
+
+export interface AliExpressRiskAssessment {
+  /** Hard-restricted — must never become customer-visible. */
+  blocked: string[];
+  /** Risk-review flags the owner must clear before publish. */
+  warnings: string[];
+}
+
+/**
+ * AliExpress-specific safety gate. Returns hard blockers (counterfeit,
+ * medicine/supplement, weapons) and risk-review warnings (battery/electrical,
+ * copyrighted characters, medical claims, ingestibles). Never fabricates a flag.
+ */
+export function assessAliExpressRisk(p: {
+  title?: string;
+  brand?: string;
+  riskFlags?: string[];
+  batteryElectrical?: string;
+  safetyNotes?: string;
+}): AliExpressRiskAssessment {
+  const text = [p.title, p.brand, p.batteryElectrical, p.safetyNotes].map((v) => String(v || '')).join(' ').toLowerCase();
+  const flags = (p.riskFlags || []).map((f) => String(f).toLowerCase());
+  const has = (words: string[]) => words.some((w) => text.includes(w) || flags.some((f) => f.includes(w)));
+  const blocked: string[] = [];
+  const warnings: string[] = [];
+  if (has(['medicine', 'supplement', 'vitamin', 'pharmaceutical', 'cbd', 'tablet', 'capsule'])) blocked.push('Medicine/supplement');
+  if (has(['counterfeit', 'replica', 'branded copy', 'copy of', 'knockoff'])) blocked.push('Counterfeit/branded copy');
+  if (has(['weapon', 'taser', 'pepper spray', 'knife', 'blade'])) blocked.push('Weapon');
+  if (has(['battery', 'rechargeable', 'lithium', 'li-ion', 'electric', 'charger', 'power bank'])) warnings.push('Battery/electrical — risk review');
+  if (has(['disney', 'pokemon', 'pokémon', 'marvel', 'hello kitty', 'star wars', 'nintendo', 'harry potter'])) warnings.push('Copyrighted character — IP risk');
+  if (has(['cure', 'heal', 'pain relief', 'anxiety relief', 'calming', 'therapeutic', 'medical grade'])) warnings.push('Medical/therapeutic claim — regulatory review');
+  if (has(['treat', 'edible', 'food', 'chewable', 'ingestible'])) warnings.push('Ingestible — food safety review');
+  return { blocked: [...new Set(blocked)], warnings: [...new Set(warnings)] };
 }

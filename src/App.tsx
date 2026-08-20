@@ -95,6 +95,7 @@ import {
 import type { ProviderStatus, ProviderStatusMap } from "./features/ai/client";
 import {
   fetchPageContent, buildExtractionPrompt, extractProductJson, parseHtmlPage,
+  normalizeProductTitle, extractAliExpressItemId, assessAliExpressRisk,
 } from "./features/ai/importer";
 
 // Re-exported so existing consumers (e.g. the admin section importing from
@@ -108,7 +109,8 @@ export {
   DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
   callAIProvider, serverGenerate, serverTestProvider, serverOpenRouterCredits,
   serverProviderStatus, fetchPageContent, buildExtractionPrompt,
-  extractProductJson, parseHtmlPage,
+  extractProductJson, parseHtmlPage, normalizeProductTitle,
+  extractAliExpressItemId, assessAliExpressRisk,
 };
 
 

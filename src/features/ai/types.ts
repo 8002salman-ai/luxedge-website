@@ -68,6 +68,20 @@ export interface AIExtractedProduct {
   careInstructions: string;
   safetyNotes: string;
   confidence: Record<string, number>;
+  // Commerce-truth / supplier-evidence fields (AliExpress import).
+  // Optional so legacy extractions and test fixtures remain compatible.
+  supplierPlatform?: string;
+  supplierUrl?: string;
+  supplierItemId?: string;
+  shippingToUsa?: string;
+  deliveryRangeUsa?: string;
+  usStockEvidence?: string;
+  ordersCount?: string;
+  ratingValue?: string;
+  reviewCount?: string;
+  batteryElectrical?: string;
+  riskFlags?: string[];
+  evidence?: Record<string, 'VERIFIED' | 'INFERRED' | 'UNKNOWN'>;
 }
 
 export interface EnterpriseVariant {

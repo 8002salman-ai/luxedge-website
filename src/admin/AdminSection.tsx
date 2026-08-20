@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, normalizeProductTitle, extractAliExpressItemId, assessAliExpressRisk } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import ProductScout from './ProductScout';
@@ -3677,7 +3677,7 @@ function ConfidenceBadge({ score }: { score: number }) {
 }
 
 function AAIImport() {
-  const { setProducts, notify } = useApp();
+  const { products, setProducts, notify } = useApp();
   const navigate = useNavigate();
 
   type ImportSource = 'url'|'html'|'text'|'clipboard'|'image';
@@ -3833,16 +3833,41 @@ function AAIImport() {
   const handleSave = () => {
     if (!extracted) return;
     const ef = editField;
+    const title = ef.title || extracted.title;
+
+    // AliExpress safety gate — hard-restricted products are never imported.
+    const risk = assessAliExpressRisk({
+      title,
+      brand: ef.brand || extracted.brand,
+      riskFlags: extracted.riskFlags,
+      batteryElectrical: extracted.batteryElectrical,
+      safetyNotes: extracted.safetyNotes,
+    });
+    if (risk.blocked.length) {
+      notify(`Import blocked: ${risk.blocked.join(', ')} — cannot be customer-visible.`, 'error');
+      return;
+    }
+
+    // Duplicate protection — normalized title already exists in the catalog.
+    const normTitle = normalizeProductTitle(title);
+    const dup = products.find((p) => normalizeProductTitle(p.name) === normTitle);
+    if (dup) {
+      notify(`Duplicate detected — "${dup.name}" already exists. Not saved.`, 'error');
+      return;
+    }
+
     const product: any = {
       id: `ai-${Date.now()}`,
-      name: ef.title || extracted.title,
+      name: title,
       shortDesc: ef.shortDescription || extracted.shortDescription || '',
       description: ef.longDescription || extracted.longDescription || '',
       price: Number(ef.sellingPrice ?? extracted.sellingPrice) || 0,
-      originalPrice: Number(ef.comparePrice ?? extracted.comparePrice) || 0,
+      // Never invent a "was" price — keep only a real supplier compare price.
+      originalPrice: Number(ef.comparePrice ?? extracted.comparePrice) > 0 ? Number(ef.comparePrice ?? extracted.comparePrice) : 0,
       category: ef.category || extracted.category || 'Uncategorized',
-      stock: Number(ef.stock ?? extracted.stock) || 100,
-      images: selectedImgs.length ? selectedImgs : ['https://images.pexels.com/photos/5632371/pexels-photo-5632371.jpeg'],
+      // Never fabricate stock — 0/UNKNOWN unless the supplier actually showed it.
+      stock: Number(ef.stock ?? extracted.stock) || 0,
+      images: selectedImgs.length ? selectedImgs : [],
       rating: 0, reviews: 0, isActive: false,
       brand: ef.brand || extracted.brand || 'Luxedge',
       condition: 'New',
@@ -3850,10 +3875,16 @@ function AAIImport() {
       weight: ef.weight || extracted.weight || '',
       dimensions: ef.dimensions || extracted.dimensions || '',
       origin: ef.origin || extracted.origin || '',
-      freeShipping: true, shippingCost: '0', variants: [],
+      // Shipping/cost are NOT verified at import — never claim free shipping or a cost.
+      freeShipping: false, shippingCost: '', variants: [],
+      supplierSource: extracted.supplierPlatform || 'AliExpress',
+      supplierUrl: extracted.supplierUrl || urlInput,
+      supplierItemId: extracted.supplierItemId || extractAliExpressItemId(urlInput) || '',
+      riskFlags: [...new Set([...(extracted.riskFlags || []), ...risk.warnings])],
     };
     setProducts(prev => [product, ...prev]);
-    notify(`"${product.name}" saved as Draft!`);
+    const riskNote = risk.warnings.length ? ` Risk flags: ${risk.warnings.join('; ')}.` : '';
+    notify(`"${product.name}" saved as Draft — source evidence attached, not customer-visible.${riskNote}`);
     setStep('done');
   };
 
