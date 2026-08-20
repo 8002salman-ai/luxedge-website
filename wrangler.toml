@@ -1,0 +1,13 @@
+# Wrangler configuration for the Luxedge Cloudflare staging Worker.
+#
+# The Worker (luxedge-cloudflare-staging) is deployed externally and serves both
+# the Vite SPA bundle and the /api/* functions. This file only carries the
+# identity info needed for secret/env management (e.g. `wrangler secret put`).
+# No `main` is declared because the deployable Worker source does not live in
+# this repository yet.
+name = "luxedge-cloudflare-staging"
+account_id = "f542683e97458480452b0b8ef37a898a"
+
+# The staging Worker runs on the Cloudflare runtime; Vercel-style Node APIs are
+# adapted for it. Compatibility date is pinned to the current runtime line.
+compatibility_date = "2026-08-20"
