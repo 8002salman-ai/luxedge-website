@@ -145,6 +145,31 @@ describe('GET /api/fetch-page', () => {
     expect(d[0].product_evidence_valid).toBe(false);
   });
 
+  it('accepts a real title suffixed with "- AliExpress 15" (not a generic shell)', async () => {
+    process.env.SCRAPE_DO_TOKEN = 'test-token';
+    // AliExpress appends "- AliExpress <n>" to real product titles — the
+    // suffix must be stripped before judging genericity, not treated as a shell.
+    vi.stubGlobal('fetch', (async () => new Response(
+      '<html><head><meta property="og:title" content="Cat Toy - AliExpress 15" /><meta property="og:image" content="https://ae-pic-a1.aliexpress-media.com/kf/S103349e589ed4ddc94e2ad3777c99062G.png" /></head><body>desc</body></html>',
+      { status: 200 },
+    )) as typeof fetch);
+    const c = makeRes();
+    await handler(req('/api/fetch-page?url=' + encodeURIComponent('https://www.aliexpress.us/item/3256811704175460.html')), c.server);
+    expect(c.status).toBe(200);
+    expect(String(c.body)).toContain('Cat Toy - AliExpress 15');
+  });
+
+  it('still rejects a pure platform-title shell (no product name)', async () => {
+    process.env.SCRAPE_DO_TOKEN = 'test-token';
+    vi.stubGlobal('fetch', (async () => new Response(
+      '<html><head><meta property="og:title" content="AliExpress - Online Shopping" /><meta property="og:image" content="https://ae.aliexpress.com/logo.png" /></head><body>homepage</body></html>',
+      { status: 200 },
+    )) as typeof fetch);
+    const c = makeRes();
+    await handler(req('/api/fetch-page?url=' + encodeURIComponent('https://www.aliexpress.com/')), c.server);
+    expect(c.status).toBe(502);
+  });
+
   it('validates Product JSON-LD as evidence even without og:title', async () => {
     process.env.SCRAPE_DO_TOKEN = 'test-token';
     vi.stubGlobal('fetch', (async () => new Response(

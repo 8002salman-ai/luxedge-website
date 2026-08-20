@@ -183,8 +183,20 @@ function validateAliExpressEvidence(raw: string, requestedItemId: string): Evide
   }
 
   // Generic AliExpress shells (homepage/sign-in) carry no product title.
+  // NOTE: AliExpress suffixes real product titles with "- AliExpress 15"
+  // (live finding: "Cat Toy - AliExpress 15") and prefixes platform pages
+  // with "AliExpress - Online Shopping". Judge by content: a title is REAL
+  // when it contains at least one word that is not a platform/bot keyword.
   const ogTitle = matchMeta(raw, 'og:title').trim();
-  const genericTitle = ogTitle.length < 4 || /aliexpress|smarter shopping|better living|online shopping|^security/i.test(ogTitle);
+  const cleanedTitle = ogTitle.replace(/\s*[-–—|]\s*AliExpress\s*\d*$/i, '').trim();
+  const stopWords = new Set([
+    'aliexpress', 'smarter', 'shopping', 'better', 'living', 'online', 'security',
+    'check', 'sign', 'in', 'login', 'page', 'home', 'verification', 'captcha',
+    'unusual', 'traffic', 'robot', 'human', 'verify', 'moment', 'interruption',
+    'pardon', 'us', 'com', 'www', '15', 'n', 'the', 'and', 'for', 'with',
+  ]);
+  const words = cleanedTitle.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const genericTitle = cleanedTitle.length < 4 || !words.some((w) => !stopWords.has(w));
   ev.titleFound = !genericTitle;
 
   const ogImage = matchMeta(raw, 'og:image').trim();
