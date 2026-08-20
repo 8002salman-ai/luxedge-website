@@ -99,12 +99,11 @@ async function fetchViaServerProxy(url: string): Promise<string | null> {
       }
       const ct = r.headers.get('content-type') || '';
       const text = await r.text();
-    // The Vite dev server answers unknown /api routes with the SPA index.html,
-    // and serves the api/* source files themselves as JS modules (e.g.
-    // /api/fetch-page → the transformed fetch-page.ts). Neither is a fetched
-    // page: a real proxy success is plain text, never HTML or JS module code.
+    // The Vite dev server answers unknown /api routes with the SPA index HTML,
+    // and serves api/* source files as JS modules. Content-Type distinguishes
+    // those responses. A real /api/fetch-page success is deliberately returned
+    // as text/plain even though its body is the target page's complete HTML.
     if (ct.includes('text/html') || ct.includes('javascript') || ct.includes('application/json')) return null;
-    if (/<!doctype html/i.test(text)) return null;
     // Guard against the dev server leaking local source files (import statements).
     if (/^import\s+\{/.test(text.trim())) return null;
     // A Jina/bot error page is NOT the requested page — treat as a proxy

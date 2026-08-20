@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
-  extractProductJson, parseHtmlPage, buildExtractionPrompt, isProxyErrorText,
+  extractProductJson, parseHtmlPage, fetchPageContent, buildExtractionPrompt, isProxyErrorText,
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
@@ -105,6 +105,32 @@ describe('parseHtmlPage', () => {
     expect(images).toContain('https://ae01.alicdn.com/kf/Sabc123.jpg');
     expect(images).toContain('https://ae01.alicdn.com/kf/Sxyz789.png');
     expect(images).toContain('https://ae01.alicdn.com/kf/Skeep.webp');
+  });
+});
+
+describe('fetchPageContent server proxy', () => {
+  it('accepts complete doctype HTML returned as text/plain by /api/fetch-page', async () => {
+    const html = [
+      '<!doctype html><html><head>',
+      '<meta property="og:title" content="AliExpress Pet Travel Bottle" />',
+      '<meta property="og:description" content="Portable pet water bottle for travel." />',
+      '<meta property="og:image" content="https://ae01.alicdn.com/kf/test-product.jpg" />',
+      '</head><body><p>',
+      'Real product content with enough supplier evidence for the importer to accept the page. '.repeat(3),
+      '</p></body></html>',
+    ].join('');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(html, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    }));
+
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('AliExpress Pet Travel Bottle');
+      expect(parsed.images).toContain('https://ae01.alicdn.com/kf/test-product.jpg');
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });
 
