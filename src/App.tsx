@@ -99,7 +99,7 @@ import {
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput,
   buildStorageImageInputs, importProductImagesToStorage,
-  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi,
+  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence,
   extractAliExpressUrlEvidence, isEmptyExtraction,
 } from "./features/ai/importer";
 
@@ -118,7 +118,7 @@ export {
   extractAliExpressItemId, assessAliExpressRisk, deriveImportReadiness,
   findDuplicateProduct, buildImportImages, buildImportVariants,
   buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage,
-  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi,
+  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence,
   extractAliExpressUrlEvidence, isEmptyExtraction,
 };
 

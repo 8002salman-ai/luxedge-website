@@ -5,6 +5,7 @@ import {
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
   buildScrapedEvidenceProduct, mergeScrapedWithAi, isEmptyExtraction,
+  requireReviewEvidence,
 } from '../importer';
 
 describe('extractProductJson', () => {
@@ -414,5 +415,109 @@ describe('mergeScrapedWithAi', () => {
     const merged = mergeScrapedWithAi(scraped, ai);
     expect(merged.supplierUrl).toBe('https://www.aliexpress.us/item/3256805600005011.html');
     expect(merged.supplierItemId).toBe('3256805600005011');
+  });
+});
+
+describe('requireReviewEvidence (never open a blank Review)', () => {
+  const empty: any = { title: '', luxuryTitle: '', images: [], shortDescription: '', longDescription: '' };
+
+  it('blocks null evidence', () => {
+    expect(requireReviewEvidence(null, 'url').ok).toBe(false);
+  });
+
+  it('blocks URL import without a title', () => {
+    const p = { ...empty, images: ['https://x/y.jpg'] };
+    expect(requireReviewEvidence(p, 'url').ok).toBe(false);
+    expect(requireReviewEvidence(p, 'url').reason).toMatch(/title/i);
+  });
+
+  it('blocks URL import with title but zero images', () => {
+    const p = { ...empty, title: 'Dog Cooling Mat' };
+    const g = requireReviewEvidence(p, 'url');
+    expect(g.ok).toBe(false);
+    expect(g.reason).toMatch(/image/i);
+  });
+
+  it('blocks URL import whose images are not http URLs', () => {
+    const p = { ...empty, title: 'Cat Toy', images: ['/local/path.jpg', 'data:image/png;base64,xx'] };
+    expect(requireReviewEvidence(p, 'url').ok).toBe(false);
+  });
+
+  it('passes URL import with title + real image', () => {
+    const p = { ...empty, title: 'Cat Toy', images: ['https://ae-pic.example/1.jpg'] };
+    expect(requireReviewEvidence(p, 'url').ok).toBe(true);
+  });
+
+  it('allows paste/text import with a title but no images (owner adds them manually)', () => {
+    const p = { ...empty, title: 'Handmade Leash' };
+    expect(requireReviewEvidence(p, 'text').ok).toBe(true);
+  });
+});
+
+describe('fetchPageContent — AliExpress never falls back to public proxies', () => {
+  it('accepts a real doctype HTML response from the server scraper', async () => {
+    const { fetchPageContent } = await import('../importer');
+    const html = '<!doctype html><html><head><meta property="og:title" content="Real AliExpress Pet Product" /><meta property="og:description" content="A real supplier description." /><meta property="og:image" content="https://cdn.example.com/product.jpg" /></head><body><p>A real supplier description with enough factual product detail to represent a real supplier page and exceed the minimum content threshold without inventing any unsupported specifications.</p></body></html>';
+    const orig = globalThis.fetch;
+    (globalThis as any).fetch = async (input: any) => {
+      if (String(input).includes('/api/fetch-page')) {
+        return new Response(html, { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      }
+      throw new Error('public proxy should not be called after a valid server scrape');
+    };
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('Real AliExpress Pet Product');
+      expect(parsed.images).toEqual(['https://cdn.example.com/product.jpg']);
+      expect(parsed.description).toBe('A real supplier description.');
+    } finally {
+      (globalThis as any).fetch = orig;
+    }
+  });
+
+  it('accepts HTML-labeled supplier content but rejects an HTML SPA shell', async () => {
+    const { fetchPageContent } = await import('../importer');
+    const orig = globalThis.fetch;
+    (globalThis as any).fetch = async (input: any) => {
+      if (String(input).includes('/api/fetch-page')) {
+        return new Response('<!doctype html><html><head><meta property="og:title" content="Real Product" /><meta property="og:image" content="https://cdn.example.com/product.jpg" /></head><body>Product details with enough factual content to represent a real supplier product page and exceed the minimum parser threshold without inventing claims, stock, cost, shipping, or specifications.</body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+      }
+      throw new Error('public proxy should not be called after a valid server scrape');
+    };
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('Real Product');
+    } finally {
+      (globalThis as any).fetch = orig;
+    }
+  });
+
+  it('throws with server diagnostics and makes no public-proxy calls when the server scrape fails', async () => {
+    const { fetchPageContent } = await import('../importer');
+    const calls: string[] = [];
+    const mockFetch = async (input: any) => {
+      calls.push(String(input));
+      if (String(input).includes('/api/fetch-page')) {
+        return new Response(JSON.stringify({
+          error: 'Could not fetch page — no valid product evidence after 3 attempts',
+          diagnostics: [
+            { scraper_attempt: 1, http_status: 200, response_chars: 12000, product_title_found: false, product_image_found: false, jsonld_product_found: false, item_id_found: false, product_evidence_valid: false, scrape_mode: 'render' },
+            { scraper_attempt: 2, http_status: 200, response_chars: 31000, product_title_found: false, product_image_found: false, jsonld_product_found: false, item_id_found: false, product_evidence_valid: false, scrape_mode: 'super' },
+          ],
+        }), { status: 502, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error('public proxy should never be called for AliExpress');
+    };
+    const orig = globalThis.fetch;
+    (globalThis as any).fetch = mockFetch as any;
+    try {
+      await expect(fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'))
+        .rejects.toThrow(/blocked/);
+    } finally {
+      (globalThis as any).fetch = orig;
+    }
+    // Only the server proxy may be called (3 retries) — no Jina/allorigins/etc.
+    expect(calls.filter((c) => c.includes('/api/fetch-page')).length).toBe(3);
+    expect(calls.some((c) => c.includes('r.jina.ai') || c.includes('allorigins') || c.includes('codetabs') || c.includes('corsproxy') || c.includes('web.archive'))).toBe(false);
   });
 });

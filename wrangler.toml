@@ -1,0 +1,29 @@
+# Wrangler configuration — Luxedge Cloudflare deployment (reproducible from repo).
+#
+# Default target: PRODUCTION worker (luxedge-production) — serves the Vite SPA
+# from dist/ via the ASSETS binding and runs the api/* handlers through
+# worker/index.ts. `wrangler deploy` = production; `wrangler deploy --env
+# staging` = luxedge-cloudflare-staging.
+name = "luxedge-production"
+main = "worker/index.ts"
+account_id = "f542683e97458480452b0b8ef37a898a"
+compatibility_date = "2026-08-20"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+# Plain-text env (non-secret). Secrets are set with `wrangler secret put`.
+[vars]
+VERCEL_ENV = "production"
+DEPLOYMENT_ENV = "production"
+
+[env.staging]
+name = "luxedge-cloudflare-staging"
+
+[env.staging.vars]
+VERCEL_ENV = "preview"
+DEPLOYMENT_ENV = "staging"
