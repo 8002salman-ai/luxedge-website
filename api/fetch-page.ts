@@ -19,6 +19,16 @@ import { requireAdmin } from './_lib/auth.js';
 const MAX_REDIRECTS = 3;
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  try {
+    await handle(req, res);
+  } catch (e) {
+    // Never let an unexpected error surface as Vercel's opaque 502 page —
+    // always answer with a clean JSON error (no secrets, no stack traces).
+    sendJson(res, 502, { error: `Could not fetch page (${(e as Error).message || 'unexpected error'})` });
+  }
+}
+
+async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET') {
     sendJson(res, 405, { error: 'Method not allowed' });
     return;
