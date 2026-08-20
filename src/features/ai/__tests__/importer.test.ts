@@ -182,6 +182,18 @@ describe('AliExpress import persistence mapping', () => {
     expect(input.commerceReadiness).toBe('ECONOMICS_PENDING');
   });
 
+  it('uses a real short description when the long description is missing', () => {
+    const input = buildImportProductInput({
+      title: 'Test Dog Toy',
+      shortDescription: 'Durable rubber dog toy.',
+      price: 0,
+      url: 'https://www.aliexpress.com/item/10050091.html',
+      itemId: '10050091',
+    });
+    expect(input.description).toBe('Durable rubber dog toy.');
+    expect(input.shortDescription).toBe('Durable rubber dog toy.');
+  });
+
   it('never invents a compare price or stock', () => {
     const input = buildImportProductInput({
       title: 'Test',

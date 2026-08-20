@@ -949,8 +949,10 @@ export function buildImportProductInput(a: ImportProductArgs): ProductInput {
   return {
     name: a.title,
     shortTitle: (a.title || '').slice(0, 60),
-    shortDescription: a.shortDescription || undefined,
-    description: a.description || undefined,
+    shortDescription: a.shortDescription?.trim() || undefined,
+    // The catalog schema requires description. A real short description is a
+    // safe fallback when the supplier exposes only one description field.
+    description: a.description?.trim() || a.shortDescription?.trim() || undefined,
     features: (a.features || []).slice(0, 6),
     specifications: (a.specifications || {}) as Record<string, unknown>,
     brand: a.brand || 'Luxedge',
