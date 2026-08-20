@@ -8,7 +8,7 @@
 // 401/403. Defense in depth on top: body size cap, prompt length cap, model
 // allowlist regex, per-instance rate limit.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generate, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
+import { generateWithFallback, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -35,6 +35,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const provider = String(body.provider || '');
   const model = String(body.model || '');
   const prompt = String(body.prompt || '');
+  const fallback = typeof body.fallback === 'string' && body.fallback.trim() ? String(body.fallback) : undefined;
   const system = typeof body.system === 'string' && body.system.trim() ? String(body.system) : undefined;
 
   if (!provider || !isConfigured(provider)) {
@@ -50,8 +51,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
   try {
-    const text = await generate(provider, { prompt, model, system });
-    sendJson(res, 200, { text, provider, model });
+    const result = await generateWithFallback(provider, fallback, { prompt, model, system });
+    sendJson(res, 200, { text: result.text, provider: result.provider, model: result.model, fallbackUsed: result.fallbackUsed });
   } catch (e) {
     sendJson(res, 502, { error: (e as Error).message });
   }

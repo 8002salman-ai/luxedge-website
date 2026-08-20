@@ -66,6 +66,7 @@ export function isValidModel(model: string): boolean {
 
 export const PROVIDER_ENV: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
+  codex: 'CODEX_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
@@ -74,6 +75,7 @@ export const PROVIDER_ENV: Record<string, string> = {
 
 export const PROVIDER_NAMES: Record<string, string> = {
   openai: 'OpenAI',
+  codex: 'OpenAI Codex',
   deepseek: 'DeepSeek',
   anthropic: 'Anthropic Claude',
   openrouter: 'OpenRouter',
@@ -92,7 +94,12 @@ export function configuredProviders(): string[] {
 
 export function providerKey(providerId: string): string {
   const envName = PROVIDER_ENV[providerId];
-  return envName ? (process.env[envName] || '') : '';
+  if (!envName) return '';
+  const primary = process.env[envName] || '';
+  if (primary) return primary;
+  // Codex may authenticate via the Freebuff ChatGPT OAuth token instead of an API key.
+  if (providerId === 'codex') return process.env['CHATGPT_OAUTH_TOKEN'] || '';
+  return '';
 }
 
 function sanitizeError(providerId: string, status: number): string {
@@ -174,8 +181,76 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       if (typeof text !== 'string') throw new Error('Anthropic returned no text');
       return text;
     }
+    case 'codex': {
+      // OpenAI Codex uses the Responses API (OpenAI-compatible bearer auth).
+      const r = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model, instructions: system || undefined, input: prompt, temperature: 0.2, max_output_tokens: 4096 }),
+        signal,
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      let text: string | undefined;
+      if (typeof d?.output_text === 'string') text = d.output_text;
+      else if (Array.isArray(d?.output)) {
+        text = d.output.map((o: { content?: { text?: string }[] }) =>
+          Array.isArray(o?.content) ? o.content.map((c) => (typeof c?.text === 'string' ? c.text : '')).join('') : ''
+        ).join('');
+      }
+      if (typeof text !== 'string' || !text.trim()) throw new Error('Codex returned no text');
+      return text;
+    }
     default:
       throw new Error(`Unknown provider: ${providerId}`);
+  }
+}
+
+/** Generate with bounded retries + linear backoff (never infinite). */
+export async function generateWithRetry(providerId: string, opts: GenerateOptions, attempts = 2): Promise<string> {
+  let lastErr: Error | null = null;
+  for (let i = 0; i <= attempts; i++) {
+    try {
+      return await generate(providerId, opts);
+    } catch (e) {
+      lastErr = e as Error;
+      if (i < attempts) await new Promise((resolve) => setTimeout(resolve, 300 * (i + 1)));
+    }
+  }
+  throw lastErr || new Error('Generation failed');
+}
+
+export interface FallbackResult {
+  text: string;
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+}
+
+/**
+ * Generate with a primary provider, falling back to the configured fallback
+ * provider when the primary fails. Never silently succeeds — if both fail a
+ * combined error is thrown with the fallback provider's message.
+ */
+export async function generateWithFallback(
+  providerId: string,
+  fallbackProviderId: string | null | undefined,
+  opts: GenerateOptions,
+): Promise<FallbackResult> {
+  try {
+    const text = await generateWithRetry(providerId, opts);
+    return { text, provider: providerId, model: opts.model, fallbackUsed: false };
+  } catch (primaryErr) {
+    if (fallbackProviderId && fallbackProviderId !== providerId && isConfigured(fallbackProviderId)) {
+      try {
+        const fallbackModel = defaultModelFor(fallbackProviderId) || opts.model;
+        const text = await generateWithRetry(fallbackProviderId, { ...opts, model: fallbackModel });
+        return { text, provider: fallbackProviderId, model: fallbackModel, fallbackUsed: true };
+      } catch (fallbackErr) {
+        throw new Error(`${PROVIDER_NAMES[providerId]} failed and fallback ${PROVIDER_NAMES[fallbackProviderId]} also failed. Last error: ${(fallbackErr as Error).message}`);
+      }
+    }
+    throw primaryErr;
   }
 }
 
@@ -198,7 +273,8 @@ export async function testProvider(providerId: string, model?: string): Promise<
 export function defaultModelFor(providerId: string): string {
   switch (providerId) {
     case 'openai': return 'gpt-4o-mini';
-    case 'deepseek': return 'deepseek-chat';
+    case 'codex': return 'gpt-5-codex';
+    case 'deepseek': return 'deepseek-v4-flash';
     case 'anthropic': return 'claude-haiku-4-5-20251001';
     case 'gemini': return 'gemini-2.0-flash-exp';
     case 'openrouter': return 'google/gemini-2.0-flash-exp:free';

@@ -9,7 +9,7 @@
 // ============================================================================
 
 import type { AIProvider } from './types';
-import { resolveActiveProvider } from './providers';
+import { loadProviderSettings, resolveProviderChain } from './providers';
 import { getAccessToken } from '../../services/supabase';
 
 const API_BASE = '/api';
@@ -103,6 +103,18 @@ export async function serverGenerate(
   return data.text;
 }
 
+/** Generate with an optional fallback provider (server decides when to fail over). */
+export async function serverGenerateWithFallback(
+  prompt: string,
+  providerId: string,
+  model: string,
+  fallbackProviderId?: string,
+  system?: string
+): Promise<string> {
+  const data = await post<GenerateResponse>('/ai/generate', { provider: providerId, model, fallback: fallbackProviderId, prompt, system });
+  return data.text;
+}
+
 /** Connection test executed server-side so no key ever touches the browser. */
 export async function serverTestProvider(providerId: string, model?: string): Promise<string> {
   const data = await post<{ ok: boolean; message: string }>('/ai/test', { provider: providerId, model });
@@ -135,10 +147,11 @@ export async function callAIProvider(
   onProgress?: (m: string) => void,
   system?: string
 ): Promise<string> {
-  const provider = resolveActiveProvider(providers);
-  if (!provider) {
+  const settings = loadProviderSettings();
+  const { primary, fallback } = resolveProviderChain(providers, settings);
+  if (!primary) {
     throw new Error('No AI provider enabled. Enable one in AI Hub → AI Provider Configuration.');
   }
-  onProgress?.(`Using ${provider.name} (${provider.defaultModel}) via secure server proxy…`);
-  return serverGenerate(prompt, provider.id, provider.defaultModel, system);
+  onProgress?.(`Using ${primary.name} (${primary.defaultModel}) via secure server proxy…`);
+  return serverGenerateWithFallback(prompt, primary.id, primary.defaultModel, fallback?.id, system);
 }

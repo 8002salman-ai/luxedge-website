@@ -9,6 +9,8 @@ import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtract
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
+import { loadProviderSettings, saveProviderSettings } from '../features/ai/providers';
+import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RULES } from '../features/ai/pricing';
 import ProductScout from './ProductScout';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
@@ -780,8 +782,12 @@ function ASettings() {
     serverProviderStatus().then(setEnvStatus).catch(() => setEnvStatus({ backend: 'missing', providers: [] }));
   }, []);
 
-const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: false, profile: false, password: false, integrations: false });
+const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: false, api: true, store: false, profile: false, password: false, integrations: false });
   const toggle = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }));
+
+  const [pricingRules, setPricingRules] = useState(loadPricingRules());
+  const [providerSettings, setProviderSettings] = useState(loadProviderSettings());
+  const allProviders = loadAIProviders();
 
   const [profName, setProfName] = useState(user?.name || '');
   const [profEmail, setProfEmail] = useState(user?.email || '');
@@ -820,11 +826,77 @@ const [open, setOpen] = useState<Record<string, boolean>>({ api: true, store: fa
       {/* ── AI Providers ── */}
       <Accordion id="ai" title="AI Providers" icon={<Robot size={18} className="text-purple-600" />} borderClass="border-purple-300" open={open} toggle={toggle}>
         <div className="pt-5 space-y-4">
-          <p className="text-sm text-gray-500">For full AI provider management including API keys, model selection, credit tracking, and connection testing, visit the dedicated AI Hub.</p>
-          <button type="button" onClick={() => navigate('/admin/ai')}
-            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
-            <Robot size={16} /> Open AI Hub →
-          </button>
+          <p className="text-sm text-gray-500">Choose which provider runs AI product listing work first, and which one the system fails over to when the first fails. API keys are managed server-side only.</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className={L}>Default provider</label>
+              <select value={providerSettings.defaultProviderId} onChange={e => setProviderSettings(s => ({ ...s, defaultProviderId: e.target.value }))} className={I}>
+                {allProviders.filter(p => p.enabled).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={L}>Fallback provider</label>
+              <select value={providerSettings.fallbackProviderId || ''} onChange={e => setProviderSettings(s => ({ ...s, fallbackProviderId: e.target.value || null }))} className={I}>
+                <option value="">None</option>
+                {allProviders.filter(p => p.enabled && p.id !== providerSettings.defaultProviderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">Recommended: DeepSeek (deepseek-v4-flash) for fast research + Codex for complex reasoning/fallback. Neither provider key is ever stored or shown in the browser.</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button type="button" onClick={() => { saveProviderSettings(providerSettings); notify('Provider routing saved.'); }}
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+              <FloppyDisk size={16} /> Save routing
+            </button>
+            <button type="button" onClick={() => navigate('/admin/ai')}
+              className="px-5 py-2.5 border border-purple-300 text-purple-700 hover:bg-purple-50 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+              <Robot size={16} /> Open AI Hub (keys + test)
+            </button>
+          </div>
+        </div>
+      </Accordion>
+
+      {/* ── Pricing Rules ── */}
+      <Accordion id="pricing" title="Pricing Rules" icon={<CurrencyDollar size={18} className="text-emerald-600" />} borderClass="border-emerald-300" open={open} toggle={toggle}>
+        <div className="pt-5 space-y-4">
+          <p className="text-sm text-gray-500">Determines the suggested selling price for AI-imported products. Prices below the minimum margin are flagged for manual approval — never auto-published.</p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div>
+              <label className={L}>Payment fee %</label>
+              <input type="number" step="0.1" min="0" max="99" value={Math.round(pricingRules.paymentFeeRate * 1000) / 10}
+                onChange={e => setPricingRules(r => ({ ...r, paymentFeeRate: Number(e.target.value) / 100 }))} className={I} />
+            </div>
+            <div>
+              <label className={L}>Desired margin %</label>
+              <input type="number" step="1" min="0" max="99" value={Math.round(pricingRules.desiredMarginRate * 100)}
+                onChange={e => setPricingRules(r => ({ ...r, desiredMarginRate: Number(e.target.value) / 100 }))} className={I} />
+            </div>
+            <div>
+              <label className={L}>Min margin %</label>
+              <input type="number" step="1" min="0" max="99" value={Math.round(pricingRules.minMarginRate * 100)}
+                onChange={e => setPricingRules(r => ({ ...r, minMarginRate: Number(e.target.value) / 100 }))} className={I} />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input type="checkbox" checked={pricingRules.psychologicalPricing} onChange={e => setPricingRules(r => ({ ...r, psychologicalPricing: e.target.checked }))} />
+            Psychological pricing (round to .99)
+          </label>
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 space-y-1">
+            <p className="font-semibold">Example — supplier $10.00 + shipping $5.00:</p>
+            {(() => { const ex = computePricing(10, 5, pricingRules); return ex.suggestedPrice === null
+              ? <p>Landed cost ${ex.landedCost?.toFixed(2) ?? '—'} — pricing UNKNOWN (adjust rules so fee + margin &lt; 100%).</p>
+              : <p>Landed ${ex.landedCost?.toFixed(2)} → Suggested ${ex.suggestedPrice.toFixed(2)} · profit ${ex.grossProfit?.toFixed(2)} · margin {ex.grossMarginRate === null ? '—' : `${(ex.grossMarginRate * 100).toFixed(0)}%`}{ex.belowMinMargin ? ' · ⚠ below minimum margin' : ''}</p>; })()}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button type="button" onClick={() => { savePricingRules(pricingRules); notify('Pricing rules saved.'); }}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+              <FloppyDisk size={16} /> Save pricing rules
+            </button>
+            <button type="button" onClick={() => { setPricingRules({ ...DEFAULT_PRICING_RULES }); savePricingRules({ ...DEFAULT_PRICING_RULES }); notify('Pricing rules reset to defaults.'); }}
+              className="px-5 py-2.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-xl text-sm font-semibold transition-colors">
+              Reset to defaults
+            </button>
+          </div>
         </div>
       </Accordion>
 

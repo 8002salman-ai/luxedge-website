@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets } from '../providers';
+import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets, loadProviderSettings, saveProviderSettings, resolveProviderChain, DEFAULT_PROVIDER_SETTINGS } from '../providers';
 import type { AIProvider } from '../types';
 
 function memoryStorage(initial: Record<string, string> = {}): Pick<Storage, 'getItem' | 'setItem'> {
@@ -126,5 +126,47 @@ describe('resolveActiveProvider', () => {
   });
   it('returns null when none enabled', () => {
     expect(resolveActiveProvider(list.map((p) => ({ ...p, enabled: false })))).toBeNull();
+  });
+});
+
+describe('provider routing settings', () => {
+  it('defaults to DeepSeek primary + Codex fallback', () => {
+    expect(DEFAULT_PROVIDER_SETTINGS.defaultProviderId).toBe('deepseek');
+    expect(DEFAULT_PROVIDER_SETTINGS.fallbackProviderId).toBe('codex');
+    expect(loadProviderSettings(memoryStorage({}))).toEqual(DEFAULT_PROVIDER_SETTINGS);
+  });
+
+  it('round-trips default/fallback and treats empty fallback as null', () => {
+    const s = memoryStorage({});
+    saveProviderSettings({ defaultProviderId: 'codex', fallbackProviderId: '' }, s);
+    expect(loadProviderSettings(s)).toEqual({ defaultProviderId: 'codex', fallbackProviderId: null });
+  });
+
+  it('recovers from corrupt storage', () => {
+    expect(loadProviderSettings(memoryStorage({ luxedge_ai_provider_settings: '{{{nope' }))).toEqual(DEFAULT_PROVIDER_SETTINGS);
+  });
+
+  const providers: AIProvider[] = [
+    { id: 'deepseek', name: 'DeepSeek', models: [], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
+    { id: 'codex', name: 'Codex', models: [], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
+    { id: 'openai', name: 'OpenAI', models: [], defaultModel: 'gpt-4o-mini', enabled: false, isDefault: false },
+  ];
+
+  it('resolves the configured primary and fallback', () => {
+    const chain = resolveProviderChain(providers, { defaultProviderId: 'deepseek', fallbackProviderId: 'codex' });
+    expect(chain.primary?.id).toBe('deepseek');
+    expect(chain.fallback?.id).toBe('codex');
+  });
+
+  it('ignores a fallback that equals the primary', () => {
+    const chain = resolveProviderChain(providers, { defaultProviderId: 'deepseek', fallbackProviderId: 'deepseek' });
+    expect(chain.primary?.id).toBe('deepseek');
+    expect(chain.fallback).toBeNull();
+  });
+
+  it('never selects a disabled provider as primary or fallback', () => {
+    const chain = resolveProviderChain(providers, { defaultProviderId: 'openai', fallbackProviderId: 'openai' });
+    expect(chain.primary?.id).not.toBe('openai');
+    expect(chain.fallback?.id).not.toBe('openai');
   });
 });

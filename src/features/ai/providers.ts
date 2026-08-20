@@ -14,7 +14,8 @@ import type { AIProvider } from './types';
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
   { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'gpt-4o-mini'], defaultModel: 'google/gemini-2.0-flash-exp:free', enabled: true, isDefault: false },
   { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', enabled: true, isDefault: false },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
+  { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
   { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: true },
   { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
 ];
@@ -63,6 +64,59 @@ export function resolveActiveProvider(providers: AIProvider[]): AIProvider | nul
   const active = providers.filter((p) => p.enabled);
   if (!active.length) return null;
   return active.find((p) => p.isDefault) || active[0];
+}
+
+// ---------------------------------------------------------------------------
+// Provider routing settings (default + fallback). Keys are never stored here.
+// ---------------------------------------------------------------------------
+
+export interface AIProviderSettings {
+  defaultProviderId: string;
+  fallbackProviderId: string | null;
+}
+
+export const DEFAULT_PROVIDER_SETTINGS: AIProviderSettings = {
+  defaultProviderId: 'deepseek',
+  fallbackProviderId: 'codex',
+};
+
+const PROVIDER_SETTINGS_KEY = 'luxedge_ai_provider_settings';
+
+/** Load the default/fallback routing settings (no secrets). */
+export function loadProviderSettings(storage?: Pick<Storage, 'getItem'>): AIProviderSettings {
+  try {
+    const raw = (storage || (typeof window !== 'undefined' ? window.localStorage : null))?.getItem(PROVIDER_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_PROVIDER_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<AIProviderSettings>;
+    return {
+      defaultProviderId: typeof parsed.defaultProviderId === 'string' && parsed.defaultProviderId ? parsed.defaultProviderId : DEFAULT_PROVIDER_SETTINGS.defaultProviderId,
+      fallbackProviderId: typeof parsed.fallbackProviderId === 'string' && parsed.fallbackProviderId ? parsed.fallbackProviderId : null,
+    };
+  } catch {
+    return { ...DEFAULT_PROVIDER_SETTINGS };
+  }
+}
+
+/** Persist the default/fallback routing settings (no secrets). */
+export function saveProviderSettings(settings: AIProviderSettings, storage?: Pick<Storage, 'setItem'>): void {
+  (storage || (typeof window !== 'undefined' ? window.localStorage : null))?.setItem(
+    PROVIDER_SETTINGS_KEY,
+    JSON.stringify({ defaultProviderId: settings.defaultProviderId, fallbackProviderId: settings.fallbackProviderId || null }),
+  );
+}
+
+/** Resolve the primary + fallback providers from the enabled list + routing settings. */
+export function resolveProviderChain(
+  providers: AIProvider[],
+  settings: AIProviderSettings,
+): { primary: AIProvider | null; fallback: AIProvider | null } {
+  const enabled = providers.filter((p) => p.enabled);
+  const find = (id: string | null) => (id ? enabled.find((p) => p.id === id) || null : null);
+  let primary = find(settings.defaultProviderId);
+  if (!primary) primary = enabled.find((p) => p.isDefault) || enabled[0] || null;
+  let fallback = find(settings.fallbackProviderId);
+  if (fallback && fallback.id === primary?.id) fallback = null;
+  return { primary, fallback };
 }
 
 export function isKnownProviderId(id: string): boolean {
