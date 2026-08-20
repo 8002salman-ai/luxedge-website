@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 import { sendJson, rateLimited, clientIp, readJsonBody } from './_lib/providers.js';
 import { validateFetchTarget } from './_lib/ssrf.js';
 import { requireAdmin } from './_lib/auth.js';
+import { supabaseServerHeaders } from './_lib/supabaseKeys.js';
 
 const DEFAULT_BUCKET = 'product-media';
 const MAX_IMAGES = 10;
@@ -84,12 +85,10 @@ async function downloadImage(url: string): Promise<{ bytes: Buffer; contentType:
 async function uploadImage(cfg: { url: string; serviceRole: string; bucket: string }, path: string, bytes: Buffer, contentType: string): Promise<string> {
   const res = await fetch(`${cfg.url}/storage/v1/object/${cfg.bucket}/${path}`, {
     method: 'POST',
-    headers: {
-      apikey: cfg.serviceRole,
-      Authorization: `Bearer ${cfg.serviceRole}`,
+    headers: supabaseServerHeaders(cfg.serviceRole, {
       'Content-Type': contentType,
       'x-upsert': 'true',
-    },
+    }),
     body: new Uint8Array(bytes),
     signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });

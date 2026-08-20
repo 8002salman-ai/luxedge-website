@@ -43,6 +43,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson } from './_lib/providers.js';
 import { verifyWebhookSignature, retrieveCheckoutSessionDetailed } from './_lib/stripe.js';
+import { supabaseServerHeaders } from './_lib/supabaseKeys.js';
 
 function serviceRole(): string {
   return (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -70,7 +71,7 @@ async function restFetch(table: string, query: string, init?: { method?: string;
   const key = serviceRole();
   if (!base || !key) return { ok: false, status: 503, data: { error: 'Database is not configured on this deployment.' } };
   try {
-    const headers: Record<string, string> = { apikey: key, Authorization: `Bearer ${key}` };
+    const headers: Record<string, string> = supabaseServerHeaders(key);
     const method = init?.method || 'GET';
     if (init?.body !== undefined) headers['Content-Type'] = 'application/json';
     if (init?.prefer) headers.Prefer = init.prefer;
@@ -98,7 +99,7 @@ async function rpcFetch(fn: string, body: Record<string, unknown>): Promise<{ ok
   try {
     const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
       method: 'POST',
-      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: supabaseServerHeaders(key, { 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     });
