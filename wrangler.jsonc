@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "luxedge-cloudflare",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.05 }
+  },
+  "env": {
+    "staging": {
+      "name": "luxedge-cloudflare-staging",
+      "vars": {
+        "DEPLOYMENT_ENV": "staging",
+        "VERCEL_ENV": "preview"
+      }
+    },
+    "production": {
+      "name": "luxedge-cloudflare-production",
+      "vars": {
+        "DEPLOYMENT_ENV": "production",
+        "VERCEL_ENV": "production"
+      }
+    }
+  }
+}
+

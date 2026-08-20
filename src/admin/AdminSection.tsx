@@ -4018,9 +4018,22 @@ function AAIImport() {
   const handleSave = async () => {
     if (!extracted || saving) return;
     const ef = editField;
-    const title = ef.title || extracted.title;
+    const title = String(ef.title || extracted.title || '').trim();
+    const shortDescription = String(ef.shortDescription || extracted.shortDescription || '').trim();
+    const description = String(ef.longDescription || extracted.longDescription || shortDescription).trim();
     const url = extracted.supplierUrl || urlInput;
     const itemId = extracted.supplierItemId || extractAliExpressItemId(urlInput) || null;
+
+    // The products table requires both identity and description. Never send a
+    // blank AI extraction to Supabase and surface a raw constraint error.
+    if (!title) {
+      notify('Cannot save yet: Product Title is required. This import returned images only; add a verified title or retry the source URL.', 'error');
+      return;
+    }
+    if (!description) {
+      notify('Cannot save yet: Short or Long Description is required. Add verified product details before saving the draft.', 'error');
+      return;
+    }
 
     // AliExpress safety gate — hard-restricted products are never imported.
     const risk = assessAliExpressRisk({
@@ -4057,8 +4070,8 @@ function AAIImport() {
       const finalRiskFlags = [...new Set([...(extracted.riskFlags || []), ...risk.warnings])];
       const created = await createProduct(buildImportProductInput({
         title,
-        shortDescription: ef.shortDescription || extracted.shortDescription || undefined,
-        description: ef.longDescription || extracted.longDescription || undefined,
+        shortDescription: shortDescription || undefined,
+        description,
         features: (extracted.features || []).slice(0, 6),
         specifications: extracted.specifications,
         brand: ef.brand || extracted.brand || 'Luxedge',

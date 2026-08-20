@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
-  extractProductJson, parseHtmlPage, buildExtractionPrompt, isProxyErrorText,
+  extractProductJson, parseHtmlPage, fetchPageContent, buildExtractionPrompt, isProxyErrorText,
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
@@ -108,6 +108,32 @@ describe('parseHtmlPage', () => {
   });
 });
 
+describe('fetchPageContent server proxy', () => {
+  it('accepts complete doctype HTML returned as text/plain by /api/fetch-page', async () => {
+    const html = [
+      '<!doctype html><html><head>',
+      '<meta property="og:title" content="AliExpress Pet Travel Bottle" />',
+      '<meta property="og:description" content="Portable pet water bottle for travel." />',
+      '<meta property="og:image" content="https://ae01.alicdn.com/kf/test-product.jpg" />',
+      '</head><body><p>',
+      'Real product content with enough supplier evidence for the importer to accept the page. '.repeat(3),
+      '</p></body></html>',
+    ].join('');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(html, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    }));
+
+    try {
+      const parsed = JSON.parse(await fetchPageContent('https://www.aliexpress.us/item/3256805600005011.html'));
+      expect(parsed.title).toBe('AliExpress Pet Travel Bottle');
+      expect(parsed.images).toContain('https://ae01.alicdn.com/kf/test-product.jpg');
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+});
+
 describe('buildExtractionPrompt', () => {
   it('includes the content and instructs against inventing facts', () => {
     const prompt = buildExtractionPrompt('The bed is 40 inches wide.', 'text');
@@ -154,6 +180,18 @@ describe('AliExpress import persistence mapping', () => {
     expect(input.supplierSource).toBe('AliExpress');
     expect(input.freeShipping).toBe(false);
     expect(input.commerceReadiness).toBe('ECONOMICS_PENDING');
+  });
+
+  it('uses a real short description when the long description is missing', () => {
+    const input = buildImportProductInput({
+      title: 'Test Dog Toy',
+      shortDescription: 'Durable rubber dog toy.',
+      price: 0,
+      url: 'https://www.aliexpress.com/item/10050091.html',
+      itemId: '10050091',
+    });
+    expect(input.description).toBe('Durable rubber dog toy.');
+    expect(input.shortDescription).toBe('Durable rubber dog toy.');
   });
 
   it('never invents a compare price or stock', () => {

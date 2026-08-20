@@ -14,6 +14,7 @@ import { sendJson, readJsonBody, rateLimited, clientIp } from './_lib/providers.
 import { requireAdmin } from './_lib/auth.js';
 import { computeCheckoutTotals, validateCheckoutRequest, buildStripeLineItems, appBaseUrl, type CheckoutDataLoader } from './_lib/checkout.js';
 import { stripeConfigured, createCheckoutSession, retrieveCheckoutSession, safeSessionSummary } from './_lib/stripe.js';
+import { supabaseServerHeaders } from './_lib/supabaseKeys.js';
 
 interface ServerProductRow {
   id: string;
@@ -40,7 +41,7 @@ async function restFetch(table: string, query: string, key: string): Promise<{ o
   if (!base || !key) return { ok: false, status: 503, data: { error: 'Database is not configured on this deployment.' } };
   try {
     const res = await fetch(`${base}/rest/v1/${table}${query}`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      headers: supabaseServerHeaders(key),
       signal: AbortSignal.timeout(15_000),
     });
     const text = await res.text();
@@ -60,7 +61,7 @@ async function rpcFetch(fn: string, body: Record<string, unknown>, key: string):
   try {
     const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
       method: 'POST',
-      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: supabaseServerHeaders(key, { 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     });
