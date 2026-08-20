@@ -1470,7 +1470,6 @@ function HomePage() {
   const homepageVisualProducts = featured.filter((p) => !/(collar|leash|shoes|apparel|shirt|bowl|nest|flying disc|cooling)/i.test(p.name));
   const topPicks = homepageVisualProducts.filter(p => p.featured);
   const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
-  const trendingNow = homepageVisualProducts.filter(p => p.trending);
   const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
   const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
   const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
@@ -1653,20 +1652,6 @@ function HomePage() {
                 <Reveal delay={60}>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
                     {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
-
-          {/* Trending Now — real trending flag (admin merchandising decision) */}
-          {trendingNow.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Popular" title="Trending Now" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-                    {trendingNow.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>

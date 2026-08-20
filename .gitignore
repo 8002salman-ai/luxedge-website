@@ -37,3 +37,7 @@ Thumbs.db
 
 # Supabase CLI temp
 supabase/.temp/
+
+# Credentials — never commit (tokens, service keys, credential caches)
+.git-credentials
+scripts/seed-premium-direct.mjs
