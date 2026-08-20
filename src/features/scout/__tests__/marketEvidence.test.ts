@@ -1,0 +1,844 @@
+// ============================================================================
+// LUXEDGE V2 — PHASE 4D MARKET EVIDENCE UPGRADE TESTS
+//
+// Covers: exact-product-page selection (diversity + caps), the evidence pack
+// builder (fetch only selected pages, honest counts), the evidence-quality
+// gate (pass/fail with exact missing reasons, configurable thresholds), the
+// engine gating DeepSeek OFF on thin packs, extracts raising the deterministic
+// score, persisted evidence metadata, and the no-op MarketDemandAdapter.
+// ============================================================================
+
+import { describe, it, expect, vi } from 'vitest';
+import type { DbAdapter } from '../../../services/db';
+import type { ComparablePriceEvidence, FetchedSourcePage, PageExtract } from '../types';
+import { extractPageFacts } from '../extract';
+import {
+  selectEvidencePages, selectEvidencePagesDetailed, buildMarketEvidencePack,
+  assessEvidenceQuality, countExtractEvidence, validateExactProduct,
+  mergeComparablePriceEvidence, emptyEvidenceCounts,
+  DEFAULT_EVIDENCE_QUALITY, type EvidenceCounts,
+} from '../marketEvidence';
+import { signalsFromExtracts } from '../market';
+import { NoopMarketDemandAdapter, collectDemandSignals, type MarketDemandAdapter } from '../marketDemand';
+import { runMarketIntelligenceJob, cjMarketContextFor } from '../engine';
+import { verifyMarketIntelligenceJob } from '../marketProvenance';
+
+// ---------------------------------------------------------------------------
+// Fake admin-JWT db adapter (mirrors RLS: only admin-token writes succeed)
+// ---------------------------------------------------------------------------
+class FakeDb implements DbAdapter {
+  mode = 'supabase' as const;
+  token: string | null = null;
+  rows = new Map<string, Record<string, unknown>[]>();
+  constructor() {
+    for (const t of ['agent_jobs', 'agent_runs', 'agent_logs']) this.rows.set(t, []);
+  }
+  private assertAdmin(): void {
+    const claims = this.token
+      ? (JSON.parse(Buffer.from(this.token.split('.')[1], 'base64url').toString()) as { app_metadata?: { role?: string } })
+      : null;
+    if (!claims || claims.app_metadata?.role !== 'admin') throw new Error('42501 row-level security violation');
+  }
+  async list<T>(table: string): Promise<T[]> { return [...(this.rows.get(table) || [])] as T[]; }
+  async get<T>(table: string, id: string): Promise<T | null> {
+    return ((this.rows.get(table) || []).find((r) => r.id === id) as T) || null;
+  }
+  async findFirst<T>(table: string, column: string, value: string): Promise<T | null> {
+    return ((this.rows.get(table) || []).find((r) => r[column] === value) as T) || null;
+  }
+  async insert<T extends { id: string }>(table: string, row: T): Promise<T> {
+    this.assertAdmin();
+    this.rows.get(table)?.push({ ...row });
+    return row;
+  }
+  async insertRaw<T>(table: string, row: T): Promise<T> {
+    this.assertAdmin();
+    this.rows.get(table)?.push({ ...(row as Record<string, unknown>) });
+    return row;
+  }
+  async update<T extends { id: string }>(table: string, id: string, patch: Partial<T>): Promise<T | null> {
+    return this.updateBy(table, 'id', id, patch);
+  }
+  async updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null> {
+    this.assertAdmin();
+    const list = this.rows.get(table) || [];
+    const idx = list.findIndex((r) => r[column] === value);
+    if (idx < 0) return null;
+    list[idx] = { ...list[idx], ...patch };
+    return list[idx] as T;
+  }
+  async remove(): Promise<void> { /* not used */ }
+  async testConnection() { return { ok: true, mode: 'supabase' as const, detail: 'fake' }; }
+}
+
+function adminToken(): string {
+  const payload = Buffer.from(JSON.stringify({ app_metadata: { role: 'admin' } })).toString('base64url');
+  return `header.${payload}.sig`;
+}
+
+function page(title: string, price: number | null, availability: 'available' | 'unavailable' | 'unknown', rating?: number): FetchedSourcePage {
+  return {
+    text: `${title}\n${price !== null ? `Price: $${price.toFixed(2)}` : ''}\n${availability === 'available' ? 'In Stock' : availability === 'unavailable' ? 'Out of Stock' : ''}\n${rating ? `${rating} out of 5 stars` : ''}\n$0.00 shipping\nShips in 3-5 days\nMade in USA`,
+    images: ['https://img.test/1.jpg'],
+  };
+}
+
+const productPages: string[] = [
+  'https://retailer1.com/product/dog-travel-bag',
+  'https://retailer2.com/products/cat-grooming-glove',
+  'https://manufacturer.com/product/senior-dog-ramp',
+  'https://retailer3.com/item/dog-water-bottle',
+  'https://retailer1.com/product/another-toy',
+  'https://retailer4.com/p/portable-pet-bowl',
+  'https://retailer2.com/products/pet-carrier',
+  'https://retailer5.com/dp/seat-cover',
+  'https://retailer6.com/gp/dog-bed',
+  'https://retailer7.com/product/food-storage',
+];
+
+// ---------------------------------------------------------------------------
+// Selection
+// ---------------------------------------------------------------------------
+
+describe('selectEvidencePages (Phase 4D)', () => {
+  it('prefers exact product pages and caps at maxPages (6-8)', () => {
+    const urls = [
+      'https://shop.com/category/dog-toys',
+      'https://shop.com/search?q=dog',
+      'https://shop.com/collections/dog',
+      'https://retailer1.com/product/a',
+      'https://retailer2.com/products/b',
+      'https://retailer3.com/item/c',
+      'https://retailer4.com/p/d',
+      'https://retailer5.com/dp/e',
+      'https://retailer6.com/gp/f',
+      'https://retailer7.com/product/g',
+      'https://retailer8.com/products/h',
+      'https://retailer9.com/item/i',
+      'https://retailer10.com/product/j',
+    ];
+    const selected = selectEvidencePages(urls, 8);
+    expect(selected).toHaveLength(8); // cap honored
+    // No category/search/collection pages survive.
+    expect(selected.some((u) => u.includes('/category/') || u.includes('/search?') || u.includes('/collections/'))).toBe(false);
+    // All are exact product-style pages.
+    expect(selected.every((u) => /(\/product[s]?\/|\/item(s)?\/|\/p\/|\/dp\/|\/gp\/)/.test(u))).toBe(true);
+  });
+
+  it('rejects retailer search/browse and listicle pages (live discovery lesson)', () => {
+    const urls = [
+      'https://www.amazon.com/dog-toys/s?k=dog+toys',            // Amazon search
+      'https://www.amazon.com/dogs-toys-gifts-games-plush/b?node=2975413011', // Amazon browse
+      'https://www.chewy.com/b/toys-315',                         // Chewy browse
+      'https://www.target.com/c/dog-toys-supplies-pets/-/N-5xt3f',// Target browse
+      'https://www.mickeyspetsupplies.com/product-category/made-in-usa/dog-toys',
+      'https://wedogy.com/dog-toy-brands-in-the-usa',             // listicle
+      'https://www.catclaws.com/14-usa-cat-toys',                 // listicle
+      'https://shop.com/blog/best-dog-toys-2024',                 // blog ranking
+      'https://allamerican.org/lists/cat-toys',                   // listicle
+      'https://www.gocattoys.com/made-in-the-usa',                // brand collection page
+      'https://retailer1.com/product/real-dog-travel-bag',        // real product
+      'https://retailer2.com/dp/real-cat-carrier',                // real product
+    ];
+    const selected = selectEvidencePages(urls, 8);
+    expect(selected).toEqual([
+      'https://retailer1.com/product/real-dog-travel-bag',
+      'https://retailer2.com/dp/real-cat-carrier',
+    ]);
+  });
+
+  it('dedupes by canonical host+path and prefers domain diversity', () => {
+    const selected = selectEvidencePages([
+      'https://Retailer1.com/product/a',
+      'https://www.retailer1.com/product/a',   // same canonical
+      'https://retailer1.com/product/a?utm=x', // same path, query stripped
+      'https://retailer1.com/product/b',        // same host, different product — allowed
+      'https://retailer2.com/product/c',
+    ], 8);
+    const hosts = selected.map((u) => new URL(u).hostname.replace(/^www\./, '').toLowerCase());
+    expect(new Set(hosts).size).toBeGreaterThanOrEqual(2);
+    // Canonical duplicates removed.
+    expect(selected.filter((u) => u.includes('/product/a')).length).toBe(1);
+  });
+
+  it('round-robins across domains: one strong URL per domain first (Phase 4E test A)', () => {
+    const urls = [
+      'https://www.chewy.com/chewy-1/dp/1', 'https://www.chewy.com/chewy-2/dp/2',
+      'https://www.chewy.com/chewy-3/dp/3', 'https://www.chewy.com/chewy-4/dp/4',
+      'https://www.chewy.com/chewy-5/dp/5',
+      'https://www.target.com/p/target-1/-/A-1', 'https://www.target.com/p/target-2/-/A-2',
+      'https://www.walmart.com/ip/walmart-1/1', 'https://www.walmart.com/ip/walmart-2/2',
+    ];
+    const selected = selectEvidencePages(urls, 6);
+    const hosts = selected.map((u) => new URL(u).hostname.replace(/^www\./, '').toLowerCase());
+    // maxPages=6 with 3 domains ⇒ exactly 2 per domain, >=3 domains present.
+    expect(new Set(hosts).size).toBeGreaterThanOrEqual(3);
+    expect(selected).toHaveLength(6);
+    const count = (h: string) => hosts.filter((x) => x === h).length;
+    expect(count('chewy.com')).toBe(2);
+    expect(count('target.com')).toBe(2);
+    expect(count('walmart.com')).toBe(2);
+  });
+
+  it('enforces maxPerDomain so one retailer cannot occupy the whole pack (Phase 4E test B)', () => {
+    const urls = [
+      'https://www.chewy.com/c1/dp/1', 'https://www.chewy.com/c2/dp/2', 'https://www.chewy.com/c3/dp/3',
+      'https://www.chewy.com/c4/dp/4', 'https://www.chewy.com/c5/dp/5',
+      'https://www.target.com/p/t1/-/A-1', 'https://www.target.com/p/t2/-/A-2', 'https://www.target.com/p/t3/-/A-3',
+    ];
+    const { selected, rejected } = selectEvidencePagesDetailed(urls, 8, 2);
+    const hosts = selected.map((u) => new URL(u).hostname.replace(/^www\./, '').toLowerCase());
+    expect(hosts.filter((h) => h === 'chewy.com').length).toBeLessThanOrEqual(2);
+    expect(hosts.filter((h) => h === 'target.com').length).toBeLessThanOrEqual(2);
+    // Excess Chewy URLs are rejected with the exact quota reason.
+    expect(rejected.some((r) => r.reason.includes('domain quota reached'))).toBe(true);
+    expect(selected).toHaveLength(4); // 2 chewy + 2 target (walmart absent)
+  });
+
+  it('returns exact rejection reasons for category/search/listicle URLs (Phase 4E test H)', () => {
+    const { selected, rejected } = selectEvidencePagesDetailed([
+      'https://www.chewy.com/b/toys-315',                            // browse
+      'https://www.target.com/c/dog-toys-supplies-pets/-/N-5xt3f',   // browse
+      'https://allamerican.org/lists/cat-toys',                      // listicle
+      'https://retailer.com/product/real-thing',                     // product
+    ], 8);
+    expect(selected).toEqual(['https://retailer.com/product/real-thing']);
+    expect(rejected.map((r) => r.reason)).toEqual(expect.arrayContaining([
+      'retailer browse/search URL',
+      'listicle/collection/guide URL',
+    ]));
+  });
+
+  it('rejects the host-specific collection/search URLs found in the live proof (Phase 4E test H2)', () => {
+    const { selected, rejected } = selectEvidencePagesDetailed([
+      'https://www.chewy.com/deals/dog-travel-accessories-and-gear-3419374', // Chewy deals page
+      'https://www.chewy.com/f/mobile-dog-gear-dog-carriers-travel_c371_f1v262866', // Chewy filter page
+      'https://www.target.com/s/dog+travel',                                  // Target search
+      'https://www.walmart.com/c/kp/dog-travel-accessories',                  // Walmart category
+      'https://www.target.com/p/petami-dog-travel-bag/-/A-91561719',          // exact product
+    ], 8);
+    expect(selected).toEqual(['https://www.target.com/p/petami-dog-travel-bag/-/A-91561719']);
+    expect(rejected.map((r) => r.reason)).toEqual(expect.arrayContaining([
+      'retailer browse/search URL',
+      'retailer collection/filter URL (chewy /f/)',
+      'retailer search URL (target /s/)',
+      'retailer category URL (walmart /c/kp/)',
+    ]));
+  });
+
+  it('exact-product validation: listicle with a price string is NOT usable (Phase 4E test E)', () => {
+    // A URL that passes URL-level selection but whose CONTENT is a roundup:
+    // title + a single price-like string, no other product signals.
+    const check = validateExactProduct({
+      title: 'Best Cat Toys 2024', price: 19.99, images: [], availability: 'unknown',
+      shippingDays: null, freeShipping: false, rating: null, reviewCount: null, origin: null, sizes: null,
+      brand: null, model: null, mpn: null, sku: null, upc: null,
+    });
+    expect(check.usable).toBe(false);
+    expect(check.reason).toContain('1 of 2 required product signals');
+  });
+
+  it('exact-product validation: title + price + availability is usable (Phase 4E test F)', () => {
+    const check = validateExactProduct({
+      title: 'KONG Classic Dog Toy', price: 11.96, images: ['https://img/1.jpg'], availability: 'available',
+      shippingDays: { min: 3, max: 5 }, freeShipping: false, rating: 4.8, reviewCount: 1200, origin: 'USA', sizes: ['L'],
+      brand: 'KONG', model: 'Classic', mpn: null, sku: null, upc: null,
+    });
+    expect(check.usable).toBe(true);
+    expect(check.reason).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Evidence pack builder
+// ---------------------------------------------------------------------------
+
+describe('buildMarketEvidencePack (Phase 4D)', () => {
+  it('fetches only the selected exact pages and counts evidence honestly', async () => {
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      const i = productPages.indexOf(url);
+      if (i === -1) throw new Error('not selected');
+      return page(`Product ${i}`, 10 + i, 'available', i < 4 ? 4.5 : undefined);
+    });
+    const pack = await buildMarketEvidencePack({ urls: productPages, fetchPage, maxPages: 8 });
+    // Only the 8 strongest exact product pages were fetched (no category pages).
+    expect(fetchPage).toHaveBeenCalledTimes(8);
+    expect(pack.selectedUrls).toHaveLength(8);
+    expect(pack.extracts.length).toBe(8);
+    expect(pack.failedUrls).toHaveLength(0);
+    expect(pack.counts.usablePages).toBe(8);
+    expect(pack.counts.priceEvidenceCount).toBe(8);
+    expect(pack.counts.ratingEvidenceCount).toBe(4); // only 4 pages carry ratings
+    expect(pack.counts.availabilityEvidenceCount).toBe(8);
+    expect(pack.independentDomains).toBeGreaterThanOrEqual(3);
+  });
+
+  it('records fetched-but-unextractable pages honestly (no fabrication)', async () => {
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      if (url.includes('/product/blocked')) throw new Error('blocked');
+      return { text: 'garbage with no product title', images: [] };
+    });
+    const pack = await buildMarketEvidencePack({
+      urls: ['https://retailer1.com/product/blocked', 'https://retailer2.com/products/ok'],
+      fetchPage,
+    });
+    expect(pack.failedUrls).toHaveLength(2);
+    expect(pack.extracts).toHaveLength(0);
+    expect(pack.counts.failedExtracts).toBe(2);
+    expect(pack.counts.usablePages).toBe(0);
+    expect(pack.counts.priceEvidenceCount).toBe(0);
+  });
+
+  it('countExtractEvidence derives price/rating/availability from extracts only', () => {
+    const extracts = [
+      { title: 'A', extract: extractPageFacts(page('A', 12.99, 'available', 4.5)) },
+      { title: 'B', extract: extractPageFacts(page('B', null, 'unavailable')) },
+      { title: 'C', extract: extractPageFacts(page('C', 8.5, 'available')) },
+    ];
+    const c = countExtractEvidence(extracts);
+    expect(c.priceEvidenceCount).toBe(2);
+    expect(c.ratingEvidenceCount).toBe(1);
+    // Phase 4E: availabilityEvidenceCount = EXPLICIT availability (available OR
+    // unavailable); availableCount = positive availability only.
+    expect(c.availabilityEvidenceCount).toBe(3);
+    expect(c.availableCount).toBe(2);
+    expect(c.unavailableCount).toBe(1);
+    expect(c.usablePages).toBe(3);
+  });
+
+  it('UNKNOWN availability increments neither count (Phase 4E semantics)', () => {
+    const extracts = [
+      { title: 'A', extract: { ...extractPageFacts(page('A', 12.99, 'available')), availability: 'unknown' as const } },
+      { title: 'B', extract: extractPageFacts(page('B', 9.99, 'available')) },
+    ];
+    const c = countExtractEvidence(extracts);
+    expect(c.availabilityEvidenceCount).toBe(1); // only B has explicit availability
+    expect(c.availableCount).toBe(1);
+    expect(c.unavailableCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Evidence-quality gate
+// ---------------------------------------------------------------------------
+
+describe('assessEvidenceQuality (Phase 4D + 4E)', () => {
+  const good: EvidenceCounts = {
+    usablePages: 6, attemptedPages: 8, successfulExtracts: 6, failedExtracts: 2,
+    independentDomains: 4, priceEvidenceCount: 5, ratingEvidenceCount: 3,
+    reviewCountEvidenceCount: 2, totalObservedReviews: 340,
+    availabilityEvidenceCount: 5, availableCount: 4, unavailableCount: 1,
+    comparablePriceEvidenceCount: 0,
+  };
+
+  it('passes with sufficient evidence and reports the pack contents', () => {
+    const a = assessEvidenceQuality(good);
+    expect(a.pass).toBe(true);
+    expect(a.missing).toHaveLength(0);
+    expect(a.reasons.join(' ')).toContain('6 usable exact product pages');
+    expect(a.reasons.join(' ')).toContain('4 independent domains');
+  });
+
+  it('fails with EXACT missing evidence reasons (no free points)', () => {
+    const a = assessEvidenceQuality({ ...good, usablePages: 2, priceEvidenceCount: 1, availabilityEvidenceCount: 0, independentDomains: 1 });
+    expect(a.pass).toBe(false);
+    expect(a.missing).toContain('only 2 usable exact product pages (need >= 4)');
+    expect(a.missing).toContain('only 1 independent source domains (need >= 3)');
+    expect(a.missing).toContain('price evidence on 1 products (need >= 3)');
+    expect(a.missing).toContain('availability evidence on 0 products (need >= 3)');
+  });
+
+  it('respects configurable thresholds (conservative defaults, not business truth)', () => {
+    const strict = assessEvidenceQuality(good, { minPages: 8, minDomains: 5, minPriceEvidence: 6, minAvailabilityEvidence: 6, minRatingEvidence: 0 });
+    expect(strict.pass).toBe(false);
+    expect(strict.missing.length).toBeGreaterThan(0);
+    const loose = assessEvidenceQuality({ ...good, usablePages: 4, independentDomains: 3, priceEvidenceCount: 3, availabilityEvidenceCount: 3, ratingEvidenceCount: 0 });
+    expect(loose.pass).toBe(true); // DEFAULT thresholds exactly met
+    expect(DEFAULT_EVIDENCE_QUALITY).toEqual({ minPages: 4, minDomains: 3, minPriceEvidence: 3, minAvailabilityEvidence: 3, minRatingEvidence: 0 });
+  });
+
+  it('evidence gate passes with exactly 4 pages / 3 domains / 3 prices / 3 known availability (Phase 4E test I)', () => {
+    const counts: EvidenceCounts = {
+      usablePages: 4, attemptedPages: 4, successfulExtracts: 4, failedExtracts: 0,
+      independentDomains: 3, priceEvidenceCount: 3, ratingEvidenceCount: 1,
+      reviewCountEvidenceCount: 0, totalObservedReviews: 0,
+      availabilityEvidenceCount: 3, availableCount: 2, unavailableCount: 1,
+      comparablePriceEvidenceCount: 0,
+    };
+    const a = assessEvidenceQuality(counts);
+    expect(a.pass).toBe(true);
+    expect(a.missing).toHaveLength(0);
+  });
+
+  it('pack records fetched-but-not-exact-product pages in rejectedUrls with reason (Phase 4E test E2)', async () => {
+    const fetchPage = vi.fn(async () => ({ text: 'og:title Best Cat Toys 2024 Roundup\nPrice: $19.99', images: [] }));
+    const pack = await buildMarketEvidencePack({
+      urls: ['https://retailer1.com/product/listicle-content'],
+      fetchPage,
+    });
+    expect(pack.extracts).toHaveLength(0);
+    expect(pack.rejectedUrls.some((r) => r.reason.includes('required product signals'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Engine: quality gate before DeepSeek + persistence
+// ---------------------------------------------------------------------------
+
+describe('runMarketIntelligenceJob evidence gate (Phase 4D)', () => {
+  it('MARKET EVIDENCE INSUFFICIENT → DEEPSEEK CALL = NO (aiCall never invoked), aiUsed=false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const fetchPage = vi.fn(async () => page('Lone Product', 20, 'available', 4.5));
+    const result = await runMarketIntelligenceJob({
+      query: 'pet enrichment',
+      market: 'US',
+      db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://retailer1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage,
+      aiCall,
+    });
+    expect(aiCall).not.toHaveBeenCalled(); // gate blocked DeepSeek
+    expect(result.aiUsed).toBe(false);
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(result.evidence.evidenceQualityReasons.some((r) => r.includes('only 1 usable exact product pages'))).toBe(true);
+    // Persisted metadata reflects the thin pack.
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE');
+    const out = job?.output as Record<string, unknown> | undefined;
+    expect(out?.evidenceQuality).toBe('insufficient');
+    expect(out?.discoveredUrls).toBe(1);
+    expect(out?.selectedUrls).toEqual(['https://retailer1.com/product/only-one']);
+    expect(out?.priceEvidenceCount).toBe(1);
+    expect(out?.availabilityEvidenceCount).toBe(1);
+  });
+
+  it('sufficient evidence pack → DeepSeek called and persisted metadata recorded', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => JSON.stringify({
+      marketOpportunityScore: 72, trendConfidence: 'inferred', demandEvidence: 'evidence', competitionLevel: 'medium',
+      customerPainPoint: null, priceBand: { min: 5, max: 40 }, risks: [], recommendedSearchQueries: ['dog travel bag'],
+      reasoningSummary: 'grounded',
+    }));
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      const i = productPages.indexOf(url);
+      if (i === -1) throw new Error('not selected');
+      return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+    });
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories',
+      market: 'US',
+      db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage,
+      aiCall,
+    });
+    expect(aiCall).toHaveBeenCalledTimes(1); // gate passed → ONE DeepSeek call
+    expect(result.aiUsed).toBe(true);
+    expect(result.evidence.evidenceQuality).toBe('sufficient');
+    expect(result.evidence.independentDomains).toBeGreaterThanOrEqual(3);
+    // Phase 4E.1: sufficient evidence ⇒ qualification-eligible with a REAL score.
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(72);
+    expect(result.recommendedSearchQueries).toEqual(['dog travel bag']);
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE');
+    const out = job?.output as Record<string, unknown> | undefined;
+    expect(out?.evidenceQuality).toBe('sufficient');
+    expect(out?.qualificationEligible).toBe(true);
+    expect(out?.marketScore).toBe(72);
+    expect(out?.recommendedSearchQueries).toEqual(['dog travel bag']);
+    expect(out?.independentDomains).toBeGreaterThanOrEqual(3);
+    expect(out?.successfulExtracts).toBe(8);
+    expect(out?.aiUsed).toBe(true);
+  });
+
+  it('extracts raise the deterministic score (price/rating/availability participate)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Discovery-only vs with extracts: the discovery-only run has no price
+    // band, no ratings, no availability → strictly lower score.
+    const run = (extracts: { title: string; extract: PageExtract }[] | undefined, urls: string[]) =>
+      runMarketIntelligenceJob({
+        query: 'dog travel accessories',
+        market: 'US',
+        db,
+        discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls, duplicates: 0, filtered: 0 }),
+        extracts,
+        aiCall: async () => { throw new Error('not configured'); },
+      });
+    const richExtracts = Array.from({ length: 6 }, (_, i) => ({ title: `Product ${i}`, extract: extractPageFacts(page(`Product ${i}`, 9 + i, 'available', 4.5)) }));
+    const thin = await run(undefined, ['https://r1.com/product/a']);
+    const rich = await run(richExtracts, ['https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d', 'https://r5.com/product/e', 'https://r6.com/product/f']);
+    // Phase 4E.1: the deterministic DIAGNOSTIC score is strictly higher with
+    // price/rating/availability evidence — and it is the diagnostic score, NOT
+    // a qualifying market score.
+    expect(rich.diagnosticDeterministicScore ?? 0).toBeGreaterThan(thin.diagnosticDeterministicScore ?? 100);
+    expect(rich.evidence.priceEvidenceCount).toBe(6);
+    expect(rich.evidence.ratingEvidenceCount).toBe(6);
+    // Fail-closed: the thin (no-pack) run has NO qualifying market score.
+    expect(thin.marketScore).toBeNull();
+    expect(thin.qualificationEligible).toBe(false);
+    expect(thin.recommendedSearchQueries).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 4E.1 — MARKET GATE FAIL-CLOSED
+//
+// A diagnostic deterministic score must NEVER become a qualification-capable
+// Market Opportunity Score when the evidence-quality gate did not pass:
+//   * insufficient evidence ⇒ marketScore = null, qualificationEligible = false
+//   * recommendedSearchQueries (qualification) = [] — diagnostics stay separate
+//   * verifyMarketIntelligenceJob rejects insufficient jobs for qualification
+//   * the Product Scout arming decision (cjMarketContextFor) never arms CJ from
+//     an insufficient run, and a new run always starts from cleared state.
+// ---------------------------------------------------------------------------
+
+describe('Phase 4E.1 market gate fail-closed', () => {
+  it('A) 1 usable page, diagnostic 72, insufficient → marketScore null, qualificationEligible false', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const fetchPage = vi.fn(async () => page('Lone Product', 39.99, 'available', 4.5));
+    const result = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(result.diagnosticDeterministicScore).not.toBeNull();
+    expect(result.marketScore).toBeNull();
+    expect(result.qualificationEligible).toBe(false);
+    expect(aiCall).not.toHaveBeenCalled();
+  });
+
+  it('B/C) insufficient job persisted: marketScore null, qualification queries [], diagnostics separate; provenance rejects it', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const fetchPage = vi.fn(async () => page('Lone Product', 39.99, 'available', 4.5));
+    const result = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE') as Record<string, unknown>;
+    const out = (job.output || {}) as Record<string, unknown>;
+    expect(out.evidenceQuality).toBe('insufficient');
+    expect(out.qualificationEligible).toBe(false);
+    expect(out.marketScore).toBeNull();
+    expect(out.recommendedSearchQueries).toEqual([]);
+    // Diagnostic artifacts persisted SEPARATELY (debugging only).
+    expect(out.diagnosticDeterministicScore).toBe(result.diagnosticDeterministicScore);
+    expect(Array.isArray(out.diagnosticSuggestedQueries)).toBe(true);
+    // B) the same persisted job is rejected by market provenance.
+    expect(verifyMarketIntelligenceJob(job)).toBeNull();
+    // D) a client-supplied marketScore cannot rescue it either.
+    expect(verifyMarketIntelligenceJob(job, { marketScore: 95, evidenceFingerprint: String(out.evidenceFingerprint) })).toBeNull();
+    // H) the UI arming decision is never positive for this run.
+    expect(cjMarketContextFor(result)).toBeNull();
+  });
+
+  it('E) sufficient evidence + deterministic fallback (AI unavailable) → qualificationEligible true with the gated deterministic score', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall: async () => { throw new Error('not configured'); }, // deterministic fallback AFTER the gate passed
+    });
+    expect(result.evidence.evidenceQuality).toBe('sufficient');
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(result.diagnosticDeterministicScore);
+    expect(result.marketScore).not.toBeNull();
+  });
+
+  it('F) sufficient evidence + DeepSeek 68 → marketScore 68 (grounded AI score wins)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => JSON.stringify({
+      marketOpportunityScore: 68, trendConfidence: 'inferred', demandEvidence: 'evidence', competitionLevel: 'medium',
+      customerPainPoint: null, priceBand: { min: 5, max: 40 }, risks: [], recommendedSearchQueries: ['dog travel bag'],
+      reasoningSummary: 'grounded',
+    }));
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall,
+    });
+    expect(aiCall).toHaveBeenCalledTimes(1);
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(68);
+    const arm = cjMarketContextFor(result);
+    expect(arm).not.toBeNull();
+    expect(arm?.marketAnalysisId).toBe(result.jobId);
+    expect(arm?.hypothesis).toBe('dog travel bag');
+  });
+
+  it('G) a new insufficient/failed run never inherits previously armed CJ context (arming derives ONLY from the current run)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Passing run — armed.
+    const passing = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: productPages, duplicates: 0, filtered: 0 }),
+      fetchPage: async (url: string): Promise<FetchedSourcePage> => {
+        const i = productPages.indexOf(url);
+        if (i === -1) throw new Error('not selected');
+        return page(`Product ${i}`, 8 + i, 'available', i < 5 ? 4.5 : undefined);
+      },
+      aiCall: async () => JSON.stringify({ marketOpportunityScore: 68, trendConfidence: 'inferred', demandEvidence: 'e', competitionLevel: 'medium', customerPainPoint: null, priceBand: { min: 5, max: 40 }, risks: [], recommendedSearchQueries: ['dog travel bag'], reasoningSummary: 'g' }),
+    });
+    expect(cjMarketContextFor(passing)).not.toBeNull();
+    // New run — insufficient (single page). The ProductScout UI clears state at
+    // run start, and the decision derives ONLY from this run's result.
+    const failing = await runMarketIntelligenceJob({
+      query: 'pet enrichment', market: 'US', db,
+      discover: async () => ({ query: 'pet enrichment', rawLinks: [], urls: ['https://r1.com/product/only-one'], duplicates: 0, filtered: 0 }),
+      fetchPage: async () => page('Lone Product', 39.99, 'available', 4.5),
+      aiCall: async () => { throw new Error('should never be called'); },
+    });
+    expect(cjMarketContextFor(failing)).toBeNull();
+    // The UI would have cleared the armed ids at run start — assert the engine
+    // result itself never carries stale arming.
+    expect(failing.marketScore).toBeNull();
+    expect(failing.qualificationEligible).toBe(false);
+    expect(failing.recommendedSearchQueries).toEqual([]);
+  });
+
+  it('H) insufficient MI job can never mark CJ market-grounded, even with a high diagnostic score', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    // Construct a thin-but-strong-diagnostic run directly (what the live proof
+    // produced: 1 exact page, diagnostic 72).
+    const result = await runMarketIntelligenceJob({
+      query: 'dog travel accessories', market: 'US', db,
+      discover: async () => ({ query: 'dog travel accessories', rawLinks: [], urls: ['https://target.com/p/travel-bag/-/A-1'], duplicates: 0, filtered: 0 }),
+      fetchPage: async () => page('PetAmi Travel Bag', 39.99, 'available', 4.2),
+      aiCall: async () => { throw new Error('should never be called'); },
+    });
+    expect(result.diagnosticDeterministicScore ?? 0).toBeGreaterThanOrEqual(0);
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(cjMarketContextFor(result)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Demand adapter (future hook — no credentials in Phase 4D)
+// ---------------------------------------------------------------------------
+
+describe('MarketDemandAdapter (Phase 4D §9-§10, hardened Phase 4G §11 + 4G.1)', () => {
+  it('no-op adapter → structured not_configured result, zero signals, never blocks the pipeline', async () => {
+    const adapter = new NoopMarketDemandAdapter();
+    expect((await adapter.getStatus()).health).toBe('not_configured');
+    const result = await collectDemandSignals(adapter, { query: 'dog toys', market: 'US' });
+    expect(result.status).toBe('not_configured');
+    expect(result.signals).toEqual([]);
+  });
+
+  it('unconfigured/undefined adapter contributes nothing (structured not_configured)', async () => {
+    const a = await collectDemandSignals(undefined, { query: 'x', market: 'US' });
+    const b = await collectDemandSignals(null, { query: 'x', market: 'US' });
+    expect(a.status).toBe('not_configured');
+    expect(a.signals).toEqual([]);
+    expect(b.status).toBe('not_configured');
+  });
+
+  it('a failing CONFIGURED demand adapter reports explicit error status (Phase 4G §11 — never silently [])', async () => {
+    const failing: MarketDemandAdapter = {
+      provider: 'google',
+      getStatus: async () => ({ health: 'configured' }),
+      collect: async () => { throw new Error('down'); },
+    };
+    const result = await collectDemandSignals(failing, { query: 'x', market: 'US' });
+    expect(result.status).toBe('error');
+    expect(result.errorSafe).toBe('down');
+    expect(result.signals).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PHASE 4H.2 — BROWSER-VERIFIED MARKET-COMPARABLE PRICE EVIDENCE
+//
+// Three REAL retailer PDP prices were verified in a rendered browser for the
+// elevated dog sofa bed concept (Amazon $159.79, Macy's $259.99, Streamdale
+// $274.98). Brands/SKUs/sizes differ — they are MARKET-COMPARABLE price
+// evidence at the CONCEPT level, NEVER exact-SKU identity. These tests prove:
+//   * comparable observations merge into the concept price evidence without
+//     double-counting an extract price of the same PDP URL;
+//   * the gate legitimately counts concept-level comparable pricing toward
+//     minPriceEvidence (the gate is market-level; product-identity rules in
+//     identity.ts are untouched);
+//   * the price-range signal labels comparables honestly;
+//   * the engine persists provenance + never lets comparables affect exact-
+//     product identity evidence (identityEvidencePages / review aggregation).
+// ---------------------------------------------------------------------------
+
+describe('Phase 4H.2 market-comparable price evidence', () => {
+  const comparable = (over: Partial<ComparablePriceEvidence>): ComparablePriceEvidence => ({
+    evidenceType: 'MARKET_COMPARABLE_PRICE',
+    retailer: 'macys.com',
+    url: 'https://www.macys.com/shop/product/zeny-elevated-dog-sofa-bed?ID=27616252',
+    price: 259.99,
+    currency: 'USD',
+    brand: 'ZENY',
+    sku: '760518918098USA',
+    variant: 'Green / ONE SIZE (big & oversized)',
+    identityMatch: 'concept',
+    observedAt: '2026-08-18T00:00:00.000Z',
+    ...over,
+  });
+
+  it('merge: no comparables → counts unchanged (backward compatible)', () => {
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 2 };
+    const out = mergeComparablePriceEvidence(base, []);
+    expect(out).toEqual(base);
+    expect(out.comparablePriceEvidenceCount).toBe(0);
+  });
+
+  it('merge: distinct comparable URLs add to the concept price evidence; provenance count tracked', () => {
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 1 };
+    const out = mergeComparablePriceEvidence(base, [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', brand: 'Simplie Fun', sku: 'W487P189544', price: 274.98 }),
+    ]);
+    expect(out.comparablePriceEvidenceCount).toBe(2);
+    expect(out.priceEvidenceCount).toBe(3); // 1 extract + 2 distinct comparables
+  });
+
+  it('merge: an extract price of the SAME PDP URL is never double-counted (union)', () => {
+    const amazon = 'https://www.amazon.com/dp/B0FZ4MQGS5';
+    const base = { ...emptyEvidenceCounts(), priceEvidenceCount: 1 };
+    const out = mergeComparablePriceEvidence(base, [
+      comparable({ retailer: 'amazon.com', url: amazon, price: 159.79, identityMatch: 'exact' as const, sku: null, brand: null, variant: 'small/medium' }),
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ], [amazon]);
+    // Amazon appears in both extract prices and comparables — counted ONCE.
+    expect(out.comparablePriceEvidenceCount).toBe(3);
+    expect(out.priceEvidenceCount).toBe(3); // 1 (amazon extract) + 2 distinct
+  });
+
+  it('gate: comparable prices legitimately satisfy the market-level minPriceEvidence (concept price evidence)', () => {
+    const base: EvidenceCounts = {
+      usablePages: 4, attemptedPages: 4, successfulExtracts: 4, failedExtracts: 0,
+      independentDomains: 3, priceEvidenceCount: 1, ratingEvidenceCount: 1,
+      reviewCountEvidenceCount: 0, totalObservedReviews: 0,
+      availabilityEvidenceCount: 4, availableCount: 3, unavailableCount: 1,
+      comparablePriceEvidenceCount: 0,
+    };
+    // WITHOUT comparables: price evidence 1 < 3 → gate fails.
+    expect(assessEvidenceQuality(base).pass).toBe(false);
+    const merged = mergeComparablePriceEvidence(base, [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+      comparable({ retailer: 'amazon.com', url: 'https://www.amazon.com/dp/B0FZ4MQGS5', price: 159.79, identityMatch: 'exact' as const }),
+    ]);
+    expect(merged.priceEvidenceCount).toBe(4); // 1 extract + 3 distinct comparables
+    const gate = assessEvidenceQuality(merged);
+    expect(gate.pass).toBe(true);
+    expect(gate.reasons.join(' ')).toContain('price evidence on 4 products');
+  });
+
+  it('price-range signal: comparable prices join the concept band with honest labeling (never exact-identity claim)', () => {
+    const extract = { title: 'Elegant Rectangular Pet Bed', extract: extractPageFacts(page('Elegant Rectangular Pet Bed\nPrice: $159.79\nIn Stock', 159.79, 'available')) };
+    const signals = signalsFromExtracts([extract], '2026-08-18T00:00:00.000Z', [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ]);
+    const price = signals.find((s) => s.signalType === 'price_range');
+    expect(price).toBeTruthy();
+    expect(price!.summary).toContain('$159.79–$274.98');
+    expect(price!.summary).toContain('3 products');
+    expect(price!.summary).toContain('MARKET-COMPARABLE');
+    expect(price!.summary).toContain('NOT exact-SKU identity');
+    expect(price!.limitations).toContain('not proof of exact-SKU identity');
+  });
+
+  it('engine: comparable prices can lift the gate over minPriceEvidence; provenance persisted; identity evidence untouched', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => JSON.stringify({
+      marketOpportunityScore: 66, trendConfidence: 'inferred', demandEvidence: 'evidence', competitionLevel: 'medium',
+      customerPainPoint: null, priceBand: { min: 150, max: 280 }, risks: [], recommendedSearchQueries: ['elevated dog sofa bed'],
+      reasoningSummary: 'grounded',
+    }));
+    const urls = [
+      'https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d',
+    ];
+    // 4 exact pages / 4 domains / 4 availability, but only 2 extract prices →
+    // the gate fails on price WITHOUT the 2 comparable observations.
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      const i = urls.indexOf(url);
+      if (url.includes('/product/a') || url.includes('/product/b')) {
+        return page(`Product ${i}`, 160 + i, 'available', 4.5);
+      }
+      return page(`Product ${i}`, null, 'available');
+    });
+    const comparables = [
+      comparable({ url: 'https://www.macys.com/shop/product/a?ID=1' }),
+      comparable({ url: 'https://streamdalefurniture.com/products/b', retailer: 'streamdalefurniture.com', price: 274.98 }),
+    ];
+    const result = await runMarketIntelligenceJob({
+      query: 'elevated dog sofa bed', market: 'US', db,
+      discover: async () => ({ query: 'elevated dog sofa bed', rawLinks: [], urls, duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall, comparablePrices: comparables,
+    });
+    expect(aiCall).toHaveBeenCalledTimes(1); // gate passed WITH comparables
+    expect(result.qualificationEligible).toBe(true);
+    expect(result.marketScore).toBe(66);
+    expect(result.evidence.comparablePriceEvidenceCount).toBe(2);
+    expect(result.evidence.comparablePrices).toHaveLength(2);
+    expect(result.evidence.priceEvidenceCount).toBe(4); // 2 extract + 2 distinct comparables
+    // Provenance persisted on the durable job output.
+    const job = (db.rows.get('agent_jobs') || []).find((j) => j.type === 'MARKET_INTELLIGENCE');
+    const out = job?.output as Record<string, unknown> | undefined;
+    expect(out?.comparablePriceEvidenceCount).toBe(2);
+    expect(Array.isArray(out?.comparablePrices)).toBe(true);
+    expect((out?.comparablePrices as ComparablePriceEvidence[])[0].evidenceType).toBe('MARKET_COMPARABLE_PRICE');
+    expect((out?.comparablePrices as ComparablePriceEvidence[])[0].sku).toBe('760518918098USA');
+    // Comparable prices NEVER create exact-product identity evidence: the
+    // test pages carry ratings but NO identity fields, so the honest note
+    // reports 0 exact-identity groups — comparable prices added none.
+    expect(result.evidence.identityEvidencePages).toBe(0);
+    expect(result.evidence.reviewAggregationNote).toContain('0 exact-identity group(s)');
+    expect(result.evidence.reviewAggregationNote).toContain('4 concept/unknown page(s)');
+  });
+
+  it('engine: without comparables the same pack stays below the price gate (no silent free points)', async () => {
+    const db = new FakeDb();
+    db.token = adminToken();
+    const aiCall = vi.fn(async () => { throw new Error('should never be called'); });
+    const urls = [
+      'https://r1.com/product/a', 'https://r2.com/product/b', 'https://r3.com/product/c', 'https://r4.com/product/d',
+    ];
+    const fetchPage = vi.fn(async (url: string): Promise<FetchedSourcePage> => {
+      if (url.includes('/product/a') || url.includes('/product/b')) {
+        return page('Product', 160, 'available', 4.5);
+      }
+      return page('Product', null, 'available');
+    });
+    const result = await runMarketIntelligenceJob({
+      query: 'elevated dog sofa bed', market: 'US', db,
+      discover: async () => ({ query: 'elevated dog sofa bed', rawLinks: [], urls, duplicates: 0, filtered: 0 }),
+      fetchPage, aiCall,
+    });
+    expect(aiCall).not.toHaveBeenCalled(); // 2 extract prices < 3 → gate blocks DeepSeek
+    expect(result.evidence.evidenceQuality).toBe('insufficient');
+    expect(result.evidence.evidenceQualityReasons.some((r) => r.includes('price evidence on 2 products'))).toBe(true);
+    // No comparable evidence was supplied or invented.
+    expect(result.evidence.comparablePriceEvidenceCount).toBe(0);
+    expect(result.evidence.comparablePrices).toEqual([]);
+  });
+});

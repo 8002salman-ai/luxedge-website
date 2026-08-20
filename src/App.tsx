@@ -1,21 +1,25 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import CookieConsent from './components/CookieConsent';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
+import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
+import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
+import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
+import { createCheckoutSession, fetchCheckoutSessionStatus } from './services/checkout';
 import {
-  ShoppingBag, Menu, X, Search, User as UserIcon, LogOut, Package,
-  Shield, Star, Truck, RotateCcw, Zap, ArrowRight, Mail, Phone,
-  MapPin, Plus, Minus, Trash2, Lock, Loader2, CheckCircle, CreditCard,
-  LayoutDashboard, AlertTriangle, Eye,
-  ChevronDown, ChevronRight, ArrowLeft, Upload,
-  Globe, Clock, Send, Headphones, Sparkles,
-  PenLine, Calendar, Tag, BookOpen, EyeOff,
-  Moon, Heart, SlidersHorizontal,
-} from 'lucide-react';
+  ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
+  ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
+  MarkerPin01,  Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
+  LayoutGrid01, AlertTriangle, Eye,
+  ChevronDown, ChevronRight, ArrowLeft, Upload01,
+  Globe01, Clock, Send01, Headphones01, Stars01,
+  PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
+  Sliders01,
+} from '@untitledui/icons';
 
 // ============================================================================
 // TYPES
@@ -27,14 +31,20 @@ export interface ProductVariant {
 export interface Product {
   id: string; name: string; shortDesc: string; description: string; price: number;
   originalPrice: number; category: string; stock: number;
-  images: string[]; rating: number; reviews: number; isActive: boolean;
+  images: string[]; imageAlts: string[]; rating: number; reviews: number; isActive: boolean;
   brand: string; condition: string; tags: string[];
   weight: string; dimensions: string; origin: string;
   freeShipping: boolean; shippingCost: string;
   variants: ProductVariant[];
+  // Catalog Launch Phase — real merchandising data from the DB (never fake).
+  featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
+  stockStatus?: string; usInventory?: boolean;
+  seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
+  supplierSource?: string;
+  commerceReadiness?: string; sourceType?: string; inventorySource?: string;
 }
 interface CartItem { product: Product; quantity: number; }
-interface AppUser { id: string; email: string; password: string; name: string; role: 'admin' | 'buyer'; isBlocked?: boolean; joined?: string; }
+interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
 export interface Order {
   id: string; userId: string; userName: string; items: CartItem[];
   total: number; status: string; date: string; address?: string;
@@ -53,391 +63,135 @@ export interface BlogPost {
   date: string;
 }
 
+// Branded image fallback (cream + Luxedge wordmark) so a failed image never
+// shows a broken-image icon. Inline SVG — no external asset dependency.
+const LUXEDGE_IMAGE_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><rect width='100%' height='100%' fill='#F6F3EE'/><text x='50%' y='50%' font-family='Georgia, serif' font-size='64' letter-spacing='6' fill='#1A2440' text-anchor='middle' dominant-baseline='middle'>LUXEDGE</text></svg>"
+);
+
+/** Swap a broken image to the branded fallback once (never loops). */
+function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  img.onerror = null;
+  if (img.src !== LUXEDGE_IMAGE_FALLBACK) img.src = LUXEDGE_IMAGE_FALLBACK;
+}
+
 
 // ============================================================================
-// AI IMPORT ENGINE — TYPES & CONSTANTS
+// AI IMPORT ENGINE — extracted to src/features/ai/* (SECURITY: provider keys
+// are server-side only; the browser proxies through /api/ai/*)
 // ============================================================================
-export interface AIProvider {
-  id: string; name: string; models: string[]; defaultModel: string;
-  apiKey: string; enabled: boolean; isDefault: boolean;
-}
-export interface ImportHistoryEntry {
-  id: string; source: string; sourceType: 'url'|'html'|'text'|'clipboard'|'image';
-  date: string; provider: string; model: string; productTitle: string;
-  status: 'success'|'failed'|'partial'; importTime: number;
-}
-export interface AIExtractedProduct {
-  title: string; luxuryTitle: string; seoTitle: string; slug: string;
-  brand: string; manufacturer: string; category: string; subcategory: string;
-  collection: string; shortDescription: string; longDescription: string;
-  features: string[]; benefits: string[]; specifications: Record<string,string>;
-  packageIncludes: string[]; weight: string; dimensions: string; origin: string;
-  materials: string[]; colors: string[]; sizes: string[];
-  sku: string; barcode: string; hsCode: string;
-  stock: number; costPrice: number; sellingPrice: number; comparePrice: number;
-  shippingWeight: string; tags: string[]; seoKeywords: string[];
-  metaTitle: string; metaDescription: string; focusKeyword: string;
-  images: string[]; faqs: {q:string;a:string}[];
-  warranty: string; careInstructions: string; safetyNotes: string;
-  confidence: Record<string,number>;
-}
-export interface EnterpriseVariant {
-  id: string; combo: Record<string,string>;
-  sku: string; barcode: string; costPrice: number; sellingPrice: number;
-  comparePrice: number; inventory: number; weight: string; dimensions: string;
-  image: string; status: 'active'|'inactive'|'draft'; lowStockThreshold: number;
-}
-export interface VariantAttribute {
-  id: string; name: string; values: string[]; autoDetected: boolean;
-}
-export interface SEOData {
-  title: string; metaDescription: string; keywords: string[];
-  slug: string; canonicalUrl: string; focusKeyword: string;
-  secondaryKeywords: string[]; imageAlt: string; imageTitle: string; imageCaption: string;
-}
-export interface SocialSEO {
-  ogTitle: string; ogDescription: string; ogImage: string;
-  twitterCard: string; twitterTitle: string; twitterDescription: string;
-  pinterestDescription: string; pinterestImage: string;
-}
-export interface ContentData {
-  premiumTitle: string; luxuryDescription: string; shortDescription: string;
-  bulletFeatures: string[]; specifications: Record<string,string>;
-  benefits: string[]; useCases: string[]; careInstructions: string;
-  packageContents: string[]; warrantyText: string; shippingInfo: string;
-  focusKeyword: string;
-  faqs: { q: string; a: string }[];
-}
-export interface SEOScore {
-  overall: number; readability: number; keywordDensity: number;
-  metaLength: number; titleLength: number; missingAlt: number;
-  issues: { type: 'error'|'warning'|'good'; msg: string }[];
-}
-export interface StructuredSchemas {
-  product: string; breadcrumb: string; organization: string; website: string; faq: string;
-}
+import type {
+  AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
+  VariantAttribute, SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
+} from "./features/ai/types";
+import {
+  DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
+} from "./features/ai/providers";
+import {
+  callAIProvider, serverGenerate, serverTestProvider,
+  serverOpenRouterCredits, serverProviderStatus,
+} from "./features/ai/client";
+import type { ProviderStatus, ProviderStatusMap } from "./features/ai/client";
+import {
+  fetchPageContent, buildExtractionPrompt, extractProductJson, parseHtmlPage,
+  normalizeProductTitle, extractAliExpressItemId, assessAliExpressRisk,
+  deriveImportReadiness, findDuplicateProduct, buildImportImages,
+  buildImportVariants, buildImportProductInput,
+  buildStorageImageInputs, importProductImagesToStorage,
+  buildUrlEvidenceProduct, extractAliExpressUrlEvidence,
+} from "./features/ai/importer";
 
-const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id:'openrouter', name:'OpenRouter', models:['google/gemini-2.0-flash-exp:free','meta-llama/llama-3.1-8b-instruct:free','mistralai/mistral-7b-instruct:free','gpt-4o-mini'], defaultModel:'google/gemini-2.0-flash-exp:free', apiKey:'', enabled:true, isDefault:false },
-  { id:'gemini', name:'Google Gemini', models:['gemini-2.0-flash-exp','gemini-1.5-flash','gemini-1.5-pro'], defaultModel:'gemini-2.0-flash-exp', apiKey:'', enabled:true, isDefault:false },
-  { id:'deepseek', name:'DeepSeek', models:['deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-chat', apiKey:'', enabled:true, isDefault:false },
-  { id:'openai', name:'OpenAI', models:['gpt-4o-mini','gpt-4o','gpt-3.5-turbo'], defaultModel:'gpt-4o-mini', apiKey:'', enabled:true, isDefault:true },
-  { id:'anthropic', name:'Anthropic Claude', models:['claude-haiku-4-5-20251001','claude-sonnet-4-6','claude-opus-4-8'], defaultModel:'claude-haiku-4-5-20251001', apiKey:'', enabled:true, isDefault:false },
-];
-
-// ── AI provider API calls (provider-independent) ──────────────────────────
-async function _callOpenAI(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:4096})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`OpenAI error ${r.status}`);
-  return d.choices[0].message.content;
-}
-async function _callGemini(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${p.defaultModel}:generateContent?key=${p.apiKey}`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:4096}})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`Gemini error ${r.status}`);
-  return d.candidates[0].content.parts[0].text;
-}
-async function _callOpenRouter(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`,'HTTP-Referer':'https://luxedge.us','X-Title':'Luxedge Admin'},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`OpenRouter error ${r.status}`);
-  return d.choices[0].message.content;
-}
-async function _callAnthropic(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','x-api-key':p.apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-    body:JSON.stringify({model:p.defaultModel,max_tokens:4096,messages:[{role:'user',content:prompt}]})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`Anthropic error ${r.status}`);
-  return d.content[0].text;
-}
-async function _callDeepSeek(prompt: string, p: AIProvider): Promise<string> {
-  const r = await fetch('https://api.deepseek.com/chat/completions', {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${p.apiKey}`},
-    body:JSON.stringify({model:p.defaultModel,messages:[{role:'user',content:prompt}],temperature:0.2,max_tokens:4096})
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message||`DeepSeek error ${r.status}`);
-  return d.choices[0].message.content;
-}
-
-export async function callAIProvider(prompt: string, providers: AIProvider[], onProgress?: (m:string)=>void): Promise<string> {
-  const active = providers.filter(p => p.enabled && p.apiKey.trim());
-  if (!active.length) throw new Error('No AI provider configured. Go to Settings → AI Providers and add an API key.');
-  const provider = active.find(p => p.isDefault) || active[0];
-  onProgress?.(`Using ${provider.name} (${provider.defaultModel})…`);
-  if (provider.id === 'openai') return _callOpenAI(prompt, provider);
-  if (provider.id === 'gemini') return _callGemini(prompt, provider);
-  if (provider.id === 'openrouter') return _callOpenRouter(prompt, provider);
-  if (provider.id === 'anthropic') return _callAnthropic(prompt, provider);
-  if (provider.id === 'deepseek') return _callDeepSeek(prompt, provider);
-  throw new Error('Unknown AI provider');
-}
-
-export function loadAIProviders(): AIProvider[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem('luxedge_ai_providers') || 'null');
-    if (!Array.isArray(stored) || !stored.length) return DEFAULT_AI_PROVIDERS;
-    const merged = [...stored];
-    for (const def of DEFAULT_AI_PROVIDERS) {
-      if (!merged.some((p: AIProvider) => p.id === def.id)) merged.push(def);
-    }
-    return merged;
-  } catch { return DEFAULT_AI_PROVIDERS; }
-}
-
-function looksLikeBotPage(raw: string): boolean {
-  const lower = raw.toLowerCase();
-  return raw.length < 15000 && (
-    lower.includes('just a moment') || lower.includes('cf-challenge') || lower.includes('challenge-platform') ||
-    lower.includes('captcha') || lower.includes('unusual traffic') || lower.includes('access denied') ||
-    lower.includes('are you a robot') || lower.includes('verify you are human') || lower.includes('one more step') ||
-    lower.includes('security check') || lower.includes('pardon our interruption') || lower.includes('robot check')
-  );
-}
-
-export async function fetchPageContent(url: string, scrapedoKey?: string): Promise<string> {
-  const isAli = /aliexpress\.(com|us)/i.test(url);
-  const timeout = isAli ? 35000 : 25000;
-  const proxies: { label: string; url: string; timeout: number }[] = [
-    scrapedoKey?.trim() ? { label: 'scrape.do', url: `https://api.scrape.do/?token=${scrapedoKey.trim()}&url=${encodeURIComponent(url)}&render=true&countryCode=US`, timeout: 40000 } : { label: 'scrape.do', url: '', timeout: 40000 },
-    { label: 'Jina Reader', url: `https://r.jina.ai/${url}`, timeout },
-    { label: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, timeout },
-    { label: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeout },
-    { label: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(url)}`, timeout },
-    { label: 'Wayback', url: `https://web.archive.org/web/2024id_/${url}`, timeout },
-  ].filter(p => p.url);
-  let lastErr = '';
-  for (const { label, url: proxy, timeout: t } of proxies) {
-    try {
-      const r = await fetch(proxy, { signal: AbortSignal.timeout(t), redirect: 'follow' });
-      if (r.ok) {
-        const raw = await r.text();
-        if (raw.length < 200) { lastErr = `${label}: empty response`; continue; }
-        if (looksLikeBotPage(raw)) { lastErr = `${label}: bot check`; continue; }
-        if (label === 'corsproxy' && raw.toLowerCase().includes('fix cors errors')) { lastErr = `${label}: proxy homepage`; continue; }
-        const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
-        let text = ''; let imgs: string[] = [];
-        if (isHtml) {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(raw, 'text/html');
-          const ogT = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
-          const ogD = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-          const jsonLd = Array.from(doc.querySelectorAll('script[type="application/ld+json"]')).map(s => s.textContent || '').join('\n');
-          doc.querySelectorAll('script,style,nav,footer,aside').forEach(el => el.remove());
-          doc.querySelectorAll('img').forEach(img => {
-            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-            if (src.startsWith('http') && (src.includes('.jpg') || src.includes('.jpeg') || src.includes('.png') || src.includes('.webp'))) imgs.push(src);
-          });
-          const bodyText = (doc.body?.innerText || '').trim();
-          text = [ogT, ogD, jsonLd ? `JSON-LD:\n${jsonLd}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
-        } else {
-          text = raw.slice(0, 12000);
-          const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g; let m;
-          while ((m = re.exec(raw))) { if (m[1].includes('.jpg') || m[1].includes('.jpeg') || m[1].includes('.png') || m[1].includes('.webp')) imgs.push(m[1]); }
-        }
-        if (isAli && label === 'Jina Reader') {
-          const titleLine = raw.match(/^Title:\s*(.+)$/m);
-          if (!titleLine || !titleLine[1] || !titleLine[1].trim() || titleLine[1].trim().toLowerCase() === 'captcha interception') {
-            lastErr = `${label}: AliExpress shell/captcha (product loads via JS)`;
-            continue;
-          }
-        }
-        if (isAli && text.length < 400 && (text.includes('Download the AliExpress app') || text.includes("I'm shopping for"))) {
-          lastErr = `${label}: AliExpress shell page`;
-          continue;
-        }
-        if (text.trim().length < 100) { lastErr = `${label}: too little content`; continue; }
-        return JSON.stringify({ text, images: [...new Set(imgs)].slice(0, 30) });
-      } else {
-        lastErr = `${label}: HTTP ${r.status}`;
-      }
-    } catch (e: any) { lastErr = `${label}: ${e.message}`; }
-  }
-  if (isAli) {
-    throw new Error(`Could not load AliExpress product (${lastErr}). AliExpress blocks automated fetching. Add a FREE scrape.do token in AI Hub → Web Scraping Configuration, or paste the product HTML/text instead.`);
-  }
-  throw new Error(`Could not fetch page (${lastErr}). Try pasting HTML or text instead.`);
-}
-
-export function buildExtractionPrompt(rawContent: string, sourceType: string): string {
-  return `You are an expert e-commerce product data analyst for Luxedge, a premium US dropshipping store.
-
-Extract ALL product information from this ${sourceType} content and return ONLY a valid JSON object.
-
-CONTENT:
-${rawContent.slice(0, 10000)}
-
-Return this EXACT JSON structure (use empty string/array/0 if not found):
-{
-  "title": "exact product title",
-  "luxuryTitle": "premium rewritten title for luxury brand",
-  "seoTitle": "SEO optimized title with main keyword (60 chars max)",
-  "slug": "url-friendly-slug",
-  "brand": "brand name",
-  "manufacturer": "manufacturer",
-  "category": "best matching: Dog Supplies | Cat Supplies | Pet Beds | Pet Toys | Feeding & Water | Grooming | Pet Accessories",
-  "subcategory": "specific subcategory",
-  "collection": "product collection name",
-  "shortDescription": "2-3 sentence product summary",
-  "longDescription": "detailed 3-4 paragraph product description",
-  "features": ["feature 1", "feature 2", "feature 3"],
-  "benefits": ["benefit 1", "benefit 2"],
-  "specifications": {"spec name": "value"},
-  "packageIncludes": ["item 1", "item 2"],
-  "weight": "e.g. 0.5 lbs",
-  "dimensions": "e.g. 10 x 5 x 2 inches",
-  "origin": "country of origin",
-  "materials": ["material 1"],
-  "colors": ["color 1", "color 2"],
-  "sizes": ["S", "M", "L"],
-  "sku": "suggested SKU",
-  "barcode": "",
-  "hsCode": "",
-  "stock": 100,
-  "costPrice": 0,
-  "sellingPrice": 0,
-  "comparePrice": 0,
-  "shippingWeight": "",
-  "tags": ["tag1", "tag2", "tag3"],
-  "seoKeywords": ["keyword1", "keyword2"],
-  "metaTitle": "SEO meta title (60 chars)",
-  "metaDescription": "SEO meta description (160 chars)",
-  "focusKeyword": "primary SEO keyword",
-  "images": [],
-  "faqs": [{"q": "question?", "a": "answer"}],
-  "warranty": "warranty info",
-  "careInstructions": "care instructions",
-  "safetyNotes": "safety notes",
-  "confidence": {
-    "title": 95, "price": 80, "description": 85, "specifications": 70, "images": 60, "brand": 75, "category": 90, "tags": 80
-  }
-}
-
-Rules:
-- luxuryTitle: make it sound premium, e.g. "Orthopedic Memory Foam Dog Bed" → "Luxe Joint-Support Memory Foam Bed | LuxePaws"
-- sellingPrice: use actual price from content; if not found estimate market price
-- comparePrice: 20-30% higher than sellingPrice (to show "was" price)
-- costPrice: 40-50% of sellingPrice  
-- confidence: 0-100 how certain you are about each field
-- Return ONLY the JSON, absolutely no other text`;
-}
+// Re-exported so existing consumers (e.g. the admin section importing from
+// "../App") keep working without change.
+export type {
+  AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
+  VariantAttribute, SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
+  ProviderStatus, ProviderStatusMap,
+};
+export {
+  DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
+  callAIProvider, serverGenerate, serverTestProvider, serverOpenRouterCredits,
+  serverProviderStatus, fetchPageContent, buildExtractionPrompt,
+  extractProductJson, parseHtmlPage, normalizeProductTitle,
+  extractAliExpressItemId, assessAliExpressRisk, deriveImportReadiness,
+  findDuplicateProduct, buildImportImages, buildImportVariants,
+  buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage,
+  buildUrlEvidenceProduct, extractAliExpressUrlEvidence,
+};
 
 
 // ============================================================================
 // DATA
-// ============================================================================
-const DP: Omit<Product,'id'|'name'|'description'|'price'|'originalPrice'|'category'|'stock'|'images'|'rating'|'reviews'|'isActive'> = { shortDesc:'', brand:'Luxedge', condition:'New', tags:[], weight:'', dimensions:'', origin:'China', freeShipping:true, shippingCost:'0', variants:[] };
-const INIT_PRODUCTS: Product[] = [
-  { ...DP, id:'1', name:'Orthopedic Memory Foam Dog Bed', shortDesc:'Joint-supporting dog bed', description:'Orthopedic memory foam dog bed with a washable, removable cover. Supports joints and relieves pressure points so your dog sleeps deeply and wakes up refreshed.', price:49.99, originalPrice:89.99, category:'Pet Beds', stock:64, images:['https://upload.wikimedia.org/wikipedia/commons/f/f4/Dog_sleeping_in_a_dog_bed.JPG'], rating:4.9, reviews:1123, isActive:true, brand:'LuxePaws', weight:'4.2 lbs', tags:['dog bed','memory foam','orthopedic'], variants:[{id:'v1',color:'Gray',size:'Medium',price:49.99,salePrice:49.99,stock:30,sku:'PB-M-GY'},{id:'v2',color:'Gray',size:'Large',price:62.99,salePrice:62.99,stock:34,sku:'PB-L-GY'}] },
-  { ...DP, id:'2', name:'Interactive Cat Feather Toy', shortDesc:'Motion-activated cat teaser', description:'Motion-activated interactive feather toy that mimics prey movement. Keeps indoor cats active, entertained, and mentally stimulated for hours.', price:24.99, originalPrice:44.99, category:'Pet Toys', stock:132, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg'], rating:4.7, reviews:876, isActive:true, brand:'WhiskerWand', weight:'0.6 lbs', tags:['cat toy','interactive','feather'] },
-  { ...DP, id:'3', name:'Stainless Steel Pet Water Fountain', shortDesc:'Triple-filter fountain', description:'3-liter stainless steel pet water fountain with triple filtration and a quiet pump. Encourages pets to drink more fresh, filtered water every day.', price:34.99, originalPrice:59.99, category:'Feeding & Water', stock:76, images:['https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg'], rating:4.8, reviews:521, isActive:true, brand:'AquaPure', weight:'2.3 lbs', tags:['water fountain','hydration','stainless steel'] },
-  { ...DP, id:'4', name:'Adjustable No-Pull Dog Harness', shortDesc:'Reflective walking harness', description:'No-pull reflective dog harness with padded chest and fully adjustable straps. Ensures comfortable, secure walks for dogs of all sizes.', price:29.99, originalPrice:54.99, category:'Dog Supplies', stock:98, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Dog_in_a_harness.jpg/960px-Dog_in_a_harness.jpg'], rating:4.8, reviews:654, isActive:true, brand:'TrailMate', weight:'0.8 lbs', tags:['dog harness','walking','reflective'], variants:[{id:'v3',color:'Black',size:'Medium',price:29.99,salePrice:29.99,stock:50,sku:'DH-M-BK'},{id:'v4',color:'Black',size:'Large',price:32.99,salePrice:32.99,stock:48,sku:'DH-L-BK'}] },
-  { ...DP, id:'5', name:'Self-Cleaning Slicker Grooming Brush', shortDesc:'Deshedding grooming brush', description:'Self-cleaning slicker brush with retractable bristles for easy cleanup. Gently removes loose fur, tangles, and mats while massaging your pet\u2019s skin.', price:19.99, originalPrice:39.99, category:'Grooming', stock:210, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG'], rating:4.6, reviews:432, isActive:true, brand:'FurFresh', weight:'1.1 lbs', tags:['grooming','brush','deshedding'] },
-  { ...DP, id:'6', name:'Premium Cat Scratching Post', shortDesc:'Sturdy sisal scratch tower', description:'Premium sisal scratching post with a cozy perch and dangling toy. Satisfies your cat\u2019s natural scratching instinct while protecting your furniture.', price:45.99, originalPrice:79.99, category:'Cat Supplies', stock:57, images:['https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg'], rating:4.8, reviews:389, isActive:true, brand:'CatHaven', weight:'8.5 lbs', tags:['scratching post','sisal','cat furniture'] },
-  { ...DP, id:'7', name:'Slow Feeder Dog Bowl', shortDesc:'Anti-gulp puzzle bowl', description:'Non-slip slow feeder bowl with raised ridges that slows down fast eaters. Reduces bloating and improves digestion for happier mealtimes.', price:17.99, originalPrice:29.99, category:'Feeding & Water', stock:143, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg/960px-Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg'], rating:4.7, reviews:298, isActive:true, brand:'BowlWell', weight:'0.9 lbs', tags:['slow feeder','bowl','anti-gulp'] },
-  { ...DP, id:'8', name:'Portable Pet Travel Water Bottle', shortDesc:'Leak-proof one-hand dispenser', description:'Portable pet travel water bottle with a one-hand dispensing cup and leak-proof design. Perfect for walks, hikes, and road trips with your furry friend.', price:15.99, originalPrice:27.99, category:'Pet Accessories', stock:188, images:['https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600'], rating:4.6, reviews:245, isActive:true, brand:'TravelPaw', weight:'0.7 lbs', tags:['travel','water bottle','portable'] },
-  { ...DP, id:'9', name:'Durable Rope Dog Toy Set', shortDesc:'Chew & fetch rope toys', description:'Set of 3 durable cotton rope dog toys designed for chewing, tug-of-war, and fetch. Helps clean teeth and satisfies natural chewing instincts.', price:14.99, originalPrice:24.99, category:'Pet Toys', stock:201, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Maltipoo_with_rope_toy_%2895554%29.jpg/960px-Maltipoo_with_rope_toy_%2895554%29.jpg'], rating:4.7, reviews:512, isActive:true, brand:'PlayBone', weight:'0.5 lbs', tags:['rope toy','chew','fetch'] },
-  { ...DP, id:'10', name:'Cozy Calming Cat Bed', shortDesc:'Cuddler donut cat bed', description:'Cozy donut-shaped cat bed with a raised rim for security and warmth. Machine-washable plush design gives cats a calm, snug place to curl up.', price:32.99, originalPrice:54.99, category:'Pet Beds', stock:84, images:['https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg'], rating:4.9, reviews:734, isActive:true, brand:'SnugglePet', weight:'1.8 lbs', tags:['cat bed','calming','cuddler'] },
-  { ...DP, id:'11', name:'Automatic Pet Food Dispenser', shortDesc:'Programmable meal feeder', description:'Automatic pet food dispenser with programmable portions and a built-in voice recorder. Keeps your pet on a consistent feeding schedule even when you are away.', price:54.99, originalPrice:89.99, category:'Feeding & Water', stock:46, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG'], rating:4.7, reviews:318, isActive:true, brand:'SmartFeed', weight:'3.6 lbs', tags:['food dispenser','automatic','programmable'] },
-  { ...DP, id:'12', name:'Pet Car Seat Protector', shortDesc:'Waterproof car seat cover', description:'Waterproof, scratch-resistant pet car seat protector with a non-slip base and easy straps. Keeps your car clean from fur, dirt, and spills on every ride.', price:36.99, originalPrice:59.99, category:'Pet Accessories', stock:72, images:['https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg'], rating:4.6, reviews:276, isActive:true, brand:'RoadDog', weight:'2.1 lbs', tags:['car seat','protector','waterproof'] },
-  { ...DP, id:'13', name:'SonicGlow Electric Toothbrush', shortDesc:'Sonic toothbrush, 5 modes', description:'Sonic electric toothbrush with 5 cleaning modes, smart 2-minute timer, and 30-day battery on a single charge. Includes 4 DuPont brush heads and a travel case. IPX7 waterproof. A hygiene bestseller across AliExpress and Amazon.', price:26.99, originalPrice:54.99, category:'Wellness', stock:88, images:['https://images.pexels.com/photos/6621462/pexels-photo-6621462.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2456, isActive:true, brand:'SonicGlow', weight:'0.3 lbs', tags:['toothbrush','electric','oral care'], variants:[{id:'v13a',color:'White',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-WHT'},{id:'v13b',color:'Black',size:'One Size',price:26.99,salePrice:26.99,stock:44,sku:'SG-BLK'}] },
-  { ...DP, id:'14', name:'FlexCore Adjustable Dumbbell', shortDesc:'5-in-1 adjustable dumbbell', description:'Space-saving adjustable dumbbell that replaces 5 sets of weights (5–25 lbs) with a quick-select dial. Anti-slip handle and durable steel plates. Perfect for home gyms. Trending fitness equipment on Amazon Movers & Shakers.', price:64.99, originalPrice:119.99, category:'Wellness', stock:42, images:['https://images.pexels.com/photos/4239013/pexels-photo-4239013.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:1367, isActive:true, brand:'FlexCore', weight:'25 lbs', tags:['dumbbell','home gym','fitness'] },
-  { ...DP, id:'15', name:'AuroraCharge 3-in-1 Wireless Station', shortDesc:'3-in-1 wireless charger', description:'Foldable 15W wireless charging station for phone, earbuds, and smartwatch simultaneously. MagSafe-compatible, fast-charge, and travel-friendly design. Includes 20W adapter. A must-have desk gadget trending on Amazon.', price:33.99, originalPrice:59.99, category:'Tech & Gadgets', stock:130, images:['https://images.pexels.com/photos/1092644/pexels-photo-1092644.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2078, isActive:true, brand:'AuroraCharge', weight:'0.5 lbs', tags:['wireless charger','magsafe','desk'] },
-  { ...DP, id:'16', name:'ZenMist Ultrasonic Aroma Diffuser', shortDesc:'300ml essential-oil diffuser', description:'300ml ultrasonic essential-oil diffuser with 7-color LED mood lighting, whisper-quiet mist, and auto shut-off. Covers rooms up to 320 sq ft. Perfect for relaxation and better sleep. A top home-wellness seller on AliExpress.', price:21.99, originalPrice:39.99, category:'Home & Living', stock:156, images:['https://images.pexels.com/photos/3735218/pexels-photo-3735218.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.8, reviews:3945, isActive:true, brand:'ZenMist', weight:'0.8 lbs', tags:['diffuser','aromatherapy','home'] },
-  { ...DP, id:'17', name:'CoreFlex Non-Slip Yoga Mat', shortDesc:'6mm TPE yoga mat', description:'Extra-thick 6mm TPE yoga mat with dual-sided non-slip texture and alignment lines. Eco-friendly, sweat-resistant, and includes a carrying strap. Lightweight for home and studio. A wellness bestseller across Amazon and AliExpress.', price:19.99, originalPrice:36.99, category:'Wellness', stock:187, images:['https://images.pexels.com/photos/4498151/pexels-photo-4498151.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:2611, isActive:true, brand:'CoreFlex', weight:'2.2 lbs', tags:['yoga mat','fitness','non-slip'], variants:[{id:'v17a',color:'Blue',size:'6mm',price:19.99,salePrice:19.99,stock:94,sku:'CF-BLU'},{id:'v17b',color:'Pink',size:'6mm',price:19.99,salePrice:19.99,stock:93,sku:'CF-PNK'}] },
-  { ...DP, id:'18', name:'ClarityPro Blue-Light Glasses', shortDesc:'Anti-blue-light computer glasses', description:'Anti-blue-light computer glasses that reduce eye strain and improve sleep. Lightweight TR90 frame, anti-glare and anti-scratch coating, unisex design. Includes case and cleaning cloth. A trending everyday accessory on Amazon.', price:17.99, originalPrice:34.99, category:'Accessories', stock:164, images:['https://images.pexels.com/photos/2872879/pexels-photo-2872879.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:1743, isActive:true, brand:'ClarityPro', weight:'0.05 lbs', tags:['glasses','blue light','eye care'] },
-  { ...DP, id:'19', name:'ChillBreeze Portable Neck Fan', shortDesc:'Bladeless hands-free neck fan', description:'Hands-free bladeless neck fan with 3 speed settings, 360° airflow, and a rechargeable 4000mAh battery lasting up to 16 hours. Lightweight, whisper-quiet, and hair-safe — perfect for commutes, travel, and outdoor work. A viral summer bestseller on TikTok and Amazon.', price:23.99, originalPrice:42.99, category:'Tech & Gadgets', stock:140, images:['https://images.pexels.com/photos/4491881/pexels-photo-4491881.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2734, isActive:true, brand:'ChillBreeze', weight:'0.4 lbs', tags:['neck fan','portable','bladeless','summer'], variants:[{id:'v19a',color:'White',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-WHT'},{id:'v19b',color:'Black',size:'One Size',price:23.99,salePrice:23.99,stock:70,sku:'CB-BLK'}] },
-  { ...DP, id:'20', name:'RelaxEye Heated Eye Massager', shortDesc:'Bluetooth heated eye massager', description:'Rechargeable heated eye massager with air-compression, gentle vibration, and soothing warmth to relieve eye strain, puffiness, and headaches. Built-in Bluetooth music, 5 modes, and a foldable travel design. A top self-care gadget trending on Amazon and AliExpress.', price:38.99, originalPrice:74.99, category:'Wellness', stock:82, images:['https://images.pexels.com/photos/3865711/pexels-photo-3865711.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:1988, isActive:true, brand:'RelaxEye', weight:'0.7 lbs', tags:['eye massager','relaxation','self care','bluetooth'] },
-  { ...DP, id:'21', name:'PostureFix Smart Posture Corrector', shortDesc:'Vibrating smart posture trainer', description:'Discreet smart posture corrector that gently vibrates when you slouch, retraining your back and shoulders for a healthier posture. Adjustable, breathable, and unisex — pairs with a free app to track progress. A viral wellness bestseller for desk workers.', price:27.99, originalPrice:49.99, category:'Wellness', stock:110, images:['https://images.pexels.com/photos/4056723/pexels-photo-4056723.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1524, isActive:true, brand:'PostureFix', weight:'0.3 lbs', tags:['posture corrector','back support','wellness','smart'] },
-  { ...DP, id:'22', name:'AquaTrack Smart Water Bottle', shortDesc:'LED reminder insulated bottle', description:'Smart insulated stainless-steel water bottle with an LED hydration reminder and temperature display in the cap. Keeps drinks cold 24h / hot 12h, 500ml, BPA-free, and leak-proof. A trending health-and-fitness gadget across Amazon and TikTok.', price:25.99, originalPrice:46.99, category:'Wellness', stock:125, images:['https://images.pexels.com/photos/1000084/pexels-photo-1000084.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.6, reviews:2103, isActive:true, brand:'AquaTrack', weight:'0.6 lbs', tags:['water bottle','smart','hydration','insulated'], variants:[{id:'v22a',color:'Silver',size:'500ml',price:25.99,salePrice:25.99,stock:63,sku:'AT-SLV'},{id:'v22b',color:'Black',size:'500ml',price:25.99,salePrice:25.99,stock:62,sku:'AT-BLK'}] },
-  { ...DP, id:'23', name:'LumaStrip RGB LED Light Strip', shortDesc:'App & music-sync LED strip 16ft', description:'16ft app-controlled RGB LED light strip with 16 million colors, music sync, and voice control (Alexa & Google). Easy peel-and-stick install, remote included, and dimmable scenes for gaming setups and bedrooms. One of the top-selling home-decor items on Amazon.', price:18.99, originalPrice:35.99, category:'Home & Living', stock:198, images:['https://images.pexels.com/photos/1616403/pexels-photo-1616403.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.7, reviews:4562, isActive:true, brand:'LumaStrip', weight:'0.5 lbs', tags:['led strip','rgb','home decor','gaming'] },
-  { ...DP, id:'24', name:'TurboVac Cordless Car Vacuum', shortDesc:'Portable handheld car vacuum', description:'Powerful 9000Pa cordless handheld vacuum for cars, desks, and pet hair. USB-C rechargeable, lightweight, and low-noise with washable HEPA filter and multiple nozzles. A best-selling car accessory trending on Amazon and AliExpress.', price:29.99, originalPrice:54.99, category:'Tech & Gadgets', stock:96, images:['https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940'], rating:4.5, reviews:1876, isActive:true, brand:'TurboVac', weight:'1.1 lbs', tags:['car vacuum','portable','cordless','cleaning'] },
-];
+// (demo catalog constants removed — the storefront is DB-driven only; no fake
+// products, fake ratings, or fake orders anywhere in the customer path)
 
-// ═══════════ 120-Product Catalog — extends the 12 featured products to a full store ═══════════
-const EXTRA_IMGS = [
-  'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg/960px-Blue_Slow_Feeder_Dog_Bowl_with_Raised_Studs_and_Ridges.jpg',
-  'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=600',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Maltipoo_with_rope_toy_%2895554%29.jpg/960px-Maltipoo_with_rope_toy_%2895554%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/0/0c/A_cat_bed_%2831681254268%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG/960px-Futterautomat_mit_RFID_-_pet_feeder%2C_cat_feeder%2C_RFID_controlled.JPG',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg',
-];
+// (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
 
-const EXTRA_PRODUCT_NAMES: Record<string, string[]> = {
-  'Dog Supplies': ['No-Pull Dog Harness', 'Reflective Dog Leash', 'Comfort Dog Collar', 'Dog Training Treat Pouch', 'Dog Raincoat Waterproof', 'Cooling Dog Vest', 'Dog Boots Anti-Slip', 'Dog Car Seat Belt', 'Dog Paw Cleaner Cup', 'Dog Whistle Trainer', 'Dog Poop Bag Holder', 'Elevated Dog Bowl Stand', 'Dog First Aid Kit', 'Dog Dental Chew Set', 'GPS Dog Tracker Collar', 'Dog Agility Tunnel'],
-  'Cat Supplies': ['Cat Tree Tower', 'Cat Window Perch', 'Cat Tunnel Play Tube', 'Cat Litter Mat', 'Cat Collar with Bell', 'Cat Grooming Glove', 'Cat Nail Clipper Kit', 'Cat Carrier Backpack', 'Catnip Toy Variety Pack', 'Cat Scratching Board', 'Cat Food Puzzle Feeder', 'Cat Water Fountain Filter', 'Cat Bed Cave Plush', 'Cat Harness Escape-Proof', 'Cat Grass Growing Kit', 'Cat Laser Pointer Toy'],
-  'Pet Beds': ['Heated Dog Bed', 'Elevated Cot Dog Bed', 'Donut Cuddler Cat Bed', 'Waterproof Outdoor Dog Bed', 'Cave Den Dog Bed', 'Pet Sofa Bed Large', 'Memory Foam Puppy Bed', 'Travel Folding Pet Bed', 'Cooling Gel Dog Bed', 'Bolster Dog Bed', 'Orthopedic Cooling Bed', 'Nest Calming Cat Bed', 'Washable Plush Pet Bed', 'Cozy Fur Lined Dog Bed', 'Fleece Cat Bed Round'],
-  'Pet Toys': ['Squeaky Plush Dog Toys', 'Rubber Chew Bone Toy', 'Tennis Ball Launcher', 'Frisbee Flying Disc', 'Cat Feather Wand Toy', 'Dog Snuffle Mat', 'Cat Laser Pointer', 'Interactive Treat Ball', 'Tug Rope Toy with Handle', 'Dog Puzzle Hide Toy', 'Cat Spring Toy Pack', 'Plush Squeaky Chicken', 'Ball Pit Cat Playpen', 'Dog Bite Ring Toy', 'Cat Toy Mouse Pack', 'Puppy Teething Toys'],
-  'Feeding & Water': ['Ceramic Pet Bowl Set', 'Non-Slip Silicone Bowl Mat', 'Collapsible Travel Pet Bowl', 'Pet Water Bottle Dispenser', 'Elevated Feeding Station', 'Smart Feeder with Camera', 'Double Stainless Bowl', 'Pet Food Storage Bin', 'Gravity Water Dispenser', 'Anti-Skid Puppy Bowl', 'Fountain Replacement Pump', 'Insulated Pet Water Bottle', 'Cascade Cat Water Fountain', 'Slow Feed Puzzle Mat', 'Stainless Pet Food Bowl', 'Portable Pet Feeder Set'],
-  'Grooming': ['Low Noise Pet Hair Dryer', 'Cordless Dog Clipper Kit', 'Pet Nail Grinder', 'Deshedding Undercoat Rake', 'Pet Shampoo Brush', 'Detangling Spray for Pets', 'Dog Toothbrush Kit', 'Pet Fur Remover Roller', 'Cat Shedding Comb', 'Grooming Scissors Set', 'Pet Cologne Freshener', 'Electric Pet Trimmer', 'Pet Bathing Massager Brush', 'Dog Ear Cleaner Kit', 'Pet Hair Catcher Towel'],
-  'Pet Accessories': ['LED Dog Collar Light', 'Custom Pet ID Tag', 'Pet Stroller', 'Pet Backpack Carrier', 'Waterproof Pet Blanket', 'Dog Seat Belt Clip', 'Pet Steps for Bed', 'Pet Car Ramp', 'Pet Safety Vest', 'Pet Fountain Travel Bowl', 'Dog Bandana Set', 'Pet GPS Tracker', 'Pet Hammock Car Seat', 'Pet Window Sill Bed'],
-};
+// Map a Supabase catalog row to the storefront Product shape WITHOUT
+// fabricating anything: ratings stay 0 (the UI shows stars only for verified
+// user reviews), dimensions/origin stay empty, no shipping promises.
+function mapCatalogProduct(p: CatalogProduct): Product {
+  return {
+    id: p.id,
+    name: p.name,
+    shortDesc: p.shortDesc,
+    description: p.description,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    category: p.category || 'Pet Supplies',
+    stock: p.stock,
+    images: p.images.length ? p.images : [],
+    imageAlts: p.imageAlts || [],
+    rating: 0,
+    reviews: 0,
+    isActive: p.isActive,
+    brand: p.brand || 'Luxedge',
+    condition: 'New',
+    tags: p.tags,
+    weight: '',
+    dimensions: '',
+    origin: '',
+    freeShipping: p.freeShipping,
+    shippingCost: '',
+    featured: p.featured,
+    newArrival: p.newArrival,
+    saleEnabled: p.saleEnabled,
+    stockStatus: p.stockStatus,
+    usInventory: p.usInventory,
+    commerceReadiness: p.commerceReadiness,
+    sourceType: p.sourceType,
+    inventorySource: p.inventorySource,
+    seoTitle: p.seoTitle,
+    seoDescription: p.seoDescription,
+    seoKeywords: p.seoKeywords,
+    supplierSource: p.supplierSource,
+    variants: (p.variants || []).map((v) => ({
+      id: v.id,
+      color: v.attributes?.color || '',
+      size: v.attributes?.size || 'One Size',
+      price: v.price ?? p.price,
+      salePrice: v.price ?? p.price,
+      stock: v.inventoryQty,
+      sku: v.sku,
+      image: v.image || undefined,
+    })),
+  };
+}
 
-const EXTRA_BRANDS = ['LuxePaws', 'WhiskerWand', 'AquaPure', 'TrailMate', 'FurFresh', 'CatHaven', 'BowlWell', 'TravelPaw', 'PlayBone', 'SnugglePet', 'SmartFeed', 'RoadDog', 'PawPerfect', 'ZenPet', 'HappyTails', 'PetPro'];
+function mapCatalogCategory(c: CatalogCategory): AdminCategory {
+  return { id: c.id, name: c.name, isActive: c.isActive, subs: [] };
+}
+// Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
+// users come from Supabase Auth and are never represented with passwords).
+// No fake customers — real users come from Supabase auth. Admin lists show
+// real profiles only (empty until they exist).
+const INIT_USERS: AppUser[] = [];
 
-let __pid = 1000;
-const EXTRA_PRODUCTS: Product[] = Object.entries(EXTRA_PRODUCT_NAMES).flatMap(([cat, names]) =>
-  names.map((nm, i) => {
-    __pid++;
-    const base = 9.99 + ((i * 7 + cat.length * 3) % 40);
-    const price = +(base + 0.99).toFixed(2);
-    const originalPrice = +(price * (1.35 + ((i * 13) % 40) / 100)).toFixed(2);
-    return {
-      ...DP, id: String(__pid), name: nm,
-      shortDesc: `${cat} essential`, description: `${nm} — handpicked premium pet essentials from Luxedge. Quality you can trust, priced honestly, delivered to your door.`,
-      price, originalPrice, category: cat, stock: 20 + ((i * 17) % 180),
-      images: [EXTRA_IMGS[(i + cat.length) % EXTRA_IMGS.length]],
-      rating: +(4.2 + ((i * 3) % 8) / 10).toFixed(1), reviews: 20 + ((i * 29) % 420),
-      isActive: true, brand: EXTRA_BRANDS[(i + cat.length) % EXTRA_BRANDS.length],
-      weight: `${(0.4 + ((i * 5) % 25) / 10).toFixed(1)} lbs`, tags: [cat.toLowerCase(), 'premium', 'luxedge'],
-    };
-  })
-);
-
-const ALL_PRODUCTS: Product[] = [...INIT_PRODUCTS, ...EXTRA_PRODUCTS];
-
-const INIT_ADMIN: AppUser = { id: 'adm', email: 'admin@luxedge.us', password: 'admin123', name: 'Admin', role: 'admin', joined: '2024-01-01' };
-const INIT_USERS: AppUser[] = [
-  { id: 'u1', email: 'john@test.com', password: 'password123', name: 'John Smith', role: 'buyer', joined: '2024-01-15' },
-  { id: 'u2', email: 'sarah@test.com', password: 'password123', name: 'Sarah Johnson', role: 'buyer', joined: '2024-02-20' },
-  { id: 'u3', email: 'mike@test.com', password: 'password123', name: 'Mike Williams', role: 'buyer', joined: '2024-03-01' },
-];
-
-const INIT_ORDERS: Order[] = [
-  { id: 'ORD-001', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[0], quantity: 1 }], total: 49.99, status: 'Delivered', date: '2024-03-01', address: '123 Main St, Austin TX' },
-  { id: 'ORD-002', userId: 'u2', userName: 'Sarah Johnson', items: [{ product: INIT_PRODUCTS[2], quantity: 2 }], total: 69.98, status: 'Shipped', date: '2024-03-10', address: '456 Oak Ave, Dallas TX' },
-  { id: 'ORD-003', userId: 'u1', userName: 'John Smith', items: [{ product: INIT_PRODUCTS[4], quantity: 1 }], total: 19.99, status: 'Processing', date: '2024-03-14', address: '123 Main St, Austin TX' },
-  { id: 'ORD-004', userId: 'u3', userName: 'Mike Williams', items: [{ product: INIT_PRODUCTS[6], quantity: 1 }, { product: INIT_PRODUCTS[7], quantity: 1 }], total: 33.98, status: 'Pending', date: '2024-03-15', address: '789 Pine St, Houston TX' },
-];
-
-const INIT_REVIEWS: Review[] = [
-  { id: 'r1', productId: '1', productName: 'Orthopedic Memory Foam Dog Bed', userName: 'John Smith', rating: 5, comment: 'Best dog bed ever! My pup sleeps great.', status: 'approved', date: '2024-03-05' },
-  { id: 'r2', productId: '3', productName: 'Stainless Steel Pet Water Fountain', userName: 'Sarah Johnson', rating: 4, comment: 'Great fountain, my cat drinks way more now.', status: 'approved', date: '2024-03-08' },
-  { id: 'r3', productId: '5', productName: 'Self-Cleaning Slicker Grooming Brush', userName: 'Mike Williams', rating: 5, comment: 'Sleek and functional! Shedding is under control.', status: 'pending', date: '2024-03-14' },
-  { id: 'r4', productId: '6', productName: 'Premium Cat Scratching Post', userName: 'Sarah Johnson', rating: 5, comment: 'Furniture is safe now. Kitty loves the perch!', status: 'pending', date: '2024-03-15' },
-];
+// No fake order history or reviews: real orders come from the Stripe webhook
+// (luxedge_orders, shown in Admin → Orders) and real reviews do not exist
+// yet. The storefront must never display invented customers or ratings.
+const INIT_REVIEWS: Review[] = [];
 
 const INIT_CATEGORIES: AdminCategory[] = [
   { id: 'c1', name: 'Dog Supplies', isActive: true, subs: [{ id: 'c1s1', name: 'Dogs', isActive: true }, { id: 'c1s2', name: 'Puppies', isActive: true }] },
@@ -458,22 +212,26 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b6', slug:'get-pet-to-drink-more-water', title:'How to Get Your Pet to Drink More Water', excerpt:'Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.', content:'Pets often don\u2019t drink enough water. Here\u2019s how to keep them properly hydrated.\n\n## Upgrade to a Fountain\nMany pets prefer running water. A Stainless Steel Pet Water Fountain with triple filtration is irresistible to most cats and dogs.\n\n## Keep Bowls Clean\nPets refuse stale water. Wash bowls daily and refresh water at least twice a day.\n\n## Add Water to Food\nMix a little warm water into dry kibble or add broth to increase daily intake.\n\n## Multiple Stations\nPlace water bowls in several rooms so water is always nearby.\n\n## Watch the Signs\nCheck for dry gums, lethargy, or loss of appetite. If you\u2019re worried about dehydration, contact your vet.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['hydration','water fountain','health','cat and dog'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
   { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding — and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
   { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle — great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
-  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. This site is served over an encrypted (HTTPS) connection.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Review the current Luxedge returns policy before ordering.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
+  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Curated stores like Luxedge use 256-bit SSL encryption.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Luxedge offers 30-day hassle-free returns.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
   { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability — here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
   { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions — even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase — not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
   { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
 ];
 
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories'];
-const CAT_META: Record<string, { icon: string; emoji: string; desc: string; img: string }> = {
-  'Dog Supplies': { icon: '🐕', emoji: '🐶', desc: 'Harnesses, training & dog essentials', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Dog_in_a_harness.jpg/960px-Dog_in_a_harness.jpg' },
-  'Cat Supplies': { icon: '🐈', emoji: '🐱', desc: 'Scratchers, towers & cat must-haves', img: 'https://upload.wikimedia.org/wikipedia/commons/5/58/Baukasten_Cathome.jpg' },
-  'Pet Beds': { icon: '🛏️', emoji: '😴', desc: 'Orthopedic & cozy beds for deep sleep', img: 'https://upload.wikimedia.org/wikipedia/commons/f/f4/Dog_sleeping_in_a_dog_bed.JPG' },
-  'Pet Toys': { icon: '🧸', emoji: '🪀', desc: 'Interactive toys for play & enrichment', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg/960px-Miyako_is_playing_with_a_fishing-rod_toy_%287756356192%29.jpg' },
-  'Feeding & Water': { icon: '🍽️', emoji: '🥣', desc: 'Bowls, fountains & smart feeders', img: 'https://upload.wikimedia.org/wikipedia/commons/4/4e/A_cat_drinking_water.jpg' },
-  'Grooming': { icon: '✂️', emoji: '🐾', desc: 'Brushes, clippers & coat care', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Dog_brush.JPG/960px-Dog_brush.JPG' },
-  'Pet Accessories': { icon: '🎒', emoji: '🐾', desc: 'Travel, car care & everyday extras', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Dog_wearing_seat_belt.jpg/960px-Dog_wearing_seat_belt.jpg' },
+const CAT_META: Record<string, { desc: string }> = {
+  'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
+  'Cat Supplies': { desc: 'Play, comfort & everyday cat essentials' },
+  'Pet Beds': { desc: 'Comfort-led pieces for deeper rest' },
+  'Pet Toys': { desc: 'Interactive play and everyday enrichment' },
+  'Feeding & Water': { desc: 'Considered pieces for daily mealtimes' },
+  'Grooming': { desc: 'Simple tools for everyday care' },
+  'Pet Accessories': { desc: 'Useful pieces for life together' },
 };
+
+function firstUsableImage(product: Product | undefined): string | undefined {
+  return product?.images.find((image) => Boolean(image));
+}
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';
 
@@ -481,58 +239,36 @@ const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'Al
 // CONTEXT
 // ============================================================================
 interface Ctx {
-  user: AppUser | null; cart: CartItem[]; orders: Order[];
+  user: AppUser | null; cart: CartItem[];
   products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
-  adminCreds: AppUser;
-  login: (e: string, p: string, admin?: boolean) => boolean;
+  login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
   guestLogin: () => void;
-  logout: () => void; signup: (n: string, e: string, p: string) => boolean;
-  changePassword: (current: string, newPass: string) => { ok: boolean; msg: string };
+  logout: () => void; signup: (n: string, e: string, p: string) => Promise<string | null>;
+  changePassword: (current: string, newPass: string) => Promise<{ ok: boolean; msg: string }>;
   updateAdminProfile: (name: string, email: string) => void;
   addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
   updateQty: (id: string, q: number) => void; clearCart: () => void;
-  placeOrder: (addr: string) => string;
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
   cartOpen: boolean; openCart: () => void; closeCart: () => void;
   notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
+  // Catalog Launch Phase — coupons + free-shipping strategy from the store.
+  coupon: StoreCoupon | null;
+  applyCoupon: (code: string) => string | null;
+  removeCoupon: () => void;
+  freeShippingEnabled: boolean;
+  freeShippingThreshold: number;
 }
 const AC = createContext<Ctx | null>(null);
 export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
-// PHASE 4E.2A CART MIGRATION: the demo-era key 'luxedge_cart' held demo/fake
-// product objects that must NEVER surface again. The current key is
-// 'luxedge_cart_v2'; the legacy key is purged once on load and never read.
-const CART_STORAGE_KEY_LEGACY = 'luxedge_cart';
-const CART_STORAGE_KEY = 'luxedge_cart_v2';
-
+// Cart persistence uses the catalog-safe v2 key (legacy demo-era payload is
+// purged on load — Phase 4E.2A hotfix behavior, kept on luxedge-v2).
 function loadCart(): CartItem[] {
-  try {
-    // One-time purge of the legacy demo-era cart payload.
-    localStorage.removeItem(CART_STORAGE_KEY_LEGACY);
-    const raw = localStorage.getItem(CART_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const items: CartItem[] = [];
-    for (const entry of parsed) {
-      const e = entry as Partial<CartItem>;
-      if (
-        e && typeof e === 'object' &&
-        e.product && typeof e.product.id === 'string' &&
-        typeof e.quantity === 'number' && e.quantity > 0
-      ) {
-        items.push({ product: e.product, quantity: Math.floor(e.quantity) });
-      }
-    }
-    return items;
-  } catch {
-    return [];
-  }
+  return parseStoredCart<Product>();
 }
 
 const SESSION_STORAGE_KEY = 'luxedge_session';
@@ -547,11 +283,10 @@ function loadSession(): AppUser | null {
     if (
       typeof u.id === 'string' &&
       typeof u.email === 'string' &&
-      typeof u.password === 'string' &&
       typeof u.name === 'string' &&
       (u.role === 'admin' || u.role === 'buyer')
     ) {
-      return { id: u.id, email: u.email, password: u.password, name: u.name, role: u.role, isBlocked: u.isBlocked, joined: u.joined };
+      return { id: u.id, email: u.email, name: u.name, role: u.role, isBlocked: u.isBlocked, joined: u.joined };
     }
     return null;
   } catch {
@@ -562,44 +297,79 @@ function loadSession(): AppUser | null {
 function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
-  const [orders, setOrders] = useState<Order[]>(INIT_ORDERS);
-  // PRODUCTION CATALOG RESET HOTFIX — TEMPORARY EMPTY-CATALOG LOCK
-  // (Phase 4E.2/4E.2A): this emergency branch does NOT load a Supabase
-  // catalog — it intentionally renders ZERO products. Demo products are
-  // never customer-visible; the storefront stays empty until the approved
-  // luxedge-v2 production release ships the real DB-driven catalog. Future
-  // published DB products will NOT automatically appear through this
-  // temporary hotfix. (Demo fixtures above remain only as admin/dev data.)
+  // Phase 4E.1 — the storefront catalog starts EMPTY. Demo/fallback products
+  // must NEVER appear when the database has no published products; only the
+  // qualified/approved pipeline may populate the customer-facing catalog.
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
-  const [adminCreds, setAdminCreds] = useState<AppUser>(INIT_ADMIN);
   const [notif, setNotif] = useState<string | null>(null);
   const notify = (m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
   const [cartOpen, setCartOpen] = useState(false);
   const openCart = useCallback(() => setCartOpen(true), []);
   const closeCart = useCallback(() => setCartOpen(false), []);
 
+  // Phase 3B: load the real storefront catalog from Supabase when it is
+  // configured and populated. On any failure (unconfigured, unreachable,
+  // empty DB) the catalog stays EMPTY — never demo/fallback products.
+  useEffect(() => {
+    let cancelled = false;
+    void loadStorefrontCatalog().then((cat) => {
+      if (cancelled) return;
+      if (cat) {
+        // Catalog load completed (even with zero products) — the cart can
+        // now be safely reconciled against the real customer-visible set.
+        setCatalogLoaded(true);
+        if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
+        if (cat.categories.length) setCategories(cat.categories.map(mapCatalogCategory));
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Catalog Launch Phase — load store promotions (coupons + free-shipping
+  // strategy). Safe defaults when unavailable (no coupons, free shipping off).
+  const [promotions, setPromotions] = useState<{ coupons: StoreCoupon[]; freeShippingEnabled: boolean; freeShippingThreshold: number }>({
+    coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50,
+  });
+  const [coupon, setCoupon] = useState<StoreCoupon | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadStorefrontPromotions().then((pro) => { if (!cancelled) setPromotions(pro); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const applyCoupon = (code: string): string | null => {
+    const found = promotions.coupons.find((c) => c.code === code.trim().toUpperCase());
+    if (!found) return 'Coupon not found';
+    if (found.usageLimit != null && found.usedCount >= found.usageLimit) return 'This coupon has reached its usage limit';
+    if (found.endAt && new Date(found.endAt) < new Date()) return 'This coupon has expired';
+    setCoupon(found);
+    return null;
+  };
+  const removeCoupon = () => setCoupon(null);
+
   // Persist the cart so items survive a page refresh.
   useEffect(() => {
     try { localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart)); } catch { /* storage full or unavailable */ }
   }, [cart]);
 
-  // PHASE 4E.2A defense in depth: the cart may only contain products that
-  // exist in the current customer-visible catalog. Under the TEMPORARY
-  // EMPTY-CATALOG LOCK (products === []) ANY stored item is stale, so the
-  // cart is forced empty — old demo cart items become ZERO on reload and a
-  // manually-restored malformed payload is reconciled away on mount.
+  // Catalog Launch Phase defense in depth: the cart may only contain
+  // products that exist in the current customer-visible catalog. Once the
+  // catalog has actually loaded, any stored item not in it is stale and is
+  // reconciled away — a manually-restored malformed payload never survives.
+  // (Only runs after a successful catalog load, so a DB outage never wipes
+  // a valid cart.)
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   useEffect(() => {
+    if (!catalogLoaded) return;
     setCart(prev => {
-      if (!products.length) return [];
-      const valid = prev.filter(i => i && i.product && products.some(p => p.id === i.product.id));
+      const valid = reconcileCart(prev, products);
       return valid.length === prev.length ? prev : valid;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products]);
+  }, [catalogLoaded, products]);
 
   // Persist the signed-in user so the session survives a page refresh.
   useEffect(() => {
@@ -609,137 +379,84 @@ function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* storage full or unavailable */ }
   }, [user]);
 
-  const login = (e: string, p: string, admin = false) => {
-    // Admin login — checks against live adminCreds state
-    if (admin) {
-      if (e === adminCreds.email && p === adminCreds.password) {
-        setUser({ ...adminCreds });
-        useAuthStore.getState().adminLogin(e, p);
-        notify('Welcome Admin!');
-        return true;
-      }
-      return false;
+  const login = async (e: string, p: string, admin = false): Promise<string | null> => {
+    // Real authentication via Supabase Auth (Phase 3A). Returns null on
+    // success or an honest error message on failure.
+    const result = await useAuthStore.getState().signIn(e, p);
+    if (!result.success) return result.message;
+    const sbUser = result.user;
+    if (!sbUser) return 'Sign-in did not return a session.';
+    if (admin && sbUser.role !== 'admin') {
+      return 'This account does not have admin access.';
     }
-    // Admin credentials also work through the storefront login
-    if (e.toLowerCase() === adminCreds.email.toLowerCase() && p === adminCreds.password) {
-      setUser({ ...adminCreds });
-      useAuthStore.getState().adminLogin(e, p);
-      notify('Welcome Admin!');
-      return true;
-    }
-    // Buyer login — check registered users first, then allow new
-    const existing = users.find(u => u.email.toLowerCase() === e.toLowerCase());
-    if (existing) {
-      if (existing.password === p) {
-        if (existing.isBlocked) { notify('Account blocked. Contact support.'); return false; }
-        setUser(existing);
-        useAuthStore.getState().login(e, p);
-        notify('Login successful!');
-        return true;
-      }
-      return false; // wrong password for existing user
-    }
-    // New user auto-register
-    if (p.length >= 6) {
-      const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: e.split('@')[0], role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
-      setUsers(prev => [...prev, newUser]);
-      setUser(newUser);
-      notify('Account created & logged in!');
-      return true;
-    }
-    return false;
+    setUser({ id: sbUser.id, email: sbUser.email, name: sbUser.name, role: sbUser.role, joined: new Date().toISOString().slice(0, 10) });
+    notify(admin ? 'Welcome Admin!' : 'Login successful!');
+    return null;
   };
 
   const guestLogin = () => {
-    const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', password: '', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
+    const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
     setUser(guest);
     notify('Shopping as guest — no account needed!');
   };
 
-  const logout = () => { setUser(null); notify('Logged out'); };
-
-  const signup = (n: string, e: string, p: string) => {
-    if (users.some(u => u.email.toLowerCase() === e.toLowerCase())) { notify('Email already registered'); return false; }
-    if (p.length >= 6) {
-      const newUser: AppUser = { id: `u${Date.now()}`, email: e, password: p, name: n, role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
-      setUsers(prev => [...prev, newUser]);
-      setUser(newUser);
-      useAuthStore.getState().signup(n, e, p);
-      notify('Account created!');
-      return true;
-    }
-    return false;
+  const logout = async () => {
+    await useAuthStore.getState().signOut();
+    setUser(null);
+    notify('Logged out');
   };
 
-  const changePassword = (current: string, newPass: string): { ok: boolean; msg: string } => {
+  const signup = async (n: string, e: string, p: string): Promise<string | null> => {
+    if (p.length < 6) return 'Password must be at least 6 characters';
+    const result = await useAuthStore.getState().signUp(n, e, p);
+    if (!result.success) return result.message;
+    if (result.user) {
+      setUser({ id: result.user.id, email: result.user.email, name: result.user.name, role: result.user.role, joined: new Date().toISOString().slice(0, 10) });
+    }
+    notify('Account created!');
+    return null;
+  };
+
+  const changePassword = async (_current: string, newPass: string): Promise<{ ok: boolean; msg: string }> => {
+    // Current password is verified by Supabase on the server; it is never
+    // stored or checked client-side.
     if (!user) return { ok: false, msg: 'Not logged in' };
-    // Check current password
-    if (user.role === 'admin') {
-      if (current !== adminCreds.password) return { ok: false, msg: 'Current password is incorrect' };
-      if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
-      const updated = { ...adminCreds, password: newPass };
-      setAdminCreds(updated);
-      setUser(updated);
-      useAuthStore.getState().changePassword(current, newPass);
+    if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
+    try {
+      await updatePassword(newPass);
       return { ok: true, msg: 'Password updated successfully!' };
-    } else {
-      if (current !== user.password) return { ok: false, msg: 'Current password is incorrect' };
-      if (newPass.length < 6) return { ok: false, msg: 'New password must be at least 6 characters' };
-      const updated = { ...user, password: newPass };
-      setUser(updated);
-      setUsers(prev => prev.map(u => u.id === user.id ? updated : u));
-      useAuthStore.getState().changePassword(current, newPass);
-      return { ok: true, msg: 'Password updated successfully!' };
+    } catch (e) {
+      return { ok: false, msg: (e as Error).message || 'Could not update password' };
     }
   };
 
-  const updateAdminProfile = (name: string, email: string) => {
+  const updateAdminProfile = async (name: string, email: string) => {
     if (user?.role === 'admin') {
-      const updated = { ...adminCreds, name, email };
-      setAdminCreds(updated);
-      setUser(updated);
-      notify('Profile updated!');
+      try {
+        await updateUserMetadata({ name });
+        setUser(prev => prev ? { ...prev, name, email } : prev);
+        notify('Profile updated!');
+      } catch (e) {
+        notify((e as Error).message || 'Could not update profile');
+      }
     }
   };
-  // PHASE 4E.2A add-to-cart safety: a product absent from the current
-  // customer-visible catalog cannot enter the cart (no demo fixture can).
-  const addToCart = (p: Product) => {
-    if (!products.some(x => x.id === p.id)) {
-      notify('This product is no longer available.');
-      return;
-    }
-    setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`);
-  };
+  const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
   const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
-  // PHASE 4E.2A checkout safety: never create an order or fire a purchase
-  // conversion for products that are not in the current customer-visible
-  // catalog. Under the temporary empty lock (products === []) no order can
-  // be placed at all. Returns '' when blocked (no order, no purchase event).
-  const placeOrder = (addr: string) => {
-    if (cart.length === 0) return '';
-    const valid = cart.filter(i => i && i.product && products.some(p => p.id === i.product.id));
-    if (products.length === 0 || valid.length !== cart.length) {
-      setCart(prev => prev.filter(i => i && i.product && products.some(p => p.id === i.product.id)));
-      notify('Your cart contained items that are no longer available.');
-      return '';
-    }
-    const oid = `ORD-${Date.now()}`;
-    const t = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-    setOrders(p => [{ id: oid, userId: user?.id || '', userName: user?.name || '', items: [...cart], total: t, status: 'Pending', date: new Date().toISOString(), address: addr }, ...p]);
-    trackEvent('purchase', { currency: 'USD', value: t, transaction_id: oid, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
-    clearCart();
-    return oid;
-  };
+  // NOTE: real orders are created server-side by the Stripe webhook into
+  // luxedge_orders (Admin → Orders). No client-side fake order path exists.
+  const freeShippingEnabled = promotions.freeShippingEnabled;
+  const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, orders, products, users, reviews, categories, blogs, setBlogs, adminCreds, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, placeOrder, setProducts, setOrders, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle size={18} className="text-green-400" />{notif}</div></div>; }
+function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle strokeWidth={1.5} size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
@@ -749,7 +466,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X strokeWidth={1.5} size={20} /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -761,9 +478,9 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
 // HEADER + FOOTER (STORE)
 // ============================================================================
 // ── Header mega menu data (maps to real category routes) ──
-const MEGA_MENU: { label: string; to: string; icon: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
+const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
   {
-    label: 'Dog', to: '/category/dog-supplies', icon: '🐶',
+    label: 'Dog', to: '/category/dog-supplies',
     groups: [
       { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
       { title: 'Comfort', links: [{ label: 'Beds', to: '/category/pet-beds' }, { label: 'Blankets & Mats', to: '/category/pet-beds' }] },
@@ -773,7 +490,7 @@ const MEGA_MENU: { label: string; to: string; icon: string; groups: { title: str
     ],
   },
   {
-    label: 'Cat', to: '/category/cat-supplies', icon: '🐱',
+    label: 'Cat', to: '/category/cat-supplies',
     groups: [
       { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }, { label: 'Scratching', to: '/category/cat-supplies' }] },
       { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches & Towers', to: '/category/cat-supplies' }] },
@@ -825,35 +542,33 @@ function Header() {
 
   return (<>
     {/* ── Top utility bar ── */}
-    <div className="bg-luxe-gold text-white text-center px-4 py-1.5 text-[11px] tracking-wide font-medium">
-      {/* Top bar — factual only (Phase 4E.2A): no unverified shipping/
-          returns/support-hours claims. */}
-      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck size={12} /> Premium pet essentials</span>
+    <div className="site-utility-bar">
+      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck01 strokeWidth={1.5} size={12} /> Free Shipping $50+</span>
       <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RotateCcw size={12} /> Thoughtfully curated</span>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RefreshCcw01 strokeWidth={1.5} size={12} /> Easy 30-Day Returns</span>
       <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones size={12} /> Customer support</span>
+      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones01 strokeWidth={1.5} size={12} /> Customer Support</span>
     </div>
 
     {/* ── Main header ── */}
-    <header className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl shadow-[0_10px_34px_-14px_rgba(16,26,46,0.22)]' : 'bg-white/95 backdrop-blur-md'} border-b border-luxe-silver/70`}>
-      <div className="max-w-7xl mx-auto px-4 h-16 lg:h-[4.5rem] flex items-center justify-between gap-3">
-        <button onClick={() => setMob(!mob)} aria-label="Menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X size={20} /> : <Menu size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.svg" alt="" className="h-9 sm:h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
+    <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
+      <div className="max-w-7xl mx-auto px-4 h-14 lg:h-14 flex items-center justify-between gap-3">
+        <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
+        <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
+          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
-            <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.18em] text-luxe-black">LUXEDGE</span>
-            <span className="hidden sm:block text-[7.5px] tracking-[0.3em] text-luxe-gold mt-1.5">PREMIUM PET ESSENTIALS</span>
+            <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
+            <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
           </span>
         </Link>
 
         {/* Search — refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
-          <div className="flex items-center w-full bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden focus-within:border-luxe-gold focus-within:ring-4 focus-within:ring-luxe-gold/10 transition-all">
-            <Search size={15} className="ml-4 text-luxe-gray shrink-0" />
+          <div className="site-search">
+            <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
             <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
-              className="flex-1 px-3 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-            <button type="submit" className="m-1 px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors">
+              className="flex-1 px-2.5 py-2 text-[13px] text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
+            <button type="submit" className="site-search-submit">
               Search
             </button>
           </div>
@@ -862,42 +577,42 @@ function Header() {
         <div className="flex items-center gap-0.5 sm:gap-1">
           {user ? (
             <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-                <span className="w-8 h-8 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[12px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
-                <span className="hidden lg:block text-xs font-medium">{user.name.split(' ')[0]}</span>
+              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+                <span className="w-7 h-7 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[11px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
+                <span className="hidden lg:block text-[11px] font-medium">{user.name.split(' ')[0]}</span>
               </button>
               {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
                 <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutDashboard size={14} className="text-luxe-gold" />Admin Panel</Link>}
-                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package size={14} className="text-luxe-gray" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut size={14} />Log Out</button>
+                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutGrid01 strokeWidth={1.5} size={14} className="text-luxe-gold" />Admin Panel</Link>}
+                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package strokeWidth={1.5} size={14} className="text-luxe-gray" />My Orders</Link>
+                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut01 strokeWidth={1.5} size={14} />Log Out</button>
               </div></>}
             </div>
           ) : (
-            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-              <UserIcon size={18} /><span className="hidden sm:inline text-xs font-medium">Sign In</span>
+            <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+              <UserIcon strokeWidth={1.5} size={16} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
             </Link>
           )}
-          <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag size={19} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[9px] font-bold">{cc}</span>}
+          <button onClick={openCart} className="relative p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
+            <ShoppingBag01 strokeWidth={1.5} size={17} />
+            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
           </button>
         </div>
       </div>
 
       {/* ── Pet navigation bar ── */}
       <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
-        <div className="max-w-7xl mx-auto px-4 flex items-center">
+        <div className="max-w-7xl mx-auto px-4 flex items-center h-9">
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                <span aria-hidden="true">{m.icon}</span>{m.label}<ChevronDown size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
+              <Link to={m.to} className="nav-underline flex items-center gap-1 px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
+                {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
                 <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
                   <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
-                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">{m.icon} Shop {m.label}</p>
+                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">Shop {m.label}</p>
                       <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -914,23 +629,23 @@ function Header() {
             </div>
           ))}
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="nav-underline px-4 py-2.5 text-sm font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
+            <Link key={c.l} to={c.to} className="nav-underline px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop?q=deal" className="ml-auto px-4 py-2.5 text-sm font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap size={13} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-3.5 py-2 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
       </nav>
 
       {/* ── Mobile menu ── */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={submitSearch} role="search" className="flex items-center bg-luxe-cream border border-luxe-silver rounded-full overflow-hidden mb-2">
-          <Search size={15} className="ml-3 text-luxe-gray shrink-0" />
+        <form onSubmit={submitSearch} role="search" className="site-search mobile-site-search mb-2">
+          <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
           <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
-        <div className="flex flex-wrap gap-1.5 pt-1 pb-2 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-3 py-1.5 rounded-full bg-luxe-cream text-[11px] font-semibold text-luxe-charcoal hover:bg-luxe-gold hover:text-white transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" className="px-3 py-1.5 rounded-full bg-luxe-gold-soft text-[11px] font-bold text-luxe-gold-dark hover:bg-luxe-gold hover:text-white transition-colors">Deals</Link>
+        <div className="flex flex-wrap gap-1 pt-1 pb-1.5 border-b border-luxe-silver/70">
+          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
+          <Link to="/shop?q=deal" className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
         </div>
         {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
         {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
@@ -951,13 +666,13 @@ function Footer() {
       <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
 
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-8">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-5 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.svg" alt="" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
+              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-brand text-xl font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
                 <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1.5">PREMIUM PET ESSENTIALS</span>
@@ -1024,20 +739,20 @@ function Footer() {
             <h4 className={COLT}>Contact</h4>
             <div className="space-y-2.5">
               <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Mail size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Mail01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 hello@luxedge.us
               </a>
               <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Phone size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <Phone strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <MapPin size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Irving, TX 75038, USA
               </div>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <Clock size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                Customer support by email & phone
+                <Clock strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
           </div>
@@ -1061,27 +776,19 @@ function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-wrap items-center gap-5">
-              {/* Footer trust strip — factual only (Phase 4E.2A). */}
               {[
-                { icon: Shield, text: 'Secure Shopping' },
-                { icon: Truck, text: 'Premium pet essentials' },
-                { icon: RotateCcw, text: 'Thoughtfully curated' },
-                { icon: Headphones, text: 'Customer support' },
+                { icon: Truck01, text: 'Free Shipping $50+' },
+                { icon: RefreshCcw01, text: '30-Day Returns' },
+                { icon: Headphones01, text: 'Customer Support' },
+                { icon: ShieldTick, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
-                  <b.icon size={14} className="text-luxe-gold-light" />
+                  <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold-light" />
                   <span>{b.text}</span>
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs text-luxe-white/50 mr-1">We accept:</span>
-              {['VISA', 'MC', 'AMEX', 'PayPal', 'Apple Pay'].map(c => (
-                <span key={c} className="px-2.5 py-1 bg-luxe-white/5 border border-luxe-white/15 rounded-md text-[10px] font-bold text-luxe-white/80 tracking-wide">
-                  {c}
-                </span>
-              ))}
-            </div>
+            <p className="text-[11px] text-luxe-white/45">{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</p>
           </div>
         </div>
       </div>
@@ -1103,7 +810,7 @@ function Footer() {
               <Link to="/shop" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-luxe-white/50">
-              <Globe size={12} className="text-luxe-gold-light" /> USD ($) · English
+              <Globe01 strokeWidth={1.5} size={12} className="text-luxe-gold-light" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -1113,46 +820,47 @@ function Footer() {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, user, notify } = useApp(); const nav = useNavigate();
-  const d = Math.round((1 - product.price / product.originalPrice) * 100);
-  const sold = product.reviews > 0 ? Math.floor(product.reviews * 0.87) : 0;
+  const { addToCart, reviews } = useApp();
+  const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
+  const secondImage = product.images.find((candidate) => candidate && candidate !== image);
+  const hasCompareAt = product.originalPrice > product.price;
+  // Ratings come ONLY from verified user reviews — never the catalog stub.
+  const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
+  const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
-    <Link to={`/product/${product.id}`} className="block group">
-      <div className="bg-white rounded-2xl overflow-hidden border border-luxe-silver/80 hover:border-luxe-gold/50 hover:shadow-[0_20px_44px_-18px_rgba(16,26,46,0.28)] hover:-translate-y-1 transition-all duration-300">
-        <div className="relative bg-luxe-cream overflow-hidden">
-          <img src={product.images[0]} alt={product.name} aria-hidden="true" loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.05] transition-transform duration-500" />
-          {d > 0 && <span className="absolute top-2.5 left-2.5 px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full leading-none shadow-sm">-{d}%</span>}
-          <button aria-label="Save to wishlist"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); notify('Saved to wishlist ♥'); }}
-            className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-luxe-gray hover:text-sale shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110">
-            <Heart size={13} />
-          </button>
-          {product.stock <= 10 && product.stock > 0 && <span className="absolute top-12 right-2.5 px-1.5 py-0.5 bg-luxe-warning/95 text-white text-[9px] font-bold rounded-full leading-none">Low Stock</span>}
-          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); user ? addToCart(product) : nav('/login'); }}
-            className="absolute bottom-2.5 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white rounded-xl text-[11px] font-semibold shadow-lg translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-1.5">
-            <ShoppingBag size={12} /> {user ? 'Add to Cart' : 'Sign in to Buy'}
-          </button>
+    <article className="product-card group">
+      <Link to={`/product/${product.id}`} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
+        <div className="product-card-media">
+          <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
+          {secondImage && (
+            <img src={secondImage} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
+              className="product-card-image product-card-image-secondary" />
+          )}
+          {product.newArrival && <span className="product-card-label">New</span>}
+          <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
         </div>
-        <div className="px-3.5 py-3">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="eyebrow truncate">{product.category}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              <Star size={10} className="text-star fill-star" />
-              <span className="text-[10px] font-semibold text-luxe-charcoal">{product.rating.toFixed(1)}</span>
-            </div>
-          </div>
-          <h3 className="text-[13px] font-semibold text-luxe-black leading-snug line-clamp-2 min-h-[2.25rem] group-hover:text-luxe-gold-dark transition-colors">{product.name}</h3>
-          <div className="flex items-baseline gap-1.5 mt-1.5">
-            <span className="text-[15px] font-bold text-luxe-black">${product.price.toFixed(2)}</span>
-            {d > 0 && <span className="text-[11px] text-luxe-gray line-through">${product.originalPrice.toFixed(2)}</span>}
-            <span className="ml-auto flex items-center gap-1 text-[9px] text-luxe-gray">
-              <span className="w-1 h-1 rounded-full bg-luxe-gold" />
-              {sold > 0 ? `${sold} sold` : 'New'}
+      </Link>
+      <div className="product-card-info">
+        <div className="flex items-start justify-between gap-3">
+          <Link to={`/product/${product.id}`} className="min-w-0">
+            <p className="product-card-category">{product.category}</p>
+            <h3 className="product-card-title">{product.name}</h3>
+          </Link>
+          {verified.length > 0 && (
+            <span className="product-card-rating" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
+              <Star01 strokeWidth={1.5} size={11} fill="currentColor" aria-hidden="true" /> {verifiedAvg.toFixed(1)}
             </span>
-          </div>
+          )}
+        </div>
+        <div className="flex items-baseline justify-between gap-3 mt-2.5">
+          <span className="product-card-price">${product.price.toFixed(2)}</span>
+          {hasCompareAt && <span className="product-card-compare">${product.originalPrice.toFixed(2)}</span>}
+          <button type="button" onClick={() => addToCart(product)} className="product-card-add" aria-label={`Add ${product.name} to cart`}>
+            Add to cart <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
+          </button>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
@@ -1162,38 +870,63 @@ function PCardPremium({ product }: { product: Product }) {
 }
 
 
-// Per-route document title for SEO
+// Per-route document title + meta description + canonical for SEO
 function RouteTitle() {
   const { pathname } = useLocation();
+  const { products } = useApp();
   useEffect(() => {
     const brand = "Luxedge";
     const segs = pathname.split("/").filter(Boolean);
-    const set = (t: string) => { document.title = t + " | " + brand; };
+    // Normalize seo_title values that already carry the brand suffix so the
+    // brand is never duplicated ("… | Luxedge | Luxedge").
+    const set = (t: string) => { document.title = t.replace(/\s*\|\s*Luxedge\s*$/i, '') + " | " + brand; };
     const full = (t: string) => { document.title = t; };
-    if (segs.length === 0) full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets");
-    else if (segs[0] === "shop") set("Shop All Products");
-    else if (segs[0] === "category") set("Shop " + fromSlug(decodeURIComponent(segs[1] || "")));
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setOg = (prop: string, content: string) => {
+      let el = document.head.querySelector(`meta[property="${prop}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('property', prop); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setCanonical = () => {
+      // BrowserRouter clean URLs — never hash (#/) canonicals.
+      const href = `https://luxedge.us${pathname}`;
+      let el = document.head.querySelector('link[rel="canonical"]');
+      if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
+      el.setAttribute('href', href);
+      setOg('og:url', href);
+    };
+    const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
+    setCanonical();
+    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming."); }
+    else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
+    else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
-      const p = ALL_PRODUCTS.find((x) => x.id === decodeURIComponent(segs[1] || ""));
-      set(p ? p.name : "Product");
+      // Real catalog product (never the demo ALL_PRODUCTS fixture).
+      const p = products.find((x) => x.id === decodeURIComponent(segs[1] || ""));
+      set(p ? (p.seoTitle || p.name) : "Product");
+      if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
-    else if (segs[0] === "cart") set("Shopping Cart");
-    else if (segs[0] === "checkout") set("Secure Checkout");
-    else if (segs[0] === "orders") set("My Orders");
-    else if (segs[0] === "about") set("About Us");
-    else if (segs[0] === "contact") set("Contact Us");
-    else if (segs[0] === "privacy") set("Privacy Policy");
-    else if (segs[0] === "terms") set("Terms of Service");
-    else if (segs[0] === "returns") set("Return Policy");
-    else if (segs[0] === "shipping-policy") set("Shipping Policy");
-    else if (segs[0] === "faq") set("Frequently Asked Questions");
-    else if (segs[0] === "careers") set("Careers");
-    else if (segs[0] === "blog") set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights");
-    else if (segs[0] === "login") set("Sign In");
-    else if (segs[0] === "signup") set("Create Account");
-    else if (segs[0] === "admin") set("Admin Dashboard");
+    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — free shipping on orders over $50."); }
+    else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
+    else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
+    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
+    else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
+    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
+    else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
+    else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
+    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — free shipping on orders over $50."); }
+    else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
+    else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
+    else if (segs[0] === "blog") { set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"); desc("Pet care tips and insights from the Luxedge team."); }
+    else if (segs[0] === "login") { set("Sign In"); desc("Sign in to your Luxedge account."); }
+    else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
+    else if (segs[0] === "admin") { set("Admin Dashboard"); }
     else set("Luxedge");
-  }, [pathname]);
+  }, [pathname, products]); // products re-run so PDP titles resolve once the catalog loads
   return null;
 }
 
@@ -1240,6 +973,97 @@ function ProductDetailPage() {
   const [showRevForm, setShowRevForm] = useState(false);
   const [selColor, setSelColor] = useState('');
   const [selSize, setSelSize] = useState('');
+  const [ctaVisible, setCtaVisible] = useState(true);
+  const ctaRef = useRef<HTMLDivElement>(null);
+  const galleryRef = useRef<HTMLDivElement>(null);
+
+  // Sync the mobile swipe gallery indicator to the scrolled image index.
+  const onGalleryScroll = useCallback(() => {
+    const el = galleryRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+    setSelImg(Math.max(0, Math.min(idx, (product?.images.length || 1) - 1)));
+  }, [product?.images.length]);
+
+  // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
+  useEffect(() => {
+    const el = ctaRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setCtaVisible(e.isIntersecting), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [product?.id]);
+
+  // Per-product SEO: canonical, meta description and Product + Breadcrumb
+  // structured data. Only verified review data is ever emitted.
+  useEffect(() => {
+    if (!product) return;
+    const verified = allReviews.filter(r => r.productId === product.id && r.status === 'approved');
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    const setCanonical = () => {
+      const href = `https://luxedge.us/product/${product.id}`;
+      let el = document.head.querySelector('link[rel="canonical"]');
+      if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
+      el.setAttribute('href', href);
+    };
+    setMeta('description', product.shortDesc || product.description.slice(0, 155));
+    setCanonical();
+    if (product.images[0]) {
+      const ogImg = document.head.querySelector('meta[property="og:image"]');
+      if (ogImg) ogImg.setAttribute('content', product.images[0]);
+      const twImg = document.head.querySelector('meta[name="twitter:image"]');
+      if (twImg) twImg.setAttribute('content', product.images[0]);
+    }
+    const jsonLd: Record<string, unknown>[] = [{
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us/' },
+        { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://luxedge.us/shop' },
+        { '@type': 'ListItem', position: 3, name: product.name, item: `https://luxedge.us/product/${product.id}` },
+      ],
+    }];
+    const offers: Record<string, unknown> = {
+      '@type': 'Offer',
+      price: product.price,
+      priceCurrency: 'USD',
+      // Honest availability: only claim InStock for real supplier-verified stock.
+      availability: product.stockStatus === 'in_stock' || (product.usInventory && product.stock > 0)
+        ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    };
+    if (product.variants[0]?.sku) offers.sku = product.variants[0].sku;
+    const prodSchema: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      image: product.images.slice(0, 8),
+      description: product.shortDesc || product.description,
+      brand: { '@type': 'Brand', name: product.brand || 'Luxedge' },
+      offers,
+    };
+    if (product.category) prodSchema.category = product.category;
+    // Only verified, user-submitted reviews go into schema — never the catalog stub.
+    if (verified.length > 0) {
+      const avg = verified.reduce((s, r) => s + r.rating, 0) / verified.length;
+      prodSchema.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: avg.toFixed(1),
+        reviewCount: verified.length,
+      };
+    }
+    jsonLd.push(prodSchema);
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'product-jsonld';
+    script.text = JSON.stringify(jsonLd);
+    document.getElementById('product-jsonld')?.remove();
+    document.head.appendChild(script);
+    return () => { document.getElementById('product-jsonld')?.remove(); };
+  }, [product?.id]);
 
   // Scroll to top on product change
   useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); if (product) { trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() }); } }, [id, product?.id]);
@@ -1287,19 +1111,17 @@ function ProductDetailPage() {
   const activeOriginal = selVariant ? selVariant.price : product.originalPrice;
   const activeStock = selVariant ? selVariant.stock : product.stock;
   const discount = activeOriginal > 0 ? Math.round((1 - activePrice / activeOriginal) * 100) : 0;
-  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : product.rating;
+  const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const uniqueColors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
 
   const handleAddToCart = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     notify(`${qty}× ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
-    if (!user) { nav('/login'); return; }
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     nav('/checkout');
@@ -1322,35 +1144,69 @@ function ProductDetailPage() {
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
         <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
-        <ChevronRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
-        <ChevronRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
-        <ChevronRight size={11} />
+        <ChevronRight strokeWidth={1.5} size={11} />
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
       <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
         {/* LEFT: Image Gallery */}
         <div className="lg:sticky lg:top-24 self-start">
-          <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
-            <div className="aspect-[4/3]">
-              <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
+          {/* Mobile: swipeable gallery with image indicator dots */}
+          <div
+            ref={galleryRef}
+            onScroll={onGalleryScroll}
+            aria-label={`${product.name} — image gallery`}
+            className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl border border-luxe-silver/70 bg-luxe-cream shadow-md"
+          >
+            {product.images.map((img, i) => (
+              <div key={i} className="w-full shrink-0 snap-center">
+                <div className="aspect-[4/3]">
+                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+                </div>
+              </div>
+            ))}
+          </div>
+          {product.images.length > 1 && (
+            <div className="flex lg:hidden justify-center gap-1.5 mt-3">
+              {product.images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => { const el = galleryRef.current; if (el) el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' }); }}
+                  aria-label={`Go to image ${i + 1}`}
+                  aria-current={selImg === i}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${selImg === i ? 'w-6 bg-luxe-gold' : 'w-1.5 bg-luxe-silver hover:bg-luxe-gray'}`}
+                />
+              ))}
             </div>
-            {discount > 0 && (
-              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
+          )}
+
+          {/* Desktop: large main image + thumbnail rail */}
+          <div className="hidden lg:block">
+            <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
+              <div className="aspect-[4/3]">
+                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+              </div>
+              {discount > 0 && (
+                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
+                </div>
+              )}
+              {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
+            </div>
+            {product.images.length > 1 && (
+              <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
+                {product.images.map((img, i) => (
+                  <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`} aria-current={selImg === i}
+                    className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
+                    <img src={img} alt="" onError={onImageError} className="w-full h-full object-cover" />
+                  </button>
+                ))}
               </div>
             )}
-            {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
-          </div>
-          <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
-            {product.images.map((img, i) => (
-              <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`}
-                className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
-                <img src={img} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
           </div>
         </div>
 
@@ -1364,13 +1220,15 @@ function ProductDetailPage() {
 
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
-          {/* Rating */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={14} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length})</span>
-            <span className="text-gray-300">|</span>
-            <span className="text-xs text-gray-500">{Math.floor(product.reviews * 0.87)} sold</span>
-          </div>
+          {/* Rating — shown ONLY when verified user reviews exist */}
+          {reviews.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={14} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
+              <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} verified review{reviews.length !== 1 ? 's' : ''})</span>
+            </div>
+          ) : (
+            <p className="text-xs text-luxe-gray mb-4">No verified reviews yet.</p>
+          )}
 
           {/* Price */}
           <div className="rounded-2xl bg-luxe-gold-soft/70 border border-luxe-gold/25 p-5 mb-4">
@@ -1382,13 +1240,16 @@ function ProductDetailPage() {
             {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
           </div>
 
-          {/* Stock + Shipping */}
+          {/* Stock + Shipping — honest: only real supplier-verified stock is
+              presented as In Stock / Low Stock; otherwise availability is
+              confirmed at checkout. No invented scarcity. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
-            {activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle size={13} className="inline mr-1" />In Stock</span>}
-            {activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
-            {activeStock === 0 && <span className="text-red-500 font-medium"><X size={13} className="inline mr-1" />Out of Stock</span>}
-            {product.freeShipping && <span className="text-gray-500"><Truck size={13} className="inline mr-1" />Free shipping</span>}
-            <span className="text-gray-500"><RotateCcw size={13} className="inline mr-1" />Thoughtfully curated essentials</span>
+            {product.usInventory && activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />In Stock</span>}
+            {product.usInventory && activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
+            {product.usInventory && activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
+            {!product.usInventory && activeStock > 0 && <span className="text-gray-500"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />Availability confirmed at checkout</span>}
+            {product.freeShipping && <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>}
+            <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
           </div>
 
           {/* Short Desc */}
@@ -1421,15 +1282,15 @@ function ProductDetailPage() {
           )}
 
           {/* Buttons */}
-          <div className="flex items-stretch gap-3 mb-4">
+          <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
             <div className="flex items-center border-2 border-gray-200 rounded-xl">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus size={14} /></button>
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
               <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
-              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus size={14} /></button>
+              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus strokeWidth={1.5} size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
               className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
-              <ShoppingBag size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+              <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
             </button>
             <button onClick={handleBuyNow} disabled={activeStock === 0}
               className="flex-1 py-3 bg-luxe-black hover:bg-luxe-charcoal disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray text-white text-sm font-bold rounded-xl transition-colors">
@@ -1439,16 +1300,14 @@ function ProductDetailPage() {
 
           {/* Trust */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {/* Trust — factual only. Free-shipping/return/support-hours claims
-                are NOT verified by a current policy (Phase 4E.2A). */}
             {[
-              { icon: Truck, t: 'Thoughtfully curated' },
-              { icon: RotateCcw, t: 'Premium pet essentials' },
-              { icon: Shield, t: 'Quality focused' },
-              { icon: Lock, t: 'Secure shopping experience' },
+              { icon: Truck01, t: 'Free ship $50+' },
+              { icon: RefreshCcw01, t: '30-day returns' },
+              { icon: ShieldTick, t: 'Thoughtfully curated' },
+              { icon: Lock01, t: 'Secure checkout' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
-                <b.icon size={14} className="text-luxe-gold shrink-0" />
+                <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />
                 <span className="text-[10px] sm:text-[11px] text-luxe-gray font-medium leading-tight">{b.t}</span>
               </div>
             ))}
@@ -1502,11 +1361,13 @@ function ProductDetailPage() {
       {/* Reviews */}
       {tab === 'reviews' && (
         <div className="max-w-3xl">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < Math.round(avgRating) ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
-            <span className="text-xs text-gray-500">{reviews.length} reviews</span>
-          </div>
+          {reviews.length > 0 && (
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
+              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={16} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
+              <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
+            </div>
+          )}
 
           {user ? (
             <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-luxe-gold hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
@@ -1518,7 +1379,7 @@ function ProductDetailPage() {
             <form onSubmit={submitReview} className="bg-luxe-cream rounded-xl p-4 mb-5 space-y-3 border border-luxe-silver/70">
               <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star size={18} className={s <= revForm.rating ? 'text-star fill-star' : 'text-gray-300'} />
+                  <Star01 strokeWidth={1.5} size={18} fill={s <= revForm.rating ? 'currentColor' : 'none'} className={s <= revForm.rating ? 'text-star' : 'text-gray-300'} />
                 </button>
               ))}</div>
               <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
@@ -1531,7 +1392,7 @@ function ProductDetailPage() {
               <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} size={11} className={i < r.rating ? 'text-star fill-star' : 'text-gray-200'} />)}</div>
+                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={11} fill={i < r.rating ? 'currentColor' : 'none'} className={i < r.rating ? 'text-star' : 'text-gray-200'} />)}</div>
                   <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
                 </div>
                 <p className="text-sm text-gray-600">{r.comment}</p>
@@ -1546,6 +1407,20 @@ function ProductDetailPage() {
         <h2 className="font-serif text-lg font-bold text-luxe-black mb-4">Related Products</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
+        </div>
+      </div>
+
+      {/* ── Sticky mobile Add to Cart (hidden on desktop) ── */}
+      <div className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-luxe-silver/70 shadow-[0_-8px_30px_-12px_rgba(16,26,46,0.2)] transition-transform duration-300 luxe-safe-bottom ${ctaVisible ? 'translate-y-full' : 'translate-y-0'}`} aria-hidden={ctaVisible} inert={ctaVisible}>
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-luxe-black leading-tight">${activePrice.toFixed(2)}</p>
+            {discount > 0 && <p className="text-[10px] text-luxe-gray line-through">${activeOriginal.toFixed(2)}</p>}
+          </div>
+          <button onClick={handleAddToCart} disabled={activeStock === 0}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold">
+            <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+          </button>
         </div>
       </div>
     </div>
@@ -1581,124 +1456,133 @@ function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; 
 
 function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
   return (
-    <div className="flex items-end justify-between gap-4 mb-7">
+    <div className="flex items-end justify-between gap-3 mb-5">
       <div>
-        <p className="eyebrow mb-2">{eyebrow}</p>
-        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
+        <p className="eyebrow mb-1.5">{eyebrow}</p>
+        <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
       </div>
-      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1.5 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
-        {linkLabel} <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
+        {linkLabel} <ArrowRight strokeWidth={1.5} size={13} className="transition-transform group-hover:translate-x-0.5" />
       </Link>}
     </div>
   );
 }
 
 function HomePage() {
-  const { products, notify } = useApp();
+  const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
+  const [nlEmail, setNlEmail] = useState('');
+  const [nlDone, setNlDone] = useState(false);
+  // Catalog Launch Phase — every section remains REAL catalog data. The
+  // homepage is intentionally art-directed: weak/collage-heavy supplier
+  // images stay available in Shop but are not promoted into editorial slots.
   const featured = products.filter(p => p.isActive);
-  const deals = featured.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
-  const hero = featured.slice(0, 4);
+  const homepageVisualProducts = featured.filter((p) => !/(collar|leash|shoes|apparel|shirt|bowl|nest|flying disc|cooling)/i.test(p.name));
+  const topPicks = homepageVisualProducts.filter(p => p.featured);
+  const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
+  const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
+  const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
+  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
+  const dogVisual = featured.find((p) => firstUsableImage(p) && /dog\s+(bed|mat|sofa)/i.test(p.name))
+    || featured.find((p) => firstUsableImage(p) && p.category === 'Pet Beds')
+    || featured.find((p) => firstUsableImage(p) && (p.category === 'Dog Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('dog'))));
+  const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
+  const categoryVisuals = [
+    { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
+    { label: 'Play', to: '/category/pet-toys', product: featured.find((p) => p.category === 'Pet Toys' && firstUsableImage(p)) },
+    { label: 'Feeding', to: '/category/feeding-water', product: featured.find((p) => p.category === 'Feeding & Water' && firstUsableImage(p)) },
+    { label: 'Comfort', to: '/category/pet-beds', product: featured.find((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p)) || featured.find((p) => p.category === 'Pet Beds' && firstUsableImage(p)) },
+    { label: 'Cat essentials', to: '/category/cat-supplies', product: catVisual },
+  ].filter((tile): tile is { label: string; to: string; product: Product } => Boolean(tile.product && firstUsableImage(tile.product)))
+    .filter((tile, index, all) => all.findIndex((candidate) => candidate.product.id === tile.product.id) === index);
+  const editorialProduct = featured.find((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name) && firstUsableImage(p))
+    || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
+    || catVisual
+    || heroProduct;
+  const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
 
   return (
     <div className="bg-white">
-      {/* ════════ HERO — light, premium blue ════════ */}
-      <section className="relative bg-gradient-to-br from-luxe-light via-white to-white text-luxe-black overflow-hidden">
-        {/* Ambient glow + texture */}
-        <div aria-hidden="true" className="absolute inset-0">
-          <div className="absolute -top-40 -right-32 w-[36rem] h-[36rem] rounded-full bg-luxe-gold/12 blur-[130px]" />
-          <div className="absolute -bottom-48 -left-32 w-[30rem] h-[30rem] rounded-full bg-luxe-gold/8 blur-[120px]" />
-          <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '34px 34px' }} />
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-4 pt-14 pb-16 sm:pt-18 sm:pb-20 lg:pt-24 lg:pb-24 grid lg:grid-cols-[1.05fr_0.95fr] items-center gap-10 lg:gap-14">
-          {/* Copy */}
+      {/* ════════ EDITORIAL HERO ════════ */}
+      <section className="home-hero">
+        <div className="home-hero-wash" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-14 grid lg:grid-cols-[0.42fr_0.58fr] items-center gap-8 lg:gap-10">
           <div className="hero-stagger text-center lg:text-left">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-luxe-gold/10 border border-luxe-gold/25 text-luxe-gold-dark text-[11px] font-bold uppercase tracking-[0.16em]">
-              <Sparkles size={12} /> Curated for Quality, Priced for Value
-            </span>
-            <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mt-6 mb-5 text-luxe-black">
-              Everything Your Pet Loves, <span className="text-gradient-blue">Thoughtfully Curated</span>
+            <p className="eyebrow mb-3">Premium pet essentials</p>
+            <h1 className="home-hero-title">
+              <span className="block">Everything Your Pet Loves,</span>
+              <span className="block">Thoughtfully <em>Curated.</em></span>
             </h1>
-            <p className="text-luxe-gray text-sm sm:text-base max-w-lg mx-auto lg:mx-0 mb-8 leading-relaxed">
-              Handpicked essentials for feeding, comfort, play, and grooming — thoughtfully curated for pet parents and delivered to your door.
+            <p className="home-hero-copy">
+              Premium essentials for walks, play, comfort and care — chosen to look good and work beautifully.
             </p>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
-              <Link to="/shop" className="inline-flex items-center gap-2 px-7 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm shadow-gold transition-all hover:-translate-y-0.5">
-                Shop Pet Essentials <ArrowRight size={16} />
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
+              <Link to="/shop" className="editorial-button editorial-button-dark">
+                Shop essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
               </Link>
-              <Link to="/shop?q=deal" className="inline-flex items-center gap-2 px-7 py-3.5 border border-luxe-silver text-luxe-charcoal font-semibold rounded-full text-sm hover:border-luxe-gold hover:text-luxe-gold transition-all bg-white/70">
-                Explore Deals
+              <Link to="/shop" className="editorial-button editorial-button-light">
+                Explore categories
               </Link>
             </div>
-            {/* Store trust — factual only. No fabricated ratings, reviews,
-                customer counts, or social proof (Master Plan §14 / Phase 4E.2). */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 mt-9 pt-8 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Shield size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck size={14} className="text-luxe-gold" /> Premium pet essentials</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RotateCcw size={14} className="text-luxe-gold" /> Quality focused</div>
+            <div className="home-hero-notes" aria-label="Luxedge shopping information">
+              <span><Truck01 strokeWidth={1.5} size={12} aria-hidden="true" /> {shipCopy}</span>
+              <span><RefreshCcw01 strokeWidth={1.5} size={12} aria-hidden="true" /> Returns &amp; support</span>
+              <span><Headphones01 strokeWidth={1.5} size={12} aria-hidden="true" /> Real customer support</span>
             </div>
           </div>
 
-          {/* Photo collage */}
-          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              {hero[0] && (
-                <Link to={`/product/${hero[0].id}`} className="relative row-span-2 group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-lg shadow-luxe-gold/10">
-                  <img src={hero[0].images[0]} alt={hero[0].name} aria-hidden="true" loading="eager" fetchPriority="high" decoding="async" className="w-full h-full min-h-[22rem] object-cover group-hover:scale-[1.04] transition-transform duration-700" />
-                  <span className="absolute bottom-3 left-3 right-3 px-3 py-2 glass rounded-lg text-[11px] font-semibold text-luxe-black">{hero[0].name}</span>
-                </Link>
-              )}
-              {hero.slice(1, 3).map(p => (
-                <Link key={p.id} to={`/product/${p.id}`} className="group rounded-2xl overflow-hidden ring-1 ring-luxe-silver shadow-md shadow-luxe-gold/5">
-                  <img src={p.images[0]} alt={p.name} loading="lazy" decoding="async" className="w-full aspect-square object-cover group-hover:scale-[1.04] transition-transform duration-700" />
-                </Link>
-              ))}
-            </div>
-            {/* Floating trust chips */}
-            <div className="absolute -left-3 sm:-left-6 top-6 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl animate-float">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Truck size={16} /></span>
-              <div>
-                <p className="text-[11px] font-bold text-luxe-black">Premium Essentials</p>
-                <p className="text-[10px] text-luxe-gray">Curated for your pet</p>
-              </div>
-            </div>
-            <div className="absolute -right-2 sm:-right-5 bottom-8 glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
-              <span className="w-9 h-9 rounded-full bg-luxe-gold/12 text-luxe-gold flex items-center justify-center"><Shield size={16} /></span>
-              <div>
-                <p className="text-[11px] font-bold text-luxe-black">Quality First</p>
-                <p className="text-[10px] text-luxe-gray">Carefully selected</p>
-              </div>
-            </div>
+          <div className="home-hero-visual">
+            <div className="home-hero-accent" aria-hidden="true" />
+            {heroProduct ? (
+              <Link to={`/product/${heroProduct.id}`} className="home-hero-frame group">
+                <img
+                  src={firstUsableImage(heroProduct) || LUXEDGE_IMAGE_FALLBACK}
+                  alt={heroProduct.name}
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                  onError={onImageError}
+                  className="home-hero-image"
+                />
+                <div className="home-hero-caption">
+                  <span className="home-hero-caption-kicker">From the collection</span>
+                  <span className="home-hero-caption-title">{heroProduct.name}</span>
+                  <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
+                </div>
+              </Link>
+            ) : (
+              <div className="home-hero-empty" aria-label="Luxedge collection preview">Luxedge</div>
+            )}
           </div>
         </div>
-        {/* Blue baseline */}
-        <div aria-hidden="true" className="h-px bg-gradient-to-r from-transparent via-luxe-gold/50 to-transparent" />
       </section>
 
       {/* ════════ Ad: After Hero ════════ */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
       {/* ════════ SHOP BY PET ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal className="text-center mb-9">
-            <p className="eyebrow mb-2">Start Here</p>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Who are you shopping for?</h2>
+      <section className="editorial-section bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="mb-5">
+            <p className="eyebrow mb-2">Shop by pet</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <h2 className="section-title">Who are you shopping for?</h2>
+              <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
+            </div>
           </Reveal>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-3xl mx-auto">
+          <div className="editorial-pet-grid">
             {[
-              { emoji: '🐶', label: 'Dog', to: '/category/dog-supplies', desc: 'Harnesses, toys, beds & more', img: CAT_META['Dog Supplies'].img },
-              { emoji: '🐱', label: 'Cat', to: '/category/cat-supplies', desc: 'Toys, towers, beds & more', img: CAT_META['Cat Supplies'].img },
-            ].map(p => (
-              <Reveal key={p.label} delay={80}>
-                <Link to={p.to} className="group relative block rounded-3xl overflow-hidden ring-1 ring-luxe-silver/80 hover:ring-luxe-gold/60 shadow-sm hover:shadow-xl transition-all duration-300">
-                  <img src={p.img} alt={p.label} loading="lazy" className="w-full aspect-[4/3] object-cover group-hover:scale-[1.05] transition-transform duration-700" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/80 via-luxe-black/20 to-transparent" />
-                  <div className="absolute inset-x-0 bottom-0 p-6 text-center">
-                    <span className="text-3xl block mb-1.5">{p.emoji}</span>
-                    <span className="font-serif text-2xl font-bold text-luxe-white block">{p.label}</span>
-                    <span className="text-xs text-luxe-white/75">{p.desc}</span>
-                    <span className="inline-flex items-center gap-1.5 mt-3 text-[11px] font-bold text-luxe-gold-light opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all">Shop now <ArrowRight size={12} /></span>
+              { label: 'Dog', to: '/category/dog-supplies', desc: 'Walk, play, rest & more', product: dogVisual },
+              { label: 'Cat', to: '/category/cat-supplies', desc: 'Play, comfort, feeding & more', product: catVisual },
+            ].filter((panel) => panel.product).map((panel, index) => (
+              <Reveal key={panel.label} delay={index * 80}>
+                <Link to={panel.to} className="editorial-pet-panel group">
+                  <img src={firstUsableImage(panel.product) || LUXEDGE_IMAGE_FALLBACK} alt={panel.product?.name || panel.label} loading="lazy" decoding="async" onError={onImageError} />
+                  <div className="editorial-pet-overlay" aria-hidden="true" />
+                  <div className="editorial-pet-copy">
+                    <span className="editorial-pet-label">{panel.label}</span>
+                    <span className="editorial-pet-desc">{panel.desc}</span>
+                    <span className="editorial-link">Shop {panel.label} <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></span>
                   </div>
                 </Link>
               </Reveal>
@@ -1707,25 +1591,26 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ POPULAR CATEGORIES ════════ */}
-      <section className="py-14 sm:py-18 bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal><SectionHeader eyebrow="Browse" title="Shop Popular Categories" to="/shop" /></Reveal>
+      {/* ════════ SHOP BY CATEGORY ════════ */}
+      <section className="editorial-section bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="mb-5">
+            <p className="eyebrow mb-2">Shop by category</p>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <h2 className="section-title">Essentials for better everyday moments.</h2>
+              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
+            </div>
+          </Reveal>
           <Reveal delay={60}>
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:mx-0 sm:px-0 sm:overflow-visible">
-              {CAT_LIST.filter(c => c !== 'All').map(c => {
-                const meta = CAT_META[c];
-                const count = featured.filter(p => p.category === c).length;
-                return (
-                  <Link key={c} to={`/category/${toSlug(c)}`} className="group shrink-0 w-32 sm:w-auto">
-                    <div className="bg-white rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-4 text-center">
-                      <div className="w-14 h-14 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center text-2xl group-hover:scale-110 group-hover:bg-luxe-gold/15 transition-transform duration-300">{meta?.emoji || '🐾'}</div>
-                      <p className="text-center text-[12px] font-semibold text-luxe-black mt-3 leading-tight">{c}</p>
-                      <p className="text-center text-[10px] text-luxe-gray mt-0.5">{count} items</p>
-                    </div>
-                  </Link>
-                );
-              })}
+            <div className="editorial-category-grid">
+              {categoryVisuals.map((tile, index) => (
+                <Link key={`${tile.label}-${tile.product.id}`} to={tile.to} className={`editorial-category-tile group ${index < 4 ? 'editorial-category-large' : 'editorial-category-small'} ${index === 1 ? 'editorial-category-crop' : ''}`}>
+                  <img src={firstUsableImage(tile.product) || LUXEDGE_IMAGE_FALLBACK} alt={tile.product.name} loading="lazy" decoding="async" onError={onImageError} />
+                  <div className="editorial-category-overlay" aria-hidden="true" />
+                  <span className="editorial-category-name">{tile.label}</span>
+                  <ArrowRight strokeWidth={1.5} size={15} className="editorial-category-arrow" aria-hidden="true" />
+                </Link>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -1734,116 +1619,150 @@ function HomePage() {
       {/* ════════ Ad: After Categories ════════ */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
 
-      {/* ════════ PROMO BANNERS ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4 grid sm:grid-cols-3 gap-4 sm:gap-5">
-          <Reveal><Link to="/shop" className="group relative block rounded-3xl overflow-hidden bg-sale-bg border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-sale text-white text-[10px] font-bold rounded-full mb-4"><Zap size={11} /> Deal</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Pet Favorites Under $30</h3>
-            <p className="text-xs text-luxe-gray mb-4">Everyday essentials your pet will love.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-sale group-hover:underline">Shop now <ArrowRight size={12} /></span>
-          </Link></Reveal>
-          <Reveal delay={70}><Link to="/category/pet-beds" className="group relative block rounded-3xl overflow-hidden bg-luxe-gold-soft border border-luxe-gold/25 p-7 hover:shadow-xl hover:shadow-luxe-gold/15 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-gold text-white text-[10px] font-bold rounded-full mb-4"><Moon size={11} /> Comfort</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Better Sleep for Your Pet</h3>
-            <p className="text-xs text-luxe-gray mb-4">Orthopedic beds & cozy caves for deep rest.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
-          </Link></Reveal>
-          <Reveal delay={140}><Link to="/category/pet-toys" className="group relative block rounded-3xl overflow-hidden bg-luxe-cream border border-luxe-silver/80 p-7 hover:shadow-xl hover:shadow-luxe-silver/50 hover:-translate-y-1 transition-all duration-300">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-luxe-black text-luxe-gold-light text-[10px] font-bold rounded-full mb-4"><Sparkles size={11} /> Play</span>
-            <h3 className="font-serif text-xl font-bold text-luxe-black mb-1.5">Playtime Essentials</h3>
-            <p className="text-xs text-luxe-gray mb-4">Interactive toys & enrichment for happy pets.</p>
-            <span className="inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold group-hover:underline">Shop now <ArrowRight size={12} /></span>
-          </Link></Reveal>
-        </div>
-      </section>
 
       {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
-      {/* Production catalog reset: with zero approved products the storefront
-          shows ONE premium curation notice instead of empty grids or demo
-          cards. No fake counts, launch dates, reviews, or shipping claims. */}
+      {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
+          show ONE premium curation notice instead of empty product grids. No
+          fake product cards, no fake counts, no fake launch dates. */}
       {featured.length === 0 ? (
         <section className="py-16 sm:py-20 bg-luxe-cream">
           <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Sparkles size={22} className="text-luxe-gold" /></div>
+            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
-            <p className="text-sm text-luxe-gray leading-relaxed">Thoughtfully selected pet essentials are coming soon. Every product is verified before it reaches your door.</p>
+            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
+              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
+            </div>
           </div>
         </section>
       ) : (
         <>
-          <section className="py-14 sm:py-18 bg-luxe-cream">
-            <div className="max-w-7xl mx-auto px-4">
-              <Reveal><SectionHeader eyebrow="Best Sellers" title="Popular Right Now" to="/shop" /></Reveal>
-              <Reveal delay={60}>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {[...featured].sort((a, b) => b.reviews - a.reviews).slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
-                </div>
-              </Reveal>
-            </div>
-          </section>
+          {/* New Arrivals — real newArrival flag, admin-set */}
+          {newArrivals.length > 0 && (
+            <section className="py-8 sm:py-10 bg-luxe-cream">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {newArrivals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* Top Picks — real featured flag (admin merchandising decision) */}
+          {topPicks.length > 0 && (
+            <section className="py-8 sm:py-10 bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
 
           {/* ════════ Ad: Between Product Sections ════════ */}
           <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+
+          {/* Dog Essentials — real category data */}
+          {dogEssentials.length > 0 && (
+            <section className="py-8 sm:py-10 bg-luxe-cream">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {dogEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* Cat Essentials — real category data */}
+          {catEssentials.length > 0 && (
+            <section className="py-8 sm:py-10 bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {catEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* All Products — full catalog browsing */}
+          {featured.length > 0 && (
+            <section className="py-8 sm:py-10 bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Collection" title="Shop All Products" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {homepageVisualProducts.slice(0, 20).map(p => <PCard key={p.id} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
         </>
       )}
 
-      {/* ════════ SHOP BY NEED ════════ */}
-      <section className="py-14 sm:py-18 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <Reveal className="text-center mb-9">
-            <p className="eyebrow mb-2">Solutions</p>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-black tracking-tight">Shop by Need</h2>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {[
-                { emoji: '🍽️', label: 'Feeding Time', to: '/category/feeding-water' },
-                { emoji: '😴', label: 'Better Sleep', to: '/category/pet-beds' },
-                { emoji: '🧸', label: 'Play & Enrichment', to: '/category/pet-toys' },
-                { emoji: '✂️', label: 'Grooming', to: '/category/grooming' },
-                { emoji: '🎒', label: 'Walking & Travel', to: '/category/pet-accessories' },
-              ].map(n => (
-                <Link key={n.label} to={n.to} className="group rounded-2xl border border-luxe-silver/80 hover:border-luxe-gold/60 hover:shadow-lg hover:shadow-luxe-gold/10 hover:-translate-y-1 transition-all duration-300 p-5 text-center bg-white">
-                  <span className="text-3xl block mb-2.5 group-hover:scale-110 transition-transform duration-300">{n.emoji}</span>
-                  <span className="text-[13px] font-semibold text-luxe-black">{n.label}</span>
-                </Link>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ════════ PET PARENT FAVORITES (only when the catalog has products) ════════ */}
-      {featured.length > 0 && (
-        <section className="py-14 sm:py-18 bg-luxe-cream">
-          <div className="max-w-7xl mx-auto px-4">
-            <Reveal><SectionHeader eyebrow="Recommended For You" title="Pet Parent Favorites" to="/shop" /></Reveal>
-            <Reveal delay={60}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                {deals.slice(0, 8).map(p => <PCard key={p.id} product={p} />)}
+      {/* ════════ EDITORIAL COLLECTION ════════ */}
+      {editorialProduct && (
+        <section className="editorial-section bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <Reveal>
+              <div className="editorial-story">
+                <div className="editorial-story-media">
+                  <img src={firstUsableImage(editorialProduct) || LUXEDGE_IMAGE_FALLBACK} alt={editorialProduct.name} loading="lazy" decoding="async" onError={onImageError} />
+                </div>
+                <div className="editorial-story-copy">
+                  <p className="eyebrow mb-3">Designed for everyday life</p>
+                  <h2 className="section-title">Pet essentials that belong in your home.</h2>
+                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space.</p>
+                  <Link to="/shop" className="editorial-link mt-5 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
+                </div>
               </div>
             </Reveal>
           </div>
         </section>
       )}
 
-      {/* ════════ TRUST BAR ════════ */}
-      <section className="py-12 sm:py-14 bg-white border-y border-luxe-silver/60">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Trust — factual only. Free-shipping/return/support-hours claims
-              are NOT verified by a current policy (Phase 4E.2A). */}
+      {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
+      {deals.length > 0 && (
+        <section className="py-8 sm:py-10 bg-luxe-cream">
+          <div className="max-w-7xl mx-auto px-4">
+            <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
+            <Reveal delay={60}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                {deals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
+
+      {/* ════════ VALUE STRIP — truthful store information only ════════ */}
+      <section className="value-strip" aria-label="Luxedge store information">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-4">
           {[
-            { icon: Truck, title: 'Premium Pet Essentials', desc: 'Curated for your pet' },
-            { icon: RotateCcw, title: 'Thoughtfully Curated', desc: 'Quality-focused selection' },
-            { icon: Shield, title: 'Secure Shopping', desc: 'Encrypted browsing experience' },
-            { icon: Headphones, title: 'Customer Support', desc: 'Here to help by email & phone' },
-          ].map(t => (
-            <div key={t.title} className="flex items-center gap-3.5">
-              <span className="w-12 h-12 rounded-2xl bg-luxe-gold-soft ring-1 ring-luxe-gold/20 text-luxe-gold flex items-center justify-center shrink-0"><t.icon size={20} /></span>
+            { icon: Truck01, title: freeShippingEnabled ? `Free ship $${freeShippingThreshold}+` : 'Fair shipping', desc: freeShippingEnabled ? 'Qualifying orders' : 'Calculated at checkout' },
+            { icon: RefreshCcw01, title: '30-day returns', desc: 'Hassle-free returns' },
+            { icon: ShieldTick, title: 'Curated quality', desc: 'Selected for pet owners' },
+            { icon: Headphones01, title: 'Support', desc: 'Real people, by email' },
+          ].map((item) => (
+            <div key={item.title} className="value-item">
+              <item.icon strokeWidth={1.5} size={14} className="value-item-icon" aria-hidden="true" />
               <div>
-                <p className="text-sm font-bold text-luxe-black">{t.title}</p>
-                <p className="text-[11px] text-luxe-gray">{t.desc}</p>
+                <p className="value-item-title">{item.title}</p>
+                <p className="value-item-copy">{item.desc}</p>
               </div>
             </div>
           ))}
@@ -1852,18 +1771,25 @@ function HomePage() {
 
       {/* ════════ NEWSLETTER — dark bookend ════════ */}
       <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
-        <div aria-hidden="true" className="absolute -top-32 right-0 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/12 blur-[120px]" />
-        <div className="relative max-w-3xl mx-auto px-4 py-16 sm:py-20 text-center">
-          <p className="eyebrow mb-3 text-luxe-gold-light">Stay in the Loop</p>
-          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-luxe-white tracking-tight mb-3">Join the Luxedge Pet Family</h2>
-          <p className="text-luxe-white/65 text-sm mb-8 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
-          <form onSubmit={e => { e.preventDefault(); notify('Thanks for subscribing! 🐾'); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input type="email" required placeholder="Your email address" aria-label="Email address"
-              className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
-            <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
-              Subscribe
-            </button>
-          </form>
+        <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
+        <div className="relative max-w-3xl mx-auto px-4 py-10 sm:py-14 text-center">
+          <p className="eyebrow mb-2 text-luxe-gold-light">Stay in the Loop</p>
+          <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-white tracking-tight mb-2">Join the Luxedge Pet Family</h2>
+          <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
+          {nlDone ? (
+            <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
+              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list!</p>
+              <p className="text-xs text-luxe-white/65">We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> locally and will let you know when email updates go live.</p>
+            </div>
+          ) : (
+            <form onSubmit={e => { e.preventDefault(); if (nlEmail.trim()) { try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: nlEmail.trim(), at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } setNlDone(true); } }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
+                className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
+              <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
+                Subscribe
+              </button>
+            </form>
+          )}
         </div>
       </section>
     </div>
@@ -1872,7 +1798,7 @@ function HomePage() {
 
 function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
-  const { products } = useApp();
+  const { products, reviews } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
 
@@ -1880,24 +1806,38 @@ function ShopPage() {
   const [cat, setCat] = useState(initialCat);
   const [q, setQ] = useState(params.get('q') || '');
   const [sort, setSort] = useState('featured');
-  const [maxPrice, setMaxPrice] = useState(0); // 0 = no limit
+  const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
   const [minRating, setMinRating] = useState(0); // 0 = any
+  const [onlyInStock, setOnlyInStock] = useState(false);
+  const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isDeals = q.toLowerCase() === 'deal';
 
   // Sync when URL slug or query changes
   useEffect(() => { setCat(slug ? fromSlug(slug) : 'All'); }, [slug]);
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
+  useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
+
+  // Rating filter uses verified review averages only — catalog rating is stub data.
+  const verifiedAvgFor = (pid: string): number => {
+    const v = reviews.filter(r => r.productId === pid && r.status === 'approved');
+    return v.length ? v.reduce((s, r) => s + r.rating, 0) / v.length : 0;
+  };
 
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
-    .filter(p => p.name.toLowerCase().includes(q.toLowerCase()))
+    .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
-    .filter(p => minRating === 0 || p.rating >= minRating)
+    .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
+    .filter(p => !onlyInStock || p.stock > 0)
+    .filter(p => !onlyFreeShipping || p.freeShipping)
+    .filter(p => !onlyNew || p.newArrival)
     .sort((a, b) => {
       if (sort === 'price-low') return a.price - b.price;
       if (sort === 'price-high') return b.price - a.price;
-      if (sort === 'rating') return b.rating - a.rating;
-      if (sort === 'best-sellers') return (b.reviews || 0) - (a.reviews || 0);
+      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+      if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
       return 0;
     });
 
@@ -1906,11 +1846,11 @@ function ShopPage() {
     else nav(`/category/${toSlug(newCat)}`);
   };
 
-  const pageTitle = cat === 'All' ? 'Shop All Products' : cat;
-  const pageDesc = cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`;
-  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0);
+  const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
+  const pageDesc = isDeals ? 'Products with compare-at savings, updated as new deals land.' : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
+  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
 
-  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); nav('/shop'); };
+  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
 
   // Reusable sidebar filter block (desktop sidebar + mobile drawer)
   const FilterBlock = () => (
@@ -1940,7 +1880,20 @@ function ShopPage() {
         </select>
       </div>
       <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Rating</h3>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Availability</h3>
+        <div className="space-y-1">
+          {[['in-stock', 'In stock', onlyInStock, setOnlyInStock] as const, ['free-shipping', 'Free shipping', onlyFreeShipping, setOnlyFreeShipping] as const, ['new', 'New arrivals', onlyNew, setOnlyNew] as const].map(([id, label, active, setter]) => (
+            <button key={id} onClick={() => setter(!active)}
+              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
+                active ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
+              }`}>
+              <span className="flex items-center gap-1"><CheckCircle strokeWidth={1.5} size={12} className={active ? 'text-luxe-gold' : 'text-gray-300'} /> {label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Verified rating</h3>
         <div className="space-y-1">
           {[4.5, 4, 0].map(r => (
             <button key={r} onClick={() => setMinRating(r)}
@@ -1948,7 +1901,7 @@ function ShopPage() {
                 minRating === r ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               {r === 0 ? 'Any rating' : (
-                <span className="flex items-center gap-1"><Star size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
+                <span className="flex items-center gap-1"><Star01 strokeWidth={1.5} size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
               )}
             </button>
           ))}
@@ -1965,31 +1918,30 @@ function ShopPage() {
       {/* Page Header */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
         <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12">
-          <p className="eyebrow mb-2">{cat === 'All' ? 'Our Collection' : cat}</p>
+          <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
           <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
         </div>
       </section>
 
-      {/* Toolbar: mobile Filter button + search + sort */}
-      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-0 z-20 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
+      {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
+      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-16 lg:top-[7.1rem] z-30 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
             className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
-            <SlidersHorizontal size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
+            <Sliders01 strokeWidth={1.5} size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
           </button>
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
+            <SearchMd strokeWidth={1.5} size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
             <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
               className="w-full pl-9 pr-3 py-2 border border-luxe-silver rounded-lg text-[13px] focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-luxe-cream/60" />
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
             className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
             <option value="featured">Featured</option>
-            <option value="best-sellers">Best Sellers</option>
+            <option value="newest">Newest</option>
             <option value="price-low">Price: Low→High</option>
             <option value="price-high">Price: High→Low</option>
-            <option value="rating">Top Rated</option>
           </select>
         </div>
       </div>
@@ -2002,7 +1954,7 @@ function ShopPage() {
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-luxe-silver/70">
               <h2 className="font-serif text-base font-bold text-luxe-black">Filters</h2>
               <button onClick={() => setDrawerOpen(false)} aria-label="Close filters"
-                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X size={16} /></button>
+                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X strokeWidth={1.5} size={16} /></button>
             </div>
             <div className="p-4">
               <FilterBlock />
@@ -2031,17 +1983,17 @@ function ShopPage() {
                 {f.map(p => <PCard key={p.id} product={p} />)}
               </div>
             ) : products.length === 0 ? (
-              /* Production catalog reset: genuinely empty catalog — premium
-                 curation notice, never demo cards or fake counts. */
+              /* Phase 4E.1 — genuinely empty catalog (no published DB products):
+                 premium curation notice, never fake cards or fake counts. */
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Sparkles size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
-                <p className="text-sm text-luxe-gray mb-5">Thoughtfully selected pet essentials are coming soon.</p>
+                <p className="text-sm text-luxe-gray mb-5">Every product is verified before it reaches your door. Please check back soon.</p>
                 <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
               </div>
             ) : (
               <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Search size={22} className="text-luxe-gold" /></div>
+                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><SearchMd strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
                 <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products found</p>
                 <p className="text-sm text-luxe-gray mb-5">Try adjusting your search or filters.</p>
                 <button onClick={clearAll} className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
@@ -2057,20 +2009,27 @@ function ShopPage() {
 }
 
 function CartDrawer() {
-  const { cart, cartOpen, closeCart, updateQty, removeFromCart, user } = useApp();
+  const { cart, cartOpen, closeCart, updateQty, removeFromCart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, notify } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
+  const [codeInput, setCodeInput] = useState('');
 
   // Close the drawer whenever the route changes (e.g. Proceed to Checkout).
   useEffect(() => { closeCart(); }, [loc.pathname, closeCart]);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const sh = sub >= 50 ? 0 : 4.99;
-  const tot = sub + sh;
+  const sh = freeShippingEnabled && sub >= freeShippingThreshold ? 0 : 4.99;
+  const discount = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
+  const tot = Math.max(0, sub - discount) + sh;
+  const remaining = freeShippingEnabled ? freeShippingThreshold - sub : 0;
+  const applyCode = () => {
+    const err = applyCoupon(codeInput);
+    if (err) notify(err, 'error'); else { notify('Coupon applied'); setCodeInput(''); }
+  };
 
   const checkout = () => {
     closeCart();
-    nav(user ? '/checkout' : '/login');
+    nav('/checkout');
   };
 
   return (
@@ -2094,17 +2053,17 @@ function CartDrawer() {
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <ShoppingBag size={20} className="text-luxe-gold" />
+              <ShoppingBag01 strokeWidth={1.5} size={20} className="text-luxe-gold" />
               <h2 className="text-lg font-semibold text-luxe-black">Your Cart ({cart.length})</h2>
             </div>
             <button onClick={closeCart} aria-label="Close cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X size={18} />
+              <X strokeWidth={1.5} size={18} />
             </button>
           </div>
 
           {cart.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
               <p className="text-luxe-black text-sm font-semibold">Your cart is empty</p>
               <p className="text-luxe-gray text-xs">Add some handpicked essentials to get started.</p>
               <button onClick={() => { closeCart(); nav('/shop'); }} className="mt-2 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">
@@ -2115,42 +2074,77 @@ function CartDrawer() {
             <>
               {/* Items */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                {/* Shipping-policy claim removed (Phase 4E.2A): no verified
-                    free-shipping policy exists on this branch. */}
-                <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
-                  <p className="text-[11px] text-gray-600">Shipping costs are calculated at checkout.</p>
+                {freeShippingEnabled ? (sub < freeShippingThreshold ? (
+                  <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
+                    <p className="text-[11px] text-gray-600">You're <span className="font-bold text-luxe-gold">${remaining.toFixed(2)}</span> away from free shipping</p>
+                    <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / freeShippingThreshold) * 100)}%` }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 flex items-center gap-2">
+                    <CheckCircle strokeWidth={1.5} size={14} className="text-green-600 shrink-0" />
+                    <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
+                  </div>
+                )) : null}
+
+                {/* Coupon (real active store coupons only) */}
+                <div className="rounded-lg border border-luxe-silver px-3 py-2.5">
+                  {coupon ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-green-700"><CheckCircle strokeWidth={1.5} size={12} className="inline mr-1" />{coupon.code} applied (−${discount.toFixed(2)})</span>
+                      <button onClick={removeCoupon} className="text-[11px] text-gray-400 hover:text-red-500">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} placeholder="Coupon code" aria-label="Coupon code"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-luxe-gold"
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }} />
+                      <button onClick={applyCode} className="px-3 py-2 bg-luxe-black hover:bg-luxe-gold text-white text-xs font-semibold rounded-lg transition-colors">Apply</button>
+                    </div>
+                  )}
                 </div>
 
-                {cart.map(item => (
+                {cart.map(item => {
+                  // Defensive rendering: a cart item may never crash the
+                  // drawer. Fall back to the branded placeholder image, safe
+                  // text, and a $0 price for any missing field.
+                  const img = (Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+                  const nm = item.product.name || 'Product';
+                  const cat = item.product.category || '';
+                  const pr = typeof item.product.price === 'number' && Number.isFinite(item.product.price) ? item.product.price : 0;
+                  return (
                   <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
-                    <img src={item.product.images[0]} alt={item.product.name} className="w-20 h-20 object-cover rounded-lg shrink-0" />
+                    <img src={img} alt={nm} onError={onImageError} className="w-20 h-20 object-cover rounded-lg shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-luxe-black truncate">{item.product.name}</h4>
-                      <p className="text-[11px] text-gray-400 truncate">{item.product.category}</p>
-                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${item.product.price.toFixed(2)}</p>
+                      <h4 className="text-sm font-semibold text-luxe-black truncate">{nm}</h4>
+                      <p className="text-[11px] text-gray-400 truncate">{cat}</p>
+                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${pr.toFixed(2)}</p>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
-                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={12} /></button>
+                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={12} /></button>
                           <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={12} /></button>
+                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={12} /></button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
+                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={14} /></button>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-luxe-black shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-luxe-black shrink-0">${(pr * item.quantity).toFixed(2)}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Footer */}
               <div className="border-t border-gray-100 px-5 py-4 space-y-3">
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
+                  {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">−${discount.toFixed(2)}</span></div>}
                   <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-semibold ${sh === 0 ? 'text-green-600' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
                   <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
                 </div>
                 <button onClick={checkout} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-gold">
-                  <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+                  <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
                 </button>
                 <button onClick={() => { closeCart(); nav('/cart'); }} className="w-full py-2.5 text-xs text-gray-500 hover:text-luxe-black transition-colors">
                   View Full Cart
@@ -2165,13 +2159,14 @@ function CartDrawer() {
 }
 
 function CartPage() {
-  const { cart, updateQty, removeFromCart, user } = useApp(); const nav = useNavigate();
+  const { cart, updateQty, removeFromCart } = useApp(); const nav = useNavigate();
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
+  const remaining = 50 - sub;
 
   if (cart.length === 0) return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag size={28} className="text-luxe-gold" /></div>
+        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
         <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
         <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
         <Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
@@ -2187,27 +2182,30 @@ function CartPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Items */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm divide-y divide-luxe-silver/60">
-            {cart.map(i => (
+            {cart.map(i => {
+              const img = (Array.isArray(i.product.images) && i.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+              return (
               <div key={i.product.id} className="flex gap-4 p-5">
-                <img src={i.product.images[0]} alt={i.product.name} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
+                <img src={img} alt={i.product.name || 'Product'} onError={onImageError} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
                 <div className="flex-1 min-w-0">
                   <Link to={`/product/${i.product.id}`} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
                   <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
                   <div className="flex items-center gap-3 mt-3">
                     <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">
-                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus size={13} /></button>
+                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={13} /></button>
                       <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
-                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus size={13} /></button>
+                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={13} /></button>
                     </div>
-                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash2 size={15} /></button>
+                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash01 strokeWidth={1.5} size={15} /></button>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-luxe-black">${(i.product.price * i.quantity).toFixed(2)}</p>
-                  <p className="text-xs text-luxe-gray">${i.product.price.toFixed(2)} each</p>
+                  <p className="font-bold text-luxe-black">${((i.product.price || 0) * i.quantity).toFixed(2)}</p>
+                  <p className="text-xs text-luxe-gray">${(i.product.price || 0).toFixed(2)} each</p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Summary */}
@@ -2215,7 +2213,10 @@ function CartPage() {
             <h2 className="font-serif text-lg font-bold text-luxe-black mb-5">Order Summary</h2>
             {sub < 50 && (
               <div className="rounded-xl bg-luxe-gold-soft/70 border border-luxe-gold/20 px-4 py-3 mb-5">
-                <p className="text-[11px] text-luxe-gray">Shipping costs are calculated at checkout.</p>
+                <p className="text-[11px] text-luxe-gray">Add <span className="font-bold text-luxe-gold-dark">${remaining.toFixed(2)}</span> more for free shipping</p>
+                <div className="mt-2 h-1.5 bg-white rounded-full overflow-hidden">
+                  <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
+                </div>
               </div>
             )}
             <div className="space-y-2.5 text-sm">
@@ -2223,13 +2224,10 @@ function CartPage() {
               <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`font-medium ${sh === 0 ? 'text-luxe-success' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
               <div className="flex justify-between text-lg font-bold pt-3 border-t border-luxe-silver/70"><span className="text-luxe-black">Total</span><span className="text-luxe-black">${tot.toFixed(2)}</span></div>
             </div>
-            <button onClick={() => nav(user ? '/checkout' : '/login')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
-              <Lock size={14} /> {user ? 'Proceed to Checkout' : 'Sign In to Checkout'}
+            <button onClick={() => nav('/checkout')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
+              <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
             </button>
             <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
-            <div className="mt-5 pt-4 border-t border-luxe-silver/60 flex items-center justify-center gap-2">
-              {['VISA', 'MC', 'AMEX', 'PayPal'].map(c => <span key={c} className="px-2 py-1 bg-luxe-cream border border-luxe-silver rounded text-[9px] font-bold text-luxe-gray">{c}</span>)}
-            </div>
           </div>
         </div>
       </div>
@@ -2238,30 +2236,28 @@ function CartPage() {
 }
 
 function CheckoutPage() {
-  const { cart, placeOrder, user, notify } = useApp();
+  const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify } = useApp();
   const nav = useNavigate();
-
-  const [step, setStep] = useState(1); // 1=info, 2=payment, 3=processing, 4=done
-  const [orderId, setOrderId] = useState('');
-  const [payMethod, setPayMethod] = useState<'card'|'paypal'>('card');
-  const [shipMethod, setShipMethod] = useState<'standard'|'express'>('standard');
+  const [searchParams] = useSearchParams();
+  const cancelled = searchParams.get('cancelled') === '1';
+  const [submitting, setSubmitting] = useState(false);
+  const [payError, setPayError] = useState('');
+  const [couponInput, setCouponInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const [f, setF] = useState({ firstName: user?.name.split(' ')[0] || '', lastName: user?.name.split(' ').slice(1).join(' ') || '', email: user?.email || '', phone: '', address: '', city: '', state: '', zip: '', cardNum: '', cardExp: '', cardCvc: '', cardName: '' });
-
-  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  useEffect(() => { window.scrollTo(0, 0); }, [step]);
+  const [f, setF] = useState({ email: user?.email || '', firstName: user?.name?.split(' ')[0] || '', lastName: user?.name?.split(' ').slice(1).join(' ') || '', phone: '', address: '', city: '', state: '', zip: '' });
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const shipCost = shipMethod === 'express' ? 9.99 : (sub >= 50 ? 0 : 4.99);
-  const tax = +(sub * 0.0825).toFixed(2); // TX 8.25%
-  const total = +(sub + shipCost + tax).toFixed(2);
+  const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
+  const discountedSub = Math.max(0, sub - couponDisc);
+  const shipCost = freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99;
+  // NO hard-coded tax. Stripe automatic tax computes the real rate from the
+  // collected shipping address at checkout. This is the pre-tax total.
+  const totalBeforeTax = +(discountedSub + shipCost).toFixed(2);
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
-  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
-  const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
+  useEffect(() => { if (cart.length === 0) nav('/shop'); }, [cart.length, nav]);
+  if (cart.length === 0) return null;
 
-  const validateStep1 = () => {
+  const validate = () => {
     const e: Record<string, string> = {};
     if (!f.firstName.trim()) e.firstName = 'Required';
     if (!f.lastName.trim()) e.lastName = 'Required';
@@ -2275,227 +2271,97 @@ function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const validateStep2 = () => {
-    if (payMethod === 'paypal') return true;
-    const e: Record<string, string> = {};
-    if (f.cardNum.replace(/\s/g, '').length < 16) e.cardNum = 'Valid card number required';
-    if (!/^\d{2}\/\d{2}$/.test(f.cardExp)) e.cardExp = 'MM/YY format';
-    if (f.cardCvc.length < 3) e.cardCvc = '3-4 digits';
-    if (!f.cardName.trim()) e.cardName = 'Required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const handleCoupon = () => {
+    if (!couponInput.trim()) return;
+    const errMsg = applyCoupon(couponInput);
+    if (errMsg) notify(errMsg, 'error'); else notify('Coupon applied!');
+    setCouponInput('');
   };
 
-  const handleNext = () => { if (step === 1 && validateStep1()) { trackEvent('begin_checkout', { currency: 'USD', value: total, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() }); setStep(2); } };
-  const handlePay = async () => {
-    if (step === 2 && validateStep2()) {
-      setStep(3);
-      await new Promise(r => setTimeout(r, 2500));
-      const addr = `${f.address}, ${f.city}, ${f.state} ${f.zip}`;
-      const oid = placeOrder(addr);
-      // PHASE 4E.2A: a blocked order (stale/invalid cart) must not reach the
-      // fake success screen and must not fire a purchase conversion.
-      if (!oid) { notify('Unable to complete your order. Please review your cart.'); setStep(2); return; }
-      setOrderId(oid);
-      setStep(4);
+  const handleCheckout = async () => {
+    if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    setSubmitting(true);
+    setPayError('');
+    try {
+      trackEvent('begin_checkout', { currency: 'USD', value: totalBeforeTax, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+      const res = await createCheckoutSession({
+        items: cart.map(i => ({ id: i.product.id, quantity: i.quantity })),
+        couponCode: coupon?.code || undefined,
+        customer: { email: f.email, name: `${f.firstName} ${f.lastName}`.trim(), phone: f.phone, address: f.address, city: f.city, state: f.state, zip: f.zip },
+      });
+      // Stripe-hosted checkout — the browser is redirected to Stripe. Luxedge
+      // never sees or stores card details.
+      window.location.assign(res.url);
+    } catch (e) {
+      setPayError((e as Error).message);
+      setSubmitting(false);
     }
   };
 
-  const fmtCard = (v: string) => v.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim().slice(0, 19);
-  const fmtExp = (v: string) => { const d = v.replace(/\D/g, ''); return d.length >= 2 ? d.slice(0, 2) + '/' + d.slice(2, 4) : d; };
-
+  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
+  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
+  const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
   const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 
-  // Redirect to cart (in an effect — never call navigate() during render).
-  useEffect(() => { if (cart.length === 0 && step < 4) nav('/cart'); }, [cart.length, step, nav]);
-  if (cart.length === 0 && step < 4) return null;
-
-  // ── Success ──
-  if (step === 4) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle size={40} className="text-green-500" /></div>
-        <h1 className="text-2xl font-bold mb-2">Order Confirmed!</h1>
-        <p className="text-gray-500 mb-1">Order <span className="font-mono font-semibold text-gray-700">#{orderId}</span></p>
-        <p className="text-sm text-gray-400 mb-6">Confirmation sent to {f.email}</p>
-        <div className="bg-white rounded-xl border p-5 text-left mb-6">
-          <h3 className="font-semibold text-sm mb-3">Shipping to:</h3>
-          <p className="text-sm text-gray-600">{f.firstName} {f.lastName}</p>
-          <p className="text-sm text-gray-600">{f.address}</p>
-          <p className="text-sm text-gray-600">{f.city}, {f.state} {f.zip}</p>
-          <div className="mt-3 pt-3 border-t"><p className="text-sm text-gray-500">Delivery: <span className="font-medium text-gray-700">{shipMethod === 'express' ? '2-4 business days' : '7-12 business days'}</span></p></div>
-        </div>
-        <div className="flex gap-3">
-          <Link to="/orders" className="flex-1 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-center text-sm transition-colors">View Orders</Link>
-          <Link to="/shop" className="flex-1 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-xl text-center text-sm">Continue Shopping</Link>
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── Processing ──
-  if (step === 3) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="text-center">
-        <div className="w-20 h-20 bg-luxe-gold-soft rounded-full flex items-center justify-center mx-auto mb-6"><Loader2 size={36} className="text-luxe-gold animate-spin" /></div>
-        <h2 className="text-xl font-bold mb-2">Processing Payment...</h2>
-        <p className="text-sm text-gray-500">Please wait. Do not close this page.</p>
-      </div>
-    </div>
-  );
-
-  // ── Main Checkout ──
   return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Progress */}
-      <div className="bg-white border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-center gap-3">
-            {[{ n: 1, l: 'Information' }, { n: 2, l: 'Payment' }, { n: 3, l: 'Confirm' }].map((s, i) => (
-              <div key={s.n} className="flex items-center gap-3">
-                <div className={`flex items-center gap-2 ${step >= s.n ? 'text-luxe-gold' : 'text-gray-400'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ring-2 ${step > s.n ? 'bg-luxe-success text-white ring-luxe-success/30' : step === s.n ? 'bg-luxe-gold text-white ring-luxe-gold/30' : 'bg-luxe-silver/60 text-luxe-gray ring-transparent'}`}>
-                    {step > s.n ? '✓' : s.n}
-                  </div>
-                  <span className="text-sm font-medium hidden sm:block">{s.l}</span>
-                </div>
-                {i < 2 && <div className={`w-8 sm:w-16 h-0.5 ${step > s.n ? 'bg-green-400' : 'bg-gray-200'}`} />}
-              </div>
-            ))}
+    <div className="bg-luxe-cream min-h-screen">
+      {cancelled && (
+        <div className="max-w-5xl mx-auto px-4 pt-6">
+          <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Payment cancelled</p>
+              <p className="text-xs text-amber-700">Your cart is still saved. No payment was taken — you can try again whenever you're ready.</p>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      )}
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <p className="eyebrow mb-2">Secure Checkout</p>
+        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Checkout</h1>
         <div className="grid lg:grid-cols-5 gap-8">
-
-          {/* ──── LEFT SIDE: Forms ──── */}
+          {/* ──── LEFT: Contact + Shipping ──── */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Step 1: Shipping */}
-            {step === 1 && (
-              <>
-                {/* Contact */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon size={18} className="text-luxe-gold" /> Contact Information</h2>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({...f, firstName: e.target.value})} className={I} placeholder="John" />{ER('firstName')}</div>
-                    <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({...f, lastName: e.target.value})} className={I} placeholder="Doe" />{ER('lastName')}</div>
-                    <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({...f, email: e.target.value})} className={I} placeholder="john@example.com" />{ER('email')}</div>
-                    <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({...f, phone: e.target.value})} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
-                  </div>
+            {payError && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle strokeWidth={1.5} size={18} className="text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">Checkout could not start</p>
+                  <p className="text-xs text-red-700">{payError}</p>
                 </div>
-
-                {/* Shipping Address */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck size={18} className="text-luxe-gold" /> Shipping Address</h2>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({...f, address: e.target.value})} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
-                    <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({...f, city: e.target.value})} className={I} placeholder="Irving" />{ER('city')}</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({...f, state: e.target.value})} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
-                      <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({...f, zip: e.target.value})} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Shipping Method */}
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Package size={18} className="text-luxe-gold" /> Shipping Method</h2>
-                  <div className="space-y-3">
-                    {[
-                      { id: 'standard' as const, label: 'Standard Shipping', time: '7-12 business days', price: sub >= 50 ? 'FREE' : '$4.99', badge: sub >= 50 ? '🎉 Free!' : '' },
-                      { id: 'express' as const, label: 'Express Shipping', time: '2-4 business days', price: '$9.99', badge: '' },
-                    ].map(o => (
-                      <label key={o.id} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${shipMethod === o.id ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="ship" checked={shipMethod === o.id} onChange={() => setShipMethod(o.id)} className="w-4 h-4 text-luxe-gold border-gray-300" />
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm">{o.label}</p>
-                          <p className="text-xs text-gray-500">{o.time}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`font-bold text-sm ${o.price === 'FREE' ? 'text-green-600' : ''}`}>{o.price}</span>
-                          {o.badge && <p className="text-[10px] text-green-600 font-medium">{o.badge}</p>}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <button onClick={handleNext} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm shadow-gold">
-                  Continue to Payment <ArrowRight size={16} />
-                </button>
-              </>
+              </div>
             )}
-
-            {/* Step 2: Payment */}
-            {step === 2 && (
-              <>
-                <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-2"><ArrowLeft size={14} /> Back to Information</button>
-
-                <div className="bg-white rounded-2xl border p-6">
-                  <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><CreditCard size={18} className="text-luxe-gold" /> Payment Method</h2>
-
-                  {/* Method Toggle */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    <button onClick={() => setPayMethod('card')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'card' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">STRIPE</span></div>
-                        <div><p className="font-semibold text-sm">Credit / Debit</p><p className="text-[10px] text-gray-500">Visa, MC, Amex</p></div>
-                      </div>
-                    </button>
-                    <button onClick={() => setPayMethod('paypal')} className={`p-4 rounded-xl border-2 text-left transition-all ${payMethod === 'paypal' ? 'border-luxe-gold bg-luxe-gold-soft' : 'border-gray-200 hover:border-gray-300'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-7 bg-[#003087] rounded flex items-center justify-center"><span className="text-white text-[8px] font-bold">PayPal</span></div>
-                        <div><p className="font-semibold text-sm">PayPal</p><p className="text-[10px] text-gray-500">Fast & secure</p></div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {payMethod === 'card' ? (
-                    <div className="space-y-4">
-                      <div><label className={L}>Card Number *</label><input value={f.cardNum} onChange={e => setF({...f, cardNum: fmtCard(e.target.value)})} className={I} placeholder="4242 4242 4242 4242" maxLength={19} />{ER('cardNum')}</div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div><label className={L}>Expiry *</label><input value={f.cardExp} onChange={e => setF({...f, cardExp: fmtExp(e.target.value)})} className={I} placeholder="MM/YY" maxLength={5} />{ER('cardExp')}</div>
-                        <div><label className={L}>CVC *</label><input value={f.cardCvc} onChange={e => setF({...f, cardCvc: e.target.value.replace(/\D/g,'').slice(0,4)})} className={I} placeholder="123" maxLength={4} />{ER('cardCvc')}</div>
-                      </div>
-                      <div><label className={L}>Cardholder Name *</label><input value={f.cardName} onChange={e => setF({...f, cardName: e.target.value})} className={I} placeholder="JOHN DOE" />{ER('cardName')}</div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 bg-gray-50 rounded-xl">
-                      <p className="text-sm text-gray-600 mb-2">You'll be redirected to PayPal to complete payment.</p>
-                      <p className="text-xs text-gray-400">Secure. Fast. Easy.</p>
-                    </div>
-                  )}
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({ ...f, firstName: e.target.value })} className={I} placeholder="John" />{ER('firstName')}</div>
+                <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} className={I} placeholder="Doe" />{ER('lastName')}</div>
+                <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} className={I} placeholder="john@example.com" />{ER('email')}</div>
+                <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({ ...f, address: e.target.value })} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
+                <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({ ...f, city: e.target.value })} className={I} placeholder="Irving" />{ER('city')}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({ ...f, state: e.target.value })} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
+                  <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({ ...f, zip: e.target.value })} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
                 </div>
-
-                {/* Security Note */}
-                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-                  <Shield size={18} className="text-green-600 shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-green-800">Your payment is secure</p>
-                    <p className="text-xs text-green-600">256-bit SSL encryption. We never store your card details.</p>
-                  </div>
-                </div>
-
-                <button onClick={handlePay} className="w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
-                  <Lock size={16} />
-                  {payMethod === 'paypal' ? `Pay with PayPal · $${total.toFixed(2)}` : `Complete Purchase · $${total.toFixed(2)}`}
-                </button>
-              </>
-            )}
+              </div>
+            </div>
           </div>
 
-          {/* ──── RIGHT SIDE: Order Summary ──── */}
+          {/* ──── RIGHT: Order Summary ──── */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border p-6 sticky top-20">
+            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm sticky top-20">
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
-
-              {/* Items */}
               <div className="space-y-4 mb-6 max-h-64 overflow-y-auto pr-1">
                 {cart.map(item => (
                   <div key={item.product.id} className="flex gap-3">
                     <div className="relative shrink-0">
-                      <img src={item.product.images[0]} alt="" className="w-16 h-16 object-cover rounded-lg border" />
+                      <img src={(Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK} alt="" onError={onImageError} className="w-16 h-16 object-cover rounded-lg border" />
                       <span className="absolute -top-2 -right-2 w-5 h-5 bg-gray-700 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -2506,39 +2372,52 @@ function CheckoutPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Totals */}
+              {/* Coupon — real active store coupons only (e.g. WELCOME10) */}
+              <div className="mb-4">
+                {coupon ? (
+                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+                    <div>
+                      <p className="text-xs font-bold text-green-700">{coupon.code} applied</p>
+                      <p className="text-[10px] text-green-600">{coupon.discountType === 'percent' ? `${coupon.discountValue}% off` : `$${coupon.discountValue} off`}</p>
+                    </div>
+                    <button onClick={removeCoupon} className="text-[11px] text-green-700 underline">Remove</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input value={couponInput} onChange={e => setCouponInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCoupon())} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Coupon code (e.g. WELCOME10)" />
+                    <button onClick={handleCoupon} className="px-4 py-2 bg-luxe-charcoal text-white rounded-lg text-xs font-semibold">Apply</button>
+                  </div>
+                )}
+              </div>
               <div className="border-t pt-4 space-y-2.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
+                {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">−${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Tax (TX 8.25%)</span><span className="font-medium">${tax.toFixed(2)}</span></div>
-                {/* Free-shipping promo removed (Phase 4E.2A): unverified policy. */}
+                <div className="flex justify-between"><span className="text-gray-500">Tax</span><span className="font-medium text-gray-400">calculated at checkout</span></div>
+                {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
-                  <span className="font-bold text-lg">Total</span>
+                  <span className="font-bold text-lg">Total before tax</span>
                   <div className="text-right">
-                    <span className="font-bold text-xl text-gray-900">${total.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-400">USD</p>
+                    <span className="font-bold text-xl text-gray-900">${totalBeforeTax.toFixed(2)}</span>
+                    <p className="text-[10px] text-gray-400">USD · tax added by Stripe at checkout</p>
                   </div>
                 </div>
               </div>
-
-              {/* Trust Badges */}
-              <div className="mt-6 pt-5 border-t space-y-2.5">
+              <button onClick={handleCheckout} disabled={submitting}
+                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
+                {submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
+                {submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
+              </button>
+              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details.</p>
+              <div className="mt-4 pt-4 border-t space-y-2.5">
                 {[
-                  { i: Truck, t: 'Shipping rates confirmed at checkout' },
-                  { i: RotateCcw, t: 'Thoughtfully curated essentials' },
-                  { i: Shield, t: 'Secure shopping experience' },
+                  { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Standard shipping 7–14 days' },
+                  { i: RefreshCcw01, t: '30-day hassle-free returns' },
+                  { i: ShieldTick, t: 'Secure SSL checkout' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
-                    <b.i size={14} className="text-luxe-gold shrink-0" />{b.t}
+                    <b.i strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />{b.t}
                   </div>
-                ))}
-              </div>
-
-              {/* Payment Icons */}
-              <div className="mt-5 pt-4 border-t flex items-center justify-center gap-2">
-                {['VISA','MC','AMEX','PayPal'].map(c => (
-                  <span key={c} className="px-2 py-1 bg-gray-50 border border-gray-200 rounded text-[9px] font-bold text-gray-500">{c}</span>
                 ))}
               </div>
             </div>
@@ -2549,9 +2428,124 @@ function CheckoutPage() {
   );
 }
 
-function OrdersPage() { const { orders, user } = useApp(); const nav = useNavigate(); useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
-  if (orders.filter(o => o.userId === user?.id).length === 0 && user?.role !== 'admin') return <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
-  return <div className="py-12 bg-gray-50 min-h-screen"><div className="max-w-4xl mx-auto px-4"><h1 className="text-3xl font-serif font-bold mb-8">My Orders</h1>{orders.filter(o => user?.role === 'admin' || o.userId === user?.id).map(o => <div key={o.id} className="bg-white rounded-xl border p-6 mb-4"><div className="flex justify-between mb-4"><div><p className="font-semibold">{o.id}</p><p className="text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</p></div><span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm">{o.status}</span></div>{o.items.map(i => <div key={i.product.id} className="flex items-center gap-4 py-2 border-t"><img src={i.product.images[0]} alt="" className="w-12 h-12 rounded object-cover" /><div className="flex-1"><p className="font-medium">{i.product.name}</p><p className="text-sm text-gray-500">Qty: {i.quantity}</p></div><p className="font-semibold">${(i.product.price * i.quantity).toFixed(2)}</p></div>)}<div className="pt-4 mt-4 border-t flex justify-between"><span className="font-semibold">Total</span><span className="text-lg font-bold text-luxe-gold">${o.total.toFixed(2)}</span></div></div>)}</div></div>;
+// ============================================================================
+// PAYMENT RESULT (real status from Stripe — never a fake success)
+// ============================================================================
+function CheckoutSuccessPage() {
+  const { clearCart, removeCoupon } = useApp();
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get('session_id') || '';
+  const [status, setStatus] = useState<'loading' | 'paid' | 'unpaid' | 'error'>('loading');
+  const [info, setInfo] = useState<{ orderNumber: string | null; total: number | null; currency: string | null; email: string | null }>({ orderNumber: null, total: null, currency: null, email: null });
+
+  useEffect(() => {
+    if (!sessionId) { setStatus('error'); return; }
+    let active = true;
+    (async () => {
+      try {
+        const r = await fetchCheckoutSessionStatus(sessionId);
+        if (!active) return;
+        setInfo({ orderNumber: r.order?.orderNumber ?? null, total: r.order?.total ?? r.session?.amountTotal ?? null, currency: r.order?.currency ?? r.session?.currency ?? null, email: r.session?.customerEmail ?? null });
+        setStatus(r.session?.paymentStatus === 'paid' ? 'paid' : 'unpaid');
+        if (r.session?.paymentStatus === 'paid') { clearCart(); removeCoupon(); }
+      } catch {
+        if (active) setStatus('error');
+      }
+    })();
+    return () => { active = false; };
+  }, [sessionId, clearCart, removeCoupon]);
+
+  if (status === 'loading') return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center">
+        <Loading01 strokeWidth={1.5} size={36} className="text-luxe-gold animate-spin mx-auto mb-4" />
+        <p className="text-sm text-luxe-gray">Verifying your payment with Stripe…</p>
+      </div>
+    </div>
+  );
+
+  if (status === 'error' || status === 'unpaid') {
+    const unpaid = status === 'unpaid';
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-6 ${unpaid ? 'bg-amber-100' : 'bg-gray-100'}`}>
+            {unpaid ? <Clock strokeWidth={1.5} size={38} className="text-amber-500" /> : <AlertTriangle strokeWidth={1.5} size={38} className="text-gray-400" />}
+          </div>
+          <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">{unpaid ? 'Payment not completed' : 'Could not verify payment'}</h1>
+          <p className="text-sm text-luxe-gray mb-6">{unpaid ? 'Your payment has not been completed yet. If you were charged, the order will be confirmed shortly.' : 'We could not confirm your payment status right now. Check your email for a receipt.'}</p>
+          <div className="flex gap-3 justify-center">
+            <Link to="/cart" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Back to Cart</Link>
+            <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"><CheckCircle strokeWidth={1.5} size={40} className="text-green-600" /></div>
+        <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">Thank you for your order!</h1>
+        {info.orderNumber && <p className="text-gray-600 mb-1">Order <span className="font-mono font-semibold text-gray-800">{info.orderNumber}</span></p>}
+        <p className="text-sm text-gray-400 mb-6">{info.email ? `A receipt is on its way to ${info.email}.` : 'Your payment was confirmed by Stripe.'}</p>
+        <div className="flex gap-3 justify-center">
+          <Link to="/orders" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">View Orders</Link>
+          <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface RealOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
+
+function OrdersPage() {
+  const { user } = useApp();
+  const nav = useNavigate();
+  const [realOrders, setRealOrders] = useState<RealOrderRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
+  // Real orders only: created server-side by the Stripe webhook. Buyers have
+  // no customer-orders endpoint yet — the honest state is "No Orders Yet".
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== 'admin') { setLoaded(true); return; }
+    const token = getAccessToken();
+    if (!token) { setLoaded(true); return; }
+    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { orders?: RealOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
+      .catch(() => setRealOrders([]))
+      .finally(() => setLoaded(true));
+  }, [user]);
+
+  const empty = <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
+  if (!user) return null;
+  if (user.role !== 'admin') return empty;
+  if (!loaded) return <div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading orders…</div>;
+  if (realOrders.length === 0) return empty;
+  return (
+    <div className="py-12 bg-gray-50 min-h-screen">
+      <div className="max-w-4xl mx-auto px-4">
+        <h1 className="text-3xl font-serif font-bold mb-2">Orders</h1>
+        <p className="text-sm text-luxe-gray mb-8">Real payment records persisted by the Stripe webhook.</p>
+        {realOrders.map(o => (
+          <div key={o.id} className="bg-white rounded-xl border p-6 mb-4">
+            <div className="flex justify-between mb-4">
+              <div><p className="font-semibold">{o.order_number}</p><p className="text-sm text-gray-500">{new Date(o.created_at).toLocaleString()}</p></div>
+              <span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm capitalize">{o.status.replace('_', ' ')}</span>
+            </div>
+            <div className="pt-4 mt-4 border-t flex justify-between">
+              <span className="font-semibold text-sm text-gray-500">{o.customer_email || '—'}</span>
+              <span className="font-semibold">Total <span className="text-lg font-bold text-luxe-gold">${Number(o.total || 0).toFixed(2)}</span></span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function LoginPage() {
@@ -2560,15 +2554,16 @@ function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, adminCreds, guestLogin, cart } = useApp();
+  const { login, guestLogin, cart } = useApp();
   const nav = useNavigate();
 
   const sub = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
-    if (login(e, p)) nav(e.toLowerCase() === adminCreds.email.toLowerCase() ? '/admin' : '/');
-    else { setErr('Invalid email or password'); setLoading(false); }
+    await new Promise(r => setTimeout(r, 400));
+    const errMsg = await login(e, p);
+    if (errMsg) { setErr(errMsg); setLoading(false); return; }
+    nav('/');
   };
 
   const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };
@@ -2594,19 +2589,24 @@ function LoginPage() {
           <p className="text-sm text-gray-500 mb-8">Sign in to your account to continue</p>
 
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
+          {!isSupabaseConfigured() && (
+            <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+              Account sign-in is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+            </div>
+          )}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
             </div>
 
@@ -2620,7 +2620,7 @@ function LoginPage() {
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight size={16} /></>}
+              {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
 
@@ -2634,7 +2634,7 @@ function LoginPage() {
           {/* Guest Login */}
           <button onClick={asGuest}
             className="w-full py-3.5 border border-luxe-silver hover:border-luxe-gold/60 bg-luxe-cream hover:bg-luxe-light text-luxe-black font-semibold rounded-xl transition-all flex flex-wrap items-center justify-center gap-2 group">
-            <UserIcon size={16} className="text-luxe-gold" />
+            <UserIcon strokeWidth={1.5} size={16} className="text-luxe-gold" />
             Continue as Guest
             <span className="text-[10px] uppercase tracking-wider text-gray-400 group-hover:text-luxe-gold transition-colors">No account needed</span>
           </button>
@@ -2647,16 +2647,16 @@ function LoginPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBag size={15} className="text-luxe-gold" />
+            <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure shopping experience</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Premium pet essentials</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> Thoughtfully curated</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
 
         {/* Admin link */}
@@ -2681,9 +2681,9 @@ function SignupPage() {
   const sub = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setErr('');
-    if (!signup(n, e, p)) { setErr('An account with this email already exists'); return; }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 700));
+    const errMsg = await signup(n, e, p);
+    if (errMsg) { setErr(errMsg); setLoading(false); return; }
     nav('/');
   };
 
@@ -2708,30 +2708,35 @@ function SignupPage() {
           <p className="text-sm text-gray-500 mb-8">Create your account to start shopping</p>
 
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
+          {!isSupabaseConfigured() && (
+            <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+              Account creation is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+            </div>
+          )}
 
           <form onSubmit={sub} className="space-y-5">
             <div className="relative">
-              <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <UserIcon strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" required value={n} onChange={ev => setN(ev.target.value)} placeholder="Full Name"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
                 className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
             </div>
             <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
                 className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
-                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
             </div>
 
             <button type="submit" disabled={loading}
               className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight size={16} /></>}
+              {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
 
@@ -2743,16 +2748,16 @@ function SignupPage() {
           {/* Go to store — browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
-            <ShoppingBag size={15} className="text-luxe-gold" />
+            <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
             Go to store
           </Link>
         </div>
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><Shield size={13} className="text-luxe-gold" /> Secure shopping experience</span>
-          <span className="flex items-center gap-1.5"><Truck size={13} className="text-luxe-gold" /> Premium pet essentials</span>
-          <span className="flex items-center gap-1.5"><RotateCcw size={13} className="text-luxe-gold" /> Thoughtfully curated</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
       </div>
     </div>
@@ -2763,31 +2768,39 @@ function AdminLoginPage() {
   const [e, setE] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useApp();
   const nav = useNavigate();
 
-  const handleSubmit = (ev: React.FormEvent) => {
+  const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setErr('');
-    if (login(e, p, true)) {
-      nav('/admin');
-    } else {
-      setErr('Invalid email or password');
-    }
+    if (!isSupabaseConfigured()) { setErr('Admin authentication is not configured yet (Supabase).'); return; }
+    setLoading(true);
+    const errMsg = await login(e, p, true);
+    setLoading(false);
+    if (errMsg) { setErr(errMsg); return; }
+    nav('/admin');
   };
 
   return (
     <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Shield className="text-luxe-gold" size={28} />
+          <ShieldTick strokeWidth={1.5} className="text-luxe-gold" size={28} />
           <span className="text-xl font-bold">Admin Login</span>
         </div>
         <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
 
+        {!isSupabaseConfigured() && (
+          <div className="p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+            Admin authentication is not configured yet — add <code className="font-mono">VITE_SUPABASE_URL</code> + <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> and promote your admin user (<code className="font-mono">app_metadata.role = 'admin'</code>). No demo credentials exist.
+          </div>
+        )}
+
         {err && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-            <AlertTriangle size={16} />{err}
+            <AlertTriangle strokeWidth={1.5} size={16} />{err}
           </div>
         )}
 
@@ -2800,13 +2813,13 @@ function AdminLoginPage() {
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Password</label>
             <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
-          <button type="submit" className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold">
-            <Lock size={16} /> Access Dashboard
+          <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
+            {loading ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
           </button>
         </form>
 
         <div className="mt-6 flex items-center gap-2 text-xs text-gray-400 justify-center">
-          <Shield size={12} /> Protected admin area
+          <ShieldTick strokeWidth={1.5} size={12} /> Protected admin area
         </div>
 
         <Link to="/" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-700">← Back to Store</Link>
@@ -2842,18 +2855,16 @@ function AboutPage() {
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
       <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
-      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We test, compare, and reject hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
+      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
       <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We're building Luxedge to stand behind what we sell. Our shipping and return policies are documented on the Shipping and Returns pages, and if something isn't right with an order we want to hear about it.</p>
+      <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
-      {/* No fabricated statistics (no fake customer counts / satisfaction
-          percentages / product counts) — Master Plan §14 / Phase 4E.2. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10 pt-8 border-t">
-        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Shield size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Thoughtfully curated</p><p className="text-xs text-gray-500 mt-1">Every product is verified before it reaches your door.</p></div>
-        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Sparkles size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Quality first</p><p className="text-xs text-gray-500 mt-1">We select only items we would genuinely recommend.</p></div>
-        <div className="text-center"><div className="w-10 h-10 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-3"><Headphones size={18} className="text-luxe-gold" /></div><p className="text-sm font-bold text-luxe-black">Real support</p><p className="text-xs text-gray-500 mt-1">Here to help by email & phone.</p></div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
+        {[{v:'$50+',l:'Free Shipping'},{v:'30-Day',l:'Returns & Replacements'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
+          <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
+        )}
       </div>
     </div></section>
   </div>);
@@ -2909,8 +2920,8 @@ function ShippingPolicyPage() {
     <LegalPage title="Shipping Policy" updated="March 15, 2025">
       <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations soon.</p></LS>
       <LS t="Processing Time"><p>Orders are typically processed within <strong>1-3 business days</strong> after payment confirmation. You'll receive an email confirmation when your order has been shipped with tracking information.</p></LS>
-      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">Confirmed at checkout</td><td className="px-4 py-2 border">Calculated at checkout</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">Confirmed at checkout</td><td className="px-4 py-2 border">Calculated at checkout</td></tr></tbody></table></div></LS>
-      <LS t="Shipping Costs"><p>Shipping costs are calculated at checkout and confirmed before you pay. Delivery estimates are provided once the storefront begins taking orders.</p></LS>
+      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">7-12 business days</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">2-4 business days</td><td className="px-4 py-2 border">$9.99</td></tr></tbody></table></div></LS>
+      <LS t="Free Shipping"><p>Enjoy <strong>free standard shipping</strong> on all orders of $50 or more. This offer applies automatically at checkout — no coupon code needed.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
       <LS t="Delivery Delays"><p>While we strive to meet all estimated delivery windows, delays may occasionally occur due to high order volume, carrier issues, weather events, or other circumstances beyond our control. If your order is significantly delayed, please contact us and we'll investigate immediately.</p></LS>
       <LS t="Missing or Lost Packages"><p>If your tracking shows "delivered" but you haven't received your package, please check with neighbors, building management, or your local post office. If you still can't locate your package after 48 hours, contact us at hello@luxedge.us and we'll work with the carrier to resolve the issue.</p></LS>
@@ -2925,7 +2936,7 @@ function FAQPage() {
   const faqs = [
     { c: 'Orders & Shipping', qs: [
       { q: 'How long does shipping take?', a: 'Standard shipping takes 7-12 business days. Express shipping delivers in 2-4 business days. Processing takes an additional 1-3 business days before shipment.' },
-      { q: 'Do you offer free shipping?', a: 'Shipping costs are calculated at checkout and confirmed before you pay. See the Shipping Policy page for current details.' },
+      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
       { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },
       { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
@@ -2937,18 +2948,18 @@ function FAQPage() {
       { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'This preview storefront does not process real payments yet. Payment methods will be announced when checkout goes live.' },
-      { q: 'Is my payment information secure?', a: 'This site is served over an encrypted (HTTPS) connection. No real payments are processed in this preview.' },
+      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. Online payment processing is currently in demo mode — a real provider (Stripe/PayPal) is being integrated, and card details are never stored or transmitted until then.' },
+      { q: 'Is my payment information secure?', a: 'Online payments are currently in demo mode — no card details are stored or transmitted. When a real provider (Stripe/PayPal) is connected, transactions will be processed through a PCI-compliant provider.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
     { c: 'Products & Quality', qs: [
       { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
-      { q: 'Are your products authentic?', a: 'Yes. We source all products from verified manufacturers and authorized distributors. Every item is quality-checked before it\'s listed on our store.' },
+      { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
     ]},
     { c: 'Account & Support', qs: [
       { q: 'Do I need an account to shop?', a: 'You need an account to place orders, track shipments, and submit reviews. Creating an account is free and takes less than a minute.' },
-      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002.' },
+      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002. Our support team is available Monday-Friday, 9 AM - 6 PM CT. We typically respond to emails within 24 hours.' },
       { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
     ]},
   ];
@@ -2959,7 +2970,7 @@ function FAQPage() {
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {faqs.map(section => (
           <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight size={16} className="text-luxe-gold" />{section.c}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight strokeWidth={1.5} size={16} className="text-luxe-gold" />{section.c}</h2>
             <div className="space-y-2">
               {section.qs.map(faq => {
                 const key = faq.q;
@@ -2968,7 +2979,7 @@ function FAQPage() {
                   <div key={key} className="bg-white rounded-xl border overflow-hidden">
                     <button onClick={() => setOpen(isOpen ? null : key)} className="w-full flex items-center justify-between px-5 py-4 text-left">
                       <span className="text-sm font-medium text-gray-900 pr-4">{faq.q}</span>
-                      <ChevronDown size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDown strokeWidth={1.5} size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
                     {isOpen && <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t pt-3">{faq.a}</div>}
                   </div>
@@ -2979,7 +2990,7 @@ function FAQPage() {
         ))}
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail size={16} />Contact Support</Link>
+          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail01 strokeWidth={1.5} size={16} />Contact Support</Link>
         </div>
       </div>
     </div>
@@ -2993,18 +3004,18 @@ function ContactPage() {
     <div>
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
         <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Contact Us</h1>
-        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you.</p>
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
       </div></section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
-            { i: Mail, l: 'Email', v: 'hello@luxedge.us', s: 'Support by email' },
-            { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Support by phone' },
-            { i: MapPin, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
-            { i: Clock, l: 'Availability', v: 'Email & phone', s: "We'll get back to you" },
+            { i: Mail01, l: 'Email', v: 'hello@luxedge.us', s: 'We reply within 24hrs' },
+            { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Mon-Fri, 9AM-6PM CT' },
+            { i: MarkerPin01, l: 'Address', v: 'Irving, TX 75038', s: 'United States' },
+            { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
-              <x.i className="mx-auto mb-2 text-luxe-gold" size={22} />
+              <x.i strokeWidth={1.5} className="mx-auto mb-2 text-luxe-gold" size={22} />
               <p className="text-[10px] text-luxe-gold font-semibold uppercase tracking-wider">{x.l}</p>
               <p className="font-semibold text-sm mt-1">{x.v}</p>
               <p className="text-xs text-gray-500">{x.s}</p>
@@ -3015,13 +3026,13 @@ function ContactPage() {
         <div className="max-w-2xl mx-auto">
           {ok ? (
             <div className="text-center py-16 bg-green-50 rounded-2xl border border-green-200">
-              <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
+              <CheckCircle strokeWidth={1.5} className="mx-auto text-green-500 mb-4" size={48} />
               <h2 className="text-xl font-bold mb-2">Message Received!</h2>
-              <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you.</p>
+              <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you within 24 hours.</p>
             </div>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send size={18} className="text-luxe-gold" /> Send Us a Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Send Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
                 <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
@@ -3030,7 +3041,7 @@ function ContactPage() {
                 <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send size={16} />Send Message</button>
+              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send01 strokeWidth={1.5} size={16} />Send Message</button>
             </form>
           )}
         </div>
@@ -3057,13 +3068,13 @@ function CareersPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Our Culture</h2>
           <div className="grid sm:grid-cols-2 gap-4 mb-8">
             {[
-              { emoji: '🚀', title: 'Growth-Focused', desc: 'We invest in our people. Learn, grow, and level up with us.' },
-              { emoji: '🤝', title: 'Collaborative', desc: 'Small team, big impact. Every voice matters here.' },
-              { emoji: '🌍', title: 'Remote-Friendly', desc: 'Work from anywhere. We care about results, not locations.' },
-              { emoji: '💡', title: 'Innovation-Driven', desc: 'We encourage new ideas and creative problem-solving.' },
+              { icon: Star01, title: 'Growth-Focused', desc: 'We invest in our people. Learn, grow, and level up with us.' },
+              { icon: Send01, title: 'Collaborative', desc: 'Small team, big impact. Every voice matters here.' },
+              { icon: Globe01, title: 'Remote-Friendly', desc: 'Work from anywhere. We care about results, not locations.' },
+              { icon: Zap, title: 'Innovation-Driven', desc: 'We encourage new ideas and creative problem-solving.' },
             ].map((v, i) => (
               <div key={i} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <span className="text-2xl">{v.emoji}</span>
+                <span className="w-9 h-9 rounded-lg bg-luxe-gold-soft ring-1 ring-luxe-gold/15 text-luxe-gold flex items-center justify-center"><v.icon strokeWidth={1.5} size={16} /></span>
                 <h3 className="font-bold text-gray-900 mt-2">{v.title}</h3>
                 <p className="text-sm text-gray-600 mt-1">{v.desc}</p>
               </div>
@@ -3094,7 +3105,7 @@ function CareersPage() {
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
           <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
           <Link to="/contact" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors">
-            <Mail size={16} /> Get in Touch
+            <Mail01 strokeWidth={1.5} size={16} /> Get in Touch
           </Link>
         </div>
       </div>
@@ -3125,7 +3136,7 @@ function BlogListPage() {
           {user && (
             <div className="flex justify-end mb-6">
               <Link to="/blog/write" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
-                <PenLine size={16} /> Write a Post
+                <PencilLine strokeWidth={1.5} size={16} /> Write a Post
               </Link>
             </div>
           )}
@@ -3139,7 +3150,7 @@ function BlogListPage() {
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar size={12} />{new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar strokeWidth={1.5} size={12} />{new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
                       <span className="text-gray-200">·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
@@ -3147,7 +3158,7 @@ function BlogListPage() {
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{post.excerpt}</p>
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">#{t}</span>)}</div>
-                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight size={14} /></span>
+                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight strokeWidth={1.5} size={14} /></span>
                     </div>
                   </div>
                 </Link>
@@ -3155,7 +3166,7 @@ function BlogListPage() {
             </div>
           ) : (
             <div className="text-center py-20 bg-white rounded-xl border">
-              <BookOpen size={48} className="mx-auto text-gray-200 mb-4" />
+              <BookOpen01 strokeWidth={1.5} size={48} className="mx-auto text-gray-200 mb-4" />
               <p className="text-lg font-semibold text-gray-700 mb-2">No posts yet</p>
               <p className="text-sm text-gray-500">Check back soon for new content!</p>
             </div>
@@ -3207,8 +3218,8 @@ function BlogDetailPage() {
         <div className="bg-white rounded-2xl shadow-xl border p-6 sm:p-10 mb-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-gray-400 mb-4">
-            <Link to="/" className="hover:text-luxe-gold">Home</Link><ChevronRight size={12} />
-            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><ChevronRight size={12} />
+            <Link to="/" className="hover:text-luxe-gold">Home</Link><ChevronRight strokeWidth={1.5} size={12} />
+            <Link to="/blog" className="hover:text-luxe-gold">Blog</Link><ChevronRight strokeWidth={1.5} size={12} />
             <span className="text-gray-600 truncate max-w-[200px]">{post.title}</span>
           </nav>
 
@@ -3223,7 +3234,7 @@ function BlogDetailPage() {
             <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{post.authorName.charAt(0)}</span></div>
             <div>
               <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
-              <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar strokeWidth={1.5} size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
           </div>
 
@@ -3266,7 +3277,7 @@ function BlogDetailPage() {
 
         {/* Back link */}
         <div className="text-center mb-12">
-          <Link to="/blog" className="text-luxe-gold font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft size={16} /> Back to All Posts</Link>
+          <Link to="/blog" className="text-luxe-gold font-semibold text-sm hover:underline flex items-center justify-center gap-2"><ArrowLeft strokeWidth={1.5} size={16} /> Back to All Posts</Link>
         </div>
       </div>
     </div>
@@ -3324,8 +3335,8 @@ function BlogWritePage() {
   return (
     <div className="py-10 bg-gray-50 min-h-screen">
       <div className="max-w-3xl mx-auto px-4">
-        <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft size={14} />Back to Blog</Link>
-        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PenLine size={22} className="text-luxe-gold" />Write a Blog Post</h1>
+        <Link to="/blog" className="text-sm text-gray-500 hover:text-luxe-gold flex items-center gap-1 mb-6"><ArrowLeft strokeWidth={1.5} size={14} />Back to Blog</Link>
+        <h1 className="text-2xl font-bold mb-8 flex items-center gap-2"><PencilLine strokeWidth={1.5} size={22} className="text-luxe-gold" />Write a Blog Post</h1>
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
@@ -3338,7 +3349,7 @@ function BlogWritePage() {
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold hover:bg-luxe-gold-soft/30 transition-all">
-                <Upload size={28} className="text-gray-400 mb-2" />
+                <Upload01 strokeWidth={1.5} size={28} className="text-gray-400 mb-2" />
                 <span className="text-sm font-medium text-gray-600">Upload cover image</span>
                 <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
                 <input type="file" accept="image/*" onChange={handleCover} className="hidden" />
@@ -3362,20 +3373,20 @@ function BlogWritePage() {
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
-            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
+            {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload01 strokeWidth={1.5} size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
+            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag01 strokeWidth={1.5} size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
           </div>
 
-          {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye size={16} />Your post will be reviewed by admin before publishing.</div>}
+          {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye strokeWidth={1.5} size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send01 strokeWidth={1.5} size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
             <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
           </div>
         </form>
@@ -3392,7 +3403,7 @@ function AdminFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-luxe-cream">
       <div className="flex flex-col items-center gap-3 text-gray-400">
-        <Loader2 size={28} className="animate-spin text-luxe-gold" />
+        <Loading01 strokeWidth={1.5} size={28} className="animate-spin text-luxe-gold" />
         <span className="text-sm font-medium">Loading admin…</span>
       </div>
     </div>
@@ -3404,7 +3415,7 @@ function AdminFallback() {
 export default function App() {
   return (
     <AppProvider>
-      <HashRouter>
+      <BrowserRouter>
         <MarketingManager />
         <RouteTitle />
         <Routes>
@@ -3415,6 +3426,7 @@ export default function App() {
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
           <Route path="/checkout" element={<SLayout><CheckoutPage /></SLayout>} />
+          <Route path="/checkout/success" element={<SLayout><CheckoutSuccessPage /></SLayout>} />
           <Route path="/orders" element={<SLayout><OrdersPage /></SLayout>} />
           <Route path="/about" element={<SLayout><AboutPage /></SLayout>} />
           <Route path="/contact" element={<SLayout><ContactPage /></SLayout>} />
@@ -3438,7 +3450,7 @@ export default function App() {
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />
         </Routes>
         <Toast />
-      </HashRouter>
+      </BrowserRouter>
     </AppProvider>
   );
 }

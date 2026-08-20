@@ -1,217 +1,154 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { User } from '../types';
+// ============================================================================
+// LUXEDGE V2 — AUTH STORE (Supabase-backed)
+//
+// Single source of truth for the signed-in user. Sessions come from Supabase
+// Auth (src/services/supabase.ts): access/refresh tokens persist in
+// localStorage and survive refresh; expiry + refresh are handled there.
+//
+// SECURITY:
+//  - No plaintext passwords anywhere. Passwords are sent once to Supabase and
+//    never stored.
+//  - The role claim comes from the signed JWT (app_metadata.role) — never
+//    accepted from a user-supplied field.
+//  - When Supabase is not configured, sign-in fails with an honest message;
+//    there is NO demo admin password fallback.
+// ============================================================================
 
-interface AuthStore {
-  user: User | null;
-  isAuthenticated: boolean;
-  users: User[];
-  login: (email: string, password: string) => { success: boolean; message: string; isAdmin?: boolean };
-  adminLogin: (email: string, password: string) => { success: boolean; message: string };
-  signup: (name: string, email: string, password: string) => { success: boolean; message: string };
-  logout: () => void;
-  updateProfile: (updates: Partial<User>) => void;
-  changePassword: (currentPassword: string, newPassword: string) => { success: boolean; message: string };
-  blockUser: (userId: string) => void;
-  unblockUser: (userId: string) => void;
-  deleteUser: (userId: string) => void;
-  getAllUsers: () => User[];
+import { create } from 'zustand';
+import {
+  type SbUser,
+  signInWithPassword,
+  signUp as sbSignUp,
+  signOut as sbSignOut,
+  getSession,
+  onAuthStateChange,
+  isSupabaseConfigured,
+} from '../services/supabase';
+import { ensureCustomerProfile } from '../services/customer';
+
+/** Fire-and-forget: keep a customers row in sync with the auth user. */
+function syncCustomerProfile(user: SbUser | null): void {
+  if (!user) return;
+  void ensureCustomerProfile({ id: user.id, email: user.email, name: user.name }).then((r) => {
+    if (!r.ok && r.reason !== 'not-provisioned') {
+      // Honest, non-fatal: profile sync issues must never break sign-in.
+      console.warn('[customer-sync]', r.reason, r.detail || '');
+    }
+  });
 }
 
-// Initial admin account
-const initialAdmin: User = {
-  id: 'admin-001',
-  email: 'admin@luxedge.us',
-  password: 'admin123', // In production, this would be hashed
-  name: 'Admin',
-  role: 'admin',
-  createdAt: new Date().toISOString(),
-  isBlocked: false,
-};
+export interface AuthResult {
+  success: boolean;
+  message: string;
+  user: SbUser | null;
+}
 
-// Sample users for demo
-const sampleUsers: User[] = [
-  {
-    id: 'user-001',
-    email: 'john@example.com',
-    password: 'password123',
-    name: 'John Smith',
-    role: 'buyer',
-    phone: '(555) 123-4567',
-    address: '123 Main St, Austin, TX 78701',
-    createdAt: '2024-01-15T10:30:00Z',
-    lastLogin: '2024-03-10T14:22:00Z',
-    isBlocked: false,
+interface AuthStore {
+  user: SbUser | null;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  /** True once the initial session hydration finished (avoids flash-redirects). */
+  ready: boolean;
+  init: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (name: string, email: string, password: string) => Promise<AuthResult>;
+  signOut: () => Promise<void>;
+  setSessionUser: (user: SbUser | null) => void;
+}
+
+let initialized = false;
+
+export const useAuthStore = create<AuthStore>()((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isAdmin: false,
+  ready: false,
+
+  init: async () => {
+    if (initialized) return;
+    initialized = true;
+    onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        set({ user: null, isAuthenticated: false, isAdmin: false });
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const u = getSessionUserSync();
+        applyUser(set, u);
+      }
+    });
+    const session = await getSession();
+    applyUser(set, session?.user || null);
+    set({ ready: true });
   },
-  {
-    id: 'user-002',
-    email: 'sarah@example.com',
-    password: 'password123',
-    name: 'Sarah Johnson',
-    role: 'buyer',
-    phone: '(555) 987-6543',
-    address: '456 Oak Ave, Dallas, TX 75201',
-    createdAt: '2024-02-20T08:15:00Z',
-    lastLogin: '2024-03-12T09:45:00Z',
-    isBlocked: false,
-  },
-  {
-    id: 'user-003',
-    email: 'mike@example.com',
-    password: 'password123',
-    name: 'Mike Williams',
-    role: 'buyer',
-    createdAt: '2024-03-01T16:00:00Z',
-    isBlocked: false,
-  },
-];
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-      users: [initialAdmin, ...sampleUsers],
-
-      login: (email, password) => {
-        const { users } = get();
-        const user = users.find(
-          (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-        );
-
-        if (!user) {
-          return { success: false, message: 'Invalid email or password' };
-        }
-
-        if (user.isBlocked) {
-          return { success: false, message: 'Your account has been blocked. Please contact support.' };
-        }
-
-        // Update last login
-        const updatedUsers = users.map((u) =>
-          u.id === user.id ? { ...u, lastLogin: new Date().toISOString() } : u
-        );
-
-        set({
-          user: { ...user, lastLogin: new Date().toISOString() },
-          isAuthenticated: true,
-          users: updatedUsers,
-        });
-
-        return { success: true, message: 'Login successful', isAdmin: user.role === 'admin' };
-      },
-
-      adminLogin: (email, password) => {
-        const { users } = get();
-        const admin = users.find(
-          (u) =>
-            u.email.toLowerCase() === email.toLowerCase() &&
-            u.password === password &&
-            u.role === 'admin'
-        );
-
-        if (!admin) {
-          return { success: false, message: 'Invalid admin credentials' };
-        }
-
-        set({
-          user: { ...admin, lastLogin: new Date().toISOString() },
-          isAuthenticated: true,
-        });
-
-        return { success: true, message: 'Admin login successful' };
-      },
-
-      signup: (name, email, password) => {
-        const { users } = get();
-        
-        if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-          return { success: false, message: 'Email already registered' };
-        }
-
-        if (password.length < 6) {
-          return { success: false, message: 'Password must be at least 6 characters' };
-        }
-
-        const newUser: User = {
-          id: `user-${Date.now()}`,
-          email,
-          password,
-          name,
-          role: 'buyer',
-          createdAt: new Date().toISOString(),
-          isBlocked: false,
-        };
-
-        set({
-          users: [...users, newUser],
-          user: newUser,
-          isAuthenticated: true,
-        });
-
-        return { success: true, message: 'Account created successfully' };
-      },
-
-      logout: () => {
-        set({ user: null, isAuthenticated: false });
-      },
-
-      updateProfile: (updates) => {
-        const { user, users } = get();
-        if (!user) return;
-
-        const updatedUser = { ...user, ...updates };
-        const updatedUsers = users.map((u) => (u.id === user.id ? updatedUser : u));
-
-        set({ user: updatedUser, users: updatedUsers });
-      },
-
-      changePassword: (currentPassword, newPassword) => {
-        const { user, users } = get();
-        if (!user) return { success: false, message: 'Not authenticated' };
-
-        if (user.password !== currentPassword) {
-          return { success: false, message: 'Current password is incorrect' };
-        }
-
-        if (newPassword.length < 6) {
-          return { success: false, message: 'New password must be at least 6 characters' };
-        }
-
-        const updatedUser = { ...user, password: newPassword };
-        const updatedUsers = users.map((u) => (u.id === user.id ? updatedUser : u));
-
-        set({ user: updatedUser, users: updatedUsers });
-        return { success: true, message: 'Password changed successfully' };
-      },
-
-      blockUser: (userId) => {
-        const { users } = get();
-        const updatedUsers = users.map((u) =>
-          u.id === userId ? { ...u, isBlocked: true } : u
-        );
-        set({ users: updatedUsers });
-      },
-
-      unblockUser: (userId) => {
-        const { users } = get();
-        const updatedUsers = users.map((u) =>
-          u.id === userId ? { ...u, isBlocked: false } : u
-        );
-        set({ users: updatedUsers });
-      },
-
-      deleteUser: (userId) => {
-        const { users } = get();
-        set({ users: users.filter((u) => u.id !== userId) });
-      },
-
-      getAllUsers: () => {
-        return get().users.filter((u) => u.role === 'buyer');
-      },
-    }),
-    {
-      name: 'luxedge-auth',
+  signIn: async (email, password) => {
+    if (!isSupabaseConfigured()) {
+      return {
+        success: false,
+        message: 'Sign-in is not configured yet (add VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY). Guest checkout still works.',
+        user: null,
+      };
     }
-  )
-);
+    try {
+      const session = await signInWithPassword(email.trim(), password);
+      applyUser(set, session.user);
+      syncCustomerProfile(session.user);
+      return { success: true, message: 'Signed in successfully.', user: session.user };
+    } catch (e) {
+      return { success: false, message: (e as Error).message || 'Sign-in failed.', user: null };
+    }
+  },
+
+  signUp: async (name, email, password) => {
+    if (!isSupabaseConfigured()) {
+      return {
+        success: false,
+        message: 'Account creation is not configured yet (add VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY). Guest checkout still works.',
+        user: null,
+      };
+    }
+    try {
+      const { session } = await sbSignUp(name.trim(), email.trim(), password);
+      if (session) {
+        applyUser(set, session.user);
+        syncCustomerProfile(session.user);
+      }
+      return {
+        success: true,
+        message: session ? 'Account created — you are signed in.' : 'Account created — check your email to confirm.',
+        user: session?.user || null,
+      };
+    } catch (e) {
+      return { success: false, message: (e as Error).message || 'Account creation failed.', user: null };
+    }
+  },
+
+  signOut: async () => {
+    await sbSignOut();
+    set({ user: null, isAuthenticated: false, isAdmin: false });
+  },
+
+  setSessionUser: (user) => applyUser(set, user),
+}));
+
+function getSessionUserSync(): SbUser | null {
+  // Avoid a circular import: read the raw stored session directly here.
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem('luxedge_sb_session') : null;
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { user?: SbUser };
+    return s.user || null;
+  } catch {
+    return null;
+  }
+}
+
+function applyUser(
+  set: (partial: Partial<AuthStore>) => void,
+  user: SbUser | null
+): void {
+  set({
+    user,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin',
+  });
+}

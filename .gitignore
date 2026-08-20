@@ -32,5 +32,17 @@ Thumbs.db
 .freebuff/
 .freebuff-backup/
 ```
+
 # Vercel CLI local state
+.vercel
 .vercel/
+
+# Environment files — never commit secrets
+.env*
+
+# Supabase CLI temp
+supabase/.temp/
+
+# Credentials — never commit (tokens, service keys, credential caches)
+.git-credentials
+scripts/seed-premium-direct.mjs

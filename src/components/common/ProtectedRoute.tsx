@@ -8,8 +8,18 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, requireAdmin = false, requireAuth = false }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, ready } = useAuthStore();
   const location = useLocation();
+
+  // Wait for the initial Supabase session hydration so a page refresh does
+  // not flash-redirect a signed-in user to the login page.
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">
+        Checking session…
+      </div>
+    );
+  }
 
   // Admin route protection
   if (requireAdmin) {
