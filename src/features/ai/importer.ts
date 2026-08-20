@@ -9,6 +9,7 @@
 import type { AIExtractedProduct } from './types';
 import type { ProductInput, CatalogImageInput, CatalogVariantInput } from '../catalog/repository';
 import type { CommerceReadiness } from '../catalog/commerceReadiness';
+import { getAccessToken } from '../../services/supabase';
 
 function looksLikeBotPage(raw: string): boolean {
   const lower = raw.toLowerCase();
@@ -60,9 +61,14 @@ interface FetchedPage {
  */
 async function fetchViaServerProxy(url: string): Promise<string | null> {
   try {
+    // /api/fetch-page is admin-only (Phase 3A). Attach the signed-in admin
+    // access token so the server-side scrape path (SCRAPE_DO_TOKEN) actually
+    // runs on the deployed app instead of silently 401-ing and falling back
+    // to public proxies. Never logs the token.
+    const token = getAccessToken();
     const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(url)}`, {
       signal: AbortSignal.timeout(45_000),
-      headers: { Accept: 'text/plain' },
+      headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     });
     if (!r.ok) return null;
     const ct = r.headers.get('content-type') || '';

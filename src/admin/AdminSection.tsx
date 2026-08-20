@@ -3472,6 +3472,29 @@ function AAIHub() {
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [orCredits, setOrCredits] = useState<{ total: number; used: number } | null>(null);
   const [checkingCredits, setCheckingCredits] = useState(false);
+  const [scrapeTest, setScrapeTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'fail'; msg: string }>({ status: 'idle', msg: '' });
+
+  /** Verify the server-side scrape path works (SCRAPE_DO_TOKEN configured → scrape.do, else public fallback). */
+  const testScraping = async () => {
+    setScrapeTest({ status: 'testing', msg: 'Testing server-side page fetch…' });
+    try {
+      // A small, stable, fetchable page — returns quickly through any working path.
+      const raw = await fetchPageContent('https://example.com');
+      const parsed = JSON.parse(raw);
+      const ok = parsed && typeof parsed.text === 'string' && parsed.text.length > 50;
+      setScrapeTest({
+        status: ok ? 'ok' : 'fail',
+        msg: ok
+          ? 'Page fetch works — the server-side scrape path is reachable. Set SCRAPE_DO_TOKEN to unlock AliExpress (JS-rendered) pages.'
+          : 'Page fetch returned too little content — check the server /api/fetch-page deployment.',
+      });
+    } catch (e) {
+      setScrapeTest({
+        status: 'fail',
+        msg: `Page fetch failed: ${(e as Error).message?.slice(0, 160) || 'unknown error'}`,
+      });
+    }
+  };
 
   const I = 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 transition-all';
 
@@ -3715,6 +3738,16 @@ const providerIcons: Record<string, string> = {
           </ol>
           <div className="p-3 bg-white/60 border border-green-200 rounded-xl text-xs text-green-800">
             🔒 Luxedge V2: scraping tokens are server-side only. Without a server token, URL import falls back to public proxies.
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={testScraping} disabled={scrapeTest.status === 'testing'}
+              className="px-4 py-2 text-xs bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg font-semibold flex items-center gap-1.5 transition-colors">
+              {scrapeTest.status === 'testing' ? <SpinnerGap size={12} className="animate-spin" /> : <LinkSimple size={12} />}
+              {scrapeTest.status === 'testing' ? 'Testing…' : 'Test scraping connection'}
+            </button>
+            {scrapeTest.status !== 'idle' && (
+              <p className={`text-xs ${scrapeTest.status === 'ok' ? 'text-green-700' : 'text-red-600'}`}>{scrapeTest.msg}</p>
+            )}
           </div>
         </div>
       </div>
