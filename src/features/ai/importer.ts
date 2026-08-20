@@ -65,6 +65,28 @@ export function isProxyErrorText(text: string): boolean {
  */
 const GENERIC_PLATFORM_DESCRIPTION_RE = /\b(smarter shopping|better living|shop the latest deals|shop millions of products|world'?s? (largest|leading) (online )?marketplace|buy online|free shipping worldwide|download the app|sign up and save|new customer discount)\b/i;
 
+/**
+ * Detect the supplier platform from the source URL. buildScrapedEvidenceProduct
+ * runs for every platform (AliExpress, Amazon, eBay, ...), not just AliExpress
+ * — the supplier badge on the saved product must reflect the real source, not
+ * a fixed default (live finding: an eBay import was saved tagged "AliExpress").
+ */
+export function detectSupplierPlatform(url: string): string {
+  const u = (url || '').toLowerCase();
+  if (!u) return 'AliExpress';
+  if (u.includes('aliexpress.com') || u.includes('aliexpress.us')) return 'AliExpress';
+  if (u.includes('alibaba.com')) return 'Alibaba';
+  if (u.includes('amazon.com') || u.includes('amzn.to')) return 'Amazon';
+  if (u.includes('ebay.com') || u.includes('ebay.co')) return 'eBay';
+  if (u.includes('etsy.com')) return 'Etsy';
+  if (u.includes('walmart.com')) return 'Walmart';
+  if (u.includes('temu.com')) return 'Temu';
+  if (u.includes('daraz.pk') || u.includes('daraz.com')) return 'Daraz';
+  if (u.includes('cjdropshipping.com')) return 'CJ Dropshipping';
+  if (u.includes('myshopify.com') || u.includes('shopify.com')) return 'Shopify Store';
+  return 'AliExpress';
+}
+
 export function isGenericPlatformDescription(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
@@ -771,7 +793,7 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
       tags: 0,
       specifications: 0,
     },
-    supplierPlatform: 'AliExpress',
+    supplierPlatform: detectSupplierPlatform(url),
     supplierUrl: url,
     supplierItemId: itemId || undefined,
     shippingToUsa: 'UNKNOWN',
