@@ -4,7 +4,7 @@ import {
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
-  isEmptyExtraction,
+  buildScrapedEvidenceProduct, mergeScrapedWithAi, isEmptyExtraction,
 } from '../importer';
 
 describe('extractProductJson', () => {
@@ -334,5 +334,85 @@ describe('AliExpress URL evidence (fetch-blocked fallback)', () => {
     expect(ev.itemId).toBe('1005001234567');
     expect(ev.shipFrom).toBeNull();
     expect(ev.listPrice).toBeNull();
+  });
+});
+
+describe('buildScrapedEvidenceProduct', () => {
+  const ALI_URL = 'https://www.aliexpress.us/item/3256805600005011.html?pdp_npi=6%40dis%21USD%214.11%210.99%21%21%2127.52%216.64%21%402101ca9517872300755714122e1037%2112000034351273366%21sea%21US%21&pdp_ext_f=%7B%22ship_from%22%3A%22US%22%7D';
+
+  const page = {
+    text: 'real page text',
+    images: ['https://ae-pic-a1.aliexpress-media.com/kf/S4a6d90fec74a41b79812cd9bae5277d7b.jpg'],
+    title: 'Dog Cooling Mat 2XL 150x100cm for Big Small Dogs',
+    description: 'Cooling mat for dogs, reusable, non-slip',
+    price: 27.52,
+    currency: 'USD',
+    brand: '',
+    jsonLdProduct: true,
+  };
+
+  it('carries the real scraped title, description, images and JSON-LD price into the base product', () => {
+    const p = buildScrapedEvidenceProduct(page, ALI_URL);
+    expect(p.title).toBe('Dog Cooling Mat 2XL 150x100cm for Big Small Dogs');
+    expect(p.shortDescription).toContain('Cooling mat');
+    expect(p.images).toContain('https://ae-pic-a1.aliexpress-media.com/kf/S4a6d90fec74a41b79812cd9bae5277d7b.jpg');
+    expect(p.sellingPrice).toBe(27.52); // JSON-LD verified price wins over URL pdp_npi $4.11
+    expect(p.evidence?.sellingPrice).toBe('VERIFIED');
+    expect(p.evidence?.title).toBe('VERIFIED');
+    expect(p.supplierItemId).toBe('3256805600005011');
+    expect(p.ownerNotes || '').toContain('JSON-LD');
+  });
+
+  it('falls back to URL pdp_npi price (INFERRED) when the page has no verified price', () => {
+    const noPrice = { ...page, price: null, jsonLdProduct: false };
+    const p = buildScrapedEvidenceProduct(noPrice, ALI_URL);
+    expect(p.sellingPrice).toBe(4.11);
+    expect(p.evidence?.sellingPrice).toBe('INFERRED');
+  });
+});
+
+describe('mergeScrapedWithAi', () => {
+  const scraped = {
+    title: 'Dog Cooling Mat 2XL 150x100cm for Big Small Dogs',
+    shortDescription: 'Cooling mat for dogs',
+    longDescription: 'Cooling mat for dogs',
+    images: ['https://cdn.example.com/hero.jpg'],
+    sellingPrice: 27.52,
+    supplierUrl: 'https://www.aliexpress.us/item/3256805600005011.html',
+    supplierItemId: '3256805600005011',
+  } as never;
+
+  it('keeps scraped title/images when AI returns empty fields', () => {
+    const aiEmpty = { title: '', images: [], shortDescription: '', longDescription: '' } as never;
+    const merged = mergeScrapedWithAi(scraped, aiEmpty);
+    expect(merged.title).toBe('Dog Cooling Mat 2XL 150x100cm for Big Small Dogs');
+    expect(merged.images).toContain('https://cdn.example.com/hero.jpg');
+    expect(merged.shortDescription).toBe('Cooling mat for dogs');
+  });
+
+  it('lets a non-empty AI title win while keeping scraped images', () => {
+    const ai = { title: 'Premium Pet Cooling Mat 2XL', images: [], shortDescription: '', longDescription: '' } as never;
+    const merged = mergeScrapedWithAi(scraped, ai);
+    expect(merged.title).toBe('Premium Pet Cooling Mat 2XL');
+    expect(merged.images).toContain('https://cdn.example.com/hero.jpg');
+  });
+
+  it('unions AI and scraped images, deduped', () => {
+    const ai = {
+      title: '',
+      images: ['https://cdn.example.com/hero.jpg', 'https://cdn.example.com/alt2.jpg'],
+      shortDescription: '',
+      longDescription: '',
+    } as never;
+    const merged = mergeScrapedWithAi(scraped, ai);
+    expect(merged.images.length).toBe(2);
+    expect(merged.images[0]).toBe('https://cdn.example.com/hero.jpg');
+  });
+
+  it('never drops the supplier identity when AI omits it', () => {
+    const ai = { title: 'X', images: [], shortDescription: '', longDescription: '' } as never;
+    const merged = mergeScrapedWithAi(scraped, ai);
+    expect(merged.supplierUrl).toBe('https://www.aliexpress.us/item/3256805600005011.html');
+    expect(merged.supplierItemId).toBe('3256805600005011');
   });
 });

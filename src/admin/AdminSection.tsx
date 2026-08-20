@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildUrlEvidenceProduct, extractAliExpressUrlEvidence, isEmptyExtraction } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi, extractAliExpressUrlEvidence, isEmptyExtraction } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
@@ -3867,15 +3867,24 @@ function AAIImport() {
     try {
       let rawContent = '';
       let pageImages: string[] = [];
+      let parsed: any = null;
 
       if (source === 'url') {
         if (!urlInput.trim()) throw new Error('Please enter a URL');
         addLog(`Fetching: ${urlInput}`);
         const pageData = await fetchPageContent(urlInput.trim());
-        const parsed = JSON.parse(pageData);
+        parsed = JSON.parse(pageData);
         rawContent = parsed.text;
         pageImages = parsed.images || [];
-        addLog(`Page fetched — ${rawContent.length} chars, ${pageImages.length} images found`, true);
+        const parsedTitle = (parsed.title || '').trim();
+        const parsedDesc = (parsed.description || '').trim();
+        addLog(`Page fetched — ${rawContent.length} chars, ${pageImages.length} images`, true);
+        addLog(`FETCH: SERVER SCRAPE SUCCESS`);
+        addLog(`SCRAPED CHARS: ${rawContent.length}`);
+        addLog(`SCRAPED TITLE: ${parsedTitle ? 'FOUND' : 'MISSING'}${parsedTitle ? ` — ${parsedTitle.slice(0, 80)}` : ''}`);
+        addLog(`SCRAPED IMAGES: ${pageImages.length}`);
+        addLog(`JSON-LD PRODUCT: ${parsed.jsonLdProduct ? 'FOUND' : 'MISSING'}`);
+        addLog(`SCRAPED DESCRIPTION: ${parsedDesc ? 'FOUND' : 'MISSING'}`);
       } else if (source === 'html') {
         if (!htmlInput.trim()) throw new Error('Please paste some HTML');
         const parser = new DOMParser();
@@ -3898,39 +3907,70 @@ function AAIImport() {
         addLog('Image content prepared', true);
       }
 
+      // ---------------------------------------------------------------------
+      // DETERMINISTIC BASE: the scrape output is the base product. AI is only
+      // an enrichment layer — an AI failure must NEVER erase real scraped
+      // evidence (title/images/description/price) into an empty form.
+      // ---------------------------------------------------------------------
+      const isAliUrl = source === 'url' && /aliexpress\.(com|us)/i.test(urlInput);
+      let base: AIExtractedProduct | null = null;
+      if (source === 'url') {
+        base = buildScrapedEvidenceProduct(parsed, urlInput.trim());
+        addLog(`BASE EVIDENCE: title=${base.title ? 'FOUND' : 'MISSING'} images=${base.images.length} desc=${base.shortDescription ? 'FOUND' : 'MISSING'} price=${base.sellingPrice > 0 ? '$' + base.sellingPrice.toFixed(2) : 'UNKNOWN'}`);
+      }
+
       addLog('Sending to AI for analysis…');
-      const prompt = buildExtractionPrompt(rawContent, source);
-      const aiText = await callAIProvider(prompt, aiProviders, (m) => addLog(m));
+      let data: AIExtractedProduct | null = null;
+      let aiState = 'FAILED';
+      try {
+        const prompt = buildExtractionPrompt(rawContent, source);
+        const aiText = await callAIProvider(prompt, aiProviders, (m) => addLog(m));
+        addLog('Parsing AI response…');
+        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const aiData = JSON.parse(jsonMatch[0]) as AIExtractedProduct;
+          if (!isEmptyExtraction(aiData)) {
+            data = aiData;
+            aiState = 'SUCCESS';
+          } else {
+            aiState = 'EMPTY';
+          }
+        }
+      } catch (e2: any) {
+        addLog(`AI error: ${e2?.message || 'unknown'}`, false);
+      }
+      addLog(`AI: ${aiState}`);
 
-      addLog('Parsing AI response…');
-      const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('AI returned invalid response. Please try again.');
-      const data = JSON.parse(jsonMatch[0]) as AIExtractedProduct;
+      // Merge: scraped base first, AI enrichment layered on top. Scraped
+      // images/title/description are NEVER discarded by an empty AI result.
+      const final = base ? mergeScrapedWithAi(base, data) : (data ?? null);
+      if (!final) throw new Error('No product evidence could be extracted. Try again or paste HTML/text instead.');
 
-      // Empty-extraction guard: a bot/anti-crawler page that slipped through
-      // detection yields 54 empty fields. For AliExpress, fall back to the
-      // REAL evidence in the URL (item ID, pdp_npi prices, ship-from) so the
-      // owner gets a truthful starting draft instead of an empty form.
-      if (isEmptyExtraction(data) && source === 'url' && /aliexpress\.(com|us)/i.test(urlInput)) {
+      // Last-resort fallback ONLY when the scrape had zero evidence AND AI
+      // returned nothing: use the real facts the URL itself proves.
+      if (isEmptyExtraction(final) && isAliUrl) {
         const urlEv = extractAliExpressUrlEvidence(urlInput.trim());
         if (urlEv.itemId) {
+          addLog('FINAL SOURCE: URL EVIDENCE ONLY (scrape had no data and AI was empty)');
           const partial = buildUrlEvidenceProduct(urlInput.trim());
           setExtracted(partial);
           setEditField({ ...partial });
           setSelectedImgs(partial.images || []);
           setHeroImg((partial.images || [])[0] || '');
-          addLog('⚠ The scrape returned AliExpress’s anti-bot page (no product data) — import started from the real evidence in the URL (item ID + price params). Complete the rest from the live page before saving — stays DRAFT.', false);
+          addLog('⚠ No page product data could be scraped (anti-bot page) — import started from the real evidence in the URL (item ID + price params). Complete the rest from the live page before saving — stays DRAFT.', false);
           setStep('preview');
           return;
         }
       }
 
-      // Merge page images with AI-found images
-      const allImages = [...new Set([...(data.images||[]), ...pageImages])].filter(u => u.startsWith('http')).slice(0, 24);
-      data.images = allImages;
+      addLog(`FINAL SOURCE: ${base ? (data ? 'SCRAPE+AI' : 'SCRAPE ONLY') : 'AI ONLY'}`);
 
-      setExtracted(data);
-      setEditField({...data});
+      // Merge page images with AI-found images
+      const allImages = [...new Set([...(final.images||[]), ...pageImages])].filter(u => u.startsWith('http')).slice(0, 24);
+      final.images = allImages;
+
+      setExtracted(final);
+      setEditField({...final});
       setSelectedImgs(allImages.slice(0, 6));
       setHeroImg(allImages[0] || '');
 
@@ -3939,7 +3979,7 @@ function AAIImport() {
       const entry: ImportHistoryEntry = {
         id: `imp-${Date.now()}`, source: source === 'url' ? urlInput : source, sourceType: source,
         date: new Date().toISOString(), provider: activeProvider?.name||'Unknown',
-        model: activeProvider?.defaultModel||'Unknown', productTitle: data.title,
+        model: activeProvider?.defaultModel||'Unknown', productTitle: final.title,
         status: 'success', importTime: elapsed * 1000
       };
       const newHist = [entry, ...history].slice(0, 50);
@@ -3960,8 +4000,10 @@ function AAIImport() {
         const partial = buildUrlEvidenceProduct(urlInput.trim());
         setExtracted(partial);
         setEditField({ ...partial });
-        setSelectedImgs([]);
-        setHeroImg('');
+        // Never blank out images the scrape already found — keep them.
+        const catchImgs = (partial.images || []).filter(u => u.startsWith('http'));
+        setSelectedImgs(catchImgs.slice(0, 6));
+        setHeroImg(catchImgs[0] || '');
         addLog('⚠ AliExpress blocked the automated page fetch (JS-rendered shell). Started from the real evidence in the URL (item ID, ship-from, price param). Fill in title/description/images/shipping from the live page before saving — everything stays DRAFT.', false);
         setError('');
         setStep('preview');
