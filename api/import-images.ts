@@ -44,10 +44,13 @@ function supabaseConfig(): { url: string; serviceRole: string; bucket: string } 
 
 function sanitizeFilename(url: string, order: number): string {
   const base = String(url).split(/[?#]/)[0].split('/').pop() || 'image';
-  const clean = base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
-  const extMatch = /\.(jpe?g|png|webp|gif)$/i.exec(clean);
+  // Strip a real image extension once, then re-append the canonical one so
+  // filenames never end up doubled (e.g. `Cat-Toy.png.png`).
+  const extMatch = /\.(jpe?g|png|webp|gif)$/i.exec(base);
+  const stem = extMatch ? base.slice(0, -extMatch[0].length) : base;
+  const clean = (stem || 'image').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
   const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
-  return `catalog/${order}-${clean || `image-${order}`}.${ext}`;
+  return `${order}-${clean}.${ext}`;
 }
 
 /** Download one image with redirect validation + content-type + size checks. */
