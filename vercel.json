@@ -5,5 +5,8 @@
   "installCommand": "npm install",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/fetch-page.ts": { "maxDuration": 60 }
+  }
 }
