@@ -748,10 +748,10 @@ function Footer() {
                 <Phone strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 (440) 941-8002
               </a>
-              <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
+              <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
                 <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                Irving, TX 75038, USA
-              </div>
+                5041 Courtside Dr, Irving, TX 75038
+              </a>
               <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
                 <Clock strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
@@ -800,7 +800,7 @@ function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-xs text-luxe-white/50">
-              © {new Date().getFullYear()} Luxedge. All rights reserved. | Irving, TX, USA
+              © {new Date().getFullYear()} Luxedge. All rights reserved. | 5041 Courtside Dr, Irving, TX 75038
             </p>
             <div className="flex items-center gap-3 flex-wrap justify-center">
               <Link to="/privacy" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Privacy Policy</Link>
