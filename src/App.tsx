@@ -1587,6 +1587,24 @@ function HomePage() {
               <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
             </div>
           </Reveal>
+          <Reveal delay={20}>
+            <div className="flex items-start gap-5 sm:gap-7 mb-8 overflow-x-auto pb-1">
+              {[
+                { label: 'Dog', to: '/category/dog-supplies', image: dogVisual ? firstUsableImage(dogVisual) : null, soon: false },
+                { label: 'Cat', to: '/category/cat-supplies', image: catVisual ? firstUsableImage(catVisual) : null, soon: false },
+                { label: 'Horse', to: '/shop', image: 'https://images.pexels.com/photos/12523634/pexels-photo-12523634.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
+                { label: 'Cattle', to: '/shop', image: 'https://images.pexels.com/photos/11684963/pexels-photo-11684963.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
+              ].filter((a) => a.image).map((animal) => (
+                <Link key={animal.label} to={animal.to} className="flex flex-col items-center gap-2 shrink-0 group">
+                  <span className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden ring-1 ring-luxe-silver bg-luxe-cream transition-transform duration-300 group-hover:scale-105 group-hover:ring-luxe-gold/50">
+                    <img src={animal.image || LUXEDGE_IMAGE_FALLBACK} alt={animal.label} loading="lazy" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+                  </span>
+                  <span className="text-[13px] font-semibold text-luxe-charcoal">{animal.label}</span>
+                  {animal.soon && <span className="text-[9px] font-bold uppercase tracking-wide text-luxe-gold">Coming soon</span>}
+                </Link>
+              ))}
+            </div>
+          </Reveal>
           <div className="editorial-pet-grid">
             {[
               { label: 'Dog', to: '/category/dog-supplies', desc: 'Walk, play, rest & more', product: dogVisual },
