@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   extractProductJson, parseHtmlPage, buildExtractionPrompt, isProxyErrorText,
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
-  buildImportVariants, buildImportProductInput,
+  buildImportVariants, buildImportProductInput, buildStorageImageInputs,
+  parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
 } from '../importer';
 
 describe('extractProductJson', () => {
@@ -209,5 +210,86 @@ describe('AliExpress import persistence mapping', () => {
     expect(imgs[0].url).toBe('https://a/2.jpg');
     expect(imgs[0].isPrimary).toBe(true);
     expect(imgs[1].isPrimary).toBe(false);
+  });
+});
+
+describe('buildStorageImageInputs (Supabase storage mapping)', () => {
+  it('maps uploaded storage URLs preserving sort order', () => {
+    const inputs = buildStorageImageInputs([
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/0-a.jpg', sourceUrl: 'https://cdn/x.jpg', sortOrder: 0 },
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/1-b.jpg', sourceUrl: 'https://cdn/y.jpg', sortOrder: 1 },
+    ], 'https://cdn/x.jpg');
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].url).toContain('/0-a.jpg');
+    expect(inputs[0].isPrimary).toBe(true);
+    expect(inputs[1].url).toContain('/1-b.jpg');
+    expect(inputs[1].isPrimary).toBe(false);
+  });
+
+  it('marks the first uploaded image primary when no hero matches', () => {
+    const inputs = buildStorageImageInputs([
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/0-a.jpg', sourceUrl: 'https://cdn/x.jpg', sortOrder: 0 },
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/1-b.jpg', sourceUrl: 'https://cdn/y.jpg', sortOrder: 1 },
+    ]);
+    expect(inputs[0].isPrimary).toBe(true);
+    expect(inputs.filter((i) => i.isPrimary)).toHaveLength(1);
+  });
+
+  it('accepts a public storage URL directly as the hero', () => {
+    const inputs = buildStorageImageInputs([
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/0-a.jpg', sourceUrl: 'https://cdn/x.jpg', sortOrder: 0 },
+      { publicUrl: 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/1-b.jpg', sourceUrl: 'https://cdn/y.jpg', sortOrder: 1 },
+    ], 'https://proj.supabase.co/storage/v1/object/public/product-media/catalog/p1/1-b.jpg');
+    expect(inputs[1].isPrimary).toBe(true);
+  });
+
+  it('returns an empty list for no uploads — never invents an image', () => {
+    expect(buildStorageImageInputs([])).toEqual([]);
+  });
+});
+
+describe('AliExpress URL evidence (fetch-blocked fallback)', () => {
+  const URL_UNDECODED = [
+    'https://www.aliexpress.us/item/3256811704175460.html?spm=a2g0o.tm1000020137.2248275130.16.f00e37440UI0QM',
+    '&pvid=7cb19531-5f80-4976-a096-20977ca27f4d',
+    '&pdp_ext_f=%7B%22ship_from%22%3A%22US%22%2C%22sku_id%22%3A%2212000056899111739%22%7D',
+    '&pdp_npi=6%40dis%21USD%21US%2B%2412.13%21US%2B%240.99%21%21%2112.13%210.99%21%402103128917872265124817054e0f05%2112000056899111739%21gdf%21US%216395549784%21X%211%210%21n_tag%3A-29910%3Bd%3A94b185ad%3Bm03_new_user%3A-29895%3BpisId%3A5000000210792318',
+    '&aecmd=true&gatewayAdapt=glo2usa',
+  ].join('');
+
+  it('parses pdp_npi list + secondary price honestly', () => {
+    const { listPrice, secondaryPrice } = parsePdpNpi('6@dis!USD!US+$12.13!US+$0.99!!!12.13!0.99!@x!12000056899111739!gdf!US');
+    expect(listPrice).toBe(12.13);
+    expect(secondaryPrice).toBe(0.99);
+    expect(parsePdpNpi(null)).toEqual({ listPrice: null, secondaryPrice: null });
+    expect(parsePdpNpi('garbage')).toEqual({ listPrice: null, secondaryPrice: null });
+  });
+
+  it('extracts item id, ship-from and sku id from the shareable URL', () => {
+    const ev = extractAliExpressUrlEvidence(URL_UNDECODED);
+    expect(ev.itemId).toBe('3256811704175460');
+    expect(ev.shipFrom).toBe('US');
+    expect(ev.skuId).toBe('12000056899111739');
+    expect(ev.listPrice).toBe(12.13);
+    expect(ev.secondaryPrice).toBe(0.99);
+  });
+
+  it('builds a partial product that stays UNKNOWN where the URL has no evidence', () => {
+    const p = buildUrlEvidenceProduct(URL_UNDECODED);
+    expect(p.supplierPlatform).toBe('AliExpress');
+    expect(p.supplierItemId).toBe('3256811704175460');
+    expect(p.sellingPrice).toBe(12.13);
+    expect(p.title).toBe('');
+    expect(p.shippingToUsa).toBe('UNKNOWN');
+    expect(p.usStockEvidence).toBe('UNKNOWN');
+    expect(p.evidence?.sellingPrice).toBe('INFERRED');
+    expect(p.ownerNotes || '').toContain('blocked by AliExpress');
+  });
+
+  it('extracts only the item id when no tracking params exist', () => {
+    const ev = extractAliExpressUrlEvidence('https://www.aliexpress.com/item/1005001234567.html');
+    expect(ev.itemId).toBe('1005001234567');
+    expect(ev.shipFrom).toBeNull();
+    expect(ev.listPrice).toBeNull();
   });
 });

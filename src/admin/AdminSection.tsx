@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useRef, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildUrlEvidenceProduct, extractAliExpressUrlEvidence } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
@@ -3899,9 +3899,26 @@ function AAIImport() {
       setStep('preview');
 
     } catch (e: any) {
-      setError(e.message||'Import failed');
-      addLog(`✗ ${e.message}`, false);
-      setStep('input');
+      // AliExpress blocks automated fetching (JS-rendered shell). When the URL
+      // itself carries real evidence (item ID, ship-from, pdp_npi price), fall
+      // back to a URL-evidence draft instead of dead-ending — the owner fills
+      // title/description/shipping from the live page and saves as DRAFT.
+      const isAli = source === 'url' && /aliexpress\.(com|us)/i.test(urlInput);
+      const urlEv = isAli ? extractAliExpressUrlEvidence(urlInput.trim()) : null;
+      if (isAli && urlEv && urlEv.itemId) {
+        const partial = buildUrlEvidenceProduct(urlInput.trim());
+        setExtracted(partial);
+        setEditField({ ...partial });
+        setSelectedImgs([]);
+        setHeroImg('');
+        addLog('⚠ AliExpress blocked the automated page fetch (JS-rendered shell). Started from the real evidence in the URL (item ID, ship-from, price param). Fill in title/description/images/shipping from the live page before saving — everything stays DRAFT.', false);
+        setError('');
+        setStep('preview');
+      } else {
+        setError(e.message||'Import failed');
+        addLog(`✗ ${e.message}`, false);
+        setStep('input');
+      }
     } finally { setLoading(false); stopTimer(); }
   };
 
@@ -3971,9 +3988,28 @@ function AAIImport() {
         imageCount: selectedImgs.length,
       }));
 
-      // Images — strongest first, deduplicated, no fake fallback.
+      // Images — storage-first: download/upload into the Supabase product-media
+      // bucket via the serverless endpoint; fall back to durable supplier URLs
+      // only when storage is unavailable, with an explicit warning (never silent).
       if (selectedImgs.length) {
-        await saveProductImages(created.id, buildImportImages(selectedImgs, heroImg || selectedImgs[0]));
+        let imageRows = buildImportImages(selectedImgs, heroImg || selectedImgs[0]);
+        const imageWarnings: string[] = [];
+        try {
+          const sr = await importProductImagesToStorage(created.id, selectedImgs);
+          if (sr.ok && sr.uploaded.length) {
+            imageRows = buildStorageImageInputs(sr.uploaded, heroImg || selectedImgs[0]);
+          } else {
+            imageWarnings.push((sr.warnings && sr.warnings[0]) || 'Storage import returned no images — saved supplier image URLs instead.');
+          }
+          if (sr.warnings && sr.warnings.length) imageWarnings.push(...sr.warnings);
+        } catch (e) {
+          imageWarnings.push(`Supabase storage import unavailable (${(e as Error).message}) — saved supplier image URLs instead.`);
+        }
+        await saveProductImages(created.id, imageRows);
+        if (imageWarnings.length) {
+          notify(imageWarnings.join(' '), 'error');
+          addLog(`⚠ ${imageWarnings.join(' ')}`, false);
+        }
       }
 
       // Variants — real only; never invent stock/price.
@@ -4148,10 +4184,12 @@ function AAIImport() {
         <div className="border rounded-xl p-4 bg-sky-50 border-sky-200">
           <p className="text-xs font-semibold text-blue-700 mb-1">⚡ AI Provider</p>
           {(() => {
-            const active = aiProviders.find(p=>p.isDefault&&p.enabled) || aiProviders.find(p=>p.enabled);
+            // The SERVER is the authority on keys (/api/ai/status). Client
+            // localStorage toggles only affect routing, never real availability.
+            const active = aiProviders.find(p=>p.isDefault&&p.enabled) || aiProviders.find(p=>p.enabled) || aiProviders[0];
             return active
               ? <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}</p>
-              : <p className="text-xs text-red-600">No AI provider configured! <button onClick={()=>navigate('/admin/settings')} className="underline">Go to GearSix → AI Providers</button></p>;
+              : <p className="text-xs text-red-600">No AI provider enabled — check AI Hub → AI Providers.</p>;
           })()}
         </div>
       </div>

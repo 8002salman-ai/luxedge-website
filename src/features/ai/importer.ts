@@ -300,6 +300,164 @@ export function extractAliExpressItemId(url: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Extract VERIFIED/INFERRED product evidence embedded in an AliExpress URL.
+ * AliExpress blocks automated page fetching (JS-rendered shell), but the
+ * shareable item URL itself carries real facts: the item ID, ship-from
+ * country, sku id, and (via the pdp_npi tracking param) the list price and a
+ * secondary price (usually the estimated shipping). Every field is classified
+ * honestly — nothing here is invented.
+ */
+export interface AliExpressUrlEvidence {
+  /** Numeric item ID — VERIFIED from the URL path. */
+  itemId: string | null;
+  /** ship_from country from pdp_ext_f — VERIFIED when present. */
+  shipFrom: string | null;
+  /** sku id from pdp_ext_f — VERIFIED when present. */
+  skuId: string | null;
+  /** List price parsed from pdp_npi — INFERRED (tracking param, not a live page read). */
+  listPrice: number | null;
+  /** Secondary price from pdp_npi (usually shipping estimate) — INFERRED semantics UNKNOWN. */
+  secondaryPrice: number | null;
+}
+
+/** Decode a URL-encoded JSON value embedded in a query param, else null. */
+function decodeEmbeddedJson(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse the AliExpress pdp_npi tracking param: `{n}@dis!CURRENCY!CC+$price!CC+$price2!...`.
+ * Returns up to the first two `CC+$price` segments. Pure + unit-tested.
+ */
+export function parsePdpNpi(param: string | null): { listPrice: number | null; secondaryPrice: number | null } {
+  if (!param) return { listPrice: null, secondaryPrice: null };
+  const marker = '@dis!';
+  const idx = param.indexOf(marker);
+  const rest = idx >= 0 ? param.slice(idx + marker.length) : param;
+  const prices: number[] = [];
+  for (const seg of rest.split('!')) {
+    const m = /^[A-Z]{2}\+\$([\d.,]+)/.exec(seg.trim());
+    if (m) {
+      const n = Number(m[1].replace(/,/g, ''));
+      if (Number.isFinite(n)) prices.push(n);
+    }
+    if (prices.length >= 2) break;
+  }
+  return { listPrice: prices[0] ?? null, secondaryPrice: prices[1] ?? null };
+}
+
+/** Extract all real evidence from an AliExpress item URL (never fabricates). */
+export function extractAliExpressUrlEvidence(url: string): AliExpressUrlEvidence {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return { itemId: extractAliExpressItemId(url), shipFrom: null, skuId: null, listPrice: null, secondaryPrice: null };
+  }
+  const ext = decodeEmbeddedJson(u.searchParams.get('pdp_ext_f'));
+  const { listPrice, secondaryPrice } = parsePdpNpi(u.searchParams.get('pdp_npi'));
+  return {
+    itemId: extractAliExpressItemId(url),
+    shipFrom: typeof ext?.ship_from === 'string' && ext.ship_from ? String(ext.ship_from) : null,
+    skuId: typeof ext?.sku_id === 'string' && ext.sku_id ? String(ext.sku_id) : null,
+    listPrice,
+    secondaryPrice,
+  };
+}
+
+/**
+ * Build a partial AIExtractedProduct from URL evidence alone — used when
+ * AliExpress blocks the page fetch so the owner can still start from the real
+ * facts the URL proves and fill in the rest. Everything not in the URL stays
+ * UNKNOWN/empty.
+ */
+export function buildUrlEvidenceProduct(url: string): AIExtractedProduct {
+  const ev = extractAliExpressUrlEvidence(url);
+  const itemId = ev.itemId || '';
+  const price = ev.listPrice ?? 0;
+  const notes: string[] = [
+    `Source URL: ${url}`,
+    `Item ID: ${itemId || 'UNKNOWN'}`,
+    ev.shipFrom ? `Ship from: ${ev.shipFrom} (from URL pdp_ext_f)` : 'Ship from: UNKNOWN',
+    ev.listPrice ? `List price evidence from URL tracking param (pdp_npi): $${ev.listPrice.toFixed(2)} — INFERRED, verify on the live page.` : 'List price: UNKNOWN',
+    ev.secondaryPrice ? `Secondary price (usually shipping) from URL param: $${ev.secondaryPrice.toFixed(2)} — INFERRED, verify on the live page.` : '',
+    'Automated page fetch was blocked by AliExpress (JS-rendered shell). Verify title, description, images, variants, USA shipping and stock on the live page before saving.',
+  ].filter(Boolean);
+  return {
+    title: '',
+    luxuryTitle: '',
+    seoTitle: '',
+    slug: '',
+    brand: '',
+    manufacturer: '',
+    category: '',
+    subcategory: '',
+    collection: '',
+    shortDescription: '',
+    longDescription: '',
+    features: [],
+    benefits: [],
+    specifications: {},
+    packageIncludes: [],
+    weight: '',
+    dimensions: '',
+    origin: ev.shipFrom || '',
+    materials: [],
+    colors: [],
+    sizes: [],
+    sku: '',
+    barcode: '',
+    hsCode: '',
+    stock: 0,
+    costPrice: 0,
+    sellingPrice: price,
+    comparePrice: 0,
+    shippingWeight: '',
+    tags: [],
+    seoKeywords: [],
+    metaTitle: '',
+    metaDescription: '',
+    focusKeyword: '',
+    images: [],
+    faqs: [],
+    warranty: '',
+    careInstructions: '',
+    safetyNotes: '',
+    confidence: {},
+    supplierPlatform: 'AliExpress',
+    supplierUrl: url,
+    supplierItemId: itemId || undefined,
+    shippingToUsa: 'UNKNOWN',
+    deliveryRangeUsa: 'UNKNOWN',
+    usStockEvidence: 'UNKNOWN',
+    ordersCount: 'UNKNOWN',
+    ratingValue: 'UNKNOWN',
+    reviewCount: 'UNKNOWN',
+    batteryElectrical: 'UNKNOWN',
+    riskFlags: [],
+    variants: [],
+    evidence: {
+      title: 'UNKNOWN',
+      sellingPrice: ev.listPrice ? 'INFERRED' : 'UNKNOWN',
+      costPrice: 'UNKNOWN',
+      shipping: 'UNKNOWN',
+      delivery: 'UNKNOWN',
+      stock: 'UNKNOWN',
+      materials: 'UNKNOWN',
+      dimensions: 'UNKNOWN',
+      battery: 'UNKNOWN',
+    },
+    ownerNotes: notes.join(' | '),
+  };
+}
+
 export interface AliExpressRiskAssessment {
   /** Hard-restricted — must never become customer-visible. */
   blocked: string[];
@@ -400,6 +558,62 @@ export function buildImportVariants(variants: { attributes?: Record<string, stri
     inventoryQty: 0,
     status: 'draft',
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Supabase Storage image import (serverless /api/import-images)
+// ---------------------------------------------------------------------------
+
+export interface StorageImportedImage {
+  publicUrl: string;
+  sourceUrl: string;
+  sortOrder: number;
+}
+
+export interface StorageImportResult {
+  ok: boolean;
+  uploaded: StorageImportedImage[];
+  failed: { sourceUrl: string; reason: string }[];
+  warnings: string[];
+}
+
+/**
+ * Map server-side storage uploads to catalog image rows, preserving order and
+ * primary (hero) placement. Never invents an image that was not uploaded.
+ */
+export function buildStorageImageInputs(uploaded: StorageImportedImage[], heroUrl?: string): CatalogImageInput[] {
+  const ordered = [...(uploaded || [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  const hero = heroUrl && ordered.some((u) => u.publicUrl === heroUrl)
+    ? heroUrl
+    : heroUrl && ordered.some((u) => u.sourceUrl === heroUrl)
+      ? ordered.find((u) => u.sourceUrl === heroUrl)!.publicUrl
+      : ordered[0]?.publicUrl || '';
+  return ordered.map((img, i) => ({
+    url: img.publicUrl,
+    altText: '',
+    isPrimary: img.publicUrl === hero,
+    sortOrder: i,
+  }));
+}
+
+/**
+ * Ask the server to download + dedupe + upload supplier images into Supabase
+ * Storage. Returns the result when the endpoint answered; throws when the
+ * endpoint itself is unreachable (e.g. local Vite dev server with no /api).
+ */
+export async function importProductImagesToStorage(productId: string, urls: string[]): Promise<StorageImportResult> {
+  const r = await fetch('/api/import-images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productId, urls }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`Storage import failed (HTTP ${r.status})${text ? `: ${text.slice(0, 160)}` : ''}`);
+  }
+  const data = (await r.json()) as StorageImportResult;
+  return data;
 }
 
 export interface ImportProductArgs {

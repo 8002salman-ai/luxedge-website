@@ -83,6 +83,8 @@ export interface AIExtractedProduct {
   riskFlags?: string[];
   evidence?: Record<string, 'VERIFIED' | 'INFERRED' | 'UNKNOWN'>;
   variants?: AIExtractedVariant[];
+  /** Owner/evidence notes carried into the draft (e.g. URL-evidence provenance). */
+  ownerNotes?: string;
 }
 
 export interface AIExtractedVariant {

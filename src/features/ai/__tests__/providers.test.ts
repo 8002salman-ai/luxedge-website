@@ -62,6 +62,21 @@ describe('loadAIProviders', () => {
     const providers = loadAIProviders(memoryStorage({ luxedge_ai_providers: '{{{not json' }));
     expect(providers.length).toBe(DEFAULT_AI_PROVIDERS.length);
   });
+
+  it('defaults to DeepSeek as the default provider (owner chain: deepseek → codex)', () => {
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('deepseek');
+    const deepseek = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek');
+    expect(deepseek?.defaultModel).toBe('deepseek-v4-flash');
+    expect(deepseek?.enabled).toBe(true);
+  });
+
+  it('self-heals a stale all-disabled stored config back to defaults', () => {
+    const allDisabled = DEFAULT_AI_PROVIDERS.map((p) => ({ ...p, enabled: false }));
+    const providers = loadAIProviders(memoryStorage({ luxedge_ai_providers: JSON.stringify(allDisabled) }));
+    expect(providers.some((p) => p.enabled)).toBe(true);
+    expect(providers.find((p) => p.id === 'deepseek')?.enabled).toBe(true);
+    expect(providers.find((p) => p.isDefault)?.id).toBe('deepseek');
+  });
 });
 
 describe('scrubLegacySecrets', () => {

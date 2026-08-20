@@ -11,12 +11,15 @@
 
 import type { AIProvider } from './types';
 
+// Default provider is DeepSeek (fast/cheap research + extraction); Codex is the
+// fallback. This matches DEFAULT_PROVIDER_SETTINGS (deepseek → codex) and the
+// owner's requested chain. OpenAI/others remain available but are NOT default.
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
   { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'gpt-4o-mini'], defaultModel: 'google/gemini-2.0-flash-exp:free', enabled: true, isDefault: false },
   { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: true },
   { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
-  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: true },
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: false },
   { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
 ];
 
@@ -47,6 +50,10 @@ export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[
     for (const def of DEFAULT_AI_PROVIDERS) {
       if (!merged.some((p) => p.id === def.id)) merged.push({ ...def });
     }
+    // Self-healing: a stale all-disabled config (e.g. from an old save) must
+    // never leave the import flow without a provider. The SERVER decides which
+    // providers actually have keys; client toggles only affect routing.
+    if (!merged.some((p) => p.enabled)) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
     return merged;
   } catch {
     return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));

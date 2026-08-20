@@ -9,7 +9,7 @@
 // ============================================================================
 
 import type { AIProvider } from './types';
-import { loadProviderSettings, resolveProviderChain } from './providers';
+import { loadProviderSettings, resolveProviderChain, DEFAULT_AI_PROVIDERS } from './providers';
 import { getAccessToken } from '../../services/supabase';
 
 const API_BASE = '/api';
@@ -148,7 +148,16 @@ export async function callAIProvider(
   system?: string
 ): Promise<string> {
   const settings = loadProviderSettings();
-  const { primary, fallback } = resolveProviderChain(providers, settings);
+  let { primary, fallback } = resolveProviderChain(providers, settings);
+  // The server is the authority on which providers actually have keys. A stale
+  // all-disabled client config must not dead-end the import: fall back to the
+  // configured routing defaults (deepseek → codex) and let the server answer
+  // honestly if the key is missing there.
+  if (!primary) {
+    const defaults = DEFAULT_AI_PROVIDERS.filter((p) => p.enabled);
+    primary = defaults.find((p) => p.id === settings.defaultProviderId) || defaults.find((p) => p.id === 'deepseek') || defaults[0] || null;
+    if (settings.fallbackProviderId) fallback = defaults.find((p) => p.id === settings.fallbackProviderId) || null;
+  }
   if (!primary) {
     throw new Error('No AI provider enabled. Enable one in AI Hub → AI Provider Configuration.');
   }
