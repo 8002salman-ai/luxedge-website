@@ -83,6 +83,29 @@ describe('parseHtmlPage', () => {
     const { images } = parseHtmlPage('See this ![product](https://img.example.com/x.png) and ![y](https://img.example.com/y.jpeg)');
     expect(images).toContain('https://img.example.com/x.png');
   });
+
+  it('reads og:image and puts it first, deduped', () => {
+    const html = [
+      '<meta property="og:image" content="https://cdn.example.com/hero.jpg" />',
+      '<img src="https://cdn.example.com/hero.jpg" />',
+      '<img data-src="https://cdn.example.com/other.png" />',
+    ].join('');
+    const { images } = parseHtmlPage(html);
+    expect(images[0]).toBe('https://cdn.example.com/hero.jpg');
+    expect(images).toHaveLength(2);
+  });
+
+  it('normalizes AliExpress size-suffixed/avif thumbnails back to base images', () => {
+    const html = [
+      '<img src="https://ae01.alicdn.com/kf/Sabc123.jpg_220x220q75.jpg_.avif" />',
+      '<img src="https://ae01.alicdn.com/kf/Sxyz789.png_640x640q75.jpg_.webp" />',
+      '<img src="https://ae01.alicdn.com/kf/Skeep.webp" />',
+    ].join('');
+    const { images } = parseHtmlPage(html);
+    expect(images).toContain('https://ae01.alicdn.com/kf/Sabc123.jpg');
+    expect(images).toContain('https://ae01.alicdn.com/kf/Sxyz789.png');
+    expect(images).toContain('https://ae01.alicdn.com/kf/Skeep.webp');
+  });
 });
 
 describe('buildExtractionPrompt', () => {
