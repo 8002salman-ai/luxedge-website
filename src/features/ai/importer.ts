@@ -57,6 +57,18 @@ export function isProxyErrorText(text: string): boolean {
 interface FetchedPage {
   text: string;
   images: string[];
+  /** og:title or JSON-LD Product name — deterministic, not AI-dependent. */
+  title: string;
+  /** og:description or JSON-LD Product description. */
+  description: string;
+  /** JSON-LD offers price (VERIFIED from the page) when present. */
+  price: number | null;
+  /** JSON-LD offers priceCurrency when present. */
+  currency: string;
+  /** JSON-LD brand name when explicitly present. */
+  brand: string;
+  /** True when a JSON-LD Product block was found. */
+  jsonLdProduct: boolean;
 }
 
 /**
@@ -164,7 +176,69 @@ export async function fetchPageContent(url: string): Promise<string> {
   throw new Error(`Could not fetch page (${lastErr}). Try pasting HTML or text instead.`);
 }
 
-/** Parse raw HTML or text into { text, images } without a DOM library. */
+interface JsonLdProduct {
+  name: string;
+  description: string;
+  images: string[];
+  price: number | null;
+  currency: string;
+  brand: string;
+}
+
+/** Parse JSON-LD blocks and pull out Product evidence (never fabricates). */
+export function parseJsonLdProduct(raw: string): JsonLdProduct {
+  const out: JsonLdProduct = { name: '', description: '', images: [], price: null, currency: '', brand: '' };
+  const blocks = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
+    .map((m) => m[1]);
+  for (const block of blocks) {
+    let data: unknown = null;
+    try {
+      data = JSON.parse(block);
+    } catch {
+      continue;
+    }
+    // Walk @graph and nested @type structures to find Product data.
+    const nodes: Record<string, unknown>[] = [];
+    if (Array.isArray(data)) nodes.push(...(data as Record<string, unknown>[]));
+    else if (data && typeof data === 'object') {
+      const root = data as Record<string, unknown>;
+      nodes.push(root);
+      if (Array.isArray(root['@graph'])) nodes.push(...(root['@graph'] as Record<string, unknown>[]));
+    }
+    for (const node of nodes) {
+      const type = Array.isArray(node['@type']) ? (node['@type'] as string[]).join(' ') : String(node['@type'] || '');
+      if (!/\bProduct\b/i.test(type) && !(node['@type'] === 'ItemPage' && node['mainEntity'])) continue;
+      const target = node['@type'] === 'ItemPage' && node['mainEntity'] ? (node['mainEntity'] as Record<string, unknown>) : node;
+      if (typeof target.name === 'string' && target.name && !out.name) out.name = target.name.trim();
+      if (typeof target.description === 'string' && target.description && !out.description) out.description = target.description.trim();
+      if (typeof target.brand === 'object' && target.brand && typeof (target.brand as Record<string, unknown>).name === 'string') {
+        out.brand = String((target.brand as Record<string, unknown>).name).trim();
+      } else if (typeof target.brand === 'string' && target.brand) {
+        out.brand = target.brand.trim();
+      }
+      const imgs = target.image ? (Array.isArray(target.image) ? target.image : [target.image]) : [];
+      for (const img of imgs) {
+        const u = typeof img === 'string' ? img : typeof img === 'object' && img ? String((img as Record<string, unknown>).url || '') : '';
+        if (u.startsWith('http')) out.images.push(u);
+      }
+      const offers = target.offers ? (Array.isArray(target.offers) ? target.offers[0] : target.offers) : null;
+      if (offers && typeof offers === 'object') {
+        const o = offers as Record<string, unknown>;
+        const price = o.price ?? o.lowPrice;
+        if (typeof price === 'number' && Number.isFinite(price) && price > 0 && out.price === null) out.price = price;
+        if (typeof price === 'string' && price && out.price === null) {
+          const n = Number(price.replace(/[^\d.\-]/g, ''));
+          if (Number.isFinite(n) && n > 0) out.price = n;
+        }
+        if (typeof o.priceCurrency === 'string' && o.priceCurrency) out.currency = o.priceCurrency;
+      }
+    }
+  }
+  out.images = [...new Set(out.images)].slice(0, 20);
+  return out;
+}
+
+/** Parse raw HTML or text into structured page evidence without a DOM library. */
 export function parseHtmlPage(raw: string): FetchedPage {
   const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
   if (isHtml) {
@@ -172,7 +246,8 @@ export function parseHtmlPage(raw: string): FetchedPage {
     const ogTitle = matchMeta(raw, 'og:title');
     const ogDesc = matchMeta(raw, 'og:description');
     const ogImage = matchMeta(raw, 'og:image');
-    const jsonLd = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
+    const ld = parseJsonLdProduct(raw);
+    const jsonLdRaw = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
       .map((m) => m[1])
       .join('\n');
     // AliExpress serves size-suffixed thumbnails (…jpg_220x220q75.jpg_.avif);
@@ -186,11 +261,22 @@ export function parseHtmlPage(raw: string): FetchedPage {
       .map((m) => normalize(m[1]))
       .filter((src) => src.startsWith('http') && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(src));
     if (ogImage && ogImage.startsWith('http')) images.unshift(normalize(ogImage));
+    images.push(...ld.images);
     const bodyText = stripHtml(raw)
       .replace(/[ \t]+/g, ' ')
       .split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
-    const text = [ogTitle, ogDesc, jsonLd ? `JSON-LD:\n${jsonLd}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
-    return { text, images: [...new Set(images)].slice(0, 30) };
+    const text = [ogTitle, ogDesc, jsonLdRaw ? `JSON-LD:\n${jsonLdRaw}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
+    const dedupImages = [...new Set(images)].slice(0, 30);
+    return {
+      text,
+      images: dedupImages,
+      title: ogTitle || ld.name,
+      description: ogDesc || ld.description,
+      price: ld.price,
+      currency: ld.currency,
+      brand: ld.brand,
+      jsonLdProduct: !!(ld.name || ld.description || ld.images.length || ld.price !== null),
+    };
   }
   const images: string[] = [];
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
@@ -198,7 +284,7 @@ export function parseHtmlPage(raw: string): FetchedPage {
   while ((m = re.exec(raw))) {
     if (m[1].match(/\.(jpe?g|png|webp)(\?|$)/i)) images.push(m[1]);
   }
-  return { text: raw.slice(0, 12000), images: [...new Set(images)].slice(0, 30) };
+  return { text: raw.slice(0, 12000), images: [...new Set(images)].slice(0, 30), title: '', description: '', price: null, currency: '', brand: '', jsonLdProduct: false };
 }
 
 function matchMeta(raw: string, prop: string): string {
@@ -513,6 +599,146 @@ export function buildUrlEvidenceProduct(url: string): AIExtractedProduct {
       battery: 'UNKNOWN',
     },
     ownerNotes: notes.join(' | '),
+  };
+}
+
+/**
+ * Build a deterministic AIExtractedProduct from real scraped page evidence
+ * (og:title/description, JSON-LD, images, JSON-LD price) PLUS the real facts
+ * the URL proves (item ID, ship-from, pdp_npi price). AI is NOT required:
+ * this is the base product the Review & Edit screen must always show when the
+ * scrape succeeded — AI only enriches it later.
+ */
+export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIExtractedProduct {
+  const ev = extractAliExpressUrlEvidence(url);
+  const itemId = ev.itemId || extractAliExpressItemId(url) || '';
+  // Price priority: JSON-LD verified price from the page > URL pdp_npi evidence.
+  const price = page.price && page.price > 0 ? page.price : (ev.listPrice ?? 0);
+  const priceVerified = page.price && page.price > 0;
+  const notes: string[] = [
+    `Source URL: ${url}`,
+    `Item ID: ${itemId || 'UNKNOWN'}`,
+    ev.shipFrom ? `Ship from: ${ev.shipFrom} (from URL pdp_ext_f)` : 'Ship from: UNKNOWN',
+    page.jsonLdProduct ? 'Page JSON-LD product data found (name/description/images/price evidence).' : 'Page JSON-LD product data: not found.',
+    priceVerified
+      ? `List price from page data: $${page.price!.toFixed(2)} ${page.currency || 'USD'} — page-verified.`
+      : (ev.listPrice
+        ? `List price evidence from URL tracking param (pdp_npi): $${ev.listPrice.toFixed(2)} — INFERRED, verify on the live page.`
+        : 'List price: UNKNOWN'),
+    ev.secondaryPrice ? `Secondary price (usually shipping) from URL param: $${ev.secondaryPrice.toFixed(2)} — INFERRED, verify on the live page.` : '',
+    'USA shipping, stock, delivery and variant details load via JS — verify on the live page before publish.',
+  ].filter(Boolean);
+  const shortDesc = page.description.trim();
+  return {
+    title: page.title.trim(),
+    luxuryTitle: '',
+    seoTitle: page.title.trim(),
+    slug: '',
+    brand: page.brand.trim(),
+    manufacturer: '',
+    category: '',
+    subcategory: '',
+    collection: '',
+    shortDescription: shortDesc,
+    longDescription: shortDesc,
+    features: [],
+    benefits: [],
+    specifications: {},
+    packageIncludes: [],
+    weight: '',
+    dimensions: '',
+    origin: ev.shipFrom || '',
+    materials: [],
+    colors: [],
+    sizes: [],
+    sku: '',
+    barcode: '',
+    hsCode: '',
+    stock: 0,
+    costPrice: 0,
+    sellingPrice: price,
+    comparePrice: 0,
+    shippingWeight: '',
+    tags: [],
+    seoKeywords: [],
+    metaTitle: page.title.trim(),
+    metaDescription: shortDesc,
+    focusKeyword: '',
+    images: page.images,
+    faqs: [],
+    warranty: '',
+    careInstructions: '',
+    safetyNotes: '',
+    confidence: {
+      title: page.title.trim() ? 1 : 0,
+      price: priceVerified ? 1 : 0,
+      description: shortDesc ? 1 : 0,
+      images: page.images.length ? 1 : 0,
+      brand: page.brand.trim() ? 1 : 0,
+      category: 0,
+      tags: 0,
+      specifications: 0,
+    },
+    supplierPlatform: 'AliExpress',
+    supplierUrl: url,
+    supplierItemId: itemId || undefined,
+    shippingToUsa: 'UNKNOWN',
+    deliveryRangeUsa: 'UNKNOWN',
+    usStockEvidence: 'UNKNOWN',
+    ordersCount: 'UNKNOWN',
+    ratingValue: 'UNKNOWN',
+    reviewCount: 'UNKNOWN',
+    batteryElectrical: 'UNKNOWN',
+    riskFlags: [],
+    variants: [],
+    evidence: {
+      title: page.title.trim() ? 'VERIFIED' : 'UNKNOWN',
+      sellingPrice: priceVerified ? 'VERIFIED' : (ev.listPrice ? 'INFERRED' : 'UNKNOWN'),
+      costPrice: 'UNKNOWN',
+      shipping: 'UNKNOWN',
+      delivery: 'UNKNOWN',
+      stock: 'UNKNOWN',
+      materials: 'UNKNOWN',
+      dimensions: 'UNKNOWN',
+      battery: 'UNKNOWN',
+    },
+    ownerNotes: notes.join(' | '),
+  };
+}
+
+/**
+ * Merge deterministic scraped evidence (base) with AI enrichment. Scraped
+ * evidence is NEVER erased by AI: empty AI fields fall back to scraped values,
+ * and images are the union of both, deduped, strongest (og:image) first.
+ */
+export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedProduct | null | undefined): AIExtractedProduct {
+  const aiImages = (ai?.images || []).filter((u) => typeof u === 'string' && u.startsWith('http'));
+  const mergedImages = [...new Set([...scraped.images, ...aiImages])].filter((u) => u.startsWith('http')).slice(0, 24);
+  const pick = (aiVal: string | undefined, scrapedVal: string): string => {
+    const v = (aiVal || '').trim();
+    return v ? v : scrapedVal.trim();
+  };
+  const shortDesc = pick(ai?.shortDescription, scraped.shortDescription);
+  const longDesc = pick(ai?.longDescription, scraped.longDescription) || shortDesc;
+  const title = pick(ai?.title, scraped.title) || scraped.title;
+  return {
+    ...scraped,
+    ...(ai ? { ...ai } : {}),
+    // Scraped evidence wins on fields where AI must not erase real data.
+    title: title || ai?.luxuryTitle || scraped.title,
+    luxuryTitle: ai?.luxuryTitle || title || '',
+    seoTitle: pick(ai?.seoTitle, scraped.seoTitle || scraped.title),
+    shortDescription: shortDesc,
+    longDescription: longDesc,
+    metaTitle: pick(ai?.metaTitle, scraped.metaTitle || scraped.title),
+    metaDescription: pick(ai?.metaDescription, scraped.metaDescription || shortDesc),
+    sellingPrice: (ai?.sellingPrice && ai.sellingPrice > 0 ? ai.sellingPrice : scraped.sellingPrice) || scraped.sellingPrice || 0,
+    images: mergedImages,
+    supplierUrl: ai?.supplierUrl || scraped.supplierUrl,
+    supplierItemId: ai?.supplierItemId || scraped.supplierItemId,
+    supplierPlatform: ai?.supplierPlatform || scraped.supplierPlatform || 'AliExpress',
+    evidence: { ...scraped.evidence, ...(ai?.evidence || {}) },
+    ownerNotes: [scraped.ownerNotes, ai?.ownerNotes].filter(Boolean).join(' | '),
   };
 }
 

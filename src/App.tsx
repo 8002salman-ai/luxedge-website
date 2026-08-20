@@ -99,7 +99,8 @@ import {
   deriveImportReadiness, findDuplicateProduct, buildImportImages,
   buildImportVariants, buildImportProductInput,
   buildStorageImageInputs, importProductImagesToStorage,
-  buildUrlEvidenceProduct, extractAliExpressUrlEvidence, isEmptyExtraction,
+  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi,
+  extractAliExpressUrlEvidence, isEmptyExtraction,
 } from "./features/ai/importer";
 
 // Re-exported so existing consumers (e.g. the admin section importing from
@@ -117,7 +118,8 @@ export {
   extractAliExpressItemId, assessAliExpressRisk, deriveImportReadiness,
   findDuplicateProduct, buildImportImages, buildImportVariants,
   buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage,
-  buildUrlEvidenceProduct, extractAliExpressUrlEvidence, isEmptyExtraction,
+  buildUrlEvidenceProduct, buildScrapedEvidenceProduct, mergeScrapedWithAi,
+  extractAliExpressUrlEvidence, isEmptyExtraction,
 };
 
 
