@@ -329,22 +329,22 @@ export function CatalogProductsPage() {
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1180px]">
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
               <tr>
                 <th className="px-4 py-3 w-8"></th>
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Species / Category</th>
-                <th className="px-4 py-3">Visible</th>
-                <th className="px-4 py-3">Price</th>
-                <th className="px-4 py-3">Cost</th>
-                <th className="px-4 py-3">Margin</th>
-                <th className="px-4 py-3">Stock</th>
-                <th className="px-4 py-3">Readiness</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="px-4 py-3">Flags</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="px-4 py-3 whitespace-nowrap">Product</th>
+                <th className="px-4 py-3 whitespace-nowrap">Species / Category</th>
+                <th className="px-4 py-3 whitespace-nowrap">Visible</th>
+                <th className="px-4 py-3 whitespace-nowrap">Price</th>
+                <th className="px-4 py-3 whitespace-nowrap">Cost</th>
+                <th className="px-4 py-3 whitespace-nowrap">Margin</th>
+                <th className="px-4 py-3 whitespace-nowrap">Stock</th>
+                <th className="px-4 py-3 whitespace-nowrap">Readiness</th>
+                <th className="px-4 py-3 whitespace-nowrap">Source</th>
+                <th className="px-4 py-3 whitespace-nowrap">Flags</th>
+                <th className="px-4 py-3 whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -353,65 +353,65 @@ export function CatalogProductsPage() {
                   <td className="px-4 py-3">
                     <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 max-w-[280px]">
                     <div className="flex items-center gap-3">
                       {p.images[0]
-                        ? <img src={p.images[0].url} alt="" className="w-10 h-10 rounded object-cover bg-gray-100" />
-                        : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300"><Package size={18} /></div>}
-                      <div>
-                        <p className="font-medium text-sm">{p.name}</p>
-                        <p className="text-xs text-gray-400">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
+                        ? <img src={p.images[0].url} alt="" className="w-10 h-10 rounded object-cover bg-gray-100 shrink-0" />
+                        : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0"><Package size={18} /></div>}
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate" title={p.name}>{p.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 text-xs whitespace-nowrap">
                     <span className="font-semibold text-gray-600">{speciesOf(p) ?? '—'}</span>
                     <span className="text-gray-400"> · {p.categoryName || '—'}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY'
                       ? <a href={`/#/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
                       : <span className="text-[10px] text-gray-400" title={p.status !== 'active' ? 'Not active' : p.commerceReadiness === 'COMMERCE_READY' ? '' : 'Active but not commerce-ready'}>{p.status !== 'active' ? `not active` : `active · ${p.commerceReadiness || 'unclassified'}`}</span>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className="font-semibold text-sm">${p.price.toFixed(2)}</span>
                     {p.compareAtPrice > p.price && <span className="text-xs text-gray-400 line-through ml-1">${p.compareAtPrice.toFixed(2)}</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{p.costPrice > 0 ? `$${p.costPrice.toFixed(2)}` : '—'}</td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{p.costPrice > 0 ? `$${p.costPrice.toFixed(2)}` : '—'}</td>
+                  <td className="px-4 py-3 text-xs whitespace-nowrap">
                     {p.marginPercent != null
                       ? <span className={p.marginPercent < 40 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>{p.marginPercent.toFixed(0)}%</span>
                       : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs">
+                  <td className="px-4 py-3 text-xs whitespace-nowrap">
                     <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''}>{p.inventoryQty}</span>
                     <span className="text-[10px] text-gray-400 ml-1">({INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']})</span>
                   </td>
-                  <td className="px-4 py-3"><ReadinessBadge readiness={p.commerceReadiness} /></td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col">
-                      <span className="text-[11px] font-medium text-gray-600">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : '—'}</span>
-                      {p.supplierSource && <span className="text-[10px] text-gray-400 max-w-[140px] truncate" title={p.supplierSource}>{p.supplierSource}</span>}
+                  <td className="px-4 py-3 whitespace-nowrap"><ReadinessBadge readiness={p.commerceReadiness} /></td>
+                  <td className="px-4 py-3 max-w-[140px]">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[11px] font-medium text-gray-600 truncate">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : '—'}</span>
+                      {p.supplierSource && <span className="text-[10px] text-gray-400 truncate" title={p.supplierSource}>{p.supplierSource}</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      {p.featured && <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-semibold">Featured</span>}
-                      {p.newArrival && <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">New</span>}
-                      {p.compareAtPrice > p.price && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-semibold">Sale</span>}
-                      {p.freeShipping && <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-semibold">Free ship</span>}
+                  <td className="px-4 py-3 max-w-[160px]">
+                    <div className="flex flex-wrap gap-1">
+                      {p.featured && <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-semibold whitespace-nowrap">Featured</span>}
+                      {p.newArrival && <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold whitespace-nowrap">New</span>}
+                      {p.compareAtPrice > p.price && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-semibold whitespace-nowrap">Sale</span>}
+                      {p.freeShipping && <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-semibold whitespace-nowrap">Free ship</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.status} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <button onClick={() => toggleActive(p)} title={p.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 hover:bg-gray-100 rounded">
+                    <div className="flex gap-1 whitespace-nowrap">
+                      <button onClick={() => toggleActive(p)} title={p.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 hover:bg-gray-100 rounded shrink-0">
                         {p.status === 'active' ? <ToggleRight size={17} className="text-green-500" /> : <ToggleLeft size={17} className="text-gray-400" />}
                       </button>
-                      <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600"><PencilSimple size={16} /></button>
-                      <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600"><Copy size={16} /></button>
-                      <button onClick={() => nav(`/#/product/${p.id}`)} title="Preview" className="p-2 hover:bg-green-50 rounded text-green-600"><Eye size={16} /></button>
-                      <button onClick={() => setDelId(p.id)} title="Archive/Delete" className="p-2 hover:bg-red-50 rounded text-red-500"><Trash size={16} /></button>
+                      <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600 shrink-0"><PencilSimple size={16} /></button>
+                      <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600 shrink-0"><Copy size={16} /></button>
+                      <button onClick={() => nav(`/#/product/${p.id}`)} title="Preview" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
+                      <button onClick={() => setDelId(p.id)} title="Archive/Delete" className="p-2 hover:bg-red-50 rounded text-red-500 shrink-0"><Trash size={16} /></button>
                     </div>
                   </td>
                 </tr>
