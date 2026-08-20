@@ -155,12 +155,21 @@ export function parseHtmlPage(raw: string): FetchedPage {
     // Lightweight extraction — enough for product import prompts.
     const ogTitle = matchMeta(raw, 'og:title');
     const ogDesc = matchMeta(raw, 'og:description');
+    const ogImage = matchMeta(raw, 'og:image');
     const jsonLd = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
       .map((m) => m[1])
       .join('\n');
+    // AliExpress serves size-suffixed thumbnails (…jpg_220x220q75.jpg_.avif);
+    // normalize them back to the base image URL so the real product image is
+    // usable, not a 220px placeholder.
+    const normalize = (src: string) =>
+      src
+        .replace(/\.avif$/i, '')
+        .replace(/(\.(?:jpe?g|png|webp))_.+$/i, '$1');
     const images = Array.from(raw.matchAll(/<img[^>]+(?:src|data-src)=["']([^"']+)["']/gi))
-      .map((m) => m[1])
-      .filter((src) => src.startsWith('http') && /\.(jpe?g|png|webp)(\?|$)/i.test(src));
+      .map((m) => normalize(m[1]))
+      .filter((src) => src.startsWith('http') && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(src));
+    if (ogImage && ogImage.startsWith('http')) images.unshift(normalize(ogImage));
     const bodyText = stripHtml(raw)
       .replace(/[ \t]+/g, ' ')
       .split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
