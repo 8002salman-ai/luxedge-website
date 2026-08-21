@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, ReactNode, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -11,70 +11,42 @@ import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, t
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus } from './services/checkout';
 import {
-  ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
-  ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
-  MarkerPin01,  Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
-  LayoutGrid01, AlertTriangle, Eye,
-  ChevronDown, ChevronRight, ArrowLeft, Upload01,
-  Globe01, Clock, Send01, Headphones01, Stars01,
+  ShoppingBag01, X, SearchMd, User01 as UserIcon,
+  ShieldTick, Star01, Truck01, RefreshCcw01, ArrowRight, Mail01, Phone,
+  MarkerPin01, Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
+  AlertTriangle, Eye,
+  ChevronRight, ArrowLeft, Upload01,
+  Clock, Send01, Headphones01, Stars01,
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
-  Sliders01,
+  Sliders01, Package, Globe01, Zap,
 } from '@untitledui/icons';
 
-// ============================================================================
-// TYPES
-// ============================================================================
-export interface ProductVariant {
-  id: string; color: string; size: string; price: number; salePrice: number;
-  stock: number; sku: string; image?: string;
-}
-export interface Product {
-  id: string; name: string; shortDesc: string; description: string; price: number;
-  originalPrice: number; category: string; stock: number;
-  images: string[]; imageAlts: string[]; rating: number; reviews: number; isActive: boolean;
-  brand: string; condition: string; tags: string[];
-  weight: string; dimensions: string; origin: string;
-  freeShipping: boolean; shippingCost: string;
-  variants: ProductVariant[];
-  // Catalog Launch Phase — real merchandising data from the DB (never fake).
-  featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
-  stockStatus?: string; usInventory?: boolean;
-  seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
-  supplierSource?: string;
-  commerceReadiness?: string; sourceType?: string; inventorySource?: string;
-}
-interface CartItem { product: Product; quantity: number; }
-interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
-export interface Order {
-  id: string; userId: string; userName: string; items: CartItem[];
-  total: number; status: string; date: string; address?: string;
-}
-export interface Review {
-  id: string; productId: string; productName: string; userName: string;
-  rating: number; comment: string; status: 'pending' | 'approved' | 'rejected';
-  date: string;
-}
-export interface AdminCategory { id: string; name: string; isActive: boolean; subs: { id: string; name: string; isActive: boolean; }[]; }
-export interface BlogPost {
-  id: string; slug: string; title: string; excerpt: string; content: string;
-  image: string; images: string[]; tags: string[];
-  authorId: string; authorName: string;
-  status: 'published' | 'draft' | 'pending';
-  date: string;
-}
+// ── Storefront presentation layer ──────────────────────────────────────────
+// Extracted from this file so each piece can be designed on its own; the
+// shared contract lives in components/storefront/context so nothing here
+// creates an import cycle.
+import Header from './components/storefront/Header';
+import Footer from './components/storefront/Footer';
+import Hero from './components/storefront/Hero';
+import ProductCard, { ProductRail } from './components/storefront/ProductCard';
+import { AnimalRail, CollectionGrid, SectionHead } from './components/storefront/Discovery';
+import { Reveal, Stagger, staggerStyle, useEscape, useScrollLock } from './components/storefront/motion';
+import {
+  AppCtx, useApp, LUXEDGE_IMAGE_FALLBACK, onImageError, firstUsableImage, toSlug, money,
+  verifiedRating,
+  type Product, type ProductVariant, type CartItem, type AppUser, type Order,
+  type Review, type AdminCategory, type BlogPost, type Ctx,
+} from './components/storefront/context';
+import {
+  COLLECTIONS, ANIMAL_COLLECTIONS, NEED_COLLECTIONS, resolveCollection,
+  collectionForCategoryName, filterByCollection, countIn, matchesCollection,
+  type Collection,
+} from './features/catalog/taxonomy';
 
-// Branded image fallback (cream + Luxedge wordmark) so a failed image never
-// shows a broken-image icon. Inline SVG — no external asset dependency.
-const LUXEDGE_IMAGE_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
-  "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><rect width='100%' height='100%' fill='#F6F3EE'/><text x='50%' y='50%' font-family='Georgia, serif' font-size='64' letter-spacing='6' fill='#1A2440' text-anchor='middle' dominant-baseline='middle'>LUXEDGE</text></svg>"
-);
-
-/** Swap a broken image to the branded fallback once (never loops). */
-function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
-  const img = e.currentTarget;
-  img.onerror = null;
-  if (img.src !== LUXEDGE_IMAGE_FALLBACK) img.src = LUXEDGE_IMAGE_FALLBACK;
-}
+// Re-exported so existing consumers (the admin bundle imports these from
+// '../App') keep working unchanged.
+export { useApp, toSlug };
+export type { Product, ProductVariant, Order, Review, AdminCategory, BlogPost, AppUser, Ctx };
 
 
 // ============================================================================
@@ -220,52 +192,13 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
 ];
 
+/**
+ * Legacy DB category names. This is a STORAGE vocabulary and it stays exactly
+ * as it is — the admin category editor writes these values and existing rows
+ * depend on them. How the storefront *merchandises* the catalog now lives in
+ * features/catalog/taxonomy.ts instead.
+ */
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories'];
-const CAT_META: Record<string, { desc: string }> = {
-  'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
-  'Cat Supplies': { desc: 'Play, comfort & everyday cat essentials' },
-  'Pet Beds': { desc: 'Comfort-led pieces for deeper rest' },
-  'Pet Toys': { desc: 'Interactive play and everyday enrichment' },
-  'Feeding & Water': { desc: 'Considered pieces for daily mealtimes' },
-  'Grooming': { desc: 'Simple tools for everyday care' },
-  'Pet Accessories': { desc: 'Useful pieces for life together' },
-};
-
-function firstUsableImage(product: Product | undefined): string | undefined {
-  return product?.images.find((image) => Boolean(image));
-}
-const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';
-
-// ============================================================================
-// CONTEXT
-// ============================================================================
-interface Ctx {
-  user: AppUser | null; cart: CartItem[];
-  products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
-  blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
-  login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
-  guestLogin: () => void;
-  logout: () => void; signup: (n: string, e: string, p: string) => Promise<string | null>;
-  changePassword: (current: string, newPass: string) => Promise<{ ok: boolean; msg: string }>;
-  updateAdminProfile: (name: string, email: string) => void;
-  addToCart: (p: Product) => void; removeFromCart: (id: string) => void;
-  updateQty: (id: string, q: number) => void; clearCart: () => void;
-  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-  setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
-  setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
-  setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
-  cartOpen: boolean; openCart: () => void; closeCart: () => void;
-  notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
-  // Catalog Launch Phase — coupons + free-shipping strategy from the store.
-  coupon: StoreCoupon | null;
-  applyCoupon: (code: string) => string | null;
-  removeCoupon: () => void;
-  freeShippingEnabled: boolean;
-  freeShippingThreshold: number;
-}
-const AC = createContext<Ctx | null>(null);
-export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
 // Cart persistence uses the catalog-safe v2 key (legacy demo-era payload is
 // purged on load — Phase 4E.2A hotfix behavior, kept on luxedge-v2).
@@ -452,23 +385,34 @@ function AppProvider({ children }: { children: ReactNode }) {
   const freeShippingEnabled = promotions.freeShippingEnabled;
   const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
+  return <AppCtx.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AppCtx.Provider>;
 }
 
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle strokeWidth={1.5} size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
+function Toast() {
+  const { notif } = useApp();
+  if (!notif) return null;
+  return (
+    <div role="status" aria-live="polite" className="toast">
+      <CheckCircle strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" aria-hidden="true" />
+      {notif}
+    </div>
+  );
+}
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
+  useEscape(open, onClose);
+  useScrollLock(open);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b">
-          <h2 className="text-lg font-bold">{title}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X strokeWidth={1.5} size={20} /></button>
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="absolute inset-0 bg-luxe-black/45 backdrop-blur-sm animate-fade-in" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-[0_44px_90px_-40px_rgba(23,21,18,0.4)] animate-scale-in">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-luxe-silver">
+          <h2 className="font-serif text-xl">{title}</h2>
+          <button onClick={onClose} className="icon-btn -mr-2" aria-label="Close"><X strokeWidth={1.5} size={19} aria-hidden="true" /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
@@ -477,415 +421,31 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
 }
 
 // ============================================================================
-// HEADER + FOOTER (STORE)
+// SHARED STOREFRONT PIECES
 // ============================================================================
-// ── Header mega menu data (maps to real category routes) ──
-const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
-  {
-    label: 'Dog', to: '/category/dog-supplies',
-    groups: [
-      { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
-      { title: 'Comfort', links: [{ label: 'Beds', to: '/category/pet-beds' }, { label: 'Blankets & Mats', to: '/category/pet-beds' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls & Feeders', to: '/category/feeding-water' }, { label: 'Water Bottles', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Grooming Tools', to: '/category/grooming' }] },
-      { title: 'Play', links: [{ label: 'Chew Toys', to: '/category/pet-toys' }, { label: 'Rope & Tug Toys', to: '/category/pet-toys' }] },
-    ],
-  },
-  {
-    label: 'Cat', to: '/category/cat-supplies',
-    groups: [
-      { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }, { label: 'Scratching', to: '/category/cat-supplies' }] },
-      { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches & Towers', to: '/category/cat-supplies' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls & Fountains', to: '/category/feeding-water' }, { label: 'Feeders', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Nail Care', to: '/category/grooming' }] },
-    ],
-  },
-];
-
-function Header() {
-  const [mob, setMob] = useState(false);
-  const [um, setUm] = useState(false);
-  const [hq, setHq] = useState('');
-  const [mega, setMega] = useState<string | null>(null);
-  const [scrolled, setScrolled] = useState(false);
-  const loc = useLocation();
-  const goTo = useNavigate();
-  const { user, cart, logout, openCart } = useApp();
-  const cc = cart.reduce((s, i) => s + i.quantity, 0);
-
-  // Elevate the header with a soft shadow once the page is scrolled
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const submitSearch = (ev: React.FormEvent) => {
-    ev.preventDefault();
-    const t = hq.trim();
-    if (t) trackEvent('search', { search_term: t, ...utmParams() });
-    goTo(t ? `/shop?q=${encodeURIComponent(t)}` : '/shop');
-    setHq('');
-    setMob(false);
-  };
-  useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
-  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
-  const catNav = [
-    { l: 'Dog', to: '/category/dog-supplies' },
-    { l: 'Cat', to: '/category/cat-supplies' },
-    { l: 'Food & Feeding', to: '/category/feeding-water' },
-    { l: 'Toys', to: '/category/pet-toys' },
-    { l: 'Beds', to: '/category/pet-beds' },
-    { l: 'Grooming', to: '/category/grooming' },
-    { l: 'Travel & Accessories', to: '/category/pet-accessories' },
-  ];
-  const isActive = (p: string) => (p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p));
-
-  return (<>
-    {/* ── Top utility bar ── */}
-    <div className="site-utility-bar">
-      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck01 strokeWidth={1.5} size={12} /> Free Shipping $50+</span>
-      <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RefreshCcw01 strokeWidth={1.5} size={12} /> Easy 30-Day Returns</span>
-      <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones01 strokeWidth={1.5} size={12} /> Customer Support</span>
-    </div>
-
-    {/* ── Main header ── */}
-    <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
-      <div className="max-w-7xl mx-auto px-4 h-14 lg:h-14 flex items-center justify-between gap-3">
-        <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
-          <span className="flex flex-col leading-none">
-            <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
-            <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
-          </span>
-        </Link>
-
-        {/* Search — refined pill */}
-        <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
-          <div className="site-search">
-            <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
-            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
-              className="flex-1 px-2.5 py-2 text-[13px] text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-            <button type="submit" className="site-search-submit">
-              Search
-            </button>
-          </div>
-        </form>
-
-        <div className="flex items-center gap-0.5 sm:gap-1">
-          {user ? (
-            <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-                <span className="w-7 h-7 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[11px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
-                <span className="hidden lg:block text-[11px] font-medium">{user.name.split(' ')[0]}</span>
-              </button>
-              {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
-                <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutGrid01 strokeWidth={1.5} size={14} className="text-luxe-gold" />Admin Panel</Link>}
-                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package strokeWidth={1.5} size={14} className="text-luxe-gray" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut01 strokeWidth={1.5} size={14} />Log Out</button>
-              </div></>}
-            </div>
-          ) : (
-            <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-              <UserIcon strokeWidth={1.5} size={16} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
-            </Link>
-          )}
-          <button onClick={openCart} className="relative p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag01 strokeWidth={1.5} size={17} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Pet navigation bar ── */}
-      <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
-        <div className="max-w-7xl mx-auto px-4 flex items-center h-9">
-          {MEGA_MENU.map(m => (
-            <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="nav-underline flex items-center gap-1 px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
-              </Link>
-              {mega === m.label && (
-                <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
-                  <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
-                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
-                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">Shop {m.label}</p>
-                      <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                      {m.groups.map(g => (
-                        <div key={g.title}>
-                          <p className="eyebrow mb-2">{g.title}</p>
-                          {g.links.map(l => <Link key={l.label} to={l.to} className="block py-1 text-[13px] text-luxe-gray hover:text-luxe-gold hover:translate-x-0.5 transition-all">{l.label}</Link>)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="nav-underline px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
-          ))}
-          <Link to="/shop?q=deal" className="ml-auto px-3.5 py-2 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
-        </div>
-      </nav>
-
-      {/* ── Mobile menu ── */}
-      {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={submitSearch} role="search" className="site-search mobile-site-search mb-2">
-          <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
-          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
-            className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-          <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
-        </form>
-        <div className="flex flex-wrap gap-1 pt-1 pb-1.5 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
-        </div>
-        {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
-      </div>}
-    </header>
-  </>);
-}
-
-function Footer() {
-  const { categories } = useApp();
-
-  const FL = 'block text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors py-1';
-  const COLT = 'font-brand text-xs font-bold uppercase tracking-[0.22em] text-luxe-gold-light mb-4';
-
-  return (
-    <footer className="bg-luxe-black text-luxe-white">
-      {/* Gold hairline divider */}
-      <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
-
-      {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-8">
-
-          {/* Col 1 — Brand */}
-          <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-3 mb-5 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
-              <span className="flex flex-col leading-none">
-                <span className="font-brand text-xl font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
-                <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1.5">PREMIUM PET ESSENTIALS</span>
-              </span>
-            </Link>
-            <p className="text-luxe-white/60 text-sm leading-relaxed mb-6 max-w-xs">
-              Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
-            </p>
-            <div className="flex gap-2.5">
-              {[
-                { label: 'Facebook', letter: 'f' },
-                { label: 'Instagram', letter: 'i' },
-                { label: 'TikTok', letter: 'T' },
-                { label: 'YouTube', letter: 'Y' },
-              ].map(s => (
-                <a key={s.label} href="#" title={s.label} aria-label={s.label}
-                  className="w-9 h-9 bg-luxe-white/5 border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-luxe-white/70 group-hover:text-luxe-black text-sm font-bold">{s.letter.toUpperCase()}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Col 2 — Shop */}
-          <div>
-            <h4 className={COLT}>Shop</h4>
-            <nav className="space-y-0.5" aria-label="Shop">
-              <Link to="/category/dog-supplies" className={FL}>Dog</Link>
-              <Link to="/category/cat-supplies" className={FL}>Cat</Link>
-              <Link to="/category/pet-toys" className={FL}>Toys</Link>
-              <Link to="/category/pet-beds" className={FL}>Beds</Link>
-              <Link to="/category/feeding-water" className={FL}>Feeding</Link>
-              <Link to="/category/grooming" className={FL}>Grooming</Link>
-              <Link to="/shop" className={FL}>Deals</Link>
-            </nav>
-          </div>
-
-          {/* Col 3 — Help */}
-          <div>
-            <h4 className={COLT}>Help</h4>
-            <nav className="space-y-0.5" aria-label="Help">
-              <Link to="/contact" className={FL}>Contact Us</Link>
-              <Link to="/faq" className={FL}>FAQs</Link>
-              <Link to="/shipping-policy" className={FL}>Shipping</Link>
-              <Link to="/returns" className={FL}>Returns</Link>
-              <Link to="/orders" className={FL}>Track Order</Link>
-            </nav>
-          </div>
-
-          {/* Col 4 — Company */}
-          <div>
-            <h4 className={COLT}>Company</h4>
-            <nav className="space-y-0.5" aria-label="Company">
-              <Link to="/about" className={FL}>About</Link>
-              <Link to="/blog" className={FL}>Blog</Link>
-              <Link to="/privacy" className={FL}>Privacy</Link>
-              <Link to="/terms" className={FL}>Terms</Link>
-              <Link to="/careers" className={FL}>Careers</Link>
-            </nav>
-          </div>
-
-          {/* Col 5 — Contact */}
-          <div className="col-span-2 md:col-span-1">
-            <h4 className={COLT}>Contact</h4>
-            <div className="space-y-2.5">
-              <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Mail01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                hello@luxedge.us
-              </a>
-              <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Phone strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                (440) 941-8002
-              </a>
-              <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                5041 Courtside Dr, Irving, TX 75038
-              </a>
-              <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <Clock strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                Mon – Fri, 9AM – 6PM CT
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Categories Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="font-brand text-xs font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
-            {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Trust & Payment Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex flex-wrap items-center gap-5">
-              {[
-                { icon: Truck01, text: 'Free Shipping $50+' },
-                { icon: RefreshCcw01, text: '30-Day Returns' },
-                { icon: Headphones01, text: 'Customer Support' },
-                { icon: ShieldTick, text: 'Thoughtfully Curated' },
-              ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
-                  <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold-light" />
-                  <span>{b.text}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-luxe-white/45">{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-xs text-luxe-white/50">
-              © {new Date().getFullYear()} Luxedge. All rights reserved. | 5041 Courtside Dr, Irving, TX 75038
-            </p>
-            <div className="flex items-center gap-3 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Privacy Policy</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/terms" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Terms of Service</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/returns" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Return Policy</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/shop" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-luxe-white/50">
-              <Globe01 strokeWidth={1.5} size={12} className="text-luxe-gold-light" /> USD ($) · English
-            </div>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}
 
 /**
- * Homepage product grids are curated (small, admin-flagged sets), so a fixed
- * 5-column grid leaves huge empty tracks when a section only has 1-3 items —
- * it reads as a broken/incomplete page rather than a real storefront. Cap the
- * grid to the actual item count (up to 5) so cards sit close together instead
- * of stretching across mostly-empty rows.
+ * Curated homepage rows are small (often 2-4 admin-flagged products), so a
+ * fixed 5-column grid leaves the page looking broken. Cap the track count to
+ * the real item count and keep the row left-aligned.
  */
-function productGridClass(count: number): string {
-  if (count <= 1) return 'grid grid-cols-1 max-w-[220px] gap-2.5 sm:gap-3';
-  if (count === 2) return 'grid grid-cols-2 max-w-[460px] gap-2.5 sm:gap-3';
-  if (count === 3) return 'grid grid-cols-2 sm:grid-cols-3 max-w-[700px] gap-2.5 sm:gap-3';
-  if (count === 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-[940px] gap-2.5 sm:gap-3';
-  return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3';
-}
-
-function PCard({ product }: { product: Product }) {
-  const { addToCart, reviews } = useApp();
-  const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
-  const secondImage = product.images.find((candidate) => candidate && candidate !== image);
-  const hasCompareAt = product.originalPrice > product.price;
-  // Ratings come ONLY from verified user reviews — never the catalog stub.
-  const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
-  const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
+function ProductGrid({ products, priority = false }: { products: Product[]; priority?: boolean }) {
+  const count = products.length;
+  const cols =
+    count <= 1 ? 'grid-cols-1 max-w-[16rem]' :
+    count === 2 ? 'grid-cols-2 max-w-[34rem]' :
+    count === 3 ? 'grid-cols-2 sm:grid-cols-3 max-w-[52rem]' :
+    'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4';
   return (
-    <article className="product-card group">
-      <Link to={`/product/${product.id}`} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
-        <div className="product-card-media">
-          <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
-          {secondImage && (
-            <img src={secondImage} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
-              className="product-card-image product-card-image-secondary" />
-          )}
-          {product.newArrival && <span className="product-card-label">New</span>}
-          <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
+    <Stagger className={`grid ${cols} gap-x-4 gap-y-9 sm:gap-x-6 sm:gap-y-12`} step={60}>
+      {products.map((p, i) => (
+        <div key={p.id} style={staggerStyle(i)}>
+          <ProductCard product={p} priority={priority && i < 4} />
         </div>
-      </Link>
-      <div className="product-card-info">
-        <div className="flex items-start justify-between gap-3">
-          <Link to={`/product/${product.id}`} className="min-w-0">
-            <p className="product-card-category">{product.category}</p>
-            <h3 className="product-card-title">{product.name}</h3>
-          </Link>
-          {verified.length > 0 && (
-            <span className="product-card-rating" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
-              <Star01 strokeWidth={1.5} size={11} fill="currentColor" aria-hidden="true" /> {verifiedAvg.toFixed(1)}
-            </span>
-          )}
-        </div>
-        <div className="flex items-baseline justify-between gap-3 mt-2.5">
-          <span className="product-card-price">${product.price.toFixed(2)}</span>
-          {hasCompareAt && <span className="product-card-compare">${product.originalPrice.toFixed(2)}</span>}
-          <button type="button" onClick={() => addToCart(product)} className="product-card-add" aria-label={`Add ${product.name} to cart`}>
-            Add to cart <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    </article>
+      ))}
+    </Stagger>
   );
 }
-
-// Premium alias — one card component across the whole storefront
-function PCardPremium({ product }: { product: Product }) {
-  return <PCard product={product} />;
-}
-
 
 // Per-route document title + meta description + canonical for SEO
 function RouteTitle() {
@@ -918,27 +478,32 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
-    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming."); }
-    else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
-    else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
+    if (segs.length === 0) { full("Luxedge — Premium Animal Essentials for Horse, Cattle, Dog & Cat"); desc("Considered essentials for horses, cattle, dogs and cats — feeding, stable, comfort, grooming and travel gear, verified before it is listed."); }
+    else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection — feeding, stable, comfort, grooming, travel and play."); }
+    else if (segs[0] === "category") {
+      const slug = decodeURIComponent(segs[1] || "");
+      const c = resolveCollection(slug);
+      set(c ? `Shop ${c.label}` : "Shop");
+      desc(c ? c.blurb : "Browse the Luxedge collection.");
+    }
     else if (segs[0] === "product") {
       // Real catalog product (never the demo ALL_PRODUCTS fixture).
       const p = products.find((x) => x.id === decodeURIComponent(segs[1] || ""));
       set(p ? (p.seoTitle || p.name) : "Product");
       if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
-    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — free shipping on orders over $50."); }
+    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart before checkout."); }
     else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
-    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
+    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest essentials for horses, cattle, dogs and cats."); }
     else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
     else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
     else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
     else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
-    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — free shipping on orders over $50."); }
+    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("How and when Luxedge orders ship."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
-    else if (segs[0] === "blog") { set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"); desc("Pet care tips and insights from the Luxedge team."); }
+    else if (segs[0] === "blog") { set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Journal") : "The Luxedge Journal"); desc("Field notes on animal care from the Luxedge team."); }
     else if (segs[0] === "login") { set("Sign In"); desc("Sign in to your Luxedge account."); }
     else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
     else if (segs[0] === "admin") { set("Admin Dashboard"); }
@@ -959,12 +524,20 @@ function ScrollToTop() {
 }
 
 function SLayout({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
   return (
     <div className="min-h-screen flex flex-col">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-4 focus:py-2 focus:bg-luxe-black focus:text-white focus:rounded-lg focus:text-sm">Skip to content</a>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-5 focus:py-3 focus:bg-luxe-black focus:text-white focus:rounded-full focus:text-sm"
+      >
+        Skip to content
+      </a>
       <ScrollToTop />
       <Header />
-      <main id="main-content" className="flex-1">{children}</main>
+      {/* Keyed on the path so each route gets a short entrance crossfade
+          rather than snapping in. Cheap: one opacity animation, no layout. */}
+      <main id="main-content" key={pathname} className="flex-1 route-enter">{children}</main>
       <Footer />
       <CartDrawer />
       <CookieConsent />
@@ -975,24 +548,51 @@ function SLayout({ children }: { children: ReactNode }) {
 // ============================================================================
 // PRODUCT DETAIL PAGE
 // ============================================================================
+
+/** Collapsible content section — replaces the old tab strip. Accordions read
+ *  better on mobile (no horizontal tab scroll) and let a customer open two
+ *  sections at once rather than losing the description to read the specs. */
+function Accordion({ title, children, defaultOpen = false, plain = false }: { title: string; children: ReactNode; defaultOpen?: boolean; plain?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = `acc-${title.replace(/\W+/g, '-').toLowerCase()}`;
+  return (
+    <div className="accordion-item">
+      <button
+        type="button"
+        className={`accordion-trigger${plain ? ' accordion-trigger-plain' : ''}`}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {title}
+        <Plus strokeWidth={1.5} size={16} aria-hidden="true" />
+      </button>
+      <div className="accordion-panel" data-open={open || undefined} id={id} role="region">
+        <div><div className="pb-6 text-[15px] leading-relaxed text-luxe-gray">{children}</div></div>
+      </div>
+    </div>
+  );
+}
+
 function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { products, addToCart, user, reviews: allReviews, setReviews, notify } = useApp();
   const nav = useNavigate();
   const product = products.find(p => p.id === id);
 
-  // ALL hooks MUST be before any return
+  // ALL hooks MUST run before any early return.
   const [qty, setQty] = useState(1);
   const [selImg, setSelImg] = useState(0);
   const [selVariant, setSelVariant] = useState<ProductVariant | null>(null);
-  const [tab, setTab] = useState<'desc' | 'specs' | 'reviews'>('desc');
   const [revForm, setRevForm] = useState({ rating: 5, comment: '' });
   const [showRevForm, setShowRevForm] = useState(false);
   const [selColor, setSelColor] = useState('');
   const [selSize, setSelSize] = useState('');
   const [ctaVisible, setCtaVisible] = useState(true);
+  const [justAdded, setJustAdded] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
+  const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync the mobile swipe gallery indicator to the scrolled image index.
   const onGalleryScroll = useCallback(() => {
@@ -1002,7 +602,7 @@ function ProductDetailPage() {
     setSelImg(Math.max(0, Math.min(idx, (product?.images.length || 1) - 1)));
   }, [product?.images.length]);
 
-  // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
+  // The sticky mobile buy bar only appears once the inline CTA scrolls away.
   useEffect(() => {
     const el = ctaRef.current;
     if (!el) return;
@@ -1010,6 +610,8 @@ function ProductDetailPage() {
     io.observe(el);
     return () => io.disconnect();
   }, [product?.id]);
+
+  useEffect(() => () => { if (addedTimer.current) clearTimeout(addedTimer.current); }, []);
 
   // Per-product SEO: canonical, meta description and Product + Breadcrumb
   // structured data. Only verified review data is ever emitted.
@@ -1063,7 +665,7 @@ function ProductDetailPage() {
       offers,
     };
     if (product.category) prodSchema.category = product.category;
-    // Only verified, user-submitted reviews go into schema — never the catalog stub.
+    // Only verified, user-submitted reviews go into schema — never a stub.
     if (verified.length > 0) {
       const avg = verified.reduce((s, r) => s + r.rating, 0) / verified.length;
       prodSchema.aggregateRating = {
@@ -1082,10 +684,15 @@ function ProductDetailPage() {
     return () => { document.getElementById('product-jsonld')?.remove(); };
   }, [product?.id]);
 
-  // Scroll to top on product change
-  useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); if (product) { trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() }); } }, [id, product?.id]);
+  // Reset per-product view state.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    setSelImg(0); setSelVariant(null); setQty(1);
+    if (product) {
+      trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() });
+    }
+  }, [id, product?.id]);
 
-  // Set initial color/size when product loads
   useEffect(() => {
     if (product && product.variants.length > 0) {
       const colors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
@@ -1095,7 +702,6 @@ function ProductDetailPage() {
     }
   }, [product?.id]);
 
-  // Update selected variant when color/size changes
   useEffect(() => {
     if (product && product.variants.length > 0) {
       const match = product.variants.find(v =>
@@ -1109,16 +715,13 @@ function ProductDetailPage() {
     }
   }, [selColor, selSize, product?.id]);
 
-  // Now safe to do early return AFTER all hooks
   if (!product) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-5xl mb-4">😕</p>
-          <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
-          <p className="text-gray-500 mb-6">This product may have been removed.</p>
-          <Link to="/shop" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full transition-colors">Back to Shop</Link>
-        </div>
+      <div className="shell empty-state min-h-[60vh] justify-center">
+        <span className="empty-mark"><SearchMd strokeWidth={1.5} size={22} aria-hidden="true" /></span>
+        <h1 className="section-title mx-auto">This product is no longer listed.</h1>
+        <p className="section-intro mx-auto mt-3">It may have sold through or been withdrawn during a sourcing review.</p>
+        <Link to="/shop" className="btn btn-primary mt-7">Back to the collection</Link>
       </div>
     );
   }
@@ -1127,19 +730,28 @@ function ProductDetailPage() {
   const activePrice = selVariant ? selVariant.salePrice : product.price;
   const activeOriginal = selVariant ? selVariant.price : product.originalPrice;
   const activeStock = selVariant ? selVariant.stock : product.stock;
-  const discount = activeOriginal > 0 ? Math.round((1 - activePrice / activeOriginal) * 100) : 0;
+  const discount = activeOriginal > activePrice ? Math.round((1 - activePrice / activeOriginal) * 100) : 0;
   const avgRating = reviews.length > 0 ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const uniqueColors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
   const uniqueSizes = [...new Set(product.variants.map(v => v.size).filter(Boolean))];
+  const soldOut = product.usInventory === true && activeStock === 0;
+  const images = product.images.length ? product.images : [LUXEDGE_IMAGE_FALLBACK];
+
+  const SWATCH_HEX: Record<string, string> = {
+    Black: '#171512', White: '#FFFFFF', Blue: '#3E5F79', Red: '#B3402C', Silver: '#B8B2A8',
+    Brown: '#6B4A2F', Green: '#4A5F42', Gold: '#A75B2E', Pink: '#C98B8B', Tan: '#C6A57F', Grey: '#8A857C', Gray: '#8A857C',
+  };
 
   const handleAddToCart = () => {
-    if (activeStock === 0) return;
+    if (soldOut) return;
     for (let i = 0; i < qty; i++) addToCart(product);
-    notify(`${qty}× ${product.name} added to cart!`);
+    setJustAdded(true);
+    if (addedTimer.current) clearTimeout(addedTimer.current);
+    addedTimer.current = setTimeout(() => setJustAdded(false), 1800);
   };
 
   const handleBuyNow = () => {
-    if (activeStock === 0) return;
+    if (soldOut) return;
     for (let i = 0; i < qty; i++) addToCart(product);
     nav('/checkout');
   };
@@ -1148,621 +760,512 @@ function ProductDetailPage() {
     e.preventDefault();
     if (!user) { nav('/login'); return; }
     setReviews(prev => [{ id: `r${Date.now()}`, productId: product.id, productName: product.name, userName: user.name, rating: revForm.rating, comment: revForm.comment, status: 'pending', date: new Date().toISOString() }, ...prev]);
-    notify('Review submitted! It will appear after approval.');
+    notify('Review submitted — it appears once approved.');
     setRevForm({ rating: 5, comment: '' });
     setShowRevForm(false);
   };
 
-  const related = products.filter(p => p.isActive && p.id !== product.id && p.category === product.category).slice(0, 4);
-  const relatedFallback = related.length === 0 ? products.filter(p => p.isActive && p.id !== product.id).slice(0, 4) : [];
+  const collection = COLLECTIONS.find((c) => matchesCollection(product, c));
+  const relatedPool = products.filter(p => p.isActive && p.id !== product.id);
+  const related = (collection ? relatedPool.filter(p => matchesCollection(p, collection)) : [])
+    .concat(relatedPool)
+    .filter((p, i, all) => all.findIndex(x => x.id === p.id) === i)
+    .slice(0, 4);
+
+  const specs: [string, string][] = ([
+    ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
+    ['Weight', product.weight], ['Dimensions', product.dimensions], ['Origin', product.origin],
+    ['Shipping', product.freeShipping ? 'Free' : product.shippingCost ? `$${product.shippingCost}` : ''],
+  ] as [string, string][]).filter(([, v]) => Boolean(v));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
-        <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
-        <ChevronRight strokeWidth={1.5} size={11} />
-        <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
-        <ChevronRight strokeWidth={1.5} size={11} />
-        <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
-        <ChevronRight strokeWidth={1.5} size={11} />
-        <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
-      </nav>
+    <div>
+      <div className="shell pt-6 pb-16 sm:pb-24">
+        <nav className="crumbs mb-8" aria-label="Breadcrumb">
+          <Link to="/">Home</Link>
+          <ChevronRight strokeWidth={1.5} size={11} aria-hidden="true" />
+          <Link to="/shop">Shop</Link>
+          {collection && <>
+            <ChevronRight strokeWidth={1.5} size={11} aria-hidden="true" />
+            <Link to={`/category/${collection.slug}`}>{collection.label}</Link>
+          </>}
+          <ChevronRight strokeWidth={1.5} size={11} aria-hidden="true" />
+          <span className="text-luxe-black truncate max-w-[16rem] normal-case tracking-normal font-sans">{product.name}</span>
+        </nav>
 
-      <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
-        {/* LEFT: Image Gallery */}
-        <div className="lg:sticky lg:top-24 self-start">
-          {/* Mobile: swipeable gallery with image indicator dots */}
-          <div
-            ref={galleryRef}
-            onScroll={onGalleryScroll}
-            aria-label={`${product.name} — image gallery`}
-            className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl border border-luxe-silver/70 bg-luxe-cream shadow-md"
-          >
-            {product.images.map((img, i) => (
-              <div key={i} className="w-full shrink-0 snap-center">
-                <div className="aspect-[4/3]">
-                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+        <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-16">
+          {/* ── Gallery ─────────────────────────────────────────────── */}
+          <div className="lg:sticky lg:self-start" style={{ top: 'calc(var(--header-h) + 1.5rem)' }}>
+            {/* Mobile: swipe gallery with dot indicator */}
+            <div
+              ref={galleryRef}
+              onScroll={onGalleryScroll}
+              aria-label={`${product.name} — image gallery`}
+              className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-[10px] bg-luxe-cream"
+            >
+              {images.map((img, i) => (
+                <div key={i} className="w-full shrink-0 snap-center aspect-square">
+                  <img
+                    src={img}
+                    alt={product.imageAlts?.[i] || `${product.name} — image ${i + 1}`}
+                    loading={i === 0 ? 'eager' : 'lazy'}
+                    fetchPriority={i === 0 ? 'high' : 'auto'}
+                    decoding="async"
+                    onError={onImageError}
+                    className="w-full h-full object-contain p-[6%]"
+                  />
                 </div>
-              </div>
-            ))}
-          </div>
-          {product.images.length > 1 && (
-            <div className="flex lg:hidden justify-center gap-1.5 mt-3">
-              {product.images.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { const el = galleryRef.current; if (el) el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' }); }}
-                  aria-label={`Go to image ${i + 1}`}
-                  aria-current={selImg === i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${selImg === i ? 'w-6 bg-luxe-gold' : 'w-1.5 bg-luxe-silver hover:bg-luxe-gray'}`}
-                />
               ))}
             </div>
-          )}
-
-          {/* Desktop: large main image + thumbnail rail */}
-          <div className="hidden lg:block">
-            <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
-              <div className="aspect-[4/3]">
-                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
-              </div>
-              {discount > 0 && (
-                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                  <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
-                </div>
-              )}
-              {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
-            </div>
-            {product.images.length > 1 && (
-              <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
-                {product.images.map((img, i) => (
-                  <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`} aria-current={selImg === i}
-                    className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
-                    <img src={img} alt="" onError={onImageError} className="w-full h-full object-cover" />
-                  </button>
+            {images.length > 1 && (
+              <div className="flex lg:hidden justify-center gap-1.5 mt-4">
+                {images.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { const el = galleryRef.current; if (el) el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' }); }}
+                    aria-label={`Go to image ${i + 1}`}
+                    aria-current={selImg === i}
+                    className={`h-[3px] rounded-full transition-all duration-300 ${selImg === i ? 'w-7 bg-luxe-black' : 'w-3 bg-luxe-silver'}`}
+                  />
                 ))}
               </div>
             )}
-          </div>
-        </div>
 
-        {/* RIGHT: Product Info — AliExpress-style premium */}
-        <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            {product.brand && <span className="text-[11px] font-bold text-luxe-gold uppercase tracking-wider">{product.brand}</span>}
-            {product.condition !== 'New' && <span className="text-[11px] text-gray-400">| {product.condition}</span>}
-            <span className="text-[11px] text-gray-500 px-2 py-0.5 bg-gray-100 rounded-full font-medium">{product.category}</span>
-          </div>
-
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
-
-          {/* Rating — shown ONLY when verified user reviews exist */}
-          {reviews.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={14} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
-              <span className="text-xs font-semibold text-luxe-gold hover:underline cursor-pointer" onClick={() => setTab('reviews')}>{avgRating.toFixed(1)} ({reviews.length} verified review{reviews.length !== 1 ? 's' : ''})</span>
-            </div>
-          ) : (
-            <p className="text-xs text-luxe-gray mb-4">No verified reviews yet.</p>
-          )}
-
-          {/* Price */}
-          <div className="rounded-2xl bg-luxe-gold-soft/70 border border-luxe-gold/25 p-5 mb-4">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <span className="font-serif text-3xl font-bold text-luxe-black">${activePrice.toFixed(2)}</span>
-              {discount > 0 && <span className="text-sm text-luxe-gray line-through">${activeOriginal.toFixed(2)}</span>}
-              {discount > 0 && <span className="px-2 py-0.5 bg-sale text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
-            </div>
-            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
-          </div>
-
-          {/* Stock + Shipping — honest: only real supplier-verified stock is
-              presented as In Stock / Low Stock; otherwise availability is
-              confirmed at checkout. No invented scarcity. */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
-            {product.usInventory && activeStock > 10 && <span className="text-green-600 font-medium"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />In Stock</span>}
-            {product.usInventory && activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
-            {product.usInventory && activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
-            {!product.usInventory && activeStock > 0 && <span className="text-gray-500"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />Availability confirmed at checkout</span>}
-            {product.freeShipping && <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>}
-            <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
-          </div>
-
-          {/* Short Desc */}
-          {product.shortDesc && <p className="text-sm text-gray-600 mb-4 leading-relaxed">{product.shortDesc}</p>}
-
-          {/* Color */}
-          {uniqueColors.length > 0 && (
-            <div className="mb-4">
-              <span className="block text-xs font-semibold text-gray-700 mb-2">Color: <span className="text-gray-400 font-normal">{selColor}</span></span>
-              <div className="flex gap-2">
-                {uniqueColors.map(c => (
-                  <button key={c} onClick={() => setSelColor(c)} title={c}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${selColor === c ? 'border-luxe-gold ring-2 ring-luxe-light' : 'border-gray-200 hover:border-gray-400'}`}
-                    style={{ backgroundColor: ({ Black: '#000', White: '#fff', Blue: '#3b82f6', Red: '#ef4444', Silver: '#9ca3af', Brown: '#92400e', Green: '#16a34a', Gold: '#d97706', Pink: '#ec4899' })[c] || '#ccc' }} />
+            {/* Desktop: main plate + thumbnail rail */}
+            <div className="hidden lg:grid grid-cols-[4.5rem_1fr] gap-4">
+              <div className="flex flex-col gap-2.5">
+                {images.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelImg(i)}
+                    className="pdp-thumb"
+                    data-active={selImg === i || undefined}
+                    aria-label={`View image ${i + 1}`}
+                    aria-current={selImg === i}
+                  >
+                    <img src={img} alt="" aria-hidden="true" onError={onImageError} loading="lazy" decoding="async" />
+                  </button>
                 ))}
               </div>
-            </div>
-          )}
-          {/* Size */}
-          {uniqueSizes.length > 0 && uniqueSizes[0] !== 'One Size' && (
-            <div className="mb-5">
-              <span className="block text-xs font-semibold text-gray-700 mb-2">Size: <span className="text-gray-400 font-normal">{selSize}</span></span>
-              <div className="flex gap-2 flex-wrap">
-                {uniqueSizes.map(s => (
-                  <button key={s} onClick={() => setSelSize(s)}
-                    className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-luxe-gold bg-luxe-light text-luxe-black' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
-                ))}
+              <div className="pdp-gallery-main" data-zoom="true">
+                <img
+                  key={selImg}
+                  src={images[selImg] || images[0]}
+                  alt={product.imageAlts?.[selImg] || product.name}
+                  fetchPriority="high"
+                  decoding="async"
+                  onError={onImageError}
+                />
+                {discount > 0 && <span className="pcard-badge pcard-badge-sale absolute top-4 left-4">Save {discount}%</span>}
               </div>
             </div>
-          )}
-
-          {/* Buttons */}
-          <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
-            <div className="flex items-center border-2 border-gray-200 rounded-xl">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
-              <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
-              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus strokeWidth={1.5} size={14} /></button>
-            </div>
-            <button onClick={handleAddToCart} disabled={activeStock === 0}
-              className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
-              <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
-            </button>
-            <button onClick={handleBuyNow} disabled={activeStock === 0}
-              className="flex-1 py-3 bg-luxe-black hover:bg-luxe-charcoal disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray text-white text-sm font-bold rounded-xl transition-colors">
-              Buy Now
-            </button>
           </div>
 
-          {/* Trust */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { icon: Truck01, t: 'Free ship $50+' },
-              { icon: RefreshCcw01, t: '30-day returns' },
-              { icon: ShieldTick, t: 'Thoughtfully curated' },
-              { icon: Lock01, t: 'Secure checkout' },
-            ].map((b, i) => (
-              <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
-                <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />
-                <span className="text-[10px] sm:text-[11px] text-luxe-gray font-medium leading-tight">{b.t}</span>
-              </div>
-            ))}
-          </div>
+          {/* ── Purchase panel ──────────────────────────────────────── */}
+          <div>
+            <p className="eyebrow mb-4">{product.brand || 'Luxedge'}</p>
+            <h1 className="pdp-title">{product.name}</h1>
 
-          {/* Ad: Below Product Information */}
-          <AdSenseAd placement="product_below_info" />
-        </div>
-      </div>
+            {reviews.length > 0 ? (
+              <button type="button" className="flex items-center gap-2 mt-4 text-[13px] text-luxe-gray hover:text-luxe-black transition-colors">
+                <span className="flex gap-0.5" aria-hidden="true">
+                  {[...Array(5)].map((_, i) => (
+                    <Star01 key={i} strokeWidth={1.5} size={13} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-luxe-silver'} />
+                  ))}
+                </span>
+                <span className="num">{avgRating.toFixed(1)}</span>
+                <span className="underline underline-offset-2">{reviews.length} verified review{reviews.length === 1 ? '' : 's'}</span>
+              </button>
+            ) : (
+              <p className="mt-4 text-[13px] text-luxe-gray">No verified reviews yet.</p>
+            )}
 
-      {/* Tabs */}
-      <div className="flex gap-6 mt-8 mb-5 border-b border-gray-100 overflow-x-auto">
-        {([['desc', 'Description'], ['specs', 'Specifications'], ['reviews', `Reviews (${reviews.length})`]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`pb-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${tab === key ? 'border-luxe-gold text-luxe-black' : 'border-transparent text-luxe-gray hover:text-luxe-black'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Description */}
-      {tab === 'desc' && (
-        <div className="max-w-3xl">
-          <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description}</p>
-          {product.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-              {product.tags.map(t => <span key={t} className="text-xs text-luxe-gold hover:underline cursor-pointer">#{t}</span>)}
+            <div className="flex flex-wrap items-baseline gap-3 mt-6">
+              <span className="pdp-price">{money(activePrice)}</span>
+              {discount > 0 && <>
+                <span className="text-luxe-gray line-through num text-sm">{money(activeOriginal)}</span>
+                <span className="pcard-badge pcard-badge-sale">Save {money(activeOriginal - activePrice)}</span>
+              </>}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Specs */}
-      {tab === 'specs' && (
-        <table className="w-full text-xs max-w-3xl">
-          <tbody>
-            {[
-              ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
-              ['Weight', product.weight], ['Dimensions', product.dimensions],
-              ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : `$${product.shippingCost}`],
-            ].filter(([, v]) => v).map(([k, v], i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
-                <td className="px-3 py-2.5 font-medium text-gray-600 w-1/3">{k}</td>
-                <td className="px-3 py-2.5 text-gray-900">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            {product.shortDesc && <p className="mt-5 text-[15px] leading-relaxed text-luxe-gray max-w-prose">{product.shortDesc}</p>}
 
-      {/* Reviews */}
-      {tab === 'reviews' && (
-        <div className="max-w-3xl">
-          {reviews.length > 0 && (
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={16} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
-              <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
+            {/* Availability — never invented scarcity. */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-5 text-[13px]">
+              {product.usInventory && activeStock > 10 && <span className="text-luxe-success flex items-center gap-1.5"><CheckCircle strokeWidth={1.5} size={14} aria-hidden="true" />In stock</span>}
+              {product.usInventory && activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold flex items-center gap-1.5"><AlertTriangle strokeWidth={1.5} size={14} aria-hidden="true" />Only {activeStock} left</span>}
+              {soldOut && <span className="text-luxe-red flex items-center gap-1.5"><X strokeWidth={1.5} size={14} aria-hidden="true" />Sold out</span>}
+              {!product.usInventory && activeStock > 0 && <span className="text-luxe-gray flex items-center gap-1.5"><CheckCircle strokeWidth={1.5} size={14} aria-hidden="true" />Availability confirmed at checkout</span>}
             </div>
-          )}
 
-          {user ? (
-            <button onClick={() => setShowRevForm(!showRevForm)} className="text-xs font-semibold text-luxe-gold hover:underline mb-4 block">{showRevForm ? 'Cancel' : 'Write a Review'}</button>
-          ) : (
-            <p className="text-xs text-gray-500 mb-4"><Link to="/login" className="text-luxe-gold font-semibold hover:underline">Sign in</Link> to review</p>
-          )}
-
-          {showRevForm && (
-            <form onSubmit={submitReview} className="bg-luxe-cream rounded-xl p-4 mb-5 space-y-3 border border-luxe-silver/70">
-              <div className="flex gap-1">{[1, 2, 3, 4, 5].map(s => (
-                <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })}>
-                  <Star01 strokeWidth={1.5} size={18} fill={s <= revForm.rating ? 'currentColor' : 'none'} className={s <= revForm.rating ? 'text-star' : 'text-gray-300'} />
-                </button>
-              ))}</div>
-              <textarea required rows={3} value={revForm.comment} onChange={e => setRevForm({ ...revForm, comment: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-luxe-gold resize-none" placeholder="Write your review..." />
-              <button type="submit" className="px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold rounded-lg transition-colors">Submit Review</button>
-            </form>
-          )}
-
-          <div className="space-y-4">
-            {reviews.length > 0 ? reviews.map(r => (
-              <div key={r.id} className="border-b border-gray-100 pb-4 last:border-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xs font-bold text-gray-800">{r.userName}</span>
-                  <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={11} fill={i < r.rating ? 'currentColor' : 'none'} className={i < r.rating ? 'text-star' : 'text-gray-200'} />)}</div>
-                  <span className="text-[11px] text-gray-400">- {new Date(r.date).toLocaleDateString()}</span>
+            {uniqueColors.length > 0 && (
+              <div className="mt-8">
+                <p className="field-label">Colour — <span className="normal-case tracking-normal text-luxe-black">{selColor}</span></p>
+                <div className="flex flex-wrap gap-2.5">
+                  {uniqueColors.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setSelColor(c)}
+                      className="swatch"
+                      data-active={selColor === c || undefined}
+                      style={{ backgroundColor: SWATCH_HEX[c] || '#C6BFB2' }}
+                      aria-label={`Colour ${c}`}
+                      aria-pressed={selColor === c}
+                    />
+                  ))}
                 </div>
-                <p className="text-sm text-gray-600">{r.comment}</p>
               </div>
-            )) : <p className="text-sm text-gray-400">No reviews yet.</p>}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Related */}
-      <div className="mt-10 pt-6 border-t border-gray-100">
-        <h2 className="font-serif text-lg font-bold text-luxe-black mb-4">Related Products</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {(related.length > 0 ? related : relatedFallback).map(p => <PCardPremium key={p.id} product={p} />)}
+            {uniqueSizes.length > 0 && uniqueSizes[0] !== 'One Size' && (
+              <div className="mt-7">
+                <p className="field-label">Size — <span className="normal-case tracking-normal text-luxe-black">{selSize}</span></p>
+                <div className="flex flex-wrap gap-2">
+                  {uniqueSizes.map(s => (
+                    <button key={s} type="button" onClick={() => setSelSize(s)} className="size-chip" data-active={selSize === s || undefined} aria-pressed={selSize === s}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div ref={ctaRef} className="flex flex-wrap items-stretch gap-3 mt-8">
+              <div className="qty">
+                <button type="button" onClick={() => setQty(Math.max(1, qty - 1))} disabled={qty <= 1} aria-label="Decrease quantity">
+                  <Minus strokeWidth={1.5} size={14} aria-hidden="true" />
+                </button>
+                <span className="num" aria-live="polite">{qty}</span>
+                <button type="button" onClick={() => setQty(qty + 1)} aria-label="Increase quantity">
+                  <Plus strokeWidth={1.5} size={14} aria-hidden="true" />
+                </button>
+              </div>
+              <button type="button" onClick={handleAddToCart} disabled={soldOut} className="btn btn-primary flex-1 min-w-[12rem]">
+                {justAdded
+                  ? <><CheckCircle strokeWidth={1.5} size={15} aria-hidden="true" /> Added to cart</>
+                  : <><ShoppingBag01 strokeWidth={1.5} size={15} aria-hidden="true" /> {soldOut ? 'Sold out' : 'Add to cart'}</>}
+              </button>
+              <button type="button" onClick={handleBuyNow} disabled={soldOut} className="btn btn-outline flex-1 min-w-[10rem]">
+                Buy it now
+              </button>
+            </div>
+
+            <div className="trust-row mt-7">
+              {[
+                { icon: Truck01, t: product.freeShipping ? 'Free shipping on this item' : 'Shipping at checkout' },
+                { icon: RefreshCcw01, t: '30-day returns' },
+                { icon: ShieldTick, t: 'Verified before listing' },
+                { icon: Lock01, t: 'Secure Stripe checkout' },
+              ].map((b, i) => (
+                <div key={i} className="trust-cell">
+                  <b.icon strokeWidth={1.5} size={15} aria-hidden="true" />
+                  <span>{b.t}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Content accordions ────────────────────────────────── */}
+            <div className="mt-10">
+              <Accordion title="Description" defaultOpen>
+                <p className="whitespace-pre-line">{product.description || product.shortDesc || 'Full details are being written up.'}</p>
+                {product.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-5 pt-5 border-t border-luxe-silver">
+                    {product.tags.map(t => (
+                      <Link key={t} to={`/shop?q=${encodeURIComponent(t)}`} className="text-[12px] text-luxe-gold hover:text-luxe-gold-dark transition-colors">#{t}</Link>
+                    ))}
+                  </div>
+                )}
+              </Accordion>
+
+              {specs.length > 0 && (
+                <Accordion title="Specifications">
+                  <dl className="grid grid-cols-[8rem_1fr] gap-x-4">
+                    {specs.map(([k, v]) => (
+                      <div key={k} className="contents">
+                        <dt className="py-2 border-b border-luxe-silver/70 text-luxe-black font-medium text-[13px]">{k}</dt>
+                        <dd className="py-2 border-b border-luxe-silver/70 text-[13px]">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Accordion>
+              )}
+
+              <Accordion title="Shipping & returns">
+                <p>Orders are processed in 1–3 business days and ship within the United States. Returns and replacements are accepted within 30 days of the order date — see the <Link to="/returns" className="text-luxe-gold underline underline-offset-2">return policy</Link> for the full terms.</p>
+              </Accordion>
+
+              <Accordion title={`Reviews (${reviews.length})`}>
+                {reviews.length > 0 && (
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="font-serif text-3xl text-luxe-black num">{avgRating.toFixed(1)}</span>
+                    <span className="flex gap-0.5" aria-hidden="true">
+                      {[...Array(5)].map((_, i) => (
+                        <Star01 key={i} strokeWidth={1.5} size={15} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-luxe-silver'} />
+                      ))}
+                    </span>
+                    <span className="text-[13px]">{reviews.length} verified review{reviews.length === 1 ? '' : 's'}</span>
+                  </div>
+                )}
+
+                {user ? (
+                  <button type="button" onClick={() => setShowRevForm(!showRevForm)} className="link-arrow text-luxe-gold mb-5">
+                    {showRevForm ? 'Cancel' : 'Write a review'}
+                  </button>
+                ) : (
+                  <p className="text-[13px] mb-5"><Link to="/login" className="text-luxe-gold underline underline-offset-2">Sign in</Link> to write a review.</p>
+                )}
+
+                {showRevForm && (
+                  <form onSubmit={submitReview} className="p-5 mb-6 rounded-[10px] bg-luxe-cream space-y-4">
+                    <div className="flex gap-1" role="group" aria-label="Rating">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <button key={s} type="button" onClick={() => setRevForm({ ...revForm, rating: s })} aria-label={`${s} star${s === 1 ? '' : 's'}`} aria-pressed={s === revForm.rating}>
+                          <Star01 strokeWidth={1.5} size={20} fill={s <= revForm.rating ? 'currentColor' : 'none'} className={s <= revForm.rating ? 'text-star' : 'text-luxe-silver'} />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      required
+                      rows={3}
+                      value={revForm.comment}
+                      onChange={e => setRevForm({ ...revForm, comment: e.target.value })}
+                      className="field resize-none"
+                      placeholder="How did it hold up?"
+                    />
+                    <button type="submit" className="btn btn-primary btn-sm">Submit review</button>
+                  </form>
+                )}
+
+                <div className="space-y-5">
+                  {reviews.length > 0 ? reviews.map(r => (
+                    <div key={r.id} className="pb-5 border-b border-luxe-silver/70 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <span className="text-[13px] font-semibold text-luxe-black">{r.userName}</span>
+                        <span className="flex gap-0.5" aria-hidden="true">
+                          {[...Array(5)].map((_, i) => (
+                            <Star01 key={i} strokeWidth={1.5} size={11} fill={i < r.rating ? 'currentColor' : 'none'} className={i < r.rating ? 'text-star' : 'text-luxe-silver'} />
+                          ))}
+                        </span>
+                        <span className="text-[11px] text-luxe-gray">{new Date(r.date).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-[14px]">{r.comment}</p>
+                    </div>
+                  )) : <p className="text-[13px]">No reviews yet — be the first once you've put it to work.</p>}
+                </div>
+              </Accordion>
+            </div>
+
+            <AdSenseAd placement="product_below_info" />
+          </div>
         </div>
       </div>
 
-      {/* ── Sticky mobile Add to Cart (hidden on desktop) ── */}
-      <div className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-luxe-silver/70 shadow-[0_-8px_30px_-12px_rgba(16,26,46,0.2)] transition-transform duration-300 luxe-safe-bottom ${ctaVisible ? 'translate-y-full' : 'translate-y-0'}`} aria-hidden={ctaVisible} inert={ctaVisible}>
-        <div className="flex items-center gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-luxe-black leading-tight">${activePrice.toFixed(2)}</p>
-            {discount > 0 && <p className="text-[10px] text-luxe-gray line-through">${activeOriginal.toFixed(2)}</p>}
+      {/* ── Related ──────────────────────────────────────────────────── */}
+      {related.length > 0 && (
+        <section className="section-tight bg-luxe-cream">
+          <div className="shell">
+            <SectionHead
+              eyebrow="Also consider"
+              title={collection ? `More from ${collection.label}` : 'More from the collection'}
+              to={collection ? `/category/${collection.slug}` : '/shop'}
+            />
+            <ProductGrid products={related} />
           </div>
-          <button onClick={handleAddToCart} disabled={activeStock === 0}
-            className="flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold">
-            <ShoppingBag01 strokeWidth={1.5} size={15} /> {activeStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+        </section>
+      )}
+
+      {/* ── Sticky mobile buy bar ────────────────────────────────────── */}
+      <div className="buybar lg:hidden luxe-safe-bottom" data-show={!ctaVisible || undefined} aria-hidden={ctaVisible} inert={ctaVisible}>
+        <div className="shell flex items-center gap-3 py-3">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-luxe-black num leading-tight">{money(activePrice)}</p>
+            {discount > 0 && <p className="text-[11px] text-luxe-gray line-through num">{money(activeOriginal)}</p>}
+          </div>
+          <button type="button" onClick={handleAddToCart} disabled={soldOut} className="btn btn-primary flex-1">
+            <ShoppingBag01 strokeWidth={1.5} size={15} aria-hidden="true" />
+            {soldOut ? 'Sold out' : 'Add to cart'}
           </button>
         </div>
       </div>
     </div>
   );
-
 }
 
 // ============================================================================
 // STORE PAGES
 // ============================================================================
-// Scroll-reveal wrapper — fades content in as it enters the viewport
-function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting) { setShown(true); io.disconnect(); }
-      },
-      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return (
-    <div ref={ref} className={`reveal-base ${shown ? 'reveal-show' : ''} ${className}`} style={delay ? { transitionDelay: `${delay}ms` } : undefined}>
-      {children}
-    </div>
-  );
-}
 
-function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
-  return (
-    <div className="flex items-end justify-between gap-3 mb-5">
-      <div>
-        <p className="eyebrow mb-1.5">{eyebrow}</p>
-        <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-black tracking-tight">{title}</h2>
-      </div>
-      {to && <Link to={to} className="hidden sm:inline-flex items-center gap-1 text-[12px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">
-        {linkLabel} <ArrowRight strokeWidth={1.5} size={13} className="transition-transform group-hover:translate-x-0.5" />
-      </Link>}
-    </div>
-  );
-}
-
+/**
+ * Homepage.
+ *
+ * Sequence: pinned hero → shop by animal (Horse and Cattle first) → need-based
+ * collection spread → curated product rails → editorial block → value strip →
+ * newsletter. Every product row is real catalog data; a collection with no
+ * stock keeps its navigation slot but never borrows another row's products.
+ */
 function HomePage() {
   const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
-  // Catalog Launch Phase — every section remains REAL catalog data. The
-  // homepage is intentionally art-directed: weak/collage-heavy supplier
-  // images stay available in Shop but are not promoted into editorial slots.
-  const featured = products.filter(p => p.isActive);
-  const homepageVisualProducts = featured.filter((p) => !/(collar|leash|shoes|apparel|shirt|bowl|nest|flying disc|cooling)/i.test(p.name));
-  const topPicks = homepageVisualProducts.filter(p => p.featured);
-  const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
-  const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
-  const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
-  const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
-  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
-  const dogVisual = featured.find((p) => firstUsableImage(p) && /dog\s+(bed|mat|sofa)/i.test(p.name))
-    || featured.find((p) => firstUsableImage(p) && p.category === 'Pet Beds')
-    || featured.find((p) => firstUsableImage(p) && (p.category === 'Dog Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('dog'))));
-  const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
-  const categoryVisuals = [
-    { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
-    { label: 'Play', to: '/category/pet-toys', product: featured.find((p) => p.category === 'Pet Toys' && firstUsableImage(p)) },
-    { label: 'Feeding', to: '/category/feeding-water', product: featured.find((p) => p.category === 'Feeding & Water' && firstUsableImage(p)) },
-    { label: 'Comfort', to: '/category/pet-beds', product: featured.find((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p)) || featured.find((p) => p.category === 'Pet Beds' && firstUsableImage(p)) },
-    { label: 'Cat essentials', to: '/category/cat-supplies', product: catVisual },
-  ].filter((tile): tile is { label: string; to: string; product: Product } => Boolean(tile.product && firstUsableImage(tile.product)))
-    .filter((tile, index, all) => all.findIndex((candidate) => candidate.product.id === tile.product.id) === index);
-  const editorialProduct = featured.find((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name) && firstUsableImage(p))
-    || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
-    || catVisual
-    || heroProduct;
-  const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
+
+  const live = useMemo(() => products.filter((p) => p.isActive), [products]);
+
+  // Editorial slots are art-directed: supplier packshots that are collage-heavy
+  // or badly cropped stay browsable in Shop but are not promoted into the hero
+  // or the story block.
+  const presentable = useMemo(
+    () => live.filter((p) => !/(collar|leash|shoes|apparel|shirt|flying disc)/i.test(p.name) && firstUsableImage(p)),
+    [live]
+  );
+
+  const topPicks = useMemo(() => live.filter((p) => p.featured), [live]);
+  const newArrivals = useMemo(() => live.filter((p) => p.newArrival), [live]);
+  const deals = useMemo(
+    () => live
+      .filter((p) => p.originalPrice > p.price)
+      .sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice)),
+    [live]
+  );
+
+  const heroProduct = topPicks.find(firstUsableImage) || presentable[0] || live.find(firstUsableImage);
+  const storyProduct = presentable.find((p) => p.id !== heroProduct?.id) || heroProduct;
+
+  // Rails are only built for collections that actually have stock, so the page
+  // never renders an empty "Shop Horse" row to fill space.
+  const collectionRails = useMemo(() => {
+    return COLLECTIONS
+      .map((c) => ({ collection: c, items: live.filter((p) => matchesCollection(p, c)) }))
+      .filter((row) => row.items.length >= 2)
+      .sort((a, b) => b.items.length - a.items.length)
+      .slice(0, 2);
+  }, [live]);
+
+  const shipNote = freeShippingEnabled ? `Free shipping over ${money(freeShippingThreshold)}` : 'Shipping calculated at checkout';
 
   return (
     <div className="bg-white">
-      {/* ════════ EDITORIAL HERO ════════ */}
-      <section className="home-hero">
-        <div className="home-hero-wash" aria-hidden="true" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-14 grid lg:grid-cols-[0.42fr_0.58fr] items-center gap-8 lg:gap-10">
-          <div className="hero-stagger text-center lg:text-left">
-            <p className="eyebrow mb-3">Premium pet essentials</p>
-            <h1 className="home-hero-title">
-              <span className="block">Everything Your Pet Loves,</span>
-              <span className="block">Thoughtfully <em>Curated.</em></span>
-            </h1>
-            <p className="home-hero-copy">
-              Premium essentials for walks, play, comfort and care — chosen to look good and work beautifully.
+      <Hero featured={heroProduct} shippingNote={shipNote} />
+
+      <div className="shell"><AdSenseAd placement="home_after_hero" /></div>
+
+      {/* ── Shop by animal — the primary discovery module ────────────── */}
+      <section className="section">
+        <div className="shell">
+          <SectionHead
+            eyebrow="Shop by animal"
+            title="Four animals. One standard."
+            intro="Working stock and household companions are held to exactly the same bar — durability, fit and honest sourcing."
+            to="/shop"
+            linkLabel="All products"
+          />
+          <Reveal variant="fade">
+            <AnimalRail products={live} />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── Collections ──────────────────────────────────────────────── */}
+      <section className="section bg-luxe-cream">
+        <div className="shell">
+          <SectionHead
+            eyebrow="Collections"
+            title="Sorted by the job, not the species."
+            intro="Feed, rest, groom, travel and turn out — start with what you need to solve."
+          />
+          <CollectionGrid products={live} />
+        </div>
+      </section>
+
+      <div className="shell"><AdSenseAd placement="home_after_categories" /></div>
+
+      {/* ── Products ─────────────────────────────────────────────────── */}
+      {live.length === 0 ? (
+        <section className="section bg-white">
+          <div className="shell max-w-2xl mx-auto empty-state">
+            <span className="empty-mark"><Stars01 strokeWidth={1.5} size={22} aria-hidden="true" /></span>
+            <h2 className="section-title mx-auto">The first collection is being sourced.</h2>
+            <p className="section-intro mx-auto mt-4">
+              Every product is verified — supplier, cost basis and delivery path — before it
+              reaches this page. Nothing is listed to fill a shelf.
             </p>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
-              <Link to="/shop" className="editorial-button editorial-button-dark">
-                Shop essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
-              </Link>
-              <Link to="/shop" className="editorial-button editorial-button-light">
-                Explore categories
-              </Link>
-            </div>
-            <div className="home-hero-notes" aria-label="Luxedge shopping information">
-              <span><Truck01 strokeWidth={1.5} size={12} aria-hidden="true" /> {shipCopy}</span>
-              <span><RefreshCcw01 strokeWidth={1.5} size={12} aria-hidden="true" /> Returns &amp; support</span>
-              <span><Headphones01 strokeWidth={1.5} size={12} aria-hidden="true" /> Real customer support</span>
-            </div>
-          </div>
-
-          <div className="home-hero-visual">
-            <div className="home-hero-accent" aria-hidden="true" />
-            {heroProduct ? (
-              <Link to={`/product/${heroProduct.id}`} className="home-hero-frame group">
-                <img
-                  src={firstUsableImage(heroProduct) || LUXEDGE_IMAGE_FALLBACK}
-                  alt={heroProduct.name}
-                  loading="eager"
-                  fetchPriority="high"
-                  decoding="async"
-                  onError={onImageError}
-                  className="home-hero-image"
-                />
-                <div className="home-hero-caption">
-                  <span className="home-hero-caption-kicker">From the collection</span>
-                  <span className="home-hero-caption-title">{heroProduct.name}</span>
-                  <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
-                </div>
-              </Link>
-            ) : (
-              <div className="home-hero-empty" aria-label="Luxedge collection preview">Luxedge</div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ Ad: After Hero ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
-
-      {/* ════════ SHOP BY PET ════════ */}
-      <section className="editorial-section bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal className="mb-5">
-            <p className="eyebrow mb-2">Shop by pet</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-              <h2 className="section-title">Who are you shopping for?</h2>
-              <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
-            </div>
-          </Reveal>
-          <Reveal delay={20}>
-            <div className="flex items-start gap-5 sm:gap-7 mb-8 overflow-x-auto pb-1">
-              {[
-                { label: 'Dog', to: '/category/dog-supplies', image: dogVisual ? firstUsableImage(dogVisual) : null, soon: false },
-                { label: 'Cat', to: '/category/cat-supplies', image: catVisual ? firstUsableImage(catVisual) : null, soon: false },
-                { label: 'Horse', to: '/shop', image: 'https://images.pexels.com/photos/12523634/pexels-photo-12523634.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
-                { label: 'Cattle', to: '/shop', image: 'https://images.pexels.com/photos/11684963/pexels-photo-11684963.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
-              ].filter((a) => a.image).map((animal) => (
-                <Link key={animal.label} to={animal.to} className="flex flex-col items-center gap-2 shrink-0 group">
-                  <span className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden ring-1 ring-luxe-silver bg-luxe-cream transition-transform duration-300 group-hover:scale-105 group-hover:ring-luxe-gold/50">
-                    <img src={animal.image || LUXEDGE_IMAGE_FALLBACK} alt={animal.label} loading="lazy" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
-                  </span>
-                  <span className="text-[13px] font-semibold text-luxe-charcoal">{animal.label}</span>
-                  {animal.soon && <span className="text-[9px] font-bold uppercase tracking-wide text-luxe-gold">Coming soon</span>}
-                </Link>
-              ))}
-            </div>
-          </Reveal>
-          <div className="editorial-pet-grid">
-            {[
-              { label: 'Dog', to: '/category/dog-supplies', desc: 'Walk, play, rest & more', product: dogVisual },
-              { label: 'Cat', to: '/category/cat-supplies', desc: 'Play, comfort, feeding & more', product: catVisual },
-            ].filter((panel) => panel.product).map((panel, index) => (
-              <Reveal key={panel.label} delay={index * 80}>
-                <Link to={panel.to} className="editorial-pet-panel group">
-                  <img src={firstUsableImage(panel.product) || LUXEDGE_IMAGE_FALLBACK} alt={panel.product?.name || panel.label} loading="lazy" decoding="async" onError={onImageError} />
-                  <div className="editorial-pet-overlay" aria-hidden="true" />
-                  <div className="editorial-pet-copy">
-                    <span className="editorial-pet-label">{panel.label}</span>
-                    <span className="editorial-pet-desc">{panel.desc}</span>
-                    <span className="editorial-link">Shop {panel.label} <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></span>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ SHOP BY CATEGORY ════════ */}
-      <section className="editorial-section bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal className="mb-5">
-            <p className="eyebrow mb-2">Shop by category</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-              <h2 className="section-title">Essentials for better everyday moments.</h2>
-              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="editorial-category-grid">
-              {categoryVisuals.map((tile, index) => (
-                <Link key={`${tile.label}-${tile.product.id}`} to={tile.to} className={`editorial-category-tile group ${index < 4 ? 'editorial-category-large' : 'editorial-category-small'} ${index === 1 ? 'editorial-category-crop' : ''}`}>
-                  <img src={firstUsableImage(tile.product) || LUXEDGE_IMAGE_FALLBACK} alt={tile.product.name} loading="lazy" decoding="async" onError={onImageError} />
-                  <div className="editorial-category-overlay" aria-hidden="true" />
-                  <span className="editorial-category-name">{tile.label}</span>
-                  <ArrowRight strokeWidth={1.5} size={15} className="editorial-category-arrow" aria-hidden="true" />
-                </Link>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ════════ Ad: After Categories ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
-
-
-      {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
-      {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
-          show ONE premium curation notice instead of empty product grids. No
-          fake product cards, no fake counts, no fake launch dates. */}
-      {featured.length === 0 ? (
-        <section className="py-16 sm:py-20 bg-luxe-cream">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
-            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
+            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 mt-10 pt-8 border-t border-luxe-silver w-full">
+              <span className="flex items-center gap-2 text-[13px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={15} className="text-luxe-gold" aria-hidden="true" /> {shipNote}</span>
+              <span className="flex items-center gap-2 text-[13px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={15} className="text-luxe-gold" aria-hidden="true" /> 30-day returns</span>
+              <span className="flex items-center gap-2 text-[13px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={15} className="text-luxe-gold" aria-hidden="true" /> Verified before listing</span>
             </div>
           </div>
         </section>
       ) : (
         <>
-          {/* New Arrivals — real newArrival flag, admin-set */}
           {newArrivals.length > 0 && (
-            <section className="py-8 sm:py-10 bg-luxe-cream">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(newArrivals.length, 10))}>
-                    {newArrivals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
+            <section className="section-tight bg-white">
+              <div className="shell">
+                <SectionHead eyebrow="Just in" title="New arrivals" to="/shop?sort=newest" />
+                <ProductRail products={newArrivals.slice(0, 12)} label="New arrivals" />
               </div>
             </section>
           )}
 
-          {/* Top Picks — real featured flag (admin merchandising decision) */}
           {topPicks.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(topPicks.length, 10))}>
-                    {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
+            <section className="section-tight bg-white">
+              <div className="shell">
+                <SectionHead eyebrow="Curated" title="This season's picks" to="/shop" />
+                <ProductGrid products={topPicks.slice(0, 8)} />
               </div>
             </section>
           )}
 
-          {/* ════════ Ad: Between Product Sections ════════ */}
-          <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
+          <div className="shell"><AdSenseAd placement="home_between_sections" /></div>
 
-          {/* Dog Essentials — real category data */}
-          {dogEssentials.length > 0 && (
-            <section className="py-8 sm:py-10 bg-luxe-cream">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(dogEssentials.length, 10))}>
-                    {dogEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
+          {collectionRails.map((row) => (
+            <section key={row.collection.slug} className="section-tight bg-white">
+              <div className="shell">
+                <SectionHead
+                  eyebrow={row.collection.kind === 'animal' ? 'For the herd' : 'Collection'}
+                  title={row.collection.label}
+                  intro={row.collection.blurb}
+                  to={`/category/${row.collection.slug}`}
+                />
+                <ProductRail products={row.items.slice(0, 12)} label={row.collection.label} />
               </div>
             </section>
-          )}
-
-          {/* Cat Essentials — real category data */}
-          {catEssentials.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(catEssentials.length, 10))}>
-                    {catEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
-
-          {/* All Products — full catalog browsing */}
-          {featured.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Collection" title="Shop All Products" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(homepageVisualProducts.length, 20))}>
-                    {homepageVisualProducts.slice(0, 20).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
+          ))}
         </>
       )}
 
-      {/* ════════ EDITORIAL COLLECTION ════════ */}
-      {editorialProduct && (
-        <section className="editorial-section bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <Reveal>
-              <div className="editorial-story">
-                <div className="editorial-story-media">
-                  <img src={firstUsableImage(editorialProduct) || LUXEDGE_IMAGE_FALLBACK} alt={editorialProduct.name} loading="lazy" decoding="async" onError={onImageError} />
+      {/* ── Editorial block ──────────────────────────────────────────── */}
+      {storyProduct && (
+        <section className="section bg-luxe-cream">
+          <div className="shell">
+            <Reveal variant="fade">
+              <div className="story">
+                <div className="story-media">
+                  <img
+                    src={firstUsableImage(storyProduct) || LUXEDGE_IMAGE_FALLBACK}
+                    alt={storyProduct.name}
+                    loading="lazy"
+                    decoding="async"
+                    onError={onImageError}
+                    className="object-contain p-[8%]"
+                  />
                 </div>
-                <div className="editorial-story-copy">
-                  <p className="eyebrow mb-3">Designed for everyday life</p>
-                  <h2 className="section-title">Pet essentials that belong in your home.</h2>
-                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space.</p>
-                  <Link to="/shop" className="editorial-link mt-5 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
+                <div className="story-copy">
+                  <p className="eyebrow mb-4">Our standard</p>
+                  <h2 className="section-title">Listed only when we can stand behind it.</h2>
+                  <p className="section-intro mt-5">
+                    A product reaches this store after its supplier, cost basis and delivery
+                    path are all verified. If we cannot prove how it gets to your door, it
+                    does not get listed — however good the margin looks.
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-8">
+                    <Link to="/shop" className="btn btn-primary">
+                      Shop the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" />
+                    </Link>
+                    <Link to="/about" className="btn btn-outline">Our story</Link>
+                  </div>
                 </div>
               </div>
             </Reveal>
@@ -1770,31 +1273,26 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
       {deals.length > 0 && (
-        <section className="py-8 sm:py-10 bg-luxe-cream">
-          <div className="max-w-7xl mx-auto px-4">
-            <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
-            <Reveal delay={60}>
-              <div className={productGridClass(Math.min(deals.length, 10))}>
-                {deals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-              </div>
-            </Reveal>
+        <section className="section-tight bg-white">
+          <div className="shell">
+            <SectionHead eyebrow="Offers" title="On sale now" to="/shop?q=deal" />
+            <ProductRail products={deals.slice(0, 12)} label="On sale" />
           </div>
         </section>
       )}
 
-      {/* ════════ VALUE STRIP — truthful store information only ════════ */}
-      <section className="value-strip" aria-label="Luxedge store information">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-4">
+      {/* ── Value strip ──────────────────────────────────────────────── */}
+      <section className="value-strip" aria-label="Store information">
+        <div className="shell grid sm:grid-cols-4">
           {[
-            { icon: Truck01, title: freeShippingEnabled ? `Free ship $${freeShippingThreshold}+` : 'Fair shipping', desc: freeShippingEnabled ? 'Qualifying orders' : 'Calculated at checkout' },
-            { icon: RefreshCcw01, title: '30-day returns', desc: 'Hassle-free returns' },
-            { icon: ShieldTick, title: 'Curated quality', desc: 'Selected for pet owners' },
-            { icon: Headphones01, title: 'Support', desc: 'Real people, by email' },
+            { icon: Truck01, title: freeShippingEnabled ? `Free ship ${money(freeShippingThreshold)}+` : 'Fair shipping', desc: freeShippingEnabled ? 'On qualifying orders' : 'Calculated at checkout' },
+            { icon: RefreshCcw01, title: '30-day returns', desc: 'Returns & replacements' },
+            { icon: ShieldTick, title: 'Verified sourcing', desc: 'Checked before listing' },
+            { icon: Headphones01, title: 'Real support', desc: 'Answered by people' },
           ].map((item) => (
             <div key={item.title} className="value-item">
-              <item.icon strokeWidth={1.5} size={14} className="value-item-icon" aria-hidden="true" />
+              <item.icon strokeWidth={1.5} size={16} className="value-item-icon" aria-hidden="true" />
               <div>
                 <p className="value-item-title">{item.title}</p>
                 <p className="value-item-copy">{item.desc}</p>
@@ -1804,24 +1302,48 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ NEWSLETTER — dark bookend ════════ */}
-      <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
-        <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
-        <div className="relative max-w-3xl mx-auto px-4 py-10 sm:py-14 text-center">
-          <p className="eyebrow mb-2 text-luxe-gold-light">Stay in the Loop</p>
-          <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-white tracking-tight mb-2">Join the Luxedge Pet Family</h2>
-          <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
+      {/* ── Newsletter ───────────────────────────────────────────────── */}
+      <section className="relative bg-luxe-black text-white overflow-hidden grain">
+        <div className="shell py-16 sm:py-24 text-center relative">
+          <Reveal>
+            <p className="eyebrow eyebrow-plain text-luxe-gold-light mb-4">Letters from the barn</p>
+            <h2 className="display text-white text-[clamp(1.9rem,4.4vw,3.25rem)] max-w-[18ch] mx-auto">
+              Field notes, new arrivals, nothing else.
+            </h2>
+            <p className="text-white/55 text-sm mt-5 max-w-md mx-auto">
+              A short letter when something genuinely new lands. Unsubscribe in one click.
+            </p>
+          </Reveal>
+
           {nlDone ? (
-            <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
-              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list!</p>
-              <p className="text-xs text-luxe-white/65">We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> locally and will let you know when email updates go live.</p>
-            </div>
+            <p className="flex items-center justify-center gap-2 mt-9 text-luxe-gold-light text-sm">
+              <CheckCircle strokeWidth={1.5} size={16} aria-hidden="true" />
+              You're on the list — we saved {nlEmail}.
+            </p>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); if (nlEmail.trim()) { try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: nlEmail.trim(), at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } setNlDone(true); } }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
-                className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
-              <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
-                Subscribe
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!nlEmail.trim()) return;
+                try {
+                  const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]');
+                  list.push({ email: nlEmail.trim(), at: new Date().toISOString() });
+                  localStorage.setItem('luxedge_newsletter', JSON.stringify(list));
+                } catch { /* storage unavailable */ }
+                setNlDone(true);
+              }}
+              className="mt-9 max-w-md mx-auto footer-newsletter"
+            >
+              <input
+                type="email"
+                required
+                value={nlEmail}
+                onChange={(e) => setNlEmail(e.target.value)}
+                placeholder="Email address"
+                aria-label="Email address"
+              />
+              <button type="submit" aria-label="Subscribe">
+                <ArrowRight strokeWidth={1.5} size={18} aria-hidden="true" />
               </button>
             </form>
           )}
@@ -1831,210 +1353,302 @@ function HomePage() {
   );
 }
 
+/**
+ * Shop / collection page.
+ *
+ * Filtering runs through the taxonomy rather than exact category equality, so
+ * `/category/horse` and `/category/stable-farm` work against the same catalog
+ * rows that `/category/dog-supplies` always did — every previously indexed URL
+ * still resolves, and the new merchandising vocabulary sits on top.
+ */
 function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
-  const { products, reviews } = useApp();
+  const { products, reviews, categories } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
 
-  const initialCat = slug ? fromSlug(slug) : 'All';
-  const [cat, setCat] = useState(initialCat);
   const [q, setQ] = useState(params.get('q') || '');
-  const [sort, setSort] = useState('featured');
-  const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
-  const [minRating, setMinRating] = useState(0); // 0 = any
+  const [sort, setSort] = useState(params.get('sort') || 'featured');
+  const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; });
+  const [minRating, setMinRating] = useState(0);
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
   const [onlyNew, setOnlyNew] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
   const isDeals = q.toLowerCase() === 'deal';
 
-  // Sync when URL slug or query changes
-  useEffect(() => { setCat(slug ? fromSlug(slug) : 'All'); }, [slug]);
+  // A slug may be a taxonomy collection, a legacy alias, or an admin-created
+  // DB category that predates the taxonomy — all three resolve to something.
+  const collection: Collection | null = useMemo(() => {
+    if (!slug) return null;
+    const known = resolveCollection(slug);
+    if (known) return known;
+    const dbCategory = categories.find((c) => toSlug(c.name) === slug);
+    return dbCategory ? collectionForCategoryName(dbCategory.name) : null;
+  }, [slug, categories]);
+
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
   useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
-  // Rating filter uses verified review averages only — catalog rating is stub data.
-  const verifiedAvgFor = (pid: string): number => {
-    const v = reviews.filter(r => r.productId === pid && r.status === 'approved');
-    return v.length ? v.reduce((s, r) => s + r.rating, 0) / v.length : 0;
+  useScrollLock(drawerOpen);
+  useEscape(drawerOpen, () => setDrawerOpen(false));
+
+  const live = useMemo(() => products.filter((p) => p.isActive), [products]);
+  const inCollection = useMemo(() => filterByCollection(live, collection), [live, collection]);
+
+  const results = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return inCollection
+      .filter((p) => (isDeals
+        ? p.originalPrice > p.price
+        : !term || p.name.toLowerCase().includes(term) || p.tags.some((t) => t.toLowerCase().includes(term))))
+      .filter((p) => maxPrice === 0 || p.price <= maxPrice)
+      .filter((p) => minRating === 0 || verifiedRating(reviews, p.id).average >= minRating)
+      .filter((p) => !onlyInStock || p.stock > 0)
+      .filter((p) => !onlyFreeShipping || p.freeShipping)
+      .filter((p) => !onlyNew || p.newArrival)
+      .sort((a, b) => {
+        if (sort === 'price-low') return a.price - b.price;
+        if (sort === 'price-high') return b.price - a.price;
+        if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+        if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+        return 0;
+      });
+  }, [inCollection, q, isDeals, maxPrice, minRating, onlyInStock, onlyFreeShipping, onlyNew, sort, reviews]);
+
+  const activeFilters =
+    (collection ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) +
+    (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
+
+  const clearAll = () => {
+    setQ(''); setMaxPrice(0); setMinRating(0);
+    setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false);
+    nav('/shop');
   };
 
-  const f = products.filter(p => p.isActive)
-    .filter(p => cat === 'All' || p.category === cat)
-    .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
-    .filter(p => maxPrice === 0 || p.price <= maxPrice)
-    .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
-    .filter(p => !onlyInStock || p.stock > 0)
-    .filter(p => !onlyFreeShipping || p.freeShipping)
-    .filter(p => !onlyNew || p.newArrival)
-    .sort((a, b) => {
-      if (sort === 'price-low') return a.price - b.price;
-      if (sort === 'price-high') return b.price - a.price;
-      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
-      if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
-      return 0;
-    });
+  const heading = isDeals ? 'On sale' : (collection ? collection.label : 'The collection');
+  const lede = isDeals
+    ? 'Products with a real compare-at price, updated as new offers land.'
+    : (collection ? collection.blurb : 'Everything Luxedge currently carries, across every animal and every job.');
 
-  const handleCatChange = (newCat: string) => {
-    if (newCat === 'All') nav('/shop');
-    else nav(`/category/${toSlug(newCat)}`);
-  };
+  const Filters = () => (
+    <>
+      <div className="filter-group">
+        <p className="filter-title">Shop by animal</p>
+        {ANIMAL_COLLECTIONS.map((c) => (
+          <button
+            key={c.slug}
+            type="button"
+            className="filter-option"
+            data-active={collection?.slug === c.slug || undefined}
+            onClick={() => nav(`/category/${c.slug}`)}
+          >
+            <span>{c.label}</span>
+            <span className="filter-count">{countIn(live, c)}</span>
+          </button>
+        ))}
+      </div>
 
-  const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
-  const pageDesc = isDeals ? 'Products with compare-at savings, updated as new deals land.' : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
-  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
+      <div className="filter-group">
+        <p className="filter-title">Collections</p>
+        <button type="button" className="filter-option" data-active={!collection || undefined} onClick={() => nav('/shop')}>
+          <span>All products</span>
+          <span className="filter-count">{live.length}</span>
+        </button>
+        {NEED_COLLECTIONS.map((c) => (
+          <button
+            key={c.slug}
+            type="button"
+            className="filter-option"
+            data-active={collection?.slug === c.slug || undefined}
+            onClick={() => nav(`/category/${c.slug}`)}
+          >
+            <span>{c.label}</span>
+            <span className="filter-count">{countIn(live, c)}</span>
+          </button>
+        ))}
+      </div>
 
-  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
+      <div className="filter-group">
+        <p className="filter-title">Price</p>
+        {[[0, 'Any price'], [25, 'Under $25'], [50, 'Under $50'], [100, 'Under $100'], [200, 'Under $200']].map(([v, label]) => (
+          <button
+            key={String(v)}
+            type="button"
+            className="filter-option"
+            data-active={maxPrice === v || undefined}
+            onClick={() => setMaxPrice(v as number)}
+          >
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
 
-  // Reusable sidebar filter block (desktop sidebar + mobile drawer)
-  const FilterBlock = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Category</h3>
-        <div className="space-y-1">
-          {CAT_LIST.map(c => (
-            <button key={c} onClick={() => handleCatChange(c)}
-              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                cat === c ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
-              }`}>
-              {c}
-            </button>
-          ))}
-        </div>
+      <div className="filter-group">
+        <p className="filter-title">Availability</p>
+        {([
+          ['in-stock', 'In stock', onlyInStock, setOnlyInStock],
+          ['free-shipping', 'Free shipping', onlyFreeShipping, setOnlyFreeShipping],
+          ['new', 'New arrivals', onlyNew, setOnlyNew],
+        ] as const).map(([id, label, active, setter]) => (
+          <button key={id} type="button" className="filter-option" data-active={active || undefined} onClick={() => setter(!active)} aria-pressed={active}>
+            <span>{label}</span>
+            {active && <CheckCircle strokeWidth={1.5} size={13} className="text-luxe-gold" aria-hidden="true" />}
+          </button>
+        ))}
       </div>
-      <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Price</h3>
-        <select value={maxPrice} onChange={e => setMaxPrice(+e.target.value)}
-          className="w-full text-[13px] px-3 py-2.5 border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20">
-          <option value={0}>Any price</option>
-          <option value={25}>Under $25</option>
-          <option value={50}>Under $50</option>
-          <option value={100}>Under $100</option>
-          <option value={200}>Under $200</option>
-        </select>
+
+      <div className="filter-group">
+        <p className="filter-title">Verified rating</p>
+        {[0, 4, 4.5].map((r) => (
+          <button key={r} type="button" className="filter-option" data-active={minRating === r || undefined} onClick={() => setMinRating(r)}>
+            <span className="flex items-center gap-1.5">
+              {r === 0 ? 'Any rating' : <>
+                <Star01 strokeWidth={1.5} size={12} fill="currentColor" className="text-star" aria-hidden="true" /> {r}+ and up
+              </>}
+            </span>
+          </button>
+        ))}
       </div>
-      <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Availability</h3>
-        <div className="space-y-1">
-          {[['in-stock', 'In stock', onlyInStock, setOnlyInStock] as const, ['free-shipping', 'Free shipping', onlyFreeShipping, setOnlyFreeShipping] as const, ['new', 'New arrivals', onlyNew, setOnlyNew] as const].map(([id, label, active, setter]) => (
-            <button key={id} onClick={() => setter(!active)}
-              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                active ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
-              }`}>
-              <span className="flex items-center gap-1"><CheckCircle strokeWidth={1.5} size={12} className={active ? 'text-luxe-gold' : 'text-gray-300'} /> {label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Verified rating</h3>
-        <div className="space-y-1">
-          {[4.5, 4, 0].map(r => (
-            <button key={r} onClick={() => setMinRating(r)}
-              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                minRating === r ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
-              }`}>
-              {r === 0 ? 'Any rating' : (
-                <span className="flex items-center gap-1"><Star01 strokeWidth={1.5} size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+
       {activeFilters > 0 && (
-        <button onClick={clearAll} className="w-full text-center text-[12px] font-semibold text-luxe-gold hover:text-luxe-gold-dark hover:underline">Clear all filters ({activeFilters})</button>
+        <button type="button" onClick={clearAll} className="link-arrow mt-7 text-luxe-gold">
+          Clear all ({activeFilters})
+        </button>
       )}
-    </div>
+    </>
   );
 
   return (
     <div>
-      {/* Page Header */}
-      <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
-        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12">
-          <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
-          <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
+      {/* ── Page head ────────────────────────────────────────────────── */}
+      <section className="page-head">
+        <div className="shell py-12 sm:py-16">
+          <nav className="crumbs mb-5" aria-label="Breadcrumb">
+            <Link to="/">Home</Link>
+            <ChevronRight strokeWidth={1.5} size={11} aria-hidden="true" />
+            <Link to="/shop">Shop</Link>
+            {collection && <>
+              <ChevronRight strokeWidth={1.5} size={11} aria-hidden="true" />
+              <span className="text-luxe-black">{collection.label}</span>
+            </>}
+          </nav>
+          <h1 className="page-head-title">{heading}</h1>
+          <p className="section-intro mt-4">{lede}</p>
         </div>
       </section>
 
-      {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
-      <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-16 lg:top-[7.1rem] z-30 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
-          <button onClick={() => setDrawerOpen(true)}
-            className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
-            <Sliders01 strokeWidth={1.5} size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
+      {/* Collection chips — lateral movement without opening the filters. */}
+      <div className="border-b border-luxe-silver bg-white">
+        <div className="shell flex gap-2 overflow-x-auto py-3 scrollbar-hide">
+          <Link to="/shop" className="chip" data-active={!collection || undefined}>All</Link>
+          {COLLECTIONS.map((c) => (
+            <Link key={c.slug} to={`/category/${c.slug}`} className="chip" data-active={collection?.slug === c.slug || undefined}>
+              {c.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Toolbar ──────────────────────────────────────────────────── */}
+      <div className="toolbar">
+        <div className="shell flex items-center gap-3 py-3">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="chip lg:hidden shrink-0"
+            aria-label="Open filters"
+          >
+            <Sliders01 strokeWidth={1.5} size={13} aria-hidden="true" /> Filter
+            {activeFilters > 0 && <span className="num">({activeFilters})</span>}
           </button>
-          <div className="relative flex-1 min-w-0">
-            <SearchMd strokeWidth={1.5} size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-luxe-gray" />
-            <input placeholder="Search products..." value={q} onChange={e => setQ(e.target.value)} aria-label="Search products"
-              className="w-full pl-9 pr-3 py-2 border border-luxe-silver rounded-lg text-[13px] focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 bg-luxe-cream/60" />
+
+          <div className="relative flex-1 min-w-0 max-w-md">
+            <SearchMd strokeWidth={1.5} size={15} className="absolute left-0 top-1/2 -translate-y-1/2 text-luxe-gray" aria-hidden="true" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search this collection"
+              aria-label="Search products"
+              className="w-full pl-6 pr-2 py-2 bg-transparent border-0 border-b border-luxe-silver text-sm focus:outline-none focus:border-luxe-black transition-colors"
+            />
           </div>
-          <select value={sort} onChange={e => setSort(e.target.value)}
-            className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
+
+          <p className="hidden sm:block text-[12px] text-luxe-gray num ml-auto shrink-0">
+            {results.length} product{results.length === 1 ? '' : 's'}
+          </p>
+
+          <select value={sort} onChange={(e) => setSort(e.target.value)} className="select-bare shrink-0" aria-label="Sort products">
             <option value="featured">Featured</option>
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Low→High</option>
-            <option value="price-high">Price: High→Low</option>
+            <option value="price-low">Price: low to high</option>
+            <option value="price-high">Price: high to low</option>
           </select>
         </div>
       </div>
 
-      {/* Mobile filter drawer */}
+      {/* ── Mobile filter drawer ─────────────────────────────────────── */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-luxe-black/50" onClick={() => setDrawerOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-[290px] max-w-[85vw] bg-white shadow-2xl overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-luxe-silver/70">
-              <h2 className="font-serif text-base font-bold text-luxe-black">Filters</h2>
-              <button onClick={() => setDrawerOpen(false)} aria-label="Close filters"
-                className="p-1.5 rounded-lg text-luxe-gray hover:bg-luxe-cream"><X strokeWidth={1.5} size={16} /></button>
+        <div className="fixed inset-0 z-[130] lg:hidden" role="dialog" aria-modal="true" aria-label="Filters">
+          <div className="absolute inset-0 bg-luxe-black/45 backdrop-blur-sm animate-fade-in" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <div className="absolute inset-y-0 left-0 w-[19rem] max-w-[86vw] bg-white shadow-[0_44px_90px_-40px_rgba(23,21,18,0.4)] overflow-y-auto animate-slide-in-right">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-luxe-silver sticky top-0 bg-white z-10">
+              <h2 className="font-serif text-xl">Filters</h2>
+              <button type="button" onClick={() => setDrawerOpen(false)} className="icon-btn -mr-2" aria-label="Close filters">
+                <X strokeWidth={1.5} size={19} aria-hidden="true" />
+              </button>
             </div>
-            <div className="p-4">
-              <FilterBlock />
-              <button onClick={() => setDrawerOpen(false)}
-                className="mt-6 w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm font-bold rounded-xl transition-colors">
-                Show {f.length} products
+            <div className="px-5 pb-8 pt-2">
+              <Filters />
+              <button type="button" onClick={() => setDrawerOpen(false)} className="btn btn-primary w-full mt-8">
+                Show {results.length} product{results.length === 1 ? '' : 's'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main content: sidebar + grid */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        <div className="flex gap-6">
-          {/* Desktop sidebar */}
-          <aside className="hidden lg:block w-56 shrink-0 bg-white border border-luxe-silver/70 rounded-2xl p-5 h-fit sticky top-16 shadow-sm">
-            <FilterBlock />
+      {/* ── Results ──────────────────────────────────────────────────── */}
+      <div className="shell py-10 sm:py-14">
+        <div className="flex gap-12">
+          <aside className="hidden lg:block w-56 shrink-0 self-start sticky" style={{ top: 'calc(var(--header-h) + 5rem)' }}>
+            <Filters />
           </aside>
 
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] text-luxe-gray mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
-
-            {f.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-                {f.map(p => <PCard key={p.id} product={p} />)}
-              </div>
+            {results.length > 0 ? (
+              <Stagger className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-9 sm:gap-x-6 sm:gap-y-12" step={45}>
+                {results.map((p, i) => (
+                  <div key={p.id} style={staggerStyle(Math.min(i, 11))}>
+                    <ProductCard product={p} priority={i < 4} />
+                  </div>
+                ))}
+              </Stagger>
             ) : products.length === 0 ? (
-              /* Phase 4E.1 — genuinely empty catalog (no published DB products):
-                 premium curation notice, never fake cards or fake counts. */
-              <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
-                <p className="font-serif text-lg font-bold text-luxe-black mb-1">New premium pet essentials are being curated</p>
-                <p className="text-sm text-luxe-gray mb-5">Every product is verified before it reaches your door. Please check back soon.</p>
-                <Link to="/" className="inline-block px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Back to home</Link>
+              <div className="empty-state">
+                <span className="empty-mark"><Stars01 strokeWidth={1.5} size={22} aria-hidden="true" /></span>
+                <h2 className="section-title mx-auto">The first collection is being sourced.</h2>
+                <p className="section-intro mx-auto mt-3">Every product is verified before it reaches this page.</p>
+                <Link to="/" className="btn btn-primary mt-7">Back to home</Link>
               </div>
             ) : (
-              <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><SearchMd strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
-                <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products found</p>
-                <p className="text-sm text-luxe-gray mb-5">Try adjusting your search or filters.</p>
-                <button onClick={clearAll} className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
+              <div className="empty-state">
+                <span className="empty-mark"><SearchMd strokeWidth={1.5} size={22} aria-hidden="true" /></span>
+                <h2 className="section-title mx-auto">
+                  {collection && inCollection.length === 0 ? `${collection.label} is being sourced.` : 'Nothing matched.'}
+                </h2>
+                <p className="section-intro mx-auto mt-3">
+                  {collection && inCollection.length === 0
+                    ? 'This collection is part of the range — the first products are still going through sourcing and verification.'
+                    : 'Try a different search or clear the filters.'}
+                </p>
+                <div className="flex flex-wrap justify-center gap-3 mt-7">
+                  {activeFilters > 0 && <button type="button" onClick={clearAll} className="btn btn-primary">Clear filters</button>}
+                  <Link to="/shop" className="btn btn-outline">Browse all products</Link>
+                </div>
               </div>
             )}
-            {/* Ad: After Product Row */}
             <AdSenseAd placement="shop_after_row" />
           </div>
         </div>
@@ -2049,221 +1663,227 @@ function CartDrawer() {
   const loc = useLocation();
   const [codeInput, setCodeInput] = useState('');
 
-  // Close the drawer whenever the route changes (e.g. Proceed to Checkout).
   useEffect(() => { closeCart(); }, [loc.pathname, closeCart]);
+  useScrollLock(cartOpen);
+  useEscape(cartOpen, closeCart);
 
   const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
   const sh = freeShippingEnabled && sub >= freeShippingThreshold ? 0 : 4.99;
   const discount = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
   const tot = Math.max(0, sub - discount) + sh;
   const remaining = freeShippingEnabled ? freeShippingThreshold - sub : 0;
+
   const applyCode = () => {
     const err = applyCoupon(codeInput);
     if (err) notify(err, 'error'); else { notify('Coupon applied'); setCodeInput(''); }
   };
 
-  const checkout = () => {
-    closeCart();
-    nav('/checkout');
-  };
-
   return (
     <>
-      {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        onClick={closeCart}
-        className={`fixed inset-0 bg-black/40 z-[90] transition-opacity duration-300 ${cartOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      />
+      <div className="drawer-scrim" data-open={cartOpen || undefined} onClick={closeCart} aria-hidden="true" />
 
-      {/* Drawer */}
       <aside
         role="dialog"
         aria-label="Shopping cart"
         aria-hidden={!cartOpen}
         inert={!cartOpen}
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-[95] shadow-2xl transform transition-transform duration-300 ease-out ${cartOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className="drawer"
+        data-open={cartOpen || undefined}
       >
-        <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <ShoppingBag01 strokeWidth={1.5} size={20} className="text-luxe-gold" />
-              <h2 className="text-lg font-semibold text-luxe-black">Your Cart ({cart.length})</h2>
-            </div>
-            <button onClick={closeCart} aria-label="Close cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X strokeWidth={1.5} size={18} />
+        <div className="flex items-center justify-between px-6 py-5 border-b border-luxe-silver">
+          <h2 className="font-serif text-2xl">Your cart <span className="text-luxe-gray text-lg num">({cart.length})</span></h2>
+          <button type="button" onClick={closeCart} className="icon-btn -mr-2" aria-label="Close cart">
+            <X strokeWidth={1.5} size={19} aria-hidden="true" />
+          </button>
+        </div>
+
+        {cart.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+            <span className="empty-mark"><ShoppingBag01 strokeWidth={1.5} size={24} aria-hidden="true" /></span>
+            <p className="font-serif text-2xl text-luxe-black">Nothing here yet</p>
+            <p className="text-[13px] text-luxe-gray mt-2 max-w-[24ch]">Start with the collection — every product has been verified before listing.</p>
+            <button type="button" onClick={() => { closeCart(); nav('/shop'); }} className="btn btn-primary mt-7">
+              Browse the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" />
             </button>
           </div>
-
-          {cart.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-              <div className="w-16 h-16 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
-              <p className="text-luxe-black text-sm font-semibold">Your cart is empty</p>
-              <p className="text-luxe-gray text-xs">Add some handpicked essentials to get started.</p>
-              <button onClick={() => { closeCart(); nav('/shop'); }} className="mt-2 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">
-                Shop Now
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Items */}
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-                {freeShippingEnabled ? (sub < freeShippingThreshold ? (
-                  <div className="rounded-lg bg-luxe-light border border-luxe-silver px-3 py-2.5">
-                    <p className="text-[11px] text-gray-600">You're <span className="font-bold text-luxe-gold">${remaining.toFixed(2)}</span> away from free shipping</p>
-                    <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / freeShippingThreshold) * 100)}%` }} />
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {freeShippingEnabled && (
+                sub < freeShippingThreshold ? (
+                  <div>
+                    <p className="text-[12px] text-luxe-gray mb-2">
+                      <span className="text-luxe-black font-semibold num">{money(remaining)}</span> from free shipping
+                    </p>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${Math.min(100, (sub / freeShippingThreshold) * 100)}%` }} />
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2.5 flex items-center gap-2">
-                    <CheckCircle strokeWidth={1.5} size={14} className="text-green-600 shrink-0" />
-                    <p className="text-[11px] font-semibold text-green-700">You've unlocked FREE shipping!</p>
-                  </div>
-                )) : null}
+                  <p className="flex items-center gap-2 text-[12px] text-luxe-success">
+                    <CheckCircle strokeWidth={1.5} size={14} aria-hidden="true" /> Free shipping unlocked
+                  </p>
+                )
+              )}
 
-                {/* Coupon (real active store coupons only) */}
-                <div className="rounded-lg border border-luxe-silver px-3 py-2.5">
-                  {coupon ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-green-700"><CheckCircle strokeWidth={1.5} size={12} className="inline mr-1" />{coupon.code} applied (−${discount.toFixed(2)})</span>
-                      <button onClick={removeCoupon} className="text-[11px] text-gray-400 hover:text-red-500">Remove</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} placeholder="Coupon code" aria-label="Coupon code"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-luxe-gold"
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }} />
-                      <button onClick={applyCode} className="px-3 py-2 bg-luxe-black hover:bg-luxe-gold text-white text-xs font-semibold rounded-lg transition-colors">Apply</button>
-                    </div>
-                  )}
-                </div>
-
-                {cart.map(item => {
-                  // Defensive rendering: a cart item may never crash the
-                  // drawer. Fall back to the branded placeholder image, safe
-                  // text, and a $0 price for any missing field.
-                  const img = (Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
-                  const nm = item.product.name || 'Product';
-                  const cat = item.product.category || '';
-                  const pr = typeof item.product.price === 'number' && Number.isFinite(item.product.price) ? item.product.price : 0;
-                  return (
-                  <div key={item.product.id} className="flex gap-3 p-3 bg-luxe-cream rounded-xl border border-luxe-silver/50">
-                    <img src={img} alt={nm} onError={onImageError} className="w-20 h-20 object-cover rounded-lg shrink-0" />
+              {cart.map(item => {
+                // Defensive rendering: a malformed stored item may never crash
+                // the drawer — fall back to brand imagery and safe values.
+                const img = (Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+                const nm = item.product.name || 'Product';
+                const cat = item.product.category || '';
+                const pr = typeof item.product.price === 'number' && Number.isFinite(item.product.price) ? item.product.price : 0;
+                return (
+                  <div key={item.product.id} className="flex gap-4">
+                    <Link to={`/product/${item.product.id}`} className="w-20 h-24 shrink-0 rounded-[8px] bg-luxe-cream overflow-hidden">
+                      <img src={img} alt="" aria-hidden="true" onError={onImageError} className="w-full h-full object-contain p-2" />
+                    </Link>
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-luxe-black truncate">{nm}</h4>
-                      <p className="text-[11px] text-gray-400 truncate">{cat}</p>
-                      <p className="text-sm font-bold text-luxe-gold mt-0.5">${pr.toFixed(2)}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
-                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={12} /></button>
-                          <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={12} /></button>
+                      <Link to={`/product/${item.product.id}`} className="text-[14px] font-medium text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-2">{nm}</Link>
+                      <p className="pcard-eyebrow mt-1">{cat}</p>
+                      <div className="flex items-center justify-between mt-3">
+                        <div className="qty scale-[0.82] origin-left">
+                          <button type="button" onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label={`Decrease quantity of ${nm}`}>
+                            <Minus strokeWidth={1.5} size={13} aria-hidden="true" />
+                          </button>
+                          <span className="num">{item.quantity}</span>
+                          <button type="button" onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label={`Increase quantity of ${nm}`}>
+                            <Plus strokeWidth={1.5} size={13} aria-hidden="true" />
+                          </button>
                         </div>
-                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={14} /></button>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[14px] font-semibold text-luxe-black num">{money(pr * item.quantity)}</span>
+                          <button type="button" onClick={() => removeFromCart(item.product.id)} className="text-luxe-gray hover:text-luxe-red transition-colors" aria-label={`Remove ${nm}`}>
+                            <Trash01 strokeWidth={1.5} size={15} aria-hidden="true" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-luxe-black shrink-0">${(pr * item.quantity).toFixed(2)}</p>
                   </div>
-                  );
-                })}
+                );
+              })}
+            </div>
+
+            <div className="border-t border-luxe-silver px-6 py-5 space-y-4">
+              {coupon ? (
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="flex items-center gap-1.5 text-luxe-success">
+                    <CheckCircle strokeWidth={1.5} size={13} aria-hidden="true" /> {coupon.code} applied (−{money(discount)})
+                  </span>
+                  <button type="button" onClick={removeCoupon} className="text-luxe-gray hover:text-luxe-red transition-colors">Remove</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={codeInput}
+                    onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }}
+                    placeholder="Coupon code"
+                    aria-label="Coupon code"
+                    className="flex-1 min-w-0 px-0 py-2 bg-transparent border-0 border-b border-luxe-silver text-[13px] focus:outline-none focus:border-luxe-black transition-colors"
+                  />
+                  <button type="button" onClick={applyCode} className="btn btn-outline btn-sm shrink-0">Apply</button>
+                </div>
+              )}
+
+              <div className="space-y-1.5 text-[13px]">
+                <div className="flex justify-between"><span className="text-luxe-gray">Subtotal</span><span className="num">{money(sub)}</span></div>
+                {discount > 0 && <div className="flex justify-between"><span className="text-luxe-gray">Coupon</span><span className="num text-luxe-success">−{money(discount)}</span></div>}
+                <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`num ${sh === 0 ? 'text-luxe-success' : ''}`}>{sh === 0 ? 'Free' : money(sh)}</span></div>
+                <div className="flex justify-between pt-3 mt-1 border-t border-luxe-silver text-[15px] font-semibold">
+                  <span>Total</span><span className="num">{money(tot)}</span>
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="border-t border-gray-100 px-5 py-4 space-y-3">
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
-                  {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">−${discount.toFixed(2)}</span></div>}
-                  <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-semibold ${sh === 0 ? 'text-green-600' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
-                  <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
-                </div>
-                <button onClick={checkout} className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl transition-colors uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-gold">
-                  <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
-                </button>
-                <button onClick={() => { closeCart(); nav('/cart'); }} className="w-full py-2.5 text-xs text-gray-500 hover:text-luxe-black transition-colors">
-                  View Full Cart
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+              <button type="button" onClick={() => { closeCart(); nav('/checkout'); }} className="btn btn-primary w-full">
+                <Lock01 strokeWidth={1.5} size={14} aria-hidden="true" /> Checkout
+              </button>
+              <button type="button" onClick={() => { closeCart(); nav('/cart'); }} className="w-full text-[12px] text-luxe-gray hover:text-luxe-black transition-colors">
+                View full cart
+              </button>
+            </div>
+          </>
+        )}
       </aside>
     </>
   );
 }
 
 function CartPage() {
-  const { cart, updateQty, removeFromCart } = useApp(); const nav = useNavigate();
-  const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0); const sh = sub >= 50 ? 0 : 4.99; const tot = sub + sh;
-  const remaining = 50 - sub;
+  const { cart, updateQty, removeFromCart, freeShippingEnabled, freeShippingThreshold } = useApp();
+  const nav = useNavigate();
+  const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+  const sh = freeShippingEnabled && sub >= freeShippingThreshold ? 0 : 4.99;
+  const tot = sub + sh;
+  const remaining = freeShippingEnabled ? freeShippingThreshold - sub : 0;
 
   if (cart.length === 0) return (
-    <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
-        <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
-        <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
-        <Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
-      </div>
+    <div className="shell empty-state min-h-[60vh] justify-center">
+      <span className="empty-mark"><ShoppingBag01 strokeWidth={1.5} size={24} aria-hidden="true" /></span>
+      <h1 className="section-title mx-auto">Your cart is empty</h1>
+      <p className="section-intro mx-auto mt-3">Everything Luxedge lists has been verified first — start with the collection.</p>
+      <Link to="/shop" className="btn btn-primary mt-7">Browse the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></Link>
     </div>
   );
 
   return (
-    <div className="py-12 bg-luxe-cream min-h-screen">
-      <div className="max-w-5xl mx-auto px-4">
-        <p className="eyebrow mb-2">Your Selection</p>
-        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Shopping Cart</h1>
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Items */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm divide-y divide-luxe-silver/60">
-            {cart.map(i => {
-              const img = (Array.isArray(i.product.images) && i.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
-              return (
-              <div key={i.product.id} className="flex gap-4 p-5">
-                <img src={img} alt={i.product.name || 'Product'} onError={onImageError} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
+    <div className="shell py-12 sm:py-16">
+      <p className="eyebrow mb-4">Your selection</p>
+      <h1 className="page-head-title mb-10">Cart</h1>
+
+      <div className="grid lg:grid-cols-[1fr_20rem] gap-10 lg:gap-16">
+        <div className="divide-y divide-luxe-silver border-y border-luxe-silver">
+          {cart.map(i => {
+            const img = (Array.isArray(i.product.images) && i.product.images[0]) || LUXEDGE_IMAGE_FALLBACK;
+            return (
+              <div key={i.product.id} className="flex gap-5 py-6">
+                <Link to={`/product/${i.product.id}`} className="w-24 h-28 sm:w-28 sm:h-32 shrink-0 rounded-[8px] bg-luxe-cream overflow-hidden">
+                  <img src={img} alt="" aria-hidden="true" onError={onImageError} className="w-full h-full object-contain p-3" />
+                </Link>
                 <div className="flex-1 min-w-0">
-                  <Link to={`/product/${i.product.id}`} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
-                  <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
-                  <div className="flex items-center gap-3 mt-3">
-                    <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">
-                      <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={13} /></button>
-                      <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
-                      <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={13} /></button>
+                  <Link to={`/product/${i.product.id}`} className="text-[15px] font-medium text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-2">{i.product.name}</Link>
+                  <p className="pcard-eyebrow mt-1">{i.product.category}</p>
+                  <div className="flex items-center gap-4 mt-4">
+                    <div className="qty scale-[0.85] origin-left">
+                      <button type="button" onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity"><Minus strokeWidth={1.5} size={13} aria-hidden="true" /></button>
+                      <span className="num">{i.quantity}</span>
+                      <button type="button" onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity"><Plus strokeWidth={1.5} size={13} aria-hidden="true" /></button>
                     </div>
-                    <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash01 strokeWidth={1.5} size={15} /></button>
+                    <button type="button" onClick={() => removeFromCart(i.product.id)} className="text-luxe-gray hover:text-luxe-red transition-colors" aria-label="Remove item">
+                      <Trash01 strokeWidth={1.5} size={15} aria-hidden="true" />
+                    </button>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-luxe-black">${((i.product.price || 0) * i.quantity).toFixed(2)}</p>
-                  <p className="text-xs text-luxe-gray">${(i.product.price || 0).toFixed(2)} each</p>
+                  <p className="font-semibold text-luxe-black num">{money((i.product.price || 0) * i.quantity)}</p>
+                  <p className="text-[12px] text-luxe-gray num mt-0.5">{money(i.product.price || 0)} each</p>
                 </div>
               </div>
-              );
-            })}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Summary */}
-          <div className="h-fit lg:sticky lg:top-20 bg-white rounded-2xl border border-luxe-silver/70 shadow-sm p-6">
-            <h2 className="font-serif text-lg font-bold text-luxe-black mb-5">Order Summary</h2>
-            {sub < 50 && (
-              <div className="rounded-xl bg-luxe-gold-soft/70 border border-luxe-gold/20 px-4 py-3 mb-5">
-                <p className="text-[11px] text-luxe-gray">Add <span className="font-bold text-luxe-gold-dark">${remaining.toFixed(2)}</span> more for free shipping</p>
-                <div className="mt-2 h-1.5 bg-white rounded-full overflow-hidden">
-                  <div className="h-full bg-luxe-gold rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (sub / 50) * 100)}%` }} />
-                </div>
+        <div className="h-fit lg:sticky" style={{ top: 'calc(var(--header-h) + 1.5rem)' }}>
+          <h2 className="font-serif text-2xl mb-6">Summary</h2>
+          {freeShippingEnabled && sub < freeShippingThreshold && (
+            <div className="mb-6">
+              <p className="text-[12px] text-luxe-gray mb-2">
+                <span className="text-luxe-black font-semibold num">{money(remaining)}</span> from free shipping
+              </p>
+              <div className="progress-track">
+                <div className="progress-fill" style={{ width: `${Math.min(100, (sub / freeShippingThreshold) * 100)}%` }} />
               </div>
-            )}
-            <div className="space-y-2.5 text-sm">
-              <div className="flex justify-between"><span className="text-luxe-gray">Subtotal</span><span className="font-medium text-luxe-black">${sub.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`font-medium ${sh === 0 ? 'text-luxe-success' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
-              <div className="flex justify-between text-lg font-bold pt-3 border-t border-luxe-silver/70"><span className="text-luxe-black">Total</span><span className="text-luxe-black">${tot.toFixed(2)}</span></div>
             </div>
-            <button onClick={() => nav('/checkout')} className="mt-5 w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm transition-colors shadow-gold flex items-center justify-center gap-2">
-              <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
-            </button>
-            <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
+          )}
+          <div className="space-y-2 text-[14px] pb-4 border-b border-luxe-silver">
+            <div className="flex justify-between"><span className="text-luxe-gray">Subtotal</span><span className="num">{money(sub)}</span></div>
+            <div className="flex justify-between"><span className="text-luxe-gray">Shipping</span><span className={`num ${sh === 0 ? 'text-luxe-success' : ''}`}>{sh === 0 ? 'Free' : money(sh)}</span></div>
           </div>
+          <div className="flex justify-between py-4 text-lg font-semibold"><span>Total</span><span className="num">{money(tot)}</span></div>
+          <button type="button" onClick={() => nav('/checkout')} className="btn btn-primary w-full">
+            <Lock01 strokeWidth={1.5} size={14} aria-hidden="true" /> Checkout
+          </button>
+          <Link to="/shop" className="block text-center mt-4 text-[12px] text-luxe-gray hover:text-luxe-black transition-colors">Continue shopping</Link>
         </div>
       </div>
     </div>
@@ -2333,7 +1953,7 @@ function CheckoutPage() {
     }
   };
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
+  const I = 'w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all';
   const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
   const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
   const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
@@ -2353,7 +1973,7 @@ function CheckoutPage() {
       )}
       <div className="max-w-6xl mx-auto px-4 py-10">
         <p className="eyebrow mb-2">Secure Checkout</p>
-        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Checkout</h1>
+        <h1 className="page-head-title mb-8">Checkout</h1>
         <div className="grid lg:grid-cols-5 gap-8">
           {/* ──── LEFT: Contact + Shipping ──── */}
           <div className="lg:col-span-3 space-y-6">
@@ -2366,7 +1986,7 @@ function CheckoutPage() {
                 </div>
               </div>
             )}
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
               <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({ ...f, firstName: e.target.value })} className={I} placeholder="John" />{ER('firstName')}</div>
@@ -2375,7 +1995,7 @@ function CheckoutPage() {
                 <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
               </div>
             </div>
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
               <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({ ...f, address: e.target.value })} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
@@ -2390,7 +2010,7 @@ function CheckoutPage() {
 
           {/* ──── RIGHT: Order Summary ──── */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm sticky top-20">
+            <div className="bg-white rounded-[10px] border border-luxe-silver p-6 sticky top-20">
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
               <div className="space-y-4 mb-6 max-h-64 overflow-y-auto pr-1">
                 {cart.map(item => (
@@ -2439,7 +2059,7 @@ function CheckoutPage() {
                 </div>
               </div>
               <button onClick={handleCheckout} disabled={submitting}
-                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
+                className="btn btn-primary w-full mt-6">
                 {submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
                 {submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
               </button>
@@ -2510,8 +2130,8 @@ function CheckoutSuccessPage() {
           <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">{unpaid ? 'Payment not completed' : 'Could not verify payment'}</h1>
           <p className="text-sm text-luxe-gray mb-6">{unpaid ? 'Your payment has not been completed yet. If you were charged, the order will be confirmed shortly.' : 'We could not confirm your payment status right now. Check your email for a receipt.'}</p>
           <div className="flex gap-3 justify-center">
-            <Link to="/cart" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Back to Cart</Link>
-            <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
+            <Link to="/cart" className="btn btn-primary">Back to Cart</Link>
+            <Link to="/shop" className="btn btn-outline">Continue Shopping</Link>
           </div>
         </div>
       </div>
@@ -2526,8 +2146,8 @@ function CheckoutSuccessPage() {
         {info.orderNumber && <p className="text-gray-600 mb-1">Order <span className="font-mono font-semibold text-gray-800">{info.orderNumber}</span></p>}
         <p className="text-sm text-gray-400 mb-6">{info.email ? `A receipt is on its way to ${info.email}.` : 'Your payment was confirmed by Stripe.'}</p>
         <div className="flex gap-3 justify-center">
-          <Link to="/orders" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">View Orders</Link>
-          <Link to="/shop" className="px-6 py-3 border border-gray-200 hover:bg-gray-50 font-semibold rounded-full text-sm">Continue Shopping</Link>
+          <Link to="/orders" className="btn btn-primary">View Orders</Link>
+          <Link to="/shop" className="btn btn-outline">Continue Shopping</Link>
         </div>
       </div>
     </div>
@@ -2556,7 +2176,7 @@ function OrdersPage() {
       .finally(() => setLoaded(true));
   }, [user]);
 
-  const empty = <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
+  const empty = <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="btn btn-primary">Shop Now</Link></div></div>;
   if (!user) return null;
   if (user.role !== 'admin') return empty;
   if (!loaded) return <div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading orders…</div>;
@@ -2604,11 +2224,12 @@ function LoginPage() {
   const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
-      {/* Ambient glows — soft blue, light theme */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-luxe-cream">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{ background: 'radial-gradient(70% 55% at 50% 0%, rgba(167,91,46,0.10), transparent 70%)' }}
+      />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
@@ -2619,7 +2240,7 @@ function LoginPage() {
         </div>
 
         {/* Card — light glass */}
-        <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
+        <div className="bg-white rounded-[14px] border border-luxe-silver p-8 shadow-[0_28px_70px_-34px_rgba(23,21,18,0.35)]">
           <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Welcome Back</h1>
           <p className="text-sm text-gray-500 mb-8">Sign in to your account to continue</p>
 
@@ -2634,12 +2255,12 @@ function LoginPage() {
             <div className="relative">
               <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
-                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-[6px] text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all" />
             </div>
             <div className="relative">
               <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password"
-                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-[6px] text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
                 {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
@@ -2654,7 +2275,7 @@ function LoginPage() {
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
+              className="btn btn-primary w-full">
               {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Sign In'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
@@ -2690,7 +2311,7 @@ function LoginPage() {
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
           <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Verified sourcing</span>
           <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
 
@@ -2723,11 +2344,12 @@ function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
-      {/* Ambient glows — soft blue, light theme */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-luxe-cream">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{ background: 'radial-gradient(70% 55% at 50% 0%, rgba(167,91,46,0.10), transparent 70%)' }}
+      />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
@@ -2738,7 +2360,7 @@ function SignupPage() {
         </div>
 
         {/* Card — light glass */}
-        <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
+        <div className="bg-white rounded-[14px] border border-luxe-silver p-8 shadow-[0_28px_70px_-34px_rgba(23,21,18,0.35)]">
           <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Join Luxedge</h1>
           <p className="text-sm text-gray-500 mb-8">Create your account to start shopping</p>
 
@@ -2753,24 +2375,24 @@ function SignupPage() {
             <div className="relative">
               <UserIcon strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="text" required value={n} onChange={ev => setN(ev.target.value)} placeholder="Full Name"
-                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-[6px] text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all" />
             </div>
             <div className="relative">
               <Mail01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type="email" required value={e} onChange={ev => setE(ev.target.value)} placeholder="Email address"
-                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-4 py-3.5 bg-white border border-luxe-silver rounded-[6px] text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all" />
             </div>
             <div className="relative">
               <Lock01 strokeWidth={1.5} size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input type={showPw ? 'text' : 'password'} required value={p} onChange={ev => setP(ev.target.value)} placeholder="Password (6+ characters)" minLength={6}
-                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-xl text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all" />
+                className="w-full pl-12 pr-12 py-3.5 bg-white border border-luxe-silver rounded-[6px] text-sm text-luxe-black placeholder-gray-400 focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10 transition-all" />
               <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-luxe-gold transition-colors">
                 {showPw ? <EyeOff strokeWidth={1.5} size={18} /> : <Eye strokeWidth={1.5} size={18} />}
               </button>
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 shadow-gold">
+              className="btn btn-primary w-full">
               {loading ? <Loading01 strokeWidth={1.5} size={18} className="animate-spin" /> : <>{'Create Account'}<ArrowRight strokeWidth={1.5} size={16} /></>}
             </button>
           </form>
@@ -2791,7 +2413,7 @@ function SignupPage() {
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
           <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Verified sourcing</span>
           <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
         </div>
       </div>
@@ -2819,8 +2441,8 @@ function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+    <div className="min-h-screen bg-luxe-black flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-[14px] shadow-[0_28px_70px_-34px_rgba(0,0,0,0.6)] p-8">
         <div className="flex items-center justify-center gap-2 mb-2">
           <ShieldTick strokeWidth={1.5} className="text-luxe-gold" size={28} />
           <span className="text-xl font-bold">Admin Login</span>
@@ -2842,13 +2464,13 @@ function AdminLoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email</label>
-            <input type="email" placeholder="Enter admin email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
+            <input type="email" placeholder="Enter admin email" value={e} onChange={ev => setE(ev.target.value)} className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10" required />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Password</label>
-            <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
+            <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10" required />
           </div>
-          <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
+          <button type="submit" disabled={loading} className="btn btn-primary w-full">
             {loading ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
           </button>
         </form>
@@ -2868,41 +2490,101 @@ function AdminLoginPage() {
 // ============================================================================
 function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black">{title}</h1></div></section>
-      <div className="max-w-3xl mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl border p-6 sm:p-10">
-          <p className="text-xs text-gray-400 mb-8">Last updated: {updated}</p>
-          <div className="space-y-8 text-sm text-gray-600 leading-relaxed">{children}</div>
+    <div className="min-h-screen bg-white">
+      <section className="page-head">
+        <div className="shell py-14 sm:py-20">
+          <p className="eyebrow mb-4">Legal</p>
+          <h1 className="page-head-title">{title}</h1>
+          <p className="text-[12px] text-luxe-gray mt-5 font-brand uppercase tracking-[0.14em]">Last updated {updated}</p>
+        </div>
+      </section>
+      <div className="shell py-14"><div className="measure">
+        <div className="space-y-10 text-[15px] text-luxe-gray leading-relaxed">{children}</div>
         </div>
       </div>
     </div>
   );
 }
-function LS({ t, children }: { t: string; children: ReactNode }) { return <div><h2 className="text-base font-bold text-gray-900 mb-2">{t}</h2>{children}</div>; }
+function LS({ t, children }: { t: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="font-serif text-2xl text-luxe-black mb-3">{t}</h2>
+      {children}
+    </section>
+  );
+}
 
 function AboutPage() {
-  return (<div>
-    <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
-      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
-      <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
-      <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
-    </div></section>
-    <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
-      <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
-      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
-      <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
-      <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
-        {[{v:'$50+',l:'Free Shipping'},{v:'30-Day',l:'Returns & Replacements'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
-          <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
-        )}
-      </div>
-    </div></section>
-  </div>);
+  return (
+    <div>
+      <section className="page-head">
+        <div className="shell py-16 sm:py-24"><div className="measure">
+          <p className="eyebrow mb-5">Our story</p>
+          <h1 className="page-head-title">A store that has to earn the listing.</h1>
+          <p className="section-intro mt-6 max-w-xl">
+            Luxedge is a curated animal-goods store based in Irving, Texas — horses,
+            cattle, dogs and cats, held to one standard.
+          </p>
+        </div></div>
+      </section>
+
+      <section className="section">
+        <div className="shell"><div className="measure space-y-6 text-[16px] leading-relaxed text-luxe-gray">
+          <p className="text-[19px] leading-relaxed text-luxe-black">
+            Buying gear for animals online is mostly guesswork. Listings are recycled,
+            photography is borrowed, and nobody will tell you where a thing actually
+            ships from. Luxedge exists because that is a solvable problem.
+          </p>
+          <p>
+            Every product goes through a verification pass before it is published: a real
+            supplier, a real cost basis, and a delivery path we can trace. Anything that
+            cannot clear that bar stays unlisted — however good the margin looks. It is
+            the reason a collection here can be small, and the reason we would rather
+            show you an empty category than a padded one.
+          </p>
+
+          <h2 className="font-serif text-3xl text-luxe-black pt-8">Working animals count</h2>
+          <p>
+            Most pet retailers treat horses and cattle as an afterthought — a stray
+            category behind three screens of dog toys. We build the other way round.
+            Stable, paddock and pasture gear sits at the same level as the dog bed and
+            the cat tree, because the people buying it are the same people, on the same
+            afternoon.
+          </p>
+
+          <h2 className="font-serif text-3xl text-luxe-black pt-8">What we stand behind</h2>
+          <p>
+            Returns and replacements within 30 days of your order date. Payments handled
+            by Stripe, so card details never touch our systems. Support answered by
+            people, Monday to Friday, 9am to 6pm Central. If something is wrong with an
+            order, we make it right without a maze.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mt-14 pt-10 border-t border-luxe-silver">
+            {[
+              { v: 'Verified', l: 'Before any listing' },
+              { v: '30-Day', l: 'Returns & replacements' },
+              { v: '1–3 days', l: 'Order processing' },
+              { v: 'Mon–Fri', l: 'Support 9am–6pm CT' },
+            ].map((stat) => (
+              <div key={stat.l}>
+                <p className="font-serif text-2xl sm:text-[1.75rem] text-luxe-black leading-none">{stat.v}</p>
+                <p className="text-[12px] text-luxe-gray mt-2 leading-snug">{stat.l}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-12">
+            <Link to="/shop" className="btn btn-primary">
+              Shop the collection <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" />
+            </Link>
+            <Link to="/contact" className="btn btn-outline">Talk to us</Link>
+          </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function PrivacyPage() {
@@ -2914,7 +2596,7 @@ function PrivacyPage() {
       <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payment Security"><p>Payments are processed securely through trusted third-party payment processors. Luxedge does not store your complete credit or debit card information on our servers.</p></LS>
       <LS t="Cookies"><p>Our website uses cookies to remember your preferences, improve website performance, analyze website traffic, and enhance your shopping experience. When you first visit our site, we ask for your consent to use advertising and analytics cookies. You may change your choice or disable cookies through your browser settings at any time, although some website features may not function properly.</p></LS>
-      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
+      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-luxe-gold underline underline-offset-2 hover:text-luxe-gold-dark">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-luxe-gold underline underline-offset-2 hover:text-luxe-gold-dark">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
       <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, and analytics services. These providers receive only the information necessary to perform their services.</li></ul></LS>
       <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
       <LS t="Your Rights"><p>Depending on your location, you may request access to, correction of, or deletion of your personal information where permitted by law, and you may opt out of marketing communications.</p></LS>
@@ -2967,65 +2649,68 @@ function ShippingPolicyPage() {
 }
 
 function FAQPage() {
-  const [open, setOpen] = useState<string | null>(null);
+  // NOTE: two answers were factually stale — payments are live through Stripe
+  // (not "demo mode"), and guest checkout means an account is optional. Both
+  // are corrected here; a storefront must never describe itself wrongly.
   const faqs = [
-    { c: 'Orders & Shipping', qs: [
-      { q: 'How long does shipping take?', a: 'Standard shipping takes 7-12 business days. Express shipping delivers in 2-4 business days. Processing takes an additional 1-3 business days before shipment.' },
-      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
-      { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
-      { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },
-      { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
+    { c: 'Orders & shipping', qs: [
+      { q: 'How long does shipping take?', a: 'Orders are processed in 1–3 business days. Standard shipping then takes 7–12 business days; express takes 2–4.' },
+      { q: 'Do you offer free shipping?', a: 'Free shipping runs as a store promotion. When it is active, the qualifying order total is shown in your cart and applied automatically at checkout — no code needed.' },
+      { q: 'How can I track my order?', a: 'You receive an email with a tracking number once the order ships. If you have an account, the same information appears under My Orders.' },
+      { q: 'Do you ship internationally?', a: 'Not yet. We currently ship within the United States, including all 50 states and APO/FPO/DPO addresses.' },
+      { q: 'Can I change my shipping address after ordering?', a: 'If the order has not shipped, email hello@luxedge.us immediately and we will do our best to update it. Once it ships, the address cannot be changed.' },
     ]},
-    { c: 'Returns & Refunds', qs: [
-      { q: 'What is your return policy?', a: 'We offer a 30-day return & replacement policy. Products must be unused, unopened, and in their original packaging. Email hello@luxedge.us within 30 days for a return authorization.' },
-      { q: 'How does the replacement process work?', a: 'Once we receive and inspect your approved return, we ship a replacement of the same product. We do not offer refunds or exchanges for different products.' },
-      { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping costs and for packaging the product safely. We recommend using a trackable shipping service.' },
-      { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
+    { c: 'Returns & replacements', qs: [
+      { q: 'What is your return policy?', a: 'Return requests are accepted within 30 days of the order date. Products must be unused, unopened and in original packaging, and returns need approval before you ship them back.' },
+      { q: 'How does the replacement process work?', a: 'Once an approved return is received and inspected, we ship a replacement of the same product. We do not offer refunds, exchanges for different products, or store credit.' },
+      { q: 'Who pays for return shipping?', a: 'Return shipping and packaging are the customer’s responsibility. We recommend a trackable service — we cannot be responsible for returns lost in transit.' },
+      { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging, and we will arrange a replacement.' },
     ]},
-    { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. Online payment processing is currently in demo mode — a real provider (Stripe/PayPal) is being integrated, and card details are never stored or transmitted until then.' },
-      { q: 'Is my payment information secure?', a: 'Online payments are currently in demo mode — no card details are stored or transmitted. When a real provider (Stripe/PayPal) is connected, transactions will be processed through a PCI-compliant provider.' },
-      { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
+    { c: 'Payment & security', qs: [
+      { q: 'What payment methods do you accept?', a: 'Checkout is handled by Stripe, which accepts Visa, Mastercard, American Express, Discover and the wallets your device supports, such as Apple Pay and Google Pay.' },
+      { q: 'Is my payment information secure?', a: 'Yes. Payment is completed on Stripe’s hosted checkout — a PCI-compliant provider. Card details are never seen, transmitted or stored by Luxedge.' },
+      { q: 'Can I cancel an order?', a: 'Orders can be cancelled within 2 hours of being placed. After that the order enters processing. Email hello@luxedge.us as soon as possible.' },
     ]},
-    { c: 'Products & Quality', qs: [
-      { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
-      { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
-      { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
+    { c: 'Products & sourcing', qs: [
+      { q: 'How do you select your products?', a: 'Every product must clear a verification pass before it is published: a real supplier, a real cost basis and a traceable delivery path. Anything that cannot be verified stays unlisted.' },
+      { q: 'Why is a category sometimes empty?', a: 'Because we would rather show an empty collection than pad it. Horse, Cattle and Stable & Farm are part of the range even while the first products are still going through sourcing.' },
+      { q: 'Do you offer warranties?', a: 'Warranty coverage varies by product and manufacturer — check the product description. Our 30-day return and replacement policy applies regardless.' },
     ]},
-    { c: 'Account & Support', qs: [
-      { q: 'Do I need an account to shop?', a: 'You need an account to place orders, track shipments, and submit reviews. Creating an account is free and takes less than a minute.' },
-      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002. Our support team is available Monday-Friday, 9 AM - 6 PM CT. We typically respond to emails within 24 hours.' },
-      { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
+    { c: 'Account & support', qs: [
+      { q: 'Do I need an account to shop?', a: 'No. You can check out as a guest. An account is optional and lets you track orders, keep your details for next time and submit product reviews.' },
+      { q: 'How do I contact customer support?', a: 'Email hello@luxedge.us or call (440) 941-8002, Monday to Friday, 9am–6pm Central. Email is typically answered within one business day.' },
+      { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the sign-in page. If you are still locked out, contact support and we will help you back in.' },
     ]},
   ];
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Frequently Asked Questions</h1><p className="text-luxe-gray text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
-      <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
+    <div className="bg-white">
+      <section className="page-head">
+        <div className="shell py-14 sm:py-20">
+          <p className="eyebrow mb-4">Support</p>
+          <h1 className="page-head-title">Frequently asked questions</h1>
+          <p className="section-intro mt-5">Straight answers on shipping, returns, payment and sourcing.</p>
+        </div>
+      </section>
+
+      <div className="shell py-14"><div className="measure space-y-14">
         {faqs.map(section => (
-          <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight strokeWidth={1.5} size={16} className="text-luxe-gold" />{section.c}</h2>
-            <div className="space-y-2">
-              {section.qs.map(faq => {
-                const key = faq.q;
-                const isOpen = open === key;
-                return (
-                  <div key={key} className="bg-white rounded-xl border overflow-hidden">
-                    <button onClick={() => setOpen(isOpen ? null : key)} className="w-full flex items-center justify-between px-5 py-4 text-left">
-                      <span className="text-sm font-medium text-gray-900 pr-4">{faq.q}</span>
-                      <ChevronDown strokeWidth={1.5} size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isOpen && <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t pt-3">{faq.a}</div>}
-                  </div>
-                );
-              })}
+          <section key={section.c}>
+            <p className="eyebrow mb-5">{section.c}</p>
+            <div>
+              {section.qs.map(faq => (
+                <Accordion key={faq.q} title={faq.q} plain>{faq.a}</Accordion>
+              ))}
             </div>
-          </div>
+          </section>
         ))}
-        <div className="text-center pt-6">
-          <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
-          <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail01 strokeWidth={1.5} size={16} />Contact Support</Link>
+
+        <div className="pt-4">
+          <p className="section-intro mb-5">Still have a question? We answer within one business day.</p>
+          <Link to="/contact" className="btn btn-primary">
+            <Mail01 strokeWidth={1.5} size={15} aria-hidden="true" /> Contact support
+          </Link>
+        </div>
         </div>
       </div>
     </div>
@@ -3037,10 +2722,13 @@ function ContactPage() {
   const { notify } = useApp();
   return (
     <div>
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Contact Us</h1>
-        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question, concern, or just want to say hello? We'd love to hear from you. Our team typically responds within 24 hours.</p>
-      </div></section>
+      <section className="page-head">
+        <div className="shell py-14 sm:py-20">
+          <p className="eyebrow mb-4">Get in touch</p>
+          <h1 className="page-head-title">Contact us</h1>
+          <p className="section-intro mt-5">Questions about an order, a product or sourcing — we answer within one business day.</p>
+        </div>
+      </section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {[
@@ -3066,17 +2754,17 @@ function ContactPage() {
               <p className="text-sm text-gray-500">Thank you for reaching out. We'll get back to you within 24 hours.</p>
             </div>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-2xl border p-6 sm:p-8 space-y-5">
+            <form onSubmit={e => { e.preventDefault(); setOk(true); notify('Message sent!'); }} className="bg-white rounded-[10px] border border-luxe-silver p-6 sm:p-8 space-y-5">
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Send01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Send Us a Message</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
-                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Name *</label><input required placeholder="Your full name" className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black" /></div>
+                <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Email *</label><input required type="email" placeholder="you@example.com" className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black" /></div>
               </div>
               <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Subject *</label>
-                <select required className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
+                <select required className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black"><option value="">Select a topic</option><option>Order Question</option><option>Shipping & Tracking</option><option>Returns & Refunds</option><option>Product Inquiry</option><option>Technical Support</option><option>Other</option></select>
               </div>
-              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
-              <button type="submit" className="w-full py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 text-sm transition-colors shadow-gold"><Send01 strokeWidth={1.5} size={16} />Send Message</button>
+              <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Message *</label><textarea required placeholder="Tell us how we can help..." rows={5} className="w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-gold resize-none" /></div>
+              <button type="submit" className="btn btn-primary w-full"><Send01 strokeWidth={1.5} size={16} />Send Message</button>
             </form>
           )}
         </div>
@@ -3090,12 +2778,15 @@ function ContactPage() {
 function CareersPage() {
   return (
     <div className="bg-gray-50 min-h-screen">
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
-        <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Careers at Luxedge</h1>
-        <p className="text-gray-500 text-sm max-w-lg mx-auto">Join our growing team and help shape the future of curated ecommerce.</p>
-      </div></section>
+      <section className="page-head">
+        <div className="shell py-14 sm:py-20">
+          <p className="eyebrow mb-4">Careers</p>
+          <h1 className="page-head-title">Work at Luxedge</h1>
+          <p className="section-intro mt-5">A small team building a store that has to earn every listing.</p>
+        </div>
+      </section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
-        <div className="bg-white rounded-2xl border p-6 sm:p-10">
+        <div className="bg-white rounded-[10px] border border-luxe-silver p-6 sm:p-10">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Why Work at Luxedge?</h2>
           <p className="text-gray-600 leading-relaxed mb-4">At Luxedge, we're building more than an online store — we're creating a trusted destination for people who value quality. Based in Irving, Texas, our small but passionate team is obsessed with finding the best products in the world and delivering an exceptional shopping experience.</p>
           <p className="text-gray-600 leading-relaxed mb-6">We value curiosity, ownership, and a genuine desire to make customers happy. If you thrive in a fast-paced environment and want to grow alongside a brand that's just getting started, we'd love to hear from you.</p>
@@ -3139,7 +2830,7 @@ function CareersPage() {
 
           <h2 className="text-xl font-bold text-gray-900 mb-3">How to Apply</h2>
           <p className="text-gray-600 leading-relaxed mb-4">Send your resume and a brief note about why you'd be a great fit to <strong>careers@luxedge.us</strong>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>
-          <Link to="/contact" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors">
+          <Link to="/contact" className="btn btn-primary">
             <Mail01 strokeWidth={1.5} size={16} /> Get in Touch
           </Link>
         </div>
@@ -3158,19 +2849,19 @@ function BlogListPage() {
 
   return (
     <div>
-      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-2">Luxedge Blog</p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Insights & Inspiration</h1>
-          <p className="text-gray-500 text-sm max-w-lg mx-auto">Tips, guides, and stories from the world of pet care.</p>
+      <section className="page-head">
+        <div className="shell py-14 sm:py-20">
+          <p className="eyebrow mb-4">The journal</p>
+          <h1 className="page-head-title">Field notes</h1>
+          <p className="section-intro mt-5">Practical guidance on feeding, bedding, grooming and turnout — written by the people who choose the products.</p>
         </div>
       </section>
 
-      <section className="py-10 bg-gray-50">
-        <div className="max-w-6xl mx-auto px-4">
+      <section className="section-tight bg-white">
+        <div className="shell">
           {user && (
             <div className="flex justify-end mb-6">
-              <Link to="/blog/write" className="px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg flex items-center gap-2 text-sm">
+              <Link to="/blog/write" className="btn btn-primary btn-sm">
                 <PencilLine strokeWidth={1.5} size={16} /> Write a Post
               </Link>
             </div>
@@ -3179,7 +2870,7 @@ function BlogListPage() {
           {published.length > 0 ? (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {published.map(post => (
-                <Link key={post.id} to={`/blog/${post.slug}`} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                <Link key={post.id} to={`/blog/${post.slug}`} className="group block card-lift bg-white rounded-[10px] border border-luxe-silver overflow-hidden">
                   <div className="aspect-[16/10] overflow-hidden">
                     <img src={post.image} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                   </div>
@@ -3189,20 +2880,20 @@ function BlogListPage() {
                       <span className="text-gray-200">·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
-                    <h2 className="font-bold text-gray-900 mb-2 group-hover:text-luxe-gold transition-colors leading-tight">{post.title}</h2>
+                    <h2 className="font-sans text-base font-semibold text-luxe-black mb-2 group-hover:text-luxe-gold-dark transition-colors leading-snug">{post.title}</h2>
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">{post.excerpt}</p>
                     <div className="flex items-center justify-between">
-                      <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">#{t}</span>)}</div>
-                      <span className="text-luxe-gold text-sm font-semibold group-hover:underline flex items-center gap-1">Read More <ArrowRight strokeWidth={1.5} size={14} /></span>
+                      <div className="flex gap-1.5">{post.tags.slice(0, 3).map(t => <span key={t} className="px-2 py-0.5 bg-luxe-cream text-luxe-gray rounded-full text-[10px] font-medium">#{t}</span>)}</div>
+                      <span className="link-arrow text-luxe-gold">Read <ArrowRight strokeWidth={1.5} size={14} /></span>
                     </div>
                   </div>
                 </Link>
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-white rounded-xl border">
+            <div className="empty-state border border-luxe-silver rounded-[10px]">
               <BookOpen01 strokeWidth={1.5} size={48} className="mx-auto text-gray-200 mb-4" />
-              <p className="text-lg font-semibold text-gray-700 mb-2">No posts yet</p>
+              <p className="font-serif text-2xl text-luxe-black mb-2">No posts yet</p>
               <p className="text-sm text-gray-500">Check back soon for new content!</p>
             </div>
           )}
@@ -3365,7 +3056,7 @@ function BlogWritePage() {
     nav('/blog');
   };
 
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20';
+  const I = 'w-full px-4 py-3 border border-luxe-silver rounded-[6px] text-sm focus:outline-none focus:border-luxe-black focus:ring-2 focus:ring-luxe-black/10';
 
   return (
     <div className="py-10 bg-gray-50 min-h-screen">
@@ -3375,7 +3066,7 @@ function BlogWritePage() {
 
         <form onSubmit={submit} className="space-y-6">
           {/* Cover Image */}
-          <div className="bg-white rounded-2xl border p-6">
+          <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Cover Image *</label>
             {cover ? (
               <div className="relative rounded-xl overflow-hidden mb-3 aspect-[16/9]">
@@ -3393,26 +3084,26 @@ function BlogWritePage() {
           </div>
 
           {/* Title & Excerpt */}
-          <div className="bg-white rounded-2xl border p-6 space-y-4">
+          <div className="bg-white rounded-[10px] border border-luxe-silver p-6 space-y-4">
             <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Title *</label><input value={title} onChange={e => setTitle(e.target.value)} className={I} placeholder="Your blog post title" required /></div>
             <div><label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Excerpt</label><input value={excerpt} onChange={e => setExcerpt(e.target.value)} className={I} placeholder="Short preview text (optional)" maxLength={200} /></div>
           </div>
 
           {/* Content */}
-          <div className="bg-white rounded-2xl border p-6">
+          <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Content * <span className="normal-case text-gray-400 font-normal">Use ## for headings</span></label>
             <textarea value={content} onChange={e => setContent(e.target.value)} className={I + ' resize-none'} rows={12} placeholder="Write your article here...&#10;&#10;## Section Heading&#10;Your paragraph text..." required />
           </div>
 
           {/* Inline Images */}
-          <div className="bg-white rounded-2xl border p-6">
+          <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
             {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
             {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload01 strokeWidth={1.5} size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
-          <div className="bg-white rounded-2xl border p-6">
+          <div className="bg-white rounded-[10px] border border-luxe-silver p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
             <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag01 strokeWidth={1.5} size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
@@ -3421,8 +3112,8 @@ function BlogWritePage() {
           {user?.role !== 'admin' && <div className="p-4 bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl text-sm text-luxe-gold-dark flex items-center gap-2"><Eye strokeWidth={1.5} size={16} />Your post will be reviewed by admin before publishing.</div>}
 
           <div className="flex gap-3">
-            <button type="submit" className="flex-1 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2"><Send01 strokeWidth={1.5} size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
-            <button type="button" onClick={() => nav('/blog')} className="px-6 py-3.5 border rounded-xl text-sm font-medium hover:bg-gray-50">Cancel</button>
+            <button type="submit" className="btn btn-primary flex-1"><Send01 strokeWidth={1.5} size={16} />{user?.role === 'admin' ? 'Publish Now' : 'Submit for Review'}</button>
+            <button type="button" onClick={() => nav('/blog')} className="btn btn-outline">Cancel</button>
           </div>
         </form>
       </div>

@@ -48,8 +48,18 @@ function commerceReady(p) {
 
 const visible = (Array.isArray(prods) ? prods : []).filter((p) => (p.status === 'active' || p.status === 'published') && commerceReady(p));
 
-const urls = ['/', '/shop', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
-for (const c of cats) urls.push(`/category/${c.slug}`);
+// Storefront taxonomy collections (src/features/catalog/taxonomy.ts). These
+// are real, crawlable destinations even before a collection has stock, so they
+// belong in the sitemap alongside the DB category slugs.
+const COLLECTION_SLUGS = [
+  'horse', 'cattle', 'dog', 'cat',
+  'feeding-water', 'comfort-rest', 'grooming-care',
+  'travel-outdoor', 'stable-farm', 'play-enrichment', 'accessories',
+];
+
+const urls = ['/', '/shop', '/about', '/contact', '/blog', '/careers', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
+for (const slug of COLLECTION_SLUGS) urls.push(`/category/${slug}`);
+for (const c of cats) if (!COLLECTION_SLUGS.includes(c.slug)) urls.push(`/category/${c.slug}`);
 for (const p of visible) urls.push(`/product/${p.id}`);
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
