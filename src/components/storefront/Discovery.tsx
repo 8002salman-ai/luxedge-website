@@ -6,8 +6,12 @@
 // Both modules read from the taxonomy and the live catalog, so they stay
 // honest: a collection with stock shows its real count and a real product
 // photograph; a collection that is still being sourced shows an "Arriving
-// soon" marker and a typographic plate. Horse and Cattle lead the animal rail
-// by design — they are part of the brand, not a footnote.
+// soon" marker and a designed ink plate.
+//
+// The animal module surfaces the PRIMARY animals only — Horse and Cattle.
+// Legacy Dog/Cat collections still resolve at their URLs and their products
+// remain reachable through Shop All, search, tags and the need-based
+// collections; they are simply not promoted in navigation.
 // ============================================================================
 
 import { Link } from 'react-router-dom';
@@ -15,20 +19,35 @@ import { ArrowRight } from '@untitledui/icons';
 import { onDarkImageError, firstUsableImage, type Product } from './context';
 import { Reveal, Stagger, staggerStyle } from './motion';
 import {
-  ANIMAL_COLLECTIONS, NEED_COLLECTIONS, matchesCollection, countIn, type Collection,
+  PRIMARY_ANIMAL_COLLECTIONS, NEED_COLLECTIONS, matchesCollection, countIn, type Collection,
 } from '../../features/catalog/taxonomy';
 
-/** Best real photograph for a collection, else its editorial image, else none. */
+/**
+ * Image for a collection, in the order the brand requires:
+ *   1. a real photograph from a product actually in that collection
+ *   2. an approved repo-local editorial asset (`collection.image`)
+ *   3. nothing — the card falls back to its designed ink plate
+ *
+ * There is deliberately no fourth option. Hotlinking a third-party stock photo
+ * would make a host we do not control a permanent dependency of the storefront,
+ * and would put imagery on the page that is not Luxedge's.
+ */
 function imageFor(collection: Collection, products: Product[]): string | undefined {
   const match = products.find((p) => matchesCollection(p, collection) && firstUsableImage(p));
   return (match && firstUsableImage(match)) || collection.image;
 }
 
-/** Shop-by-animal rail — the primary entry point into the catalog. */
-export function AnimalRail({ products }: { products: Product[] }) {
+/**
+ * Shop-by-animal module — the primary entry point into the catalog.
+ *
+ * Two panels rather than a four-card rail, because there are two primary
+ * animals. A scroll rail sized for four would leave two cards adrift in empty
+ * track; a deliberate two-up spread reads as a decision.
+ */
+export function AnimalPanels({ products }: { products: Product[] }) {
   return (
-    <div className="animal-rail" role="list">
-      {ANIMAL_COLLECTIONS.map((c, i) => {
+    <div className="animal-panels" role="list">
+      {PRIMARY_ANIMAL_COLLECTIONS.map((c, i) => {
         const image = imageFor(c, products);
         const count = countIn(products, c);
         return (
@@ -36,7 +55,7 @@ export function AnimalRail({ products }: { products: Product[] }) {
             key={c.slug}
             to={`/category/${c.slug}`}
             role="listitem"
-            className={`animal-card${image ? '' : ' tile-blank'}`}
+            className="animal-card"
             style={staggerStyle(i)}
           >
             {image && (

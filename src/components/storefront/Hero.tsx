@@ -9,9 +9,10 @@
 //     animation frame, so the whole sequence costs zero React renders.
 //   • The headline unmasks line by line on load; the lede, actions and meta
 //     follow on a fixed cadence.
-//   • A branded ink plate is painted *underneath* the photograph. If the image
-//     is slow or fails outright, the hero is still a designed composition —
-//     never a hole in the page.
+//   • The stage is a branded ink plate by default — no third-party image host
+//     is on the critical path. Owned photography drops in by setting
+//     HERO_IMAGE to a repo-local asset; the plate stays painted underneath, so
+//     a slow or failed image still leaves a designed composition.
 //   • Mobile gets its own geometry (shorter track, reduced amplitude, no
 //     floating card), and `prefers-reduced-motion` collapses the whole thing
 //     to a normal, static block via CSS.
@@ -25,11 +26,16 @@ import {
 import { useScrollProgressVar, usePrefersReducedMotion, staggerStyle } from './motion';
 
 /**
- * Editorial hero photograph. Kept as a single named constant so it can be
- * swapped for owned brand photography without touching layout code.
+ * Optional hero photograph. MUST be a repo-local path (e.g. '/hero/stable.jpg')
+ * — never a third-party hotlink. A remote host we do not control has no
+ * business sitting on the LCP path of the homepage, and stock imagery is not
+ * Luxedge's brand.
+ *
+ * `null` renders the designed ink plate alone, which is the intended launch
+ * state until owned photography exists. Set this constant to add it; no other
+ * code changes.
  */
-const HERO_IMAGE =
-  'https://images.pexels.com/photos/635499/pexels-photo-635499.jpeg?auto=compress&cs=tinysrgb&w=1920';
+const HERO_IMAGE: string | null = null;
 
 const TITLE_LINES = ['Built for the', 'animals that', 'earn their keep.'];
 
@@ -50,19 +56,21 @@ export default function Hero({ featured, shippingNote }: HeroProps) {
           {/* Ink plate — always painted, so the hero can never be empty. */}
           <div className="hero-plate" aria-hidden="true" />
 
-          <div className="hero-media" aria-hidden="true">
-            <img
-              src={HERO_IMAGE}
-              alt=""
-              fetchPriority="high"
-              decoding="async"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          </div>
+          {HERO_IMAGE && (
+            <div className="hero-media" aria-hidden="true">
+              <img
+                src={HERO_IMAGE}
+                alt=""
+                fetchPriority="high"
+                decoding="async"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            </div>
+          )}
           <div className="hero-scrim" aria-hidden="true" />
 
           <div className="shell hero-content">
-            <p className="eyebrow text-luxe-gold-light">Horse · Cattle · Dog · Cat</p>
+            <p className="eyebrow text-luxe-gold-light">Horse · Cattle · Stable · Pasture</p>
 
             <h1 className="hero-title">
               {TITLE_LINES.map((line, i) => (

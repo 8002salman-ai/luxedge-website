@@ -29,7 +29,7 @@ import Header from './components/storefront/Header';
 import Footer from './components/storefront/Footer';
 import Hero from './components/storefront/Hero';
 import ProductCard, { ProductRail } from './components/storefront/ProductCard';
-import { AnimalRail, CollectionGrid, SectionHead } from './components/storefront/Discovery';
+import { AnimalPanels, CollectionGrid, SectionHead } from './components/storefront/Discovery';
 import { Reveal, Stagger, staggerStyle, useEscape, useScrollLock } from './components/storefront/motion';
 import {
   AppCtx, useApp, LUXEDGE_IMAGE_FALLBACK, onImageError, firstUsableImage, toSlug, money,
@@ -38,8 +38,9 @@ import {
   type Review, type AdminCategory, type BlogPost, type Ctx,
 } from './components/storefront/context';
 import {
-  COLLECTIONS, ANIMAL_COLLECTIONS, NEED_COLLECTIONS, resolveCollection,
+  NAV_COLLECTIONS, PRIMARY_ANIMAL_COLLECTIONS, NEED_COLLECTIONS, resolveCollection,
   collectionForCategoryName, filterByCollection, countIn, matchesCollection,
+  primaryCollectionFor, isLegacyCollection,
   type Collection,
 } from './features/catalog/taxonomy';
 
@@ -478,7 +479,7 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
-    if (segs.length === 0) { full("Luxedge — Premium Animal Essentials for Horse, Cattle, Dog & Cat"); desc("Considered essentials for horses, cattle, dogs and cats — feeding, stable, comfort, grooming and travel gear, verified before it is listed."); }
+    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Horse, Cattle & Everyday Animal Care"); desc("Premium pet essentials from Luxedge — horse and cattle gear, feeding, stable, comfort, grooming and travel, verified before it is listed."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection — feeding, stable, comfort, grooming, travel and play."); }
     else if (segs[0] === "category") {
       const slug = decodeURIComponent(segs[1] || "");
@@ -765,7 +766,10 @@ function ProductDetailPage() {
     setShowRevForm(false);
   };
 
-  const collection = COLLECTIONS.find((c) => matchesCollection(product, c));
+  // Prefer a navigable collection so a breadcrumb never points the customer at
+  // a collection the navigation hides; falls back to a legacy one only when
+  // nothing else matches, so legacy Dog/Cat products still get a real crumb.
+  const collection = primaryCollectionFor(product);
   const relatedPool = products.filter(p => p.isActive && p.id !== product.id);
   const related = (collection ? relatedPool.filter(p => matchesCollection(p, collection)) : [])
     .concat(relatedPool)
@@ -1133,10 +1137,11 @@ function HomePage() {
   const heroProduct = topPicks.find(firstUsableImage) || presentable[0] || live.find(firstUsableImage);
   const storyProduct = presentable.find((p) => p.id !== heroProduct?.id) || heroProduct;
 
-  // Rails are only built for collections that actually have stock, so the page
-  // never renders an empty "Shop Horse" row to fill space.
+  // Rails are only built for NAVIGABLE collections that actually have stock, so
+  // the homepage never renders an empty row to fill space — and never
+  // merchandises a legacy collection the navigation deliberately hides.
   const collectionRails = useMemo(() => {
-    return COLLECTIONS
+    return NAV_COLLECTIONS
       .map((c) => ({ collection: c, items: live.filter((p) => matchesCollection(p, c)) }))
       .filter((row) => row.items.length >= 2)
       .sort((a, b) => b.items.length - a.items.length)
@@ -1156,13 +1161,13 @@ function HomePage() {
         <div className="shell">
           <SectionHead
             eyebrow="Shop by animal"
-            title="Four animals. One standard."
-            intro="Working stock and household companions are held to exactly the same bar — durability, fit and honest sourcing."
+            title="Horse and cattle, first."
+            intro="Gear that has to survive a stall, a paddock and a winter — held to the same sourcing bar as everything else we list."
             to="/shop"
             linkLabel="All products"
           />
           <Reveal variant="fade">
-            <AnimalRail products={live} />
+            <AnimalPanels products={live} />
           </Reveal>
         </div>
       </section>
@@ -1436,7 +1441,7 @@ function ShopPage() {
     <>
       <div className="filter-group">
         <p className="filter-title">Shop by animal</p>
-        {ANIMAL_COLLECTIONS.map((c) => (
+        {PRIMARY_ANIMAL_COLLECTIONS.map((c) => (
           <button
             key={c.slug}
             type="button"
@@ -1543,11 +1548,17 @@ function ShopPage() {
       <div className="border-b border-luxe-silver bg-white">
         <div className="shell flex gap-2 overflow-x-auto py-3 scrollbar-hide">
           <Link to="/shop" className="chip" data-active={!collection || undefined}>All</Link>
-          {COLLECTIONS.map((c) => (
+          {NAV_COLLECTIONS.map((c) => (
             <Link key={c.slug} to={`/category/${c.slug}`} className="chip" data-active={collection?.slug === c.slug || undefined}>
               {c.label}
             </Link>
           ))}
+          {/* A legacy collection is never advertised, but when the customer is
+              standing in one (an old link, a bookmark, a search result) it gets
+              a chip so the active state is honest rather than looking broken. */}
+          {isLegacyCollection(collection) && collection && (
+            <span className="chip" data-active>{collection.label}</span>
+          )}
         </div>
       </div>
 
@@ -2235,7 +2246,7 @@ function LoginPage() {
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
@@ -2355,7 +2366,7 @@ function SignupPage() {
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
+            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
@@ -2872,7 +2883,7 @@ function BlogListPage() {
               {published.map(post => (
                 <Link key={post.id} to={`/blog/${post.slug}`} className="group block card-lift bg-white rounded-[10px] border border-luxe-silver overflow-hidden">
                   <div className="aspect-[16/10] overflow-hidden">
-                    <img src={post.image} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <img src={post.image} alt={post.title} onError={onImageError} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
@@ -2935,7 +2946,7 @@ function BlogDetailPage() {
     <div>
       {/* Hero Image */}
       <div className="relative h-64 sm:h-80 lg:h-96 bg-luxe-light">
-        <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
+        <img src={post.image} alt={post.title} onError={onImageError} fetchPriority="high" decoding="async" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/70 via-transparent to-transparent" />
       </div>
 
@@ -2975,7 +2986,7 @@ function BlogDetailPage() {
           {/* Inline images */}
           {post.images.length > 0 && (
             <div className="grid grid-cols-2 gap-4 mt-8">
-              {post.images.map((img, i) => <img key={i} src={img} alt="" className="rounded-xl w-full object-cover" />)}
+              {post.images.map((img, i) => <img key={i} src={img} alt="" onError={onImageError} loading="lazy" decoding="async" className="rounded-xl w-full object-cover" />)}
             </div>
           )}
 
@@ -2989,7 +3000,7 @@ function BlogDetailPage() {
               <div className="grid sm:grid-cols-3 gap-4">
                 {relatedPosts.map(r => (
                   <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-luxe-gold-soft transition-colors">
-                    <img src={r.image} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                    <img src={r.image} alt="" onError={onImageError} loading="lazy" decoding="async" className="w-16 h-16 rounded-lg object-cover shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-gray-900 group-hover:text-luxe-gold line-clamp-2 leading-tight">{r.title}</p>
                       <p className="text-[10px] text-gray-400 mt-1">{new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>

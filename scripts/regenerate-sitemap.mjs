@@ -48,13 +48,20 @@ function commerceReady(p) {
 
 const visible = (Array.isArray(prods) ? prods : []).filter((p) => (p.status === 'active' || p.status === 'published') && commerceReady(p));
 
-// Storefront taxonomy collections (src/features/catalog/taxonomy.ts). These
-// are real, crawlable destinations even before a collection has stock, so they
-// belong in the sitemap alongside the DB category slugs.
+// Storefront taxonomy collections — must stay in sync with
+// sitemapCollectionSlugs() in src/features/catalog/taxonomy.ts (asserted by
+// src/features/catalog/__tests__/taxonomy.test.ts).
+//
+// These are the PRIMARY collections plus the legacy aliases that were already
+// indexed. `/category/dog` and `/category/cat` are deliberately absent: they
+// still resolve for backwards compatibility, but they are not part of the
+// primary taxonomy and there is no reason to newly promote them to crawlers.
 const COLLECTION_SLUGS = [
-  'horse', 'cattle', 'dog', 'cat',
+  'horse', 'cattle',
   'feeding-water', 'comfort-rest', 'grooming-care',
   'travel-outdoor', 'stable-farm', 'play-enrichment', 'accessories',
+  // Already-indexed legacy aliases — kept so existing rankings are not dropped.
+  'dog-supplies', 'cat-supplies',
 ];
 
 const urls = ['/', '/shop', '/about', '/contact', '/blog', '/careers', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];

@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Mail01, Phone, MarkerPin01, CheckCircle } from '@untitledui/icons';
-import { ANIMAL_COLLECTIONS, NEED_COLLECTIONS } from '../../features/catalog/taxonomy';
+import { PRIMARY_ANIMAL_COLLECTIONS, NEED_COLLECTIONS } from '../../features/catalog/taxonomy';
 
 const HELP = [
   { to: '/contact', label: 'Contact' },
@@ -49,9 +49,10 @@ export default function Footer() {
     setDone(true);
   };
 
-  // Shown once, in the shop column: animals first, then the need-based
-  // collections. Trimmed so the column stays a column, not a directory.
-  const shopLinks = [...ANIMAL_COLLECTIONS, ...NEED_COLLECTIONS].slice(0, 8);
+  // Shown once, in the shop column: the navigable animals (Horse, Cattle)
+  // first, then the need-based collections. Legacy Dog/Cat collections resolve
+  // but are not linked from navigation.
+  const shopLinks = [...PRIMARY_ANIMAL_COLLECTIONS, ...NEED_COLLECTIONS];
 
   return (
     <footer className="footer">

@@ -21,8 +21,8 @@ import {
 import { useApp, onImageError, firstUsableImage, LUXEDGE_IMAGE_FALLBACK, type Product } from './context';
 import { useHeaderScroll, useScrollLock, useEscape, staggerStyle } from './motion';
 import {
-  ANIMAL_COLLECTIONS, NEED_COLLECTIONS, MEGA_COLUMNS, COLLECTIONS, countIn,
-  type Collection,
+  PRIMARY_ANIMAL_COLLECTIONS, NEED_COLLECTIONS, MEGA_COLUMNS, NAV_COLLECTIONS,
+  COLLECTIONS, countIn, type Collection,
 } from '../../features/catalog/taxonomy';
 import { trackEvent, utmParams } from '../../lib/marketing';
 
@@ -154,7 +154,7 @@ export default function Header() {
             <img src="/luxedge-mark.svg" alt="" aria-hidden="true" className="h-8 w-8" />
             <span className="leading-none">
               <span className="wordmark-text">LUXEDGE</span>
-              <span className="wordmark-sub hidden sm:block">PREMIUM ANIMAL ESSENTIALS</span>
+              <span className="wordmark-sub hidden sm:block">PREMIUM PET ESSENTIALS</span>
             </span>
           </Link>
 
@@ -304,7 +304,7 @@ export default function Header() {
 
             <p className="mega-col-title">Shop by animal</p>
             <nav aria-label="Animals">
-              {ANIMAL_COLLECTIONS.map((c, i) => (
+              {PRIMARY_ANIMAL_COLLECTIONS.map((c, i) => (
                 <Link key={c.slug} to={`/category/${c.slug}`} className="sheet-link" style={staggerStyle(i)}>
                   {c.label}
                   <ArrowRight strokeWidth={1.5} size={17} aria-hidden="true" />
@@ -315,7 +315,7 @@ export default function Header() {
             <p className="mega-col-title mt-8">Collections</p>
             <nav aria-label="Collections">
               {NEED_COLLECTIONS.map((c, i) => (
-                <Link key={c.slug} to={`/category/${c.slug}`} className="sheet-link" style={staggerStyle(i + ANIMAL_COLLECTIONS.length)}>
+                <Link key={c.slug} to={`/category/${c.slug}`} className="sheet-link" style={staggerStyle(i + PRIMARY_ANIMAL_COLLECTIONS.length)}>
                   {c.label}
                   <ArrowRight strokeWidth={1.5} size={17} aria-hidden="true" />
                 </Link>
@@ -409,7 +409,7 @@ function SearchOverlay({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
 
         <p className="mega-col-title mt-6 border-0 pb-0">Jump to</p>
         <div className="flex flex-wrap gap-2 mt-3">
-          {COLLECTIONS.map((c) => (
+          {NAV_COLLECTIONS.map((c) => (
             <Link key={c.slug} to={`/category/${c.slug}`} className="search-chip" onClick={onClose}>
               {c.label}
             </Link>
