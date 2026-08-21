@@ -27,6 +27,7 @@ import salmanOsHandler from '../api/salman-os';
 import cjHandler from '../api/suppliers/cj';
 import hermesIngestHandler from '../api/hermes/ingest';
 import googleAdsHandler from '../api/market-demand/google-ads';
+import omnisendStatusHandler from '../api/omnisend/status';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -56,6 +57,7 @@ const ROUTES: Route[] = [
   { path: '/api/suppliers/cj', handler: cjHandler },
   { path: '/api/hermes/ingest', handler: hermesIngestHandler },
   { path: '/api/market-demand/google-ads', handler: googleAdsHandler },
+  { path: '/api/omnisend/status', handler: omnisendStatusHandler },
 ];
 
 /**

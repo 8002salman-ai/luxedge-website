@@ -108,6 +108,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Engine ⭐' },
     { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
     { to: '/admin/marketing-traffic', icon: TrendUp, label: 'Marketing & Traffic' },
+    { to: '/admin/email-marketing', icon: PaperPlaneRight, label: 'Email Marketing ⭐' },
     { to: '/admin/variant-gen', icon: Stack, label: 'Variant Gen ⭐' },
     { to: '/admin/ai', icon: Robot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Robot, label: 'AI Import ⭐' },
@@ -4623,6 +4624,108 @@ function AAIImport() {
 // ============================================================================
 // ADMIN — MARKETING & TRAFFIC
 // ============================================================================
+function AEmailMarketing() {
+  const { notify } = useApp();
+  const [status, setStatus] = useState<{ configured: boolean; connected: boolean; message?: string; audience?: number; platform?: string } | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const check = async () => {
+    setChecking(true);
+    try {
+      const token = getAccessToken();
+      const r = await fetch('/api/omnisend/status', { headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json().catch(() => null);
+      setStatus(j);
+      if (!j?.connected) notify(j?.message || 'Omnisend connection failed', 'error');
+      else notify(j.message || 'Connected', 'success');
+    } catch (e) {
+      notify(`Could not check Omnisend: ${(e as Error).message}`, 'error');
+    } finally {
+      setChecking(false);
+    }
+  };
+  useEffect(() => { void check(); }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><PaperPlaneRight className="text-green-600" size={24} /> Email Marketing</h1>
+          <p className="text-sm text-gray-500">Omnisend-powered email, SMS & automation for Luxedge.</p>
+        </div>
+        <button onClick={check} disabled={checking} className="btn-glow px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-2">
+          <ArrowClockwise size={15} />{checking ? 'Checking…' : 'Check Connection'}
+        </button>
+      </div>
+
+      {/* Connection status */}
+      <div className={`rounded-xl border p-5 ${status?.connected ? 'bg-green-50 border-green-200' : status?.configured ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`w-2.5 h-2.5 rounded-full ${status?.connected ? 'bg-green-500' : status?.configured ? 'bg-amber-500' : 'bg-gray-400'}`} />
+          <p className="font-semibold text-gray-800">
+            {status?.connected ? 'Omnisend Connected' : status?.configured ? 'Key configured — connection pending' : 'Omnisend not configured'}
+          </p>
+        </div>
+        <p className="text-sm text-gray-600">{status?.message || 'Checking server configuration…'}</p>
+        {status?.audience !== undefined && (
+          <p className="text-sm mt-2 font-medium text-green-800">Contact list: <span className="font-bold">{status.audience.toLocaleString()}</span> contacts</p>
+        )}
+      </div>
+
+      {/* Setup card */}
+      <div className="bg-white rounded-xl border p-5">
+        <h2 className="font-bold text-gray-900 mb-1">1 · Connect Omnisend</h2>
+        <p className="text-sm text-gray-500 mb-3">The API key is stored server-side only — it never reaches the browser.</p>
+        <ol className="text-sm text-gray-600 space-y-1.5 list-decimal list-inside">
+          <li>Open <a className="text-green-700 font-medium underline" href="https://app.omnisend.com" target="_blank" rel="noreferrer">app.omnisend.com</a> → Settings → <span className="font-medium">API keys</span>.</li>
+          <li>Create a key with read access to Contacts.</li>
+          <li>Add it as <code className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">OMNISEND_API_KEY</code> in your hosting env:</li>
+        </ol>
+        <div className="mt-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono">
+          Cloudflare → luxedge-production → Settings → Variables &amp; Secrets → add <span className="text-green-700 font-semibold">OMNISEND_API_KEY</span> → redeploy
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid sm:grid-cols-3 gap-4">
+        {[
+          { t: 'Open Omnisend', d: 'Campaigns, forms & automation dashboard', h: 'https://app.omnisend.com', c: 'bg-green-600 hover:bg-green-700' },
+          { t: 'New Campaign', d: 'Create an email blast for your list', h: 'https://app.omnisend.com/campaigns', c: 'bg-blue-600 hover:bg-blue-700' },
+          { t: 'Automations', d: 'Welcome, abandoned-cart & win-back flows', h: 'https://app.omnisend.com/automations', c: 'bg-purple-600 hover:bg-purple-700' },
+        ].map((c) => (
+          <a key={c.t} href={c.h} target="_blank" rel="noreferrer" className={`btn-glow ${c.c} text-white rounded-xl p-5 shadow-sm`}>
+            <p className="font-bold">{c.t}</p>
+            <p className="text-xs text-white/80 mt-1">{c.d}</p>
+          </a>
+        ))}
+      </div>
+
+      {/* Playbook */}
+      <div className="bg-white rounded-xl border p-5">
+        <h2 className="font-bold text-gray-900 mb-3">Luxedge Email Playbook</h2>
+        <div className="grid sm:grid-cols-2 gap-4 text-sm">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="font-semibold text-gray-800 mb-1">Welcome Series</p>
+            <p className="text-gray-500">Email 1: welcome + 10% code. Email 2: bestsellers. Email 3: care guide for their pet.</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="font-semibold text-gray-800 mb-1">Abandoned Cart</p>
+            <p className="text-gray-500">Wait 1h, then send: “Your pet’s picks are waiting” + product photo + free-shipping nudge.</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="font-semibold text-gray-800 mb-1">Win-back</p>
+            <p className="text-gray-500">30 days inactive: “We miss you (and so does Fido)” + new arrivals.</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="font-semibold text-gray-800 mb-1">Post-purchase</p>
+            <p className="text-gray-500">Order shipped + review request after 10 days. Never spam — real pet owners only.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AMarketingTraffic() {
   const { notify } = useApp();
   const [globalCfg, setGlobalCfg] = useState<MarketingConfig | null>(null);
@@ -5023,6 +5126,7 @@ export default function AdminSection() {
       <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
+      <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
     </AdminErrorBoundary>
