@@ -744,7 +744,7 @@ export default function ProductScout() {
 
   return (
     <div className="space-y-6">
-      <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 text-xs ${aiActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-4 py-2.5 text-xs ${aiActive ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
         <span className={`font-bold ${aiActive ? 'text-green-700' : 'text-amber-700'}`}>AI Services: {aiActive ? 'ON' : 'OFF'}</span>
         <span className="text-gray-500">·</span>
         <span className="font-semibold text-gray-700">Control Mode: {aiControl.controlMode}</span>
@@ -760,24 +760,24 @@ export default function ProductScout() {
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
+        <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
           <Target size={20} className="text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Product Scout</h1>
           <p className="text-sm text-gray-500">Autonomous research → verify → score → shortlist (no auto-publishing)</p>
         </div>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <button
             onClick={() => setMiOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap"
           >
             <Brain size={16} /> Market Intelligence
           </button>
-          <button onClick={() => setRunOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">
+          <button onClick={() => setRunOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap">
             <Play size={16} /> Run Scout Run
           </button>
-          <button onClick={() => void load()} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+          <button onClick={() => void load()} className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap">
             <ArrowClockwise size={15} /> Refresh
           </button>
         </div>

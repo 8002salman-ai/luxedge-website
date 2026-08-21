@@ -118,7 +118,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`flex flex-col ${mobile ? 'w-full h-full' : 'w-52 h-screen sticky top-0 hidden lg:flex'}`}
+    <aside className={`flex flex-col shrink-0 ${mobile ? 'w-full h-full' : 'w-56 h-screen sticky top-0 hidden lg:flex'}`}
       style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
       <div className="p-3 border-b border-white/5 flex items-center gap-2">
         <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-[10px]"
@@ -156,11 +156,11 @@ function AdminLayout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="h-screen bg-gray-100 flex overflow-hidden">
       <Sidebar />
       {mobSide && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setMobSide(false)} /><div className="absolute left-0 top-0 h-full w-64"><Sidebar mobile /></div></div>}
-      <div className="flex-1 flex flex-col">
-        <header className="h-14 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-14 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 z-40">
           <button onClick={() => setMobSide(true)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg"><List size={18} /></button>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
               style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>A</div>
           </div>
         </header>
-        <main className="flex-1 p-3 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
+        <main className="flex-1 overflow-y-auto min-w-0 p-3 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
       </div>
     </div>
   );
