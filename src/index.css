@@ -176,7 +176,23 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--color-luxe-gold);
   color: var(--color-luxe-white);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-gold);
+  animation: luxe-glow 2.4s ease-in-out infinite;
+}
+
+/* ── Multi-color animated glow (hover) — buttons, CTAs, chips ── */
+.btn-glow {
+  position: relative;
+  transition: transform var(--transition-base);
+}
+.btn-glow:hover {
+  transform: translateY(-2px);
+  animation: luxe-glow 2.4s ease-in-out infinite;
+}
+@keyframes luxe-glow {
+  0%, 100% { box-shadow: 0 0 12px 1px rgba(37, 99, 235, 0.55), 0 0 26px 3px rgba(99, 102, 241, 0.30); }
+  25%     { box-shadow: 0 0 14px 2px rgba(168, 85, 247, 0.60), 0 0 30px 5px rgba(236, 72, 153, 0.32); }
+  50%     { box-shadow: 0 0 14px 2px rgba(236, 72, 153, 0.60), 0 0 30px 5px rgba(34, 211, 238, 0.32); }
+  75%     { box-shadow: 0 0 14px 2px rgba(34, 211, 238, 0.60), 0 0 30px 5px rgba(168, 85, 247, 0.32); }
 }
 
 .btn-secondary {

@@ -716,8 +716,8 @@ export function CatalogProductEditor() {
         <div className="flex gap-2 items-center">
           {isNew && (
             <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-              <button onClick={() => setMode('quick')} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick Add</button>
-              <button onClick={() => setMode('detail')} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail Add</button>
+              <button onClick={() => setMode('quick')} className={`btn-glow px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick Add</button>
+              <button onClick={() => setMode('detail')} className={`btn-glow px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail Add</button>
             </div>
           )}
           <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className={`${I} w-auto`} aria-label="Product status">
@@ -727,7 +727,7 @@ export function CatalogProductEditor() {
             <option value="inactive">Inactive</option>
             <option value="archived">Archived</option>
           </select>
-          <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-2">
+          <button onClick={handleSave} disabled={saving} className="btn-glow px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-2">
             <FloppyDisk size={16} />{saving ? 'Saving…' : 'Save Product'}
           </button>
         </div>
@@ -989,7 +989,7 @@ No other text.`;
           <p className="text-sm font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={15} />SEO & Meta — write nothing, let AI do it</p>
           <p className="text-xs text-indigo-600 mt-0.5">One click generates a factual SEO title, meta description, keywords and slug from your product name (DeepSeek, secure server-side). You can still edit everything.</p>
         </div>
-        <button onClick={generateWithAI} disabled={busy || !product.name.trim()} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+        <button onClick={generateWithAI} disabled={busy || !product.name.trim()} className="btn-glow px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
           <Sparkle size={15} />{busy ? 'Generating…' : 'Generate SEO with AI'}
         </button>
       </div>
@@ -1053,7 +1053,7 @@ function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends k
           <p className="text-sm font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={15} />Promotions — simplified</p>
           <p className="text-xs text-indigo-600 mt-0.5">AI checks your economics and suggests a safe discount. Trending / Best rated / Best seller are NEVER auto-suggested — they need real evidence.</p>
         </div>
-        <button onClick={suggest} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+        <button onClick={suggest} className="btn-glow px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
           <Sparkle size={15} />Suggest a sale (economics)
         </button>
       </div>
@@ -1373,14 +1373,14 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
       <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
         <div className="flex flex-wrap gap-2 items-end">
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addByFile(e.target.files)} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading || product.images.length >= 5} className="px-3.5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading || product.images.length >= 5} className="btn-glow px-3.5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5">
             <UploadSimple size={15} />{uploading ? 'Working…' : `Upload from PC (${product.images.length}/5)`}
           </button>
           <div className="flex-1 min-w-[200px]">
             <input value={url} onChange={(e) => setUrl(e.target.value)} className={I} placeholder="Image URL — or paste a product page to fetch ALL its images" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); importAllFromUrl(); } }} />
           </div>
           <div className="flex-1 min-w-[140px]"><input value={alt} onChange={(e) => setAlt(e.target.value)} className={I} placeholder="Alt text (optional)" /></div>
-          <button onClick={addByUrl} disabled={uploading} className="px-3.5 py-2 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add URL</button>
+          <button onClick={addByUrl} disabled={uploading} className="btn-glow px-3.5 py-2 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add URL</button>
           <button onClick={importAllFromUrl} disabled={uploading} className="px-3.5 py-2 border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 rounded-lg text-sm flex items-center gap-1.5" title="Fetch every image found on the pasted page URL and add them all (max 5)">
             <Download size={15} />Fetch all from page
           </button>
@@ -1474,7 +1474,7 @@ function VariantManager({ product, onProduct }: { product: CatalogProduct; onPro
             <div><label className={L}>SKU</label><input value={v.sku} onChange={(e) => setV({ ...v, sku: e.target.value })} className={I} /></div>
             <div><label className={L}>Price</label><input type="number" step="0.01" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} className={I} placeholder={String(product.price)} /></div>
             <div><label className={L}>Stock</label><input type="number" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} className={I} /></div>
-            <button onClick={add} className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add variant</button>
+            <button onClick={add} className="btn-glow px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add variant</button>
           </div>
           <p className="text-xs text-gray-400">Only genuine variant options. Assign a variant image in the Images tab — never guess a variant→image link.</p>
 
@@ -1553,7 +1553,7 @@ export function CatalogPromotionsPage() {
       <div className="flex items-center justify-between">
         <div><h1 className="text-2xl font-bold">Promotions</h1><p className="text-sm text-gray-500">Coupons, store offers and free-shipping rules — all editable, no fake urgency.</p></div>
         <div className="flex gap-2">
-          <button onClick={() => setCouponModal('new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2"><Plus size={16} />Coupon</button>
+          <button onClick={() => setCouponModal('new')} className="btn-glow px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2"><Plus size={16} />Coupon</button>
           <button onClick={() => setOfferModal('new')} className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg flex items-center gap-2"><Megaphone size={16} />Offer</button>
         </div>
       </div>
@@ -1565,7 +1565,7 @@ export function CatalogPromotionsPage() {
           <div className="flex flex-wrap gap-4 items-end">
             <label className="flex items-center gap-2 text-sm text-gray-600 pb-2"><input type="checkbox" checked={settings.freeShippingEnabled} onChange={(e) => setSettings({ ...settings, freeShippingEnabled: e.target.checked })} className="w-4 h-4" />Enable free shipping</label>
             <div><label className={L}>Cart minimum ($)</label><input type="number" min="0" step="0.01" value={settings.freeShippingThreshold} onChange={(e) => setSettings({ ...settings, freeShippingThreshold: +e.target.value })} className={`${I} w-32`} /></div>
-            <button onClick={saveSettings} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm">Save rule</button>
+            <button onClick={saveSettings} className="btn-glow px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm">Save rule</button>
           </div>
         )}
         <p className="text-xs text-gray-400 mt-3">Storewide threshold + per-product free-shipping flags (set on each product). This is a business rule, not a supplier shipping claim.</p>
@@ -1658,7 +1658,7 @@ function FeedPanel({ products }: { products: CatalogProduct[] }) {
           <h2 className="font-semibold flex items-center gap-2"><GearSix size={16} className="text-blue-600" />Ads / Feed Readiness</h2>
           <p className="text-xs text-gray-500 mt-1">Merchant Center / Meta / Pinterest-ready rows for {active.length} ACTIVE products. No campaign, no billing, no submission — data only.</p>
         </div>
-        <button onClick={download} className="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm flex items-center gap-2"><Download size={15} />Download feed CSV</button>
+        <button onClick={download} className="btn-glow px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm flex items-center gap-2"><Download size={15} />Download feed CSV</button>
       </div>
     </div>
   );
@@ -1726,7 +1726,7 @@ function CouponModal({ coupon, onClose, onSaved }: { coupon: Coupon | 'new' | nu
           <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-600 pb-2"><input type="checkbox" checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} className="w-4 h-4" />Active</label></div>
         </div>
         <div className="flex gap-3 pt-2">
-          <button onClick={save} disabled={saving} className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg font-medium">{saving ? 'Saving…' : 'Save coupon'}</button>
+          <button onClick={save} disabled={saving} className="btn-glow flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg font-medium">{saving ? 'Saving…' : 'Save coupon'}</button>
           <button onClick={onClose} className="flex-1 py-2.5 border rounded-lg">Cancel</button>
         </div>
       </div>
