@@ -14,11 +14,11 @@
   --color-luxe-charcoal: #334155;     /* muted navy for surfaces       */
   --color-luxe-gray: #64748b;         /* body secondary text           */
   --color-luxe-silver: #e2e8f0;       /* hairline borders              */
-  --color-luxe-gold: #2563eb;         /* accent blue — buttons/links   */
-  --color-luxe-gold-light: #3b82f6;   /* bright blue — hover/on dark   */
-  --color-luxe-gold-dark: #1d4ed8;    /* deep blue — hover             */
-  --color-luxe-gold-soft: #eff6ff;    /* blue tint background          */
-  --color-luxe-cream: #f8fafc;        /* light slate section bg        */
+  --color-luxe-gold: #1769d1;         /* bright ecommerce blue accent  */
+  --color-luxe-gold-light: #2f80ed;   /* hover blue                    */
+  --color-luxe-gold-dark: #0d4fa8;    /* deep blue hover               */
+  --color-luxe-gold-soft: #eaf3ff;    /* blue tint background           */
+  --color-luxe-cream: #f4f8fc;        /* cool light section bg          */
   --color-luxe-white: #ffffff;
   --color-luxe-light: #eff6ff;        /* blue-tinted section bg        */
   --color-luxe-red: #dc2626;
@@ -73,11 +73,11 @@
   --color-luxe-charcoal: #334155;
   --color-luxe-gray: #64748b;
   --color-luxe-silver: #e2e8f0;
-  --color-luxe-gold: #2563eb;
-  --color-luxe-gold-light: #3b82f6;
-  --color-luxe-gold-dark: #1d4ed8;
-  --color-luxe-gold-soft: #eff6ff;
-  --color-luxe-cream: #f8fafc;
+  --color-luxe-gold: #1769d1;
+  --color-luxe-gold-light: #2f80ed;
+  --color-luxe-gold-dark: #0d4fa8;
+  --color-luxe-gold-soft: #eaf3ff;
+  --color-luxe-cream: #f4f8fc;
   --color-luxe-white: #ffffff;
   --color-luxe-light: #eff6ff;
   --color-luxe-accent: #eff6ff;
@@ -439,7 +439,8 @@ input[type="number"] { -moz-appearance: textfield; }
 .home-hero {
   position: relative;
   overflow: hidden;
-  background: #f4f0e9;
+  background: #f3f8ff;
+  border-bottom: 1px solid #dbeafe;
   color: var(--color-luxe-black);
 }
 
@@ -449,7 +450,7 @@ input[type="number"] { -moz-appearance: textfield; }
   pointer-events: none;
   background:
     radial-gradient(circle at 84% 22%, rgba(37, 99, 235, 0.08), transparent 25%),
-    linear-gradient(110deg, rgba(255, 255, 255, 0.5), rgba(244, 240, 233, 0.05) 55%, rgba(37, 99, 235, 0.03));
+    linear-gradient(110deg, rgba(255, 255, 255, 0.72), rgba(243, 248, 255, 0.1) 55%, rgba(23, 105, 209, 0.08));
 }
 
 .home-hero-title {
@@ -521,7 +522,7 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .home-hero-visual {
   position: relative;
-  min-height: clamp(280px, 28vw, 420px);
+  min-height: clamp(230px, 24vw, 340px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -534,6 +535,37 @@ input[type="number"] { -moz-appearance: textfield; }
   border: 1px solid rgba(37, 99, 235, 0.35);
   transform: translate(0.8rem, 0.7rem);
 }
+
+.home-hero-pet-collage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 36rem);
+  grid-template-columns: 1.12fr 0.88fr;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.home-hero-pet-card {
+  position: relative;
+  display: block;
+  min-height: clamp(190px, 20vw, 285px);
+  overflow: hidden;
+  border: 4px solid white;
+  border-radius: 16px;
+  background: #dbeafe;
+  box-shadow: 0 18px 38px -22px rgba(23, 32, 51, 0.42);
+}
+
+.home-hero-pet-card img { width: 100%; height: 100%; object-fit: cover; transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1); }
+.home-hero-pet-card:hover img { transform: scale(1.045); }
+.home-hero-dog-card { min-height: clamp(210px, 22vw, 320px); }
+.home-hero-cat-card { min-height: clamp(170px, 18vw, 260px); }
+.home-hero-pet-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(10, 36, 78, 0.78)); }
+.home-hero-pet-card span { position: absolute; z-index: 1; bottom: 0.7rem; left: 0.75rem; right: 0.5rem; display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; color: white; font-family: var(--font-brand); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.home-hero-product-chip { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; min-height: 42px; padding: 0.55rem 0.8rem; border-radius: 8px; background: #102f66; color: white; box-shadow: 0 10px 24px -16px rgba(23, 32, 51, 0.5); }
+.home-hero-product-chip span { color: #a9c9f7; font-size: 0.52rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.home-hero-product-chip strong { max-width: 58%; overflow: hidden; font-family: var(--font-serif); font-size: 0.75rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
 .home-hero-frame {
   position: relative;
@@ -656,6 +688,53 @@ input[type="number"] { -moz-appearance: textfield; }
 .product-card:hover .product-card-add, .product-card-add:focus-visible { opacity: 1; transform: translateX(0); }
 .product-card-add:hover { color: var(--color-luxe-black); }
 
+/* ── ROTATING PROMO BAR ── */
+.promo-slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 0.45rem; opacity: 0; transition: opacity 0.5s ease; pointer-events: none; }
+.promo-slide.promo-active { opacity: 1; pointer-events: auto; }
+
+/* ── CIRCULAR PET AVATARS ── */
+.pet-avatar-grid { display: flex; gap: clamp(1rem, 3vw, 2rem); justify-content: center; flex-wrap: wrap; padding: 0.5rem 0; }
+.pet-avatar-item { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; text-decoration: none; group: pet; }
+.pet-avatar-circle { width: clamp(100px, 12vw, 140px); height: clamp(100px, 12vw, 140px); border-radius: 50%; overflow: hidden; border: 3px solid var(--color-luxe-silver); background: #f4f0e9; transition: border-color var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base); position: relative; }
+.pet-avatar-circle img { width: 100%; height: 100%; object-fit: cover; transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pet-avatar-item:hover .pet-avatar-circle { border-color: var(--color-luxe-gold); transform: translateY(-4px); box-shadow: 0 8px 24px -6px rgba(37, 99, 235, 0.25); }
+.pet-avatar-item:hover .pet-avatar-circle img { transform: scale(1.08); }
+.pet-avatar-name { font-family: var(--font-serif); font-size: clamp(0.85rem, 1.2vw, 1rem); font-weight: 600; color: var(--color-luxe-black); transition: color var(--transition-fast); }
+.pet-avatar-item:hover .pet-avatar-name { color: var(--color-luxe-gold); }
+
+/* ── HORIZONTAL CATEGORY SCROLL ── */
+.category-scroll { display: flex; gap: 0.75rem; overflow-x: auto; padding: 0.5rem 0 1rem; scrollbar-width: none; -ms-overflow-style: none; }
+.category-scroll::-webkit-scrollbar { display: none; }
+.category-pill { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1rem; background: var(--color-luxe-white); border: 1px solid var(--color-luxe-silver); border-radius: 999px; font-family: var(--font-brand); font-size: 0.72rem; font-weight: 600; color: var(--color-luxe-charcoal); text-decoration: none; transition: all var(--transition-fast); white-space: nowrap; }
+.category-pill:hover { border-color: var(--color-luxe-gold); color: var(--color-luxe-gold); background: var(--color-luxe-gold-soft); transform: translateY(-2px); box-shadow: 0 4px 12px -4px rgba(37, 99, 235, 0.15); }
+.category-pill img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+
+/* ── DEAL BANNER ── */
+.deal-banner { position: relative; overflow: hidden; background: linear-gradient(135deg, var(--color-luxe-black) 0%, #1a2744 100%); color: white; border-radius: 12px; }
+.deal-banner::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 85% 30%, rgba(37, 99, 235, 0.2), transparent 50%); pointer-events: none; }
+
+/* ── TRUST PILLS ── */
+.trust-pill-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
+.trust-pill { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; background: var(--color-luxe-white); border: 1px solid var(--color-luxe-silver); border-radius: 999px; font-size: 0.72rem; font-weight: 500; color: var(--color-luxe-charcoal); }
+.trust-pill svg { color: var(--color-luxe-gold); flex: 0 0 auto; }
+
+/* ── PRODUCT CARD UPGRADES ── */
+.product-card-add-visible { opacity: 1 !important; transform: none !important; }
+.product-card-badge { position: absolute; top: 0.5rem; left: 0.5rem; z-index: 2; display: flex; flex-direction: column; gap: 0.25rem; }
+.product-card-badge span { padding: 0.2rem 0.45rem; border-radius: 4px; font-family: var(--font-brand); font-size: 0.5rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.badge-new { background: var(--color-luxe-gold); color: white; }
+.badge-sale { background: var(--color-sale); color: white; }
+.badge-featured { background: var(--color-luxe-black); color: white; }
+
+/* ── SECTION DENSITY UPGRADE ── */
+.section-compact { padding: clamp(2rem, 4vw, 3rem) 0; }
+.section-heading-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+
+/* ── PROMO STRIP ── */
+.promo-strip { background: var(--color-luxe-gold-soft); border-bottom: 1px solid rgba(37, 99, 235, 0.1); }
+.promo-strip-inner { display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 0.5rem 1rem; font-size: 0.72rem; color: var(--color-luxe-charcoal); }
+.promo-strip-inner a { font-weight: 700; color: var(--color-luxe-gold-dark); text-decoration: underline; text-underline-offset: 2px; }
+
 /* ── RESPONSIVE ── */
 @media (min-width: 1024px) and (max-width: 1199px) {
   .home-hero-title { font-size: 2.1rem; }
@@ -663,13 +742,18 @@ input[type="number"] { -moz-appearance: textfield; }
 
 @media (max-width: 767px) {
   .site-utility-bar { min-height: 22px; gap: 0.2rem; padding-inline: 0.4rem; font-size: 0.52rem; letter-spacing: 0.01em; }
-  .home-hero { background: #f4f0e9; }
+  .home-hero { background: #f3f8ff; }
   .home-hero-title { max-width: none; font-size: clamp(1.5rem, 7.5vw, 2rem); line-height: 1.02; }
   .home-hero-copy { margin-inline: auto; font-size: 0.82rem; }
   .home-hero-notes { justify-content: center; gap: 0.4rem 0.6rem; margin-top: 1.2rem; padding-top: 0.7rem; }
   .home-hero-notes span + span { padding-left: 0.6rem; }
-  .home-hero-visual { min-height: 260px; padding: 0.5rem 0.4rem 0.7rem; }
-  .home-hero-frame { min-height: 250px; border-radius: 8px; }
+  .home-hero-visual { min-height: 235px; padding: 0.4rem 0.2rem 0.55rem; }
+  .home-hero-pet-collage { gap: 0.45rem; }
+  .home-hero-pet-card, .home-hero-dog-card { min-height: 175px; border-width: 3px; border-radius: 12px; }
+  .home-hero-cat-card { min-height: 145px; }
+  .home-hero-product-chip { min-height: 38px; padding: 0.45rem 0.6rem; }
+  .home-hero-product-chip span { font-size: 0.45rem; }
+  .home-hero-product-chip strong { font-size: 0.65rem; }
   .home-hero-accent { inset: 5% 1% 5% 8%; transform: translate(0.5rem, 0.5rem); }
   .home-hero-caption { padding: 0.6rem 0.7rem; }
   .home-hero-caption-kicker { display: none; }
@@ -690,6 +774,11 @@ input[type="number"] { -moz-appearance: textfield; }
   .product-card-title { font-size: 0.72rem; }
   .product-card-add { opacity: 1; transform: none; font-size: 0.5rem; }
   .product-card-view { display: none; }
+  .pet-avatar-circle { width: 80px; height: 80px; }
+  .pet-avatar-name { font-size: 0.8rem; }
+  .category-pill { padding: 0.4rem 0.7rem; font-size: 0.65rem; }
+  .category-pill img { width: 22px; height: 22px; }
+  .trust-pill { font-size: 0.62rem; padding: 0.3rem 0.6rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -698,14 +787,8 @@ input[type="number"] { -moz-appearance: textfield; }
   .editorial-category-tile:hover img,
   .editorial-story-media:hover img,
   .product-card:hover .product-card-image:first-child,
-  .product-card:hover .product-card-image-secondary { transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home-hero-frame:hover .home-hero-image,
-  .editorial-pet-panel:hover img,
-  .editorial-category-tile:hover img,
-  .editorial-story-media:hover img,
-  .product-card:hover .product-card-image:first-child,
-  .product-card:hover .product-card-image-secondary { transform: none; }
+  .product-card:hover .product-card-image-secondary,
+  .pet-avatar-circle img { transform: none; }
+  .pet-avatar-item:hover .pet-avatar-circle { transform: none; box-shadow: none; }
+  .category-pill:hover { transform: none; box-shadow: none; }
 }
