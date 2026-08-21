@@ -4388,6 +4388,52 @@ function AEmailMarketing() {
   const [emailStatus, setEmailStatus] = useState<{ configured?: boolean; inbound?: { enabled?: boolean; destination?: string; routes?: string[] }; outbound?: { sender?: string; bindingPresent?: boolean; note?: string } } | null>(null);
   const [testMail, setTestMail] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [testMailMsg, setTestMailMsg] = useState('');
+  const [mailRoutes, setMailRoutes] = useState<{ configured?: boolean; routes?: { id?: string; address?: string; local?: string; forwardsTo?: string; enabled?: boolean }[]; destinations?: { email?: string; verified?: boolean }[]; message?: string } | null>(null);
+  const [newAddr, setNewAddr] = useState('');
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrMsg, setAddrMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadRoutes = async () => {
+    try {
+      const token = getAccessToken();
+      const r = await fetch('/api/email/routes', { headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json().catch(() => null);
+      setMailRoutes(j);
+    } catch { setMailRoutes(null); }
+  };
+  useEffect(() => { void loadRoutes(); }, []);
+
+  const addAddress = async () => {
+    const local = newAddr.trim().toLowerCase().replace(/@.*$/, '');
+    if (!local) { setAddrMsg({ ok: false, text: 'Enter an address name, e.g. salman' }); return; }
+    setAddrBusy(true); setAddrMsg(null);
+    try {
+      const token = getAccessToken();
+      const r = await fetch('/api/email/routes', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: local, forwardTo: '8002salman@gmail.com' }),
+      });
+      const j = await r.json().catch(() => null);
+      if (j?.ok) { setAddrMsg({ ok: true, text: j.message }); setNewAddr(''); await loadRoutes(); notify(j.message, 'success'); }
+      else { setAddrMsg({ ok: false, text: j?.error || j?.message || 'Could not create address' }); }
+    } catch (e) { setAddrMsg({ ok: false, text: `Request failed: ${(e as Error).message}` }); }
+    finally { setAddrBusy(false); }
+  };
+
+  const deleteAddress = async (local: string) => {
+    if (!window.confirm(`Delete ${local}@luxedge.us? Emails to it will stop forwarding.`)) return;
+    setAddrBusy(true); setAddrMsg(null);
+    try {
+      const token = getAccessToken();
+      const r = await fetch(`/api/email/routes?name=${encodeURIComponent(local)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await r.json().catch(() => null);
+      if (j?.ok) { setAddrMsg({ ok: true, text: j.message }); await loadRoutes(); notify(j.message, 'success'); }
+      else setAddrMsg({ ok: false, text: j?.error || 'Could not delete address' });
+    } catch (e) { setAddrMsg({ ok: false, text: `Request failed: ${(e as Error).message}` }); }
+    finally { setAddrBusy(false); }
+  };
 
   const checkEmail = async () => {
     try {
@@ -4502,6 +4548,44 @@ function AEmailMarketing() {
             </button>
             {testMailMsg && <p className={`mt-2 text-[11px] ${testMail === 'sent' ? 'text-green-700' : 'text-red-600'}`}>{testMailMsg}</p>}
           </div>
+        </div>
+
+        {/* Email addresses — create more like salman@luxedge.us */}
+        <div className="mt-3 bg-white rounded-xl border border-blue-100 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Your email addresses (@luxedge.us)</p>
+            <button onClick={loadRoutes} className="text-[11px] text-blue-600 hover:underline font-medium">Refresh</button>
+          </div>
+          {mailRoutes?.configured === false && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[11px] text-amber-800 mb-3">
+              <p className="font-semibold mb-1">Self-service needs one Cloudflare API token</p>
+              <p className="text-amber-700">Cloudflare dashboard → My Profile → API Tokens → Create Token → <b>Edit zone DNS</b> template → give it <b>Email Routing Addresses:Edit</b> + <b>Email Routing Rules:Edit</b> → paste the token as worker secret <code className="font-mono bg-amber-100 px-1 rounded">CLOUDFLARE_API_TOKEN</code> → redeploy. Current addresses still work below.</p>
+            </div>
+          )}
+          {(mailRoutes?.routes || []).length > 0 ? (
+            <div className="space-y-1.5">
+              {(mailRoutes?.routes || []).map((r) => (
+                <div key={r.id || r.address} className="flex items-center justify-between gap-2 bg-blue-50/60 rounded-lg px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 font-mono">{r.address} <span className="text-[10px] font-normal text-green-600">{r.enabled ? '· active' : '· off'}</span></p>
+                    <p className="text-[10px] text-gray-500">forwards to {r.forwardsTo || '—'}</p>
+                  </div>
+                  <button onClick={() => r.local && deleteAddress(r.local)} disabled={addrBusy} className="shrink-0 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50 rounded border border-red-200 disabled:opacity-50">Delete</button>
+                </div>
+              ))}
+            </div>
+          ) : mailRoutes?.configured ? (
+            <p className="text-[11px] text-gray-400">No custom addresses yet — add one below.</p>
+          ) : (
+            <p className="text-[11px] text-gray-400">Loading addresses…</p>
+          )}
+          <div className="flex gap-1.5 mt-3">
+            <input value={newAddr} onChange={(e) => setNewAddr(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addAddress(); }} placeholder="e.g. salman" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs" aria-label="New email address name" />
+            <span className="self-center text-xs text-gray-400 font-mono">@luxedge.us</span>
+            <button onClick={addAddress} disabled={addrBusy || !newAddr.trim()} className="btn-glow px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold whitespace-nowrap">{addrBusy ? '…' : 'Add address'}</button>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1.5">New addresses forward to 8002salman@gmail.com automatically — emails to <b>anything@luxedge.us</b> already arrive there too (catch-all).</p>
+          {addrMsg && <p className={`mt-2 text-[11px] ${addrMsg.ok ? 'text-green-700' : 'text-red-600'}`}>{addrMsg.text}</p>}
         </div>
 
         {/* DNS checklist */}

@@ -27,6 +27,10 @@ type = "send_email"
 [vars]
 VERCEL_ENV = "production"
 DEPLOYMENT_ENV = "production"
+# Cloudflare Email Routing management (self-service addresses). The API token
+# itself is a SECRET (wrangler secret put CLOUDFLARE_API_TOKEN).
+CLOUDFLARE_ACCOUNT_ID = "f542683e97458480452b0b8ef37a898a"
+CLOUDFLARE_ZONE_ID = "33109dc6283b9e9cdafc2d1a0b05b6f8"
 
 [env.staging]
 name = "luxedge-cloudflare-staging"

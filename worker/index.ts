@@ -30,6 +30,7 @@ import googleAdsHandler from '../api/market-demand/google-ads';
 import omnisendStatusHandler from '../api/omnisend/status';
 import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
+import emailRoutesHandler from '../api/email/routes';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -62,6 +63,7 @@ const ROUTES: Route[] = [
   { path: '/api/omnisend/status', handler: omnisendStatusHandler },
   { path: '/api/email/send', handler: emailSendHandler },
   { path: '/api/email/status', handler: emailStatusHandler },
+  { path: '/api/email/routes', handler: emailRoutesHandler },
 ];
 
 /**
