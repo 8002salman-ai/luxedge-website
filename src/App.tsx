@@ -508,10 +508,17 @@ function Header() {
   const [hq, setHq] = useState('');
   const [mega, setMega] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [promoIdx, setPromoIdx] = useState(0);
   const loc = useLocation();
   const goTo = useNavigate();
   const { user, cart, logout, openCart } = useApp();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
+
+  // Rotate promo messages every 3.5 seconds
+  useEffect(() => {
+    const id = setInterval(() => setPromoIdx(p => (p + 1) % 4), 3500);
+    return () => clearInterval(id);
+  }, []);
 
   // Elevate the header with a soft shadow once the page is scrolled
   useEffect(() => {
@@ -534,22 +541,29 @@ function Header() {
   const catNav = [
     { l: 'Dog', to: '/category/dog-supplies' },
     { l: 'Cat', to: '/category/cat-supplies' },
+    { l: 'Horses', to: '/shop?q=horse' },
+    { l: 'Livestock', to: '/shop?q=livestock' },
     { l: 'Food & Feeding', to: '/category/feeding-water' },
     { l: 'Toys', to: '/category/pet-toys' },
     { l: 'Beds', to: '/category/pet-beds' },
     { l: 'Grooming', to: '/category/grooming' },
-    { l: 'Travel & Accessories', to: '/category/pet-accessories' },
+    { l: 'Travel', to: '/category/pet-accessories' },
   ];
   const isActive = (p: string) => (p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p));
 
   return (<>
-    {/* ── Top utility bar ── */}
-    <div className="site-utility-bar">
-      <span className="inline-flex items-center gap-1.5 text-white/95"><Truck01 strokeWidth={1.5} size={12} /> Free Shipping $50+</span>
-      <span className="mx-2.5 text-white/40 hidden sm:inline" aria-hidden="true">|</span>
-      <span className="hidden sm:inline-flex items-center gap-1.5 text-white/95"><RefreshCcw01 strokeWidth={1.5} size={12} /> Easy 30-Day Returns</span>
-      <span className="mx-2.5 text-white/40 hidden md:inline" aria-hidden="true">|</span>
-      <span className="hidden md:inline-flex items-center gap-1.5 text-white/95"><Headphones01 strokeWidth={1.5} size={12} /> Customer Support</span>
+    {/* ── Rotating promo bar ── */}
+    <div className="site-utility-bar relative" style={{ minHeight: 24 }}>
+      {[
+        { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Free Shipping on Orders $50+' },
+        { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Easy Returns' },
+        { icon: <Headphones01 strokeWidth={1.5} size={12} />, text: 'Customer Support Mon–Fri 9AM–6PM CT' },
+        { icon: <ShieldTick strokeWidth={1.5} size={12} />, text: 'Thoughtfully Curated — Quality You Can Trust' },
+      ].map((promo, i) => (
+        <span key={i} className={`promo-slide ${promoIdx === i ? 'promo-active' : ''}`} aria-hidden={promoIdx !== i}>
+          {promo.icon} {promo.text}
+        </span>
+      ))}
     </div>
 
     {/* ── Main header ── */}
@@ -841,6 +855,7 @@ function PCard({ product }: { product: Product }) {
   const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
   const secondImage = product.images.find((candidate) => candidate && candidate !== image);
   const hasCompareAt = product.originalPrice > product.price;
+  const discount = hasCompareAt ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
   // Ratings come ONLY from verified user reviews — never the catalog stub.
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
@@ -853,29 +868,36 @@ function PCard({ product }: { product: Product }) {
             <img src={secondImage} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
               className="product-card-image product-card-image-secondary" />
           )}
-          {product.newArrival && <span className="product-card-label">New</span>}
+          <div className="product-card-badge">
+            {product.newArrival && <span className="badge-new">New</span>}
+            {discount > 0 && <span className="badge-sale">-{discount}%</span>}
+            {product.featured && !product.newArrival && <span className="badge-featured">Featured</span>}
+          </div>
           <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
         </div>
       </Link>
       <div className="product-card-info">
-        <div className="flex items-start justify-between gap-3">
-          <Link to={`/product/${product.id}`} className="min-w-0">
-            <p className="product-card-category">{product.category}</p>
-            <h3 className="product-card-title">{product.name}</h3>
-          </Link>
-          {verified.length > 0 && (
-            <span className="product-card-rating" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
-              <Star01 strokeWidth={1.5} size={11} fill="currentColor" aria-hidden="true" /> {verifiedAvg.toFixed(1)}
-            </span>
-          )}
+        <Link to={`/product/${product.id}`} className="block min-w-0">
+          <p className="product-card-category">{product.category}</p>
+          <h3 className="product-card-title line-clamp-2">{product.name}</h3>
+        </Link>
+        {verified.length > 0 && (
+          <span className="product-card-rating mt-1 inline-flex" aria-label={`Rated ${verifiedAvg.toFixed(1)} out of 5 by ${verified.length} verified review${verified.length !== 1 ? 's' : ''}`}>
+            <span className="inline-flex" aria-hidden="true">{[0, 1, 2, 3, 4].map(i => <Star01 key={i} strokeWidth={1.5} size={10} fill={i < Math.round(verifiedAvg) ? 'currentColor' : 'none'} />)}</span>
+            <span>{verifiedAvg.toFixed(1)}</span>
+          </span>
+        )}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <div className="flex items-baseline gap-1.5">
+            <span className="product-card-price">${product.price.toFixed(2)}</span>
+            {hasCompareAt && <span className="product-card-compare">${product.originalPrice.toFixed(2)}</span>}
+          </div>
         </div>
-        <div className="flex items-baseline justify-between gap-3 mt-2.5">
-          <span className="product-card-price">${product.price.toFixed(2)}</span>
-          {hasCompareAt && <span className="product-card-compare">${product.originalPrice.toFixed(2)}</span>}
-          <button type="button" onClick={() => addToCart(product)} className="product-card-add" aria-label={`Add ${product.name} to cart`}>
-            Add to cart <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
-          </button>
-        </div>
+        <button type="button" onClick={(e) => { e.preventDefault(); addToCart(product); }}
+          className="mt-2 w-full py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow-gold product-card-add-visible"
+          aria-label={`Add ${product.name} to cart`}>
+          <ShoppingBag01 strokeWidth={1.5} size={12} aria-hidden="true" /> Add to Cart
+        </button>
       </div>
     </article>
   );
@@ -1497,12 +1519,16 @@ function HomePage() {
   const topPicks = homepageVisualProducts.filter(p => p.featured);
   const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
   const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  // Supplier sections are evidence-based: CJ rows appear only when the live
+  // catalog explicitly records CJ as their source and they are customer-visible.
+  const cjProducts = homepageVisualProducts.filter(p => /cjdropshipping|\bcj\b/i.test(`${p.supplierSource || ''} ${p.sourceType || ''} ${p.inventorySource || ''}`));
+  // "Trending" is merchandising intent from the catalog, not fabricated sales.
+  const trendingProducts = homepageVisualProducts.filter(p => p.featured || p.newArrival || p.saleEnabled).slice(0, 10);
   const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
   const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
   const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
-  const dogVisual = featured.find((p) => firstUsableImage(p) && /dog\s+(bed|mat|sofa)/i.test(p.name))
-    || featured.find((p) => firstUsableImage(p) && p.category === 'Pet Beds')
-    || featured.find((p) => firstUsableImage(p) && (p.category === 'Dog Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('dog'))));
+  const heroDogImage = 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=900&h=700&fit=crop&auto=format&q=85';
+  const heroCatImage = 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=900&h=700&fit=crop&auto=format&q=85';
   const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
   const categoryVisuals = [
     { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
@@ -1523,7 +1549,7 @@ function HomePage() {
       {/* ════════ EDITORIAL HERO ════════ */}
       <section className="home-hero">
         <div className="home-hero-wash" aria-hidden="true" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-14 grid lg:grid-cols-[0.42fr_0.58fr] items-center gap-8 lg:gap-10">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8 grid lg:grid-cols-[0.44fr_0.56fr] items-center gap-5 lg:gap-8">
           <div className="hero-stagger text-center lg:text-left">
             <p className="eyebrow mb-3">Premium pet essentials</p>
             <h1 className="home-hero-title">
@@ -1550,26 +1576,19 @@ function HomePage() {
 
           <div className="home-hero-visual">
             <div className="home-hero-accent" aria-hidden="true" />
-            {heroProduct ? (
-              <Link to={`/product/${heroProduct.id}`} className="home-hero-frame group">
-                <img
-                  src={firstUsableImage(heroProduct) || LUXEDGE_IMAGE_FALLBACK}
-                  alt={heroProduct.name}
-                  loading="eager"
-                  fetchPriority="high"
-                  decoding="async"
-                  onError={onImageError}
-                  className="home-hero-image"
-                />
-                <div className="home-hero-caption">
-                  <span className="home-hero-caption-kicker">From the collection</span>
-                  <span className="home-hero-caption-title">{heroProduct.name}</span>
-                  <ArrowRight strokeWidth={1.5} size={15} aria-hidden="true" />
-                </div>
+            <div className="home-hero-pet-collage" aria-label="Happy dog and cat">
+              <Link to="/category/dog-supplies" className="home-hero-pet-card home-hero-dog-card group">
+                <img src={heroDogImage} alt="Happy dog" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
+                <span>Shop dog essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
               </Link>
-            ) : (
-              <div className="home-hero-empty" aria-label="Luxedge collection preview">Luxedge</div>
-            )}
+              <Link to="/category/cat-supplies" className="home-hero-pet-card home-hero-cat-card group">
+                <img src={heroCatImage} alt="Relaxed cat" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
+                <span>Shop cat essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
+              </Link>
+              {heroProduct && <Link to={`/product/${heroProduct.id}`} className="home-hero-product-chip">
+                <span>Featured from the collection</span><strong>{heroProduct.name}</strong>
+              </Link>}
+            </div>
           </div>
         </div>
       </section>
@@ -1577,57 +1596,102 @@ function HomePage() {
       {/* ════════ Ad: After Hero ════════ */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
-      {/* ════════ SHOP BY PET ════════ */}
-      <section className="editorial-section bg-white">
+      {/* ════════ SHOP BY PET — Circular Avatars ════════ */}
+      <section className="section-compact bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="mb-5">
-            <p className="eyebrow mb-2">Shop by pet</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-              <h2 className="section-title">Who are you shopping for?</h2>
-              <p className="section-intro sm:max-w-xs">Considered essentials for the animals who make home feel like home.</p>
+            <div className="section-heading-row">
+              <div>
+                <p className="eyebrow mb-1">Shop by pet</p>
+                <h2 className="section-title">Who are you shopping for?</h2>
+              </div>
             </div>
           </Reveal>
-          <Reveal delay={20}>
-            <div className="flex items-start gap-5 sm:gap-7 mb-8 overflow-x-auto pb-1">
+          <Reveal delay={40}>
+            <div className="pet-avatar-grid">
               {[
-                { label: 'Dog', to: '/category/dog-supplies', image: dogVisual ? firstUsableImage(dogVisual) : null, soon: false },
-                { label: 'Cat', to: '/category/cat-supplies', image: catVisual ? firstUsableImage(catVisual) : null, soon: false },
-                { label: 'Horse', to: '/shop', image: 'https://images.pexels.com/photos/12523634/pexels-photo-12523634.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
-                { label: 'Cattle', to: '/shop', image: 'https://images.pexels.com/photos/11684963/pexels-photo-11684963.jpeg?auto=compress&cs=tinysrgb&w=240&h=240&fit=crop', soon: true },
-              ].filter((a) => a.image).map((animal) => (
-                <Link key={animal.label} to={animal.to} className="flex flex-col items-center gap-2 shrink-0 group">
-                  <span className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden ring-1 ring-luxe-silver bg-luxe-cream transition-transform duration-300 group-hover:scale-105 group-hover:ring-luxe-gold/50">
-                    <img src={animal.image || LUXEDGE_IMAGE_FALLBACK} alt={animal.label} loading="lazy" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
-                  </span>
-                  <span className="text-[13px] font-semibold text-luxe-charcoal">{animal.label}</span>
-                  {animal.soon && <span className="text-[9px] font-bold uppercase tracking-wide text-luxe-gold">Coming soon</span>}
+                { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=300&h=300&fit=crop' },
+                { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&h=300&fit=crop' },
+                { label: 'Horse', to: '/shop?q=horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=300&h=300&fit=crop' },
+                { label: 'Livestock', to: '/shop?q=livestock', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=300&h=300&fit=crop' },
+              ].map((pet, index) => (
+                <Reveal key={pet.label} delay={index * 60}>
+                  <Link to={pet.to} className="pet-avatar-item">
+                    <div className="pet-avatar-circle">
+                      <img src={pet.img} alt={pet.label} loading="lazy" decoding="async" onError={onImageError} />
+                    </div>
+                    <span className="pet-avatar-name">{pet.label}</span>
+                  </Link>
+                </Reveal>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ════════ POPULAR CATEGORIES — Horizontal Scroll ════════ */}
+      <section className="section-compact bg-luxe-cream">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="section-heading-row">
+              <div>
+                <p className="eyebrow mb-1">Browse</p>
+                <h2 className="section-title" style={{ fontSize: 'clamp(1.2rem, 2.2vw, 1.6rem)' }}>Popular Categories</h2>
+              </div>
+              <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">View All <ArrowRight strokeWidth={1.5} size={12} className="transition-transform group-hover:translate-x-0.5" /></Link>
+            </div>
+          </Reveal>
+          <Reveal delay={40}>
+            <div className="category-scroll">
+              {[
+                { label: 'Dog Walking', to: '/category/dog-supplies', icon: <Truck01 strokeWidth={1.5} size={14} /> },
+                { label: 'Beds & Mats', to: '/category/pet-beds', icon: <Star01 strokeWidth={1.5} size={14} /> },
+                { label: 'Grooming', to: '/category/grooming', icon: <Stars01 strokeWidth={1.5} size={14} /> },
+                { label: 'Feeding', to: '/category/feeding-water', icon: <Zap strokeWidth={1.5} size={14} /> },
+                { label: 'Toys', to: '/category/pet-toys', icon: <Star01 strokeWidth={1.5} size={14} /> },
+                { label: 'Travel', to: '/category/pet-accessories', icon: <Globe01 strokeWidth={1.5} size={14} /> },
+                { label: 'Cat Essentials', to: '/category/cat-supplies', icon: <Stars01 strokeWidth={1.5} size={14} /> },
+                { label: 'New Arrivals', to: '/shop', icon: <Zap strokeWidth={1.5} size={14} /> },
+              ].map((cat) => (
+                <Link key={cat.label} to={cat.to} className="category-pill">
+                  <span className="text-luxe-gold" aria-hidden="true">{cat.icon}</span>
+                  {cat.label}
                 </Link>
               ))}
             </div>
           </Reveal>
-          <div className="editorial-pet-grid">
-            {[
-              { label: 'Dog', to: '/category/dog-supplies', desc: 'Walk, play, rest & more', product: dogVisual },
-              { label: 'Cat', to: '/category/cat-supplies', desc: 'Play, comfort, feeding & more', product: catVisual },
-            ].filter((panel) => panel.product).map((panel, index) => (
-              <Reveal key={panel.label} delay={index * 80}>
-                <Link to={panel.to} className="editorial-pet-panel group">
-                  <img src={firstUsableImage(panel.product) || LUXEDGE_IMAGE_FALLBACK} alt={panel.product?.name || panel.label} loading="lazy" decoding="async" onError={onImageError} />
-                  <div className="editorial-pet-overlay" aria-hidden="true" />
-                  <div className="editorial-pet-copy">
-                    <span className="editorial-pet-label">{panel.label}</span>
-                    <span className="editorial-pet-desc">{panel.desc}</span>
-                    <span className="editorial-link">Shop {panel.label} <ArrowRight strokeWidth={1.5} size={14} aria-hidden="true" /></span>
-                  </div>
-                </Link>
-              </Reveal>
-            ))}
-          </div>
         </div>
       </section>
 
+      {/* ════════ DEAL BANNER ════════ */}
+      {deals.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <Link to="/shop?q=deal" className="deal-banner block p-6 sm:p-8 lg:p-10">
+              <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6">
+                <div className="flex-1 text-center sm:text-left">
+                  <p className="eyebrow mb-2 text-luxe-gold-light">Limited Time</p>
+                  <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white mb-2">Special Deals on Pet Essentials</h2>
+                  <p className="text-white/70 text-sm mb-4 max-w-md">Save on handpicked premium products for your furry friends. Quality you trust, prices you'll love.</p>
+                  <span className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-luxe-gold text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:bg-luxe-gold-dark">
+                    Shop Deals <ArrowRight strokeWidth={1.5} size={13} />
+                  </span>
+                </div>
+                <div className="flex -space-x-3">
+                  {deals.slice(0, 3).map((p) => (
+                    <div key={p.id} className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border-2 border-white/20 bg-white/10">
+                      <img src={firstUsableImage(p) || LUXEDGE_IMAGE_FALLBACK} alt={p.name} loading="lazy" onError={onImageError} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Link>
+          </Reveal>
+        </section>
+      )}
+
       {/* ════════ SHOP BY CATEGORY ════════ */}
-      <section className="editorial-section bg-luxe-cream">
+      <section className="section-compact bg-luxe-cream">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="mb-5">
             <p className="eyebrow mb-2">Shop by category</p>
@@ -1660,7 +1724,7 @@ function HomePage() {
           show ONE premium curation notice instead of empty product grids. No
           fake product cards, no fake counts, no fake launch dates. */}
       {featured.length === 0 ? (
-        <section className="py-16 sm:py-20 bg-luxe-cream">
+        <section className="section-compact bg-luxe-cream">
           <div className="max-w-2xl mx-auto px-4 text-center">
             <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
@@ -1676,7 +1740,7 @@ function HomePage() {
         <>
           {/* New Arrivals — real newArrival flag, admin-set */}
           {newArrivals.length > 0 && (
-            <section className="py-8 sm:py-10 bg-luxe-cream">
+            <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
                 <Reveal delay={60}>
@@ -1688,9 +1752,37 @@ function HomePage() {
             </section>
           )}
 
+          {/* Trending — real catalog merchandising flags only; no fake sales/rankings */}
+          {trendingProducts.length > 0 && (
+            <section className="section-compact bg-white">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Worth a closer look" title="Trending Now" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {trendingProducts.map(p => <PCard key={`trending-${p.id}`} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
+          {/* CJ listings — only active catalog products with explicit CJ source evidence */}
+          {cjProducts.length > 0 && (
+            <section className="section-compact bg-luxe-cream">
+              <div className="max-w-7xl mx-auto px-4">
+                <Reveal><SectionHeader eyebrow="Supplier-verified collection" title="CJ Pet Picks" to="/shop" /></Reveal>
+                <Reveal delay={60}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    {cjProducts.slice(0, 10).map(p => <PCard key={`cj-${p.id}`} product={p} />)}
+                  </div>
+                </Reveal>
+              </div>
+            </section>
+          )}
+
           {/* Top Picks — real featured flag (admin merchandising decision) */}
           {topPicks.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
+            <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
                 <Reveal delay={60}>
@@ -1707,7 +1799,7 @@ function HomePage() {
 
           {/* Dog Essentials — real category data */}
           {dogEssentials.length > 0 && (
-            <section className="py-8 sm:py-10 bg-luxe-cream">
+            <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
                 <Reveal delay={60}>
@@ -1721,7 +1813,7 @@ function HomePage() {
 
           {/* Cat Essentials — real category data */}
           {catEssentials.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
+            <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
                 <Reveal delay={60}>
@@ -1735,7 +1827,7 @@ function HomePage() {
 
           {/* All Products — full catalog browsing */}
           {featured.length > 0 && (
-            <section className="py-8 sm:py-10 bg-white">
+            <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Collection" title="Shop All Products" to="/shop" /></Reveal>
                 <Reveal delay={60}>
@@ -1751,7 +1843,7 @@ function HomePage() {
 
       {/* ════════ EDITORIAL COLLECTION ════════ */}
       {editorialProduct && (
-        <section className="editorial-section bg-white">
+        <section className="section-compact bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Reveal>
               <div className="editorial-story">
@@ -1772,7 +1864,7 @@ function HomePage() {
 
       {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
       {deals.length > 0 && (
-        <section className="py-8 sm:py-10 bg-luxe-cream">
+        <section className="section-compact bg-luxe-cream">
           <div className="max-w-7xl mx-auto px-4">
             <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
             <Reveal delay={60}>
@@ -1784,23 +1876,25 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ VALUE STRIP — truthful store information only ════════ */}
-      <section className="value-strip" aria-label="Luxedge store information">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-4">
-          {[
-            { icon: Truck01, title: freeShippingEnabled ? `Free ship $${freeShippingThreshold}+` : 'Fair shipping', desc: freeShippingEnabled ? 'Qualifying orders' : 'Calculated at checkout' },
-            { icon: RefreshCcw01, title: '30-day returns', desc: 'Hassle-free returns' },
-            { icon: ShieldTick, title: 'Curated quality', desc: 'Selected for pet owners' },
-            { icon: Headphones01, title: 'Support', desc: 'Real people, by email' },
-          ].map((item) => (
-            <div key={item.title} className="value-item">
-              <item.icon strokeWidth={1.5} size={14} className="value-item-icon" aria-hidden="true" />
-              <div>
-                <p className="value-item-title">{item.title}</p>
-                <p className="value-item-copy">{item.desc}</p>
-              </div>
+      {/* ════════ TRUST PILLS — truthful store information ════════ */}
+      <section className="section-compact bg-white" aria-label="Why shop at Luxedge">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal>
+            <div className="trust-pill-row">
+              {[
+                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: freeShippingEnabled ? `Free Shipping $${freeShippingThreshold}+` : 'Fast Shipping' },
+                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-Day Easy Returns' },
+                { icon: <ShieldTick strokeWidth={1.5} size={13} />, text: 'Thoughtfully Curated' },
+                { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Customer Support' },
+                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Secure Checkout' },
+              ].map((item, i) => (
+                <span key={i} className="trust-pill">
+                  {item.icon}
+                  {item.text}
+                </span>
+              ))}
             </div>
-          ))}
+          </Reveal>
         </div>
       </section>
 
