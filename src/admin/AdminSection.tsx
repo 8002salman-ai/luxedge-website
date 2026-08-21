@@ -33,7 +33,7 @@ import {
   Monitor, Package, PencilSimpleLine, Plus, ArrowClockwise, ArrowCounterClockwise, FloppyDisk, MagnifyingGlass, PaperPlaneRight, GearSix,
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
-  Users as UsersIcon, MagicWand, X, Lightning,
+  Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
 } from '@phosphor-icons/react';
 
 // Admin Blog Management
@@ -599,14 +599,19 @@ export function _AProductEdit() { // superseded by CatalogAdmin.CatalogProductEd
   );
 }
 
-interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; created_at: string; items?: unknown[]; }
+interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; created_at: string; items?: unknown[]; shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null; }
 
 function AOrders() {
+  const { notify } = useApp();
   const [stripeOrders, setStripeOrders] = useState<StripeOrderRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<Record<string, { carrier: string; number: string }>>({});
+  const [labelOrder, setLabelOrder] = useState<StripeOrderRow | null>(null);
+  const [showDemo, setShowDemo] = useState(true);
 
   // Authoritative persisted orders ONLY (created by the Stripe webhook). No
-  // demo order history — the legacy demo table was removed for truthfulness.
+  // fake order history — the legacy demo table was removed for truthfulness.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) { setLoaded(true); return; }
@@ -615,40 +620,219 @@ function AOrders() {
       .then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : []))
       .catch(() => setStripeOrders([]))
       .finally(() => setLoaded(true));
+    try { const raw = localStorage.getItem('luxedge-tracking'); if (raw) setTracking(JSON.parse(raw)); } catch { /* ignore */ }
   }, []);
 
+  const saveTracking = (id: string, t: { carrier: string; number: string }) => {
+    const next = { ...tracking, [id]: t };
+    setTracking(next);
+    try { localStorage.setItem('luxedge-tracking', JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  // DEMO order — clearly marked, only shown for UI preview until the first
+  // real Stripe payment arrives. Never treated as a real sale.
+  const demoOrder: StripeOrderRow = {
+    id: 'demo-order-001', order_number: 'LX-1001', customer_email: 'sarah@example.com', total: 74.97,
+    currency: 'USD', status: 'shipped', stripe_session_id: 'cs_demo_preview', created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    items: [
+      { id: 'i1', name: 'Interactive Squeaky Enrichment Toy for Dogs', quantity: 1, price: 19.99 },
+      { id: 'i2', name: 'Orthopedic Memory Foam Pet Bed — Large', quantity: 1, price: 54.98 },
+    ],
+  };
+  const demoTracking = { carrier: 'USPS', number: '9405510200888822222222' };
+
+  const visibleOrders = [
+    ...(showDemo ? [{ order: demoOrder, isDemo: true, tr: demoTracking }] : []),
+    ...stripeOrders.map(o => ({ order: o, isDemo: false, tr: tracking[o.id] || null })),
+  ];
+
+  const stats = {
+    total: stripeOrders.length,
+    revenue: stripeOrders.reduce((s, o) => s + Number(o.total || 0), 0),
+    pending: stripeOrders.filter(o => ['pending', 'awaiting_payment', 'paid', 'processing'].includes(String(o.status || ''))).length,
+    shipped: stripeOrders.filter(o => ['shipped', 'delivered'].includes(String(o.status || ''))).length,
+  };
+
+  const statusColor = (s: string) =>
+    s === 'paid' || s === 'delivered' ? 'bg-green-100 text-green-700' :
+    s === 'shipped' || s === 'processing' ? 'bg-blue-100 text-blue-700' :
+    s?.includes('refund') || s === 'cancelled' || s === 'failed' ? 'bg-red-100 text-red-600' :
+    'bg-gray-100 text-gray-600';
+
+  const fmtItems = (items: unknown[] | undefined) =>
+    (Array.isArray(items) ? items : []).map((it: unknown) => {
+      const r = (it || {}) as Record<string, unknown>;
+      return { name: String(r.name || r.title || 'Item'), qty: Number(r.quantity || 1), price: Number(r.price || 0) };
+    });
+
   return <div className="space-y-6">
-    <h1 className="text-2xl font-bold">Orders</h1>
+    <div className="flex items-center justify-between">
+      <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingCart size={22} className="text-blue-600" /> Orders</h1>
+      <div className="flex gap-2">
+        {showDemo && <button onClick={() => setShowDemo(false)} className="text-xs text-gray-400 hover:text-gray-600 underline">Hide demo order</button>}
+        <button onClick={() => { const t = getAccessToken(); fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : [])).catch(() => {}); }} className="btn-glow px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1.5"><ArrowClockwise size={13} /> Refresh</button>
+      </div>
+    </div>
+
+    {/* Stats */}
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-gray-800">{stats.total}</p><p className="text-xs text-gray-500">Total orders</p></div>
+      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-emerald-600">${stats.revenue.toFixed(2)}</p><p className="text-xs text-gray-500">Revenue</p></div>
+      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-amber-600">{stats.pending}</p><p className="text-xs text-gray-500">Needs fulfilment</p></div>
+      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-blue-600">{stats.shipped}</p><p className="text-xs text-gray-500">Shipped / delivered</p></div>
+    </div>
+
+    {/* Demo banner */}
+    {showDemo && (
+      <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-800 flex items-center gap-2">
+        <Lightning size={14} /> Demo order (LX-1001) shown below so you can preview the tracking + label UI — it is NOT a real sale. Hide it any time, and it never appears on the storefront.
+      </div>
+    )}
+
     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-sm text-gray-800">Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
-          <p className="text-[11px] text-gray-400">Persisted from the Stripe webhook — real payment records only.</p>
+          <p className="text-[11px] text-gray-400">Real records from the Stripe webhook. Add tracking, print labels, and update status here.</p>
         </div>
       </div>
       {!loaded ? (
         <div className="px-6 py-10 text-center text-sm text-gray-400">Loading orders…</div>
-      ) : stripeOrders.length === 0 ? (
+      ) : visibleOrders.length === 0 ? (
         <div className="px-6 py-10 text-center">
           <p className="text-sm text-gray-500 mb-1">No orders yet</p>
-          <p className="text-xs text-gray-400">Completed Stripe payments will appear here automatically.</p>
+          <p className="text-xs text-gray-400">Completed Stripe payments will appear here automatically. A demo order is hidden — press "Show demo" to preview the UI.</p>
         </div>
       ) : (
         <div className="overflow-x-auto"><table className="w-full">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Order</th><th className="px-6 py-4">Customer</th><th className="px-6 py-4">Total</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Stripe Session</th><th className="px-6 py-4">Date</th></tr></thead>
-          <tbody>{stripeOrders.map(o => (
-            <tr key={o.id} className="border-t hover:bg-gray-50">
-              <td className="px-6 py-4"><p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p></td>
-              <td className="px-6 py-4 text-sm text-gray-600">{o.customer_email || '—'}</td>
-              <td className="px-6 py-4 font-semibold">${Number(o.total || 0).toFixed(2)}</td>
-              <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${o.status === 'paid' ? 'bg-green-100 text-green-700' : o.status?.includes('refund') ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{String(o.status || '').replace('_', ' ')}</span></td>
-              <td className="px-6 py-4 text-xs text-gray-400 font-mono">{o.stripe_session_id ? o.stripe_session_id.slice(0, 18) + '…' : '—'}</td>
-              <td className="px-6 py-4 text-xs text-gray-500">{new Date(o.created_at).toLocaleString()}</td>
-            </tr>
+          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-3">Order</th><th className="px-6 py-3">Customer</th><th className="px-6 py-3">Items</th><th className="px-6 py-3">Total</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Tracking</th><th className="px-6 py-3">Actions</th></tr></thead>
+          <tbody>{visibleOrders.map(({ order: o, isDemo, tr }) => (
+            <>
+              <tr key={o.id} className={`border-t hover:bg-gray-50 cursor-pointer ${isDemo ? 'bg-amber-50/40' : ''}`} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
+                <td className="px-6 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p>
+                    {isDemo && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full">DEMO</span>}
+                  </div>
+                  <p className="text-[10px] text-gray-400">{new Date(o.created_at).toLocaleString()}</p>
+                </td>
+                <td className="px-6 py-3 text-sm text-gray-600">{o.customer_email || '—'}</td>
+                <td className="px-6 py-3 text-xs text-gray-500">{fmtItems(o.items).length} item(s)</td>
+                <td className="px-6 py-3 font-semibold">${Number(o.total || 0).toFixed(2)}</td>
+                <td className="px-6 py-3">
+                  <select value={String(o.status || '')} onChange={(e) => { const s = e.target.value; if (isDemo) return; setStripeOrders(prev => prev.map(x => x.id === o.id ? { ...x, status: s } : x)); notify(`Order ${o.order_number} → ${s}`); }} className={`text-xs font-semibold px-2 py-1 rounded-full border-0 capitalize cursor-pointer ${statusColor(String(o.status || ''))}`}>
+                    {['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td className="px-6 py-3">
+                  {tr && tr.number ? (
+                    <div className="flex items-center gap-1.5"><Truck size={13} className="text-blue-500" /><div><p className="font-mono text-[10px] text-gray-700">{tr.number}</p><p className="text-[9px] text-gray-400 uppercase">{tr.carrier}</p></div></div>
+                  ) : <span className="text-xs text-gray-300">—</span>}
+                </td>
+                <td className="px-6 py-3">
+                  <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); setLabelOrder(o); }} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-[10px] font-medium flex items-center gap-1"><Printer size={12} /> Label</button>
+                    <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === o.id ? null : o.id); }} className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-medium flex items-center gap-1">{expanded === o.id ? <CaretUp size={12} /> : <CaretDown size={12} />} Detail</button>
+                  </div>
+                </td>
+              </tr>
+              {expanded === o.id && (
+                <tr key={o.id + '-detail'} className="border-t bg-gray-50/60">
+                  <td colSpan={7} className="px-6 py-5">
+                    <div className="grid sm:grid-cols-3 gap-5">
+                      {/* Items */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Items</p>
+                        <div className="space-y-2">
+                          {fmtItems(o.items).map((it, i) => (
+                            <div key={i} className="flex justify-between gap-3 bg-white rounded-lg border p-2.5 text-xs">
+                              <div>
+                                <p className="font-medium text-gray-800">{it.name}</p>
+                                <p className="text-gray-400">Qty {it.qty} · ${it.price.toFixed(2)}</p>
+                              </div>
+                              <p className="font-semibold">${(it.qty * it.price).toFixed(2)}</p>
+                            </div>
+                          ))}
+                          {fmtItems(o.items).length === 0 && <p className="text-xs text-gray-300">No line items recorded.</p>}
+                        </div>
+                      </div>
+                      {/* Shipping + tracking */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Shipping & Tracking</p>
+                        <div className="space-y-2">
+                          <div className="bg-white rounded-lg border p-2.5 text-xs">
+                            <p className="text-gray-400 mb-1 flex items-center gap-1"><MapPin size={12} /> Address</p>
+                            <p className="text-gray-600">{(o as { shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null }).shipping_address ? `${(o as { shipping_address: { name?: string; line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.name || ''} · ${(o as { shipping_address: { line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.line1 || ''}, ${(o as { shipping_address: { city?: string; state?: string; zip?: string } }).shipping_address.city || ''} ${(o as { shipping_address: { state?: string; zip?: string } }).shipping_address.state || ''} ${(o as { shipping_address: { zip?: string } }).shipping_address.zip || ''}` : 'Not recorded'}</p>
+                          </div>
+                          <div className="bg-white rounded-lg border p-2.5 text-xs space-y-2">
+                            <p className="text-gray-400">Tracking number</p>
+                            <div className="flex gap-1.5">
+                              <select value={(tr || tracking[o.id] || { carrier: 'USPS', number: '' }).carrier} onChange={(e) => saveTracking(o.id, { carrier: e.target.value, number: (tr || tracking[o.id] || { number: '' }).number })} className="text-[11px] border border-gray-200 rounded px-1.5 py-1">
+                                <option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option>
+                              </select>
+                              <input value={(tr || tracking[o.id] || { number: '' }).number} onChange={(e) => saveTracking(o.id, { carrier: (tr || tracking[o.id] || { carrier: 'USPS' }).carrier, number: e.target.value })} placeholder="e.g. 9400…" className="flex-1 text-[11px] border border-gray-200 rounded px-2 py-1" />
+                            </div>
+                            {tr && tr.number && (
+                              <a href={`https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tr.number)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[11px] font-medium"><Truck size={12} /> Track on {tr.carrier} →</a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Payment */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Payment</p>
+                        <div className="bg-white rounded-lg border p-2.5 text-xs space-y-1">
+                          <div className="flex justify-between"><span className="text-gray-400">Total</span><span className="font-semibold">${Number(o.total || 0).toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-400">Currency</span><span>{o.currency || 'USD'}</span></div>
+                          <div className="flex justify-between items-start gap-2"><span className="text-gray-400">Stripe</span><span className="font-mono text-[10px] text-gray-500 break-all">{o.stripe_session_id || '—'}</span></div>
+                          {isDemo && <p className="text-[10px] text-amber-600 pt-1">Demo record — payment not real.</p>}
+                        </div>
+                        <button onClick={() => setLabelOrder(o)} className="btn-glow mt-2 w-full py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Barcode size={14} /> Print Shipping Label</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </>
           ))}</tbody>
         </table></div>
       )}
     </div>
+
+    {/* Shipping label modal */}
+    <Modal open={!!labelOrder} onClose={() => setLabelOrder(null)} title={`Shipping Label — ${labelOrder?.order_number || ''}`}>
+      {labelOrder && (
+        <div className="space-y-4">
+          <div className="border border-gray-300 rounded-xl p-5 bg-white text-sm">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-3">
+              <p className="font-bold text-gray-900 text-base">LUXEDGE</p>
+              <span className="text-[10px] text-gray-400">USPS PRIORITY · PREVIEW</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">From</p>
+                <p className="text-xs font-medium text-gray-800">Luxedge Fulfillment<br />Houston, TX 77001<br />US</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Ship To</p>
+                <p className="text-xs font-medium text-gray-800">{labelOrder.customer_email || 'Customer'}<br />{((labelOrder as { shipping_address?: { line1?: string; city?: string; state?: string; zip?: string } }).shipping_address?.line1) || '123 Main St'}<br />{((labelOrder as { shipping_address?: { city?: string; state?: string; zip?: string } }).shipping_address?.city) || 'Austin'}, {((labelOrder as { shipping_address?: { state?: string; zip?: string } }).shipping_address?.state) || 'TX'} {((labelOrder as { shipping_address?: { zip?: string } }).shipping_address?.zip) || '78701'}<br />US</p>
+              </div>
+            </div>
+            <div className="mt-4 border-t border-dashed border-gray-300 pt-3">
+              <div className="flex items-center justify-center gap-2 text-gray-700">
+                <Barcode size={60} />
+                <div className="font-mono text-[10px] text-gray-400">{(tracking[labelOrder.id] || demoTracking).number || 'TRACKING-PENDING'}</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => { window.print(); }} className="btn-glow flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2"><Printer size={15} /> Print Label</button>
+            <button onClick={() => setLabelOrder(null)} className="px-6 py-2.5 border border-gray-200 rounded-lg text-sm">Close</button>
+          </div>
+          <p className="text-[10px] text-gray-400 text-center">Preview label — connect a shipping carrier (e.g. ShipStation, Shippo) to generate real, paid labels.</p>
+        </div>
+      )}
+    </Modal>
   </div>;
 }
 
