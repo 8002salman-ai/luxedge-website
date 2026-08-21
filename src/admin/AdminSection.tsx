@@ -838,7 +838,32 @@ function ASettings() {
     serverProviderStatus().then(setEnvStatus).catch(() => setEnvStatus({ backend: 'missing', providers: [] }));
   }, []);
 
-const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: false, api: true, store: false, profile: false, password: false, integrations: false });
+  // AdSense & ads.txt — read the live site config (same source as Marketing & Traffic).
+  const [cfg, setCfg] = useState<MarketingConfig>(() => JSON.parse(JSON.stringify(DEFAULT_CONFIG)));
+  const [adsTxtStatus, setAdsTxtStatus] = useState<'checking' | 'configured' | 'missing' | 'invalid'>('checking');
+  useEffect(() => {
+    fetchGlobalConfig().then(g => { setCfg(JSON.parse(JSON.stringify(g))); }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/ads.txt');
+        if (!r.ok) { setAdsTxtStatus('missing'); return; }
+        const txt = (await r.text()).trim();
+        const expected = (cfg.adsTxtRecord || DEFAULT_CONFIG.adsTxtRecord).trim();
+        if (txt === expected) setAdsTxtStatus('configured');
+        else if (txt.includes('pub-')) setAdsTxtStatus('invalid');
+        else setAdsTxtStatus('missing');
+      } catch { setAdsTxtStatus('missing'); }
+    })();
+  }, [cfg.adsTxtRecord]);
+  const adsenseOk = cfg.adsenseEnabled && CLIENT_ID_RE.test(cfg.adsenseClientId.trim());
+  const copyAdsTxt = async () => {
+    try { await navigator.clipboard.writeText(cfg.adsTxtRecord); notify('ads.txt entry copied'); }
+    catch { notify('Copy failed — select the text manually', 'error'); }
+  };
+
+const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: false, api: true, store: false, profile: false, password: false, adsense: true, integrations: false });
   const toggle = (k: string) => setOpen(s => ({ ...s, [k]: !s[k] }));
 
   const [pricingRules, setPricingRules] = useState(loadPricingRules());
@@ -1022,6 +1047,34 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
             <div><label className={L}>Confirm New Password *</label><input type="password" value={confPass} onChange={e => setConfPass(e.target.value)} className={I} placeholder="Re-enter new password" required minLength={6} /></div>
             <button type="submit" className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"><Lock size={16} />Update Password</button>
           </form>
+        </div>
+      </Accordion>
+
+      {/* ── AdSense & ads.txt ── */}
+      <Accordion id="adsense" title="Google AdSense & ads.txt" icon={<Megaphone size={18} className="text-blue-500" />} borderClass="border-blue-300" open={open} toggle={toggle}>
+        <div className="pt-5 space-y-4">
+          <p className="text-sm text-gray-500">AdSense is already configured for this site. ads.txt tells Google who is authorized to sell your ad inventory — it is served at <code className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">/ads.txt</code>.</p>
+
+          {/* Live status */}
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50">
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Google AdSense</p>
+              <p className="font-semibold text-gray-800">{adsenseOk ? 'Configured' : cfg.adsenseEnabled ? 'Invalid config' : 'Disabled'}</p>
+              {cfg.adsenseClientId && <p className="text-xs text-gray-500 mt-1 font-mono">{cfg.adsenseClientId}</p>}
+            </div>
+            <div className="p-4 rounded-xl border border-green-100 bg-green-50/50">
+              <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">ads.txt</p>
+              <p className="font-semibold text-gray-800">{adsTxtStatus === 'configured' ? 'Live on site ✓' : adsTxtStatus === 'checking' ? 'Checking…' : adsTxtStatus === 'invalid' ? 'Present but mismatch' : 'Not found on /ads.txt'}</p>
+              <button type="button" onClick={copyAdsTxt} className="text-xs text-blue-600 hover:text-blue-800 mt-1 underline">Copy ads.txt line</button>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-semibold text-gray-500 mb-1.5">Current /ads.txt content</p>
+            <code className="block text-xs font-mono text-gray-700 whitespace-pre-wrap break-all">{cfg.adsTxtRecord}</code>
+          </div>
+
+          <p className="text-xs text-gray-400">AdSense on/off, client ID, auto ads, placements and the ads.txt record are managed in <button type="button" onClick={() => navigate('/admin/marketing-traffic')} className="text-blue-600 hover:text-blue-800 font-medium underline">Marketing &amp; Traffic</button>.</p>
         </div>
       </Accordion>
 
