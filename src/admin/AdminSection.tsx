@@ -8,7 +8,7 @@ import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } fr
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct, buildImportImages, buildImportVariants, buildImportProductInput, buildStorageImageInputs, importProductImagesToStorage, buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence, isEmptyExtraction } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
-import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
+import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, createCategory, updateCategory, deleteCategory, setDbToken } from '../features/catalog/repository';
 import { loadProviderSettings, saveProviderSettings } from '../features/ai/providers';
 import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RULES } from '../features/ai/pricing';
 import ProductScout from './ProductScout';
@@ -677,13 +677,68 @@ function ACategories() {
   const [delId, setDelId] = useState<string | null>(null);
   const [subModal, setSubModal] = useState<string | null>(null);
   const [subName, setSubName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Categories live in Supabase (the Add Product dropdown reads the same
+  // table) — never only in memory. Reload from the DB on mount.
+  const reload = useCallback(async () => {
+    try {
+      const cs = await listCategories();
+      setCategories(cs.map((c) => ({ id: c.id, name: c.name, isActive: c.isActive, subs: [] })));
+    } catch (e) {
+      notify(`Could not load categories: ${(e as Error).message}`, 'error');
+    }
+  }, [setCategories, notify]);
+  useEffect(() => { void reload(); }, [reload]);
 
   const toggle = (id: string) => { const n = new Set(expanded); n.has(id) ? n.delete(id) : n.add(id); setExpanded(n); };
   const openAdd = () => { setEdit(null); setForm({ name: '', isActive: true, parentId: '' }); setModal(true); };
   const openEdit = (c: AdminCategory) => { setEdit(c); setForm({ name: c.name, isActive: c.isActive, parentId: '' }); setModal(true); };
-  const save = (e: React.FormEvent) => { e.preventDefault(); if (edit) { setCategories(prev => prev.map(c => c.id === edit.id ? { ...c, name: form.name, isActive: form.isActive } : c)); notify('Category updated!'); } else { setCategories(prev => [...prev, { id: `c${Date.now()}`, name: form.name, isActive: form.isActive, subs: [] }]); notify('Category added!'); } setModal(false); };
-  const del = () => { if (delId) { setCategories(prev => prev.filter(c => c.id !== delId)); notify('Category deleted!'); setDelId(null); } };
-  const toggleStatus = (id: string) => { setCategories(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c)); notify('Status updated!'); };
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setBusy(true);
+    try {
+      if (edit) {
+        await updateCategory(edit.id, { name: form.name, isActive: form.isActive });
+        notify('Category updated!');
+      } else {
+        await createCategory({ name: form.name, isActive: form.isActive });
+        notify('Category added!');
+      }
+      await reload();
+      setModal(false);
+    } catch (err) {
+      notify(`Could not save category: ${(err as Error).message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const del = async () => {
+    if (!delId) return;
+    setBusy(true);
+    try {
+      await deleteCategory(delId);
+      await reload();
+      notify('Category deleted!');
+      setDelId(null);
+    } catch (err) {
+      notify(`Could not delete category: ${(err as Error).message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggleStatus = async (id: string) => {
+    const c = categories.find((x) => x.id === id);
+    if (!c) return;
+    try {
+      await updateCategory(id, { isActive: !c.isActive });
+      await reload();
+      notify('Status updated!');
+    } catch (err) {
+      notify(`Could not update category: ${(err as Error).message}`, 'error');
+    }
+  };
   const addSub = (e: React.FormEvent) => { e.preventDefault(); if (subModal && subName) { setCategories(prev => prev.map(c => c.id === subModal ? { ...c, subs: [...c.subs, { id: `s${Date.now()}`, name: subName, isActive: true }] } : c)); setSubName(''); setSubModal(null); notify('Subcategory added!'); } };
   const delSub = (catId: string, subId: string) => { setCategories(prev => prev.map(c => c.id === catId ? { ...c, subs: c.subs.filter(s => s.id !== subId) } : c)); notify('Subcategory deleted!'); };
   const toggleSub = (catId: string, subId: string) => { setCategories(prev => prev.map(c => c.id === catId ? { ...c, subs: c.subs.map(s => s.id === subId ? { ...s, isActive: !s.isActive } : s) } : c)); notify('Updated!'); };
@@ -716,7 +771,7 @@ function ACategories() {
       </div>)}
     </div>
     <Modal open={modal} onClose={() => setModal(false)} title={edit ? 'Edit Category' : 'Add Category'}>
-      <form onSubmit={save} className="space-y-4"><input required placeholder="Category Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 border rounded-lg" /><label className="flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Active</label><div className="flex gap-3"><button type="submit" className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium">{edit ? 'FloppyDisk' : 'Add'}</button><button type="button" onClick={() => setModal(false)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>
+      <form onSubmit={save} className="space-y-4"><input required placeholder="Category Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 border rounded-lg" /><label className="flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} />Active</label><div className="flex gap-3"><button type="submit" disabled={busy} className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium disabled:opacity-50">{busy ? 'Saving…' : (edit ? 'Save' : 'Add')}</button><button type="button" onClick={() => setModal(false)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>
     </Modal>
     <Modal open={!!subModal} onClose={() => setSubModal(null)} title="Add Subcategory">
       <form onSubmit={addSub} className="space-y-4"><input required placeholder="Subcategory Name" value={subName} onChange={e => setSubName(e.target.value)} className="w-full px-4 py-2.5 border rounded-lg" /><div className="flex gap-3"><button type="submit" className="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium">Add</button><button type="button" onClick={() => setSubModal(null)} className="px-6 py-2.5 border rounded-lg">Cancel</button></div></form>

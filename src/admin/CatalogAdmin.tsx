@@ -583,7 +583,7 @@ export function CatalogProductEditor() {
       } else {
         setP({
           id: '', slug: '', name: '', shortDescription: '', description: '', features: [], specifications: {},
-          categoryId: cs[0]?.id ?? null, categoryName: cs[0]?.name ?? '', brand: 'Luxedge', status: 'draft',
+          categoryId: cs[0]?.id ?? null, categoryName: cs[0]?.name ?? '', brand: '', status: 'draft',
           price: 0, compareAtPrice: 0, costPrice: 0, landedCost: 0, marginPercent: null, currency: 'USD',
           sku: '', inventoryQty: 0, stockStatus: 'in_stock', lowStockThreshold: 0, shippingCost: 0,
           freeShipping: false, deliveryMinDays: null, deliveryMaxDays: null, usInventory: false,
@@ -761,7 +761,7 @@ export function CatalogProductEditor() {
                 {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div><label className={L}>Brand</label><input value={p.brand} onChange={(e) => set('brand', e.target.value)} className={I} /></div>
+            <div><label className={L}>Brand <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={p.brand} onChange={(e) => set('brand', e.target.value)} className={I} placeholder="e.g. KONG" /></div>
             <div className="sm:col-span-2">
               <label className={L}>Tags</label>
               <div className="flex flex-wrap gap-1.5 items-center">
@@ -1182,7 +1182,7 @@ function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; ca
             {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div><label className={L}>Brand</label><input value={product.brand} onChange={(e) => set('brand', e.target.value)} className={I} /></div>
+        <div><label className={L}>Brand <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={product.brand} onChange={(e) => set('brand', e.target.value)} className={I} placeholder="e.g. KONG" /></div>
         <div>
           <label className={L}>Retail price (USD) <span className="text-red-500">*</span></label>
           <input type="number" min="0" step="0.01" value={product.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} placeholder="0.00" />

@@ -368,7 +368,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
 // ---------------------------------------------------------------------------
 export async function listCategories(): Promise<CatalogCategory[]> {
   const db = getDb();
-  const rows = (await db.list<CategoryRow>('categories')) || [];
+  const rows = (await db.list<CategoryRow>('categories', { orderBy: 'sort_order' })) || [];
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -377,6 +377,58 @@ export async function listCategories(): Promise<CatalogCategory[]> {
     isActive: r.is_active !== false,
     sortOrder: num(r.sort_order),
   }));
+}
+
+/** Persist a new category to Supabase so it appears in the Add Product dropdown. */
+export async function createCategory(input: { name: string; isActive?: boolean }): Promise<CatalogCategory> {
+  const db = getDb();
+  const id = uid();
+  const slug = `${id.slice(0, 8)}`;
+  const now = new Date().toISOString();
+  const row = await db.insert<{ id: string } & Record<string, unknown>>('categories', {
+    id,
+    slug,
+    name: input.name.trim(),
+    is_active: input.isActive !== false,
+    sort_order: 0,
+    created_at: now,
+    updated_at: now,
+  });
+  return {
+    id: row.id,
+    name: input.name.trim(),
+    slug,
+    isActive: input.isActive !== false,
+    sortOrder: 0,
+  };
+}
+
+/** Rename / toggle a category. */
+export async function updateCategory(id: string, patch: { name?: string; isActive?: boolean }): Promise<CatalogCategory | null> {
+  const db = getDb();
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.name !== undefined) dbPatch.name = patch.name.trim();
+  if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+  dbPatch.updated_at = new Date().toISOString();
+  const row = await db.update<{ id: string } & Record<string, unknown>>('categories', id, dbPatch);
+  if (!row) return null;
+  const rn = typeof row.name === 'string' ? row.name : row.id;
+  const rsl = typeof row.slug === 'string' ? row.slug : row.id;
+  const rd = typeof row.description === 'string' ? row.description : undefined;
+  return {
+    id: row.id,
+    name: patch.name !== undefined ? patch.name.trim() : rn,
+    slug: rsl,
+    description: rd,
+    isActive: patch.isActive !== undefined ? patch.isActive : row.is_active !== false,
+    sortOrder: num(row.sort_order),
+  };
+}
+
+/** Hard-delete a category row (admin action). */
+export async function deleteCategory(id: string): Promise<void> {
+  const db = getDb();
+  await db.remove('categories', id);
 }
 
 // ---------------------------------------------------------------------------
