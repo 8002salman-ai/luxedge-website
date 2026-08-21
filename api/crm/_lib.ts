@@ -43,5 +43,6 @@ export async function supabaseFetch(
 
 /** True when the error is a missing crm_leads table (migration not applied yet). */
 export function isMissingTable(e: { ok: boolean; status: number; data: unknown }): boolean {
-  return !e.ok && /relation .*crm_leads.* does not exist|42P01/i.test(JSON.stringify(e.data || ''));
+  // PostgREST reports a missing table as PGRST205 / relation does not exist / 42P01.
+  return !e.ok && /crm_leads|PGRST205|42P01|relation .* does not exist/i.test(JSON.stringify(e.data || ''));
 }
