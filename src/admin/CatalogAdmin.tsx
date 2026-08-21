@@ -37,6 +37,7 @@ import {
 import { callAIProvider } from '../features/ai/client';
 import { loadAIProviders, loadProviderSettings, resolveProviderChain } from '../features/ai/providers';
 import { parseHtmlPage } from '../features/ai/importer';
+import { AIImportPanel } from './AIImportPanel';
 
 const I = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
 const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
@@ -568,8 +569,9 @@ export function CatalogProductEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<EditorTab>('general');
-  // Quick Add = compact one-screen form; Detail Add = full tabbed editor.
-  const [mode, setMode] = useState<'quick' | 'detail'>('quick');
+  // Quick Add = compact one-screen form; Detail Add = full tabbed editor;
+  // AI Import = the shared AI product import engine (research → review → draft).
+  const [mode, setMode] = useState<'quick' | 'detail' | 'ai'>('quick');
   const [p, setP] = useState<CatalogProduct | null>(null);
 
   const load = useCallback(async () => {
@@ -713,25 +715,32 @@ export function CatalogProductEditor() {
           <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 shrink-0">
             <button onClick={() => setMode('quick')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick</button>
             <button onClick={() => setMode('detail')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail</button>
+            <button onClick={() => setMode('ai')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'ai' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`} title="AI Import — research any product URL and save as a draft">✨ AI Import</button>
           </div>
         )}
         <div className="flex-1" />
-        <div className="relative shrink-0">
-          <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className="appearance-none pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs font-medium bg-white cursor-pointer" aria-label="Product status">
-            <option value="draft">Draft</option>
-            <option value="ready">Ready</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="archived">Archived</option>
-          </select>
-          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"><CaretDown size={11} /></span>
-        </div>
-        <button onClick={handleSave} disabled={saving} className="btn-glow px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0">
-          <FloppyDisk size={14} />{saving ? 'Saving…' : 'Save'}
-        </button>
+        {mode !== 'ai' && (
+          <>
+            <div className="relative shrink-0">
+              <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className="appearance-none pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs font-medium bg-white cursor-pointer" aria-label="Product status">
+                <option value="draft">Draft</option>
+                <option value="ready">Ready</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="archived">Archived</option>
+              </select>
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"><CaretDown size={11} /></span>
+            </div>
+            <button onClick={handleSave} disabled={saving} className="btn-glow px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0">
+              <FloppyDisk size={14} />{saving ? 'Saving…' : 'Save'}
+            </button>
+          </>
+        )}
       </div>
 
       {isNew && mode === 'quick' && <QuickAddForm product={p} cats={cats} onChange={setP} />}
+
+      {isNew && mode === 'ai' && <AIImportPanel />}
 
       {isNew && mode === 'detail' && (
         <div className="flex gap-1.5 overflow-x-auto pb-1">
