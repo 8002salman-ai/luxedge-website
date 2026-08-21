@@ -42,7 +42,7 @@ function makeHandler(env?: { SEND_MAIL?: unknown }) {
     } as unknown as ServerResponse;
     return Object.assign(captured, { server });
   }
-  function req(method: string, token?: string, body?: string): IncomingMessage {
+  function req(method: string, token?: string): IncomingMessage {
     const headers: Record<string, string> = {};
     if (token !== undefined) headers.authorization = `Bearer ${token}`;
     const r = {
@@ -120,14 +120,14 @@ describe('/api/email/send', () => {
   it('rejects non-admin with 403', async () => {
     const { res, req } = makeHandler({ SEND_MAIL: {} });
     const r = res();
-    await sendHandler(req('POST', BUYER_TOKEN, '{}'), r.server);
+    await sendHandler(req('POST', BUYER_TOKEN), r.server);
     expect(r.status).toBe(403);
   });
 
   it('reports 501 honestly when the send_email binding is missing', async () => {
     const { res, req } = makeHandler();
     const r = res();
-    await sendHandler(req('POST', ADMIN_TOKEN, '{}'), r.server);
+    await sendHandler(req('POST', ADMIN_TOKEN), r.server);
     expect(r.status).toBe(501);
     expect(r.body).toMatchObject({ ok: false });
     expect(JSON.stringify(r.body)).toContain('send_email binding');

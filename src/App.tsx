@@ -673,8 +673,9 @@ function Header() {
 function Footer() {
   const { categories } = useApp();
 
-  const FL = 'block text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors py-1';
-  const COLT = 'font-brand text-xs font-bold uppercase tracking-[0.22em] text-luxe-gold-light mb-4';
+  // Compact footer: tight spacing, inline links, verified policy pages.
+  const FL = 'block text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors py-0.5';
+  const COLT = 'font-brand text-[11px] font-bold uppercase tracking-[0.22em] text-luxe-gold-light mb-2.5';
 
   return (
     <footer className="bg-luxe-black text-luxe-white">
@@ -682,22 +683,22 @@ function Footer() {
       <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
 
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-8 gap-y-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-7 pb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-6">
 
           {/* Col 1 — Brand */}
           <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-3 mb-5 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-11 h-11 transition-transform duration-300 group-hover:scale-105" />
+            <Link to="/" className="flex items-center gap-3 mb-3 group w-fit" aria-label="Luxedge home">
+              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-10 h-10 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
-                <span className="font-brand text-xl font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
-                <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1.5">PREMIUM PET ESSENTIALS</span>
+                <span className="font-brand text-lg font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
+                <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
               </span>
             </Link>
-            <p className="text-luxe-white/60 text-sm leading-relaxed mb-6 max-w-xs">
+            <p className="text-luxe-white/60 text-[13px] leading-snug mb-3 max-w-xs">
               Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
             </p>
-            <div className="flex gap-2.5">
+            <div className="flex gap-2">
               {[
                 { label: 'Facebook', letter: 'f' },
                 { label: 'Instagram', letter: 'i' },
@@ -705,10 +706,28 @@ function Footer() {
                 { label: 'YouTube', letter: 'Y' },
               ].map(s => (
                 <a key={s.label} href="#" title={s.label} aria-label={s.label}
-                  className="w-9 h-9 bg-luxe-white/5 border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-luxe-white/70 group-hover:text-luxe-black text-sm font-bold">{s.letter.toUpperCase()}</span>
+                  className="w-8 h-8 bg-luxe-white/5 border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
+                  <span className="text-luxe-white/70 group-hover:text-luxe-black text-xs font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
+            </div>
+            {/* Google Business address + map */}
+            <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer"
+              className="flex items-start gap-2 mt-3 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors group w-fit">
+              <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+              <span>
+                5041 Courtside Dr,<br />Irving, TX 75038
+              </span>
+            </a>
+            <div className="mt-2.5 rounded-lg overflow-hidden border border-luxe-white/10 max-w-xs">
+              <iframe
+                title="Luxedge — 5041 Courtside Dr, Irving, TX 75038 on Google Maps"
+                src="https://www.google.com/maps?q=5041+Courtside+Dr,+Irving,+TX+75038&output=embed"
+                className="w-full h-28 block"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
             </div>
           </div>
 
@@ -732,8 +751,8 @@ function Footer() {
             <nav className="space-y-0.5" aria-label="Help">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
-              <Link to="/shipping-policy" className={FL}>Shipping</Link>
-              <Link to="/returns" className={FL}>Returns</Link>
+              <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
+              <Link to="/returns" className={FL}>Return Policy</Link>
               <Link to="/orders" className={FL}>Track Order</Link>
             </nav>
           </div>
@@ -742,10 +761,10 @@ function Footer() {
           <div>
             <h4 className={COLT}>Company</h4>
             <nav className="space-y-0.5" aria-label="Company">
-              <Link to="/about" className={FL}>About</Link>
+              <Link to="/about" className={FL}>About Us</Link>
               <Link to="/blog" className={FL}>Blog</Link>
-              <Link to="/privacy" className={FL}>Privacy</Link>
-              <Link to="/terms" className={FL}>Terms</Link>
+              <Link to="/privacy" className={FL}>Privacy Policy</Link>
+              <Link to="/terms" className={FL}>Terms of Service</Link>
               <Link to="/careers" className={FL}>Careers</Link>
             </nav>
           </div>
@@ -753,21 +772,17 @@ function Footer() {
           {/* Col 5 — Contact */}
           <div className="col-span-2 md:col-span-1">
             <h4 className={COLT}>Contact</h4>
-            <div className="space-y-2.5">
-              <a href="mailto:hello@luxedge.us" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Mail01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+            <div className="space-y-1.5">
+              <a href="mailto:hello@luxedge.us" className="flex items-center gap-2 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
+                <Mail01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
                 hello@luxedge.us
               </a>
-              <a href="tel:4409418002" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Phone strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+              <a href="tel:4409418002" className="flex items-center gap-2 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
+                <Phone strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
                 (440) 941-8002
               </a>
-              <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 text-sm text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                5041 Courtside Dr, Irving, TX 75038
-              </a>
-              <div className="flex items-start gap-2.5 text-sm text-luxe-white/70">
-                <Clock strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
+              <div className="flex items-center gap-2 text-[13px] text-luxe-white/70">
+                <Clock strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
                 Mon – Fri, 9AM – 6PM CT
               </div>
             </div>
@@ -777,9 +792,9 @@ function Footer() {
 
       {/* ── Categories Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span className="font-brand text-xs font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+            <span className="font-brand text-[11px] font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
               <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
             ))}
@@ -789,9 +804,9 @@ function Footer() {
 
       {/* ── Trust & Payment Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex flex-wrap items-center gap-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-4">
               {[
                 { icon: Truck01, text: 'Free Shipping $50+' },
                 { icon: RefreshCcw01, text: '30-Day Returns' },
@@ -811,8 +826,8 @@ function Footer() {
 
       {/* ── Bottom Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-xs text-luxe-white/50">
               © {new Date().getFullYear()} Luxedge. All rights reserved. | 5041 Courtside Dr, Irving, TX 75038
             </p>
