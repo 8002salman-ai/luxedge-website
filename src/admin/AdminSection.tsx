@@ -35,6 +35,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
+  Receipt, CloudArrowUp,
 } from '@phosphor-icons/react';
 
 // Admin Blog Management
@@ -609,7 +610,16 @@ function AOrders() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tracking, setTracking] = useState<Record<string, { carrier: string; number: string }>>({});
   const [labelOrder, setLabelOrder] = useState<StripeOrderRow | null>(null);
+  const [invoiceOrder, setInvoiceOrder] = useState<StripeOrderRow | null>(null);
   const [showDemo, setShowDemo] = useState(true);
+  // Per-order invoice extras (shipping / tax rate / discount) — admin-recorded,
+  // persisted locally like tracking. Defaults are honest: 0 = not recorded.
+  const [orderExtras, setOrderExtras] = useState<Record<string, { shipping: number; taxRate: number; discount: number }>>({});
+  // ERP (Emabni LLC) sync config — webhook URL + optional token, stored locally.
+  const [erpWebhook, setErpWebhook] = useState('');
+  const [erpToken, setErpToken] = useState('');
+  const [erpBusy, setErpBusy] = useState(false);
+  const [erpResult, setErpResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Authoritative persisted orders ONLY (created by the Stripe webhook). No
   // fake order history — the legacy demo table was removed for truthfulness.
@@ -622,12 +632,135 @@ function AOrders() {
       .catch(() => setStripeOrders([]))
       .finally(() => setLoaded(true));
     try { const raw = localStorage.getItem('luxedge-tracking'); if (raw) setTracking(JSON.parse(raw)); } catch { /* ignore */ }
+    try { const raw = localStorage.getItem('luxedge-order-extras'); if (raw) setOrderExtras(JSON.parse(raw)); } catch { /* ignore */ }
+    setErpWebhook(localStorage.getItem('luxedge-erp-webhook') || '');
+    setErpToken(localStorage.getItem('luxedge-erp-token') || '');
   }, []);
 
   const saveTracking = (id: string, t: { carrier: string; number: string }) => {
     const next = { ...tracking, [id]: t };
     setTracking(next);
     try { localStorage.setItem('luxedge-tracking', JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  const extrasFor = (o: StripeOrderRow) => {
+    const e = orderExtras[o.id] || (o.id === 'demo-order-001' ? { shipping: 6.99, taxRate: 8.25, discount: 0 } : { shipping: 0, taxRate: 0, discount: 0 });
+    // Round defensively — stale localStorage values may carry float artifacts.
+    return { shipping: Math.round(e.shipping * 100) / 100, taxRate: Math.round(e.taxRate * 100) / 100, discount: Math.round(e.discount * 100) / 100 };
+  };
+
+  const saveExtras = (id: string, e: { shipping: number; taxRate: number; discount: number }) => {
+    const next = { ...orderExtras, [id]: e };
+    setOrderExtras(next);
+    try { localStorage.setItem('luxedge-order-extras', JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  const subtotalOf = (o: StripeOrderRow) => fmtItems(o.items).reduce((s, it) => s + it.qty * it.price, 0);
+
+  // Invoice totals — subtotal + shipping − discount, then tax on the net.
+  const totalsOf = (o: StripeOrderRow) => {
+    const subtotal = subtotalOf(o);
+    const ex = extrasFor(o);
+    const discount = Math.min(ex.discount, subtotal);
+    const taxable = Math.max(subtotal - discount, 0);
+    const tax = taxable * (ex.taxRate / 100);
+    const grand = taxable + tax + ex.shipping;
+    return { subtotal, shipping: ex.shipping, discount, taxRate: ex.taxRate, tax, grand };
+  };
+
+  // Expand behaviour with many orders: accordion (one open at a time) + auto
+  // scroll so the opened detail is never lost below the fold.
+  useEffect(() => {
+    if (!expanded) return;
+    const el = document.getElementById(`order-detail-${expanded}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [expanded]);
+
+  // ── Invoice download — opens a clean printable invoice in a new tab (Save as PDF). ──
+  const downloadInvoice = (o: StripeOrderRow) => {
+    const t = totalsOf(o);
+    const addr = (o as { shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null }).shipping_address;
+    const items = fmtItems(o.items);
+    const rows = items.map(it => `<tr>
+      <td>${String(it.name).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</td>
+      <td style="text-align:center">${it.qty}</td>
+      <td style="text-align:right">$${it.price.toFixed(2)}</td>
+      <td style="text-align:right">$${(it.qty * it.price).toFixed(2)}</td></tr>`).join('\n');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${o.order_number}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:720px;margin:32px auto;padding:0 24px}
+        h1{font-size:20px;margin:0}.muted{color:#666;font-size:12px}
+        .head{display:flex;justify-content:space-between;border-bottom:2px solid #1e3a8a;padding-bottom:14px;margin-bottom:18px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th{background:#f1f5f9;text-align:left;padding:8px;font-size:11px;text-transform:uppercase;color:#475569}
+        td{padding:8px;border-bottom:1px solid #e2e8f0}
+        .totals{margin-top:16px;margin-left:auto;width:260px;font-size:13px}
+        .totals div{display:flex;justify-content:space-between;padding:3px 0}
+        .grand{font-weight:bold;border-top:2px solid #1e3a8a;margin-top:4px;padding-top:8px;font-size:15px}
+        .foot{margin-top:26px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px}
+      </style></head><body>
+      <div class="head"><div><h1>LUXEDGE — INVOICE</h1><p class="muted">Luxedge.us · Houston, TX · hello@luxedge.us</p></div>
+      <div style="text-align:right"><p><strong>${o.order_number}</strong></p><p class="muted">${new Date(o.created_at).toLocaleDateString()}</p><p class="muted">Status: ${String(o.status || 'unknown')}</p></div></div>
+      <div class="muted" style="margin-bottom:14px"><strong style="color:#111">Bill To:</strong> ${String(o.customer_email || '—')}<br>${addr ? `${String(addr.line1 || '')}, ${String(addr.city || '')} ${String(addr.state || '')} ${String(addr.zip || '')}` : 'Address not recorded'}</div>
+      <table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Line Total</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No line items recorded.</td></tr>'}</tbody></table>
+      <div class="totals">
+        <div><span>Subtotal</span><span>$${t.subtotal.toFixed(2)}</span></div>
+        ${t.shipping > 0 ? `<div><span>Shipping</span><span>$${t.shipping.toFixed(2)}</span></div>` : ''}
+        ${t.discount > 0 ? `<div><span>Discount</span><span>−$${t.discount.toFixed(2)}</span></div>` : ''}
+        ${t.tax > 0 ? `<div><span>Tax (${t.taxRate.toFixed(2)}%)</span><span>$${t.tax.toFixed(2)}</span></div>` : ''}
+        <div class="grand"><span>Total</span><span>$${t.grand.toFixed(2)}</span></div>
+      </div>
+      <p class="foot">Thank you for shopping with Luxedge. ${Number(o.total || 0) > 0 && Math.abs(t.grand - Number(o.total || 0)) > 0.01 ? `Stripe-recorded total: $${Number(o.total).toFixed(2)}. ` : ''}This is a Luxedge-generated invoice.</p>
+    </body></html>`;
+    const win = window.open('', '_blank', 'width=820,height=1000');
+    if (!win) { notify('Popup blocked — allow popups to download the invoice', 'error'); return; }
+    win.document.write(html); win.document.close();
+    win.focus();
+    setTimeout(() => { try { win.print(); } catch { /* user prints manually */ } }, 400);
+  };
+
+  // ── CSV export (matches the Excel-based Emabni ERP workflow). ──
+  const downloadCsv = () => {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['order_number', 'date', 'customer_email', 'status', 'subtotal', 'shipping', 'tax', 'discount', 'total', 'items'];
+    const rows = visibleOrders.map(({ order: o, isDemo }) => {
+      const t = totalsOf(o);
+      return [o.order_number, new Date(o.created_at).toISOString(), o.customer_email, o.status + (isDemo ? ' (DEMO)' : ''), t.subtotal.toFixed(2), t.shipping.toFixed(2), t.tax.toFixed(2), t.discount.toFixed(2), t.grand.toFixed(2), fmtItems(o.items).map(it => `${it.name} x${it.qty}`).join(' | ')].map(esc).join(',');
+    });
+    const csv = [header.map(esc).join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `luxedge-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(a.href);
+    notify('Orders CSV downloaded — import it into your Emabni ERP workbook');
+  };
+
+  // ── ERP push — sends orders to the Emabni ERP webhook when that repo is live. ──
+  const pushToErp = async (testOnly = false) => {
+    if (!erpWebhook.trim()) { setErpResult({ ok: false, msg: 'Set the ERP webhook URL first.' }); return; }
+    setErpBusy(true); setErpResult(null);
+    try {
+      const payload = {
+        app: 'luxedge', event: testOnly ? 'test' : 'orders.sync',
+        sent_at: new Date().toISOString(),
+        ...(testOnly ? {} : { orders: visibleOrders.map(({ order: o, isDemo, tr }) => ({
+          order_number: o.order_number, date: o.created_at, customer_email: o.customer_email, status: o.status,
+          demo: isDemo, subtotal: subtotalOf(o), ...extrasFor(o), total: totalsOf(o).grand,
+          tracking: tr ? { carrier: tr.carrier, number: tr.number } : null,
+          items: fmtItems(o.items), shipping_address: (o as { shipping_address?: unknown }).shipping_address || null,
+        })) }),
+      };
+      const res = await fetch(erpWebhook.trim(), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(erpToken.trim() ? { Authorization: `Bearer ${erpToken.trim()}` } : {}) },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      setErpResult({ ok: res.ok, msg: res.ok ? `ERP ${testOnly ? 'connection OK' : `received ${visibleOrders.length} order(s)`} — HTTP ${res.status}` : `ERP returned HTTP ${res.status}: ${text.slice(0, 120)}` });
+      if (res.ok) notify(testOnly ? 'ERP connection OK' : `Pushed ${visibleOrders.length} orders to ERP`);
+    } catch (e) {
+      setErpResult({ ok: false, msg: `ERP request failed: ${(e as Error).message}` });
+    } finally { setErpBusy(false); }
   };
 
   // DEMO order — clearly marked, only shown for UI preview until the first
@@ -683,6 +816,33 @@ function AOrders() {
       <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-blue-600">{stats.shipped}</p><p className="text-xs text-gray-500">Shipped / delivered</p></div>
     </div>
 
+    {/* ERP sync — Emabni LLC link (webhook push + CSV for the Excel workbook) */}
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <CloudArrowUp size={18} className="text-indigo-600" />
+          <div>
+            <p className="text-sm font-semibold text-indigo-900">ERP Sync — Emabni LLC</p>
+            <p className="text-[11px] text-indigo-700/70">Push orders to your ERP webhook, or download CSV for the Emabni Excel workbook. Works with any ERP repo that exposes a POST webhook.</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={downloadCsv} className="btn-glow px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"><Download size={13} /> Export CSV (Excel)</button>
+        </div>
+      </div>
+      <div className="mt-3 grid sm:grid-cols-2 gap-2">
+        <input value={erpWebhook} onChange={(e) => { setErpWebhook(e.target.value); localStorage.setItem('luxedge-erp-webhook', e.target.value); }} placeholder="ERP webhook URL — e.g. https://erp.yourdomain.com/api/luxedge/orders" className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
+        <div className="flex gap-2">
+          <input value={erpToken} onChange={(e) => { setErpToken(e.target.value); localStorage.setItem('luxedge-erp-token', e.target.value); }} type="password" placeholder="ERP API token (optional)" className="flex-1 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
+          <button onClick={() => pushToErp(true)} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50">{erpBusy ? '…' : 'Test'}</button>
+          <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"><CloudArrowUp size={13} /> Push orders</button>
+        </div>
+      </div>
+      {erpResult && (
+        <p className={`mt-2 text-[11px] ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
+      )}
+    </div>
+
     {/* Demo banner */}
     {showDemo && (
       <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-800 flex items-center gap-2">
@@ -732,14 +892,19 @@ function AOrders() {
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex gap-1.5">
+                    <button onClick={(e) => { e.stopPropagation(); setInvoiceOrder(o); }} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-medium flex items-center gap-1"><Receipt size={12} /> Invoice</button>
                     <button onClick={(e) => { e.stopPropagation(); setLabelOrder(o); }} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-[10px] font-medium flex items-center gap-1"><Printer size={12} /> Label</button>
                     <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === o.id ? null : o.id); }} className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-medium flex items-center gap-1">{expanded === o.id ? <CaretUp size={12} /> : <CaretDown size={12} />} Detail</button>
                   </div>
                 </td>
               </tr>
               {expanded === o.id && (
-                <tr key={o.id + '-detail'} className="border-t bg-gray-50/60">
+                <tr key={o.id + '-detail'} id={`order-detail-${o.id}`} className="border-t bg-gray-50/60">
                   <td colSpan={7} className="px-6 py-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Order detail — {o.order_number}</p>
+                      <button onClick={() => setInvoiceOrder(o)} className="btn-glow px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1.5"><Receipt size={13} /> Maximize — Full Invoice</button>
+                    </div>
                     <div className="grid sm:grid-cols-3 gap-5">
                       {/* Items */}
                       <div>
@@ -783,12 +948,18 @@ function AOrders() {
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Payment</p>
                         <div className="bg-white rounded-lg border p-2.5 text-xs space-y-1">
-                          <div className="flex justify-between"><span className="text-gray-400">Total</span><span className="font-semibold">${Number(o.total || 0).toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-400">Subtotal</span><span>${subtotalOf(o).toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-400">Shipping</span><span>${extrasFor(o).shipping.toFixed(2)}</span></div>
+                          <div className="flex justify-between"><span className="text-gray-400">Tax</span><span>${totalsOf(o).tax.toFixed(2)}</span></div>
+                          <div className="flex justify-between border-t border-gray-100 pt-1"><span className="text-gray-400">Total</span><span className="font-semibold">${totalsOf(o).grand.toFixed(2)}</span></div>
                           <div className="flex justify-between"><span className="text-gray-400">Currency</span><span>{o.currency || 'USD'}</span></div>
                           <div className="flex justify-between items-start gap-2"><span className="text-gray-400">Stripe</span><span className="font-mono text-[10px] text-gray-500 break-all">{o.stripe_session_id || '—'}</span></div>
                           {isDemo && <p className="text-[10px] text-amber-600 pt-1">Demo record — payment not real.</p>}
                         </div>
-                        <button onClick={() => setLabelOrder(o)} className="btn-glow mt-2 w-full py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Barcode size={14} /> Print Shipping Label</button>
+                        <div className="flex gap-1.5 mt-2">
+                          <button onClick={() => setInvoiceOrder(o)} className="btn-glow flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Receipt size={14} /> Invoice</button>
+                          <button onClick={() => setLabelOrder(o)} className="btn-glow flex-1 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Barcode size={14} /> Label</button>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -799,6 +970,73 @@ function AOrders() {
         </table></div>
       )}
     </div>
+
+    {/* Invoice modal — complete invoice with tax + shipping + download */}
+    <Modal open={!!invoiceOrder} onClose={() => setInvoiceOrder(null)} title={`Invoice ${invoiceOrder?.order_number || ''}`}>
+      {invoiceOrder && (() => {
+        const o = invoiceOrder;
+        const t = totalsOf(o);
+        const ex = extrasFor(o);
+        const addr = (o as { shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null }).shipping_address;
+        return (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-200 p-5 bg-white text-sm" id="luxedge-invoice">
+              <div className="flex items-start justify-between border-b-2 border-blue-800 pb-3">
+                <div>
+                  <p className="text-lg font-bold text-gray-900">LUXEDGE</p>
+                  <p className="text-[11px] text-gray-400">Luxedge.us · Houston, TX · hello@luxedge.us</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-900">{o.order_number}</p>
+                  <p className="text-[11px] text-gray-400">{new Date(o.created_at).toLocaleString()}</p>
+                  <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor(String(o.status || ''))}`}>{o.status}</span>
+                </div>
+              </div>
+              <div className="py-3 text-xs text-gray-600">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Bill To</p>
+                <p className="font-medium text-gray-800">{o.customer_email || '—'}</p>
+                <p className="text-gray-400">{addr ? `${addr.line1 || ''}, ${addr.city || ''} ${addr.state || ''} ${addr.zip || ''}` : 'Address not recorded'}</p>
+              </div>
+              <table className="w-full text-xs">
+                <thead><tr className="bg-gray-50 text-left text-[10px] uppercase text-gray-500"><th className="px-3 py-2">Item</th><th className="px-3 py-2 text-center">Qty</th><th className="px-3 py-2 text-right">Unit</th><th className="px-3 py-2 text-right">Line Total</th></tr></thead>
+                <tbody>
+                  {fmtItems(o.items).map((it, i) => (
+                    <tr key={i} className="border-b border-gray-100">
+                      <td className="px-3 py-2">{it.name}</td>
+                      <td className="px-3 py-2 text-center">{it.qty}</td>
+                      <td className="px-3 py-2 text-right">${it.price.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-medium">${(it.qty * it.price).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  {fmtItems(o.items).length === 0 && <tr><td colSpan={4} className="px-3 py-2 text-gray-400">No line items recorded.</td></tr>}
+                </tbody>
+              </table>
+              <div className="mt-3 flex justify-end">
+                <div className="w-64 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>${t.subtotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">Shipping ($)</span>
+                    <input type="number" min={0} step="0.01" value={Math.round(ex.shipping * 100) / 100} onChange={(e) => saveExtras(o.id, { ...ex, shipping: Math.round((Number(e.target.value) || 0) * 100) / 100 })} className="w-20 text-right border border-gray-200 rounded px-1.5 py-0.5" /></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">Tax rate (%)</span>
+                    <input type="number" min={0} step="0.01" value={Math.round(ex.taxRate * 100) / 100} onChange={(e) => saveExtras(o.id, { ...ex, taxRate: Math.round((Number(e.target.value) || 0) * 100) / 100 })} className="w-20 text-right border border-gray-200 rounded px-1.5 py-0.5" /></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-500">Discount ($)</span>
+                    <input type="number" min={0} step="0.01" value={Math.round(ex.discount * 100) / 100} onChange={(e) => saveExtras(o.id, { ...ex, discount: Math.round((Number(e.target.value) || 0) * 100) / 100 })} className="w-20 text-right border border-gray-200 rounded px-1.5 py-0.5" /></div>
+                  {t.tax > 0 && <div className="flex justify-between"><span className="text-gray-500">Tax</span><span>${t.tax.toFixed(2)}</span></div>}
+                  <div className="flex justify-between font-bold border-t border-gray-200 pt-1.5 text-sm"><span>Total</span><span>${t.grand.toFixed(2)}</span></div>
+                  {Number(o.total || 0) > 0 && Math.abs(t.grand - Number(o.total || 0)) > 0.01 && (
+                    <p className="text-[10px] text-amber-600 pt-1">Stripe-recorded total: ${Number(o.total).toFixed(2)} — update shipping/tax to reconcile.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => downloadInvoice(o)} className="btn-glow flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2"><Download size={15} /> Download Invoice (PDF)</button>
+              <button onClick={() => setInvoiceOrder(null)} className="px-6 py-2.5 border border-gray-200 rounded-lg text-sm">Close</button>
+            </div>
+            <p className="text-[10px] text-gray-400 text-center">Shipping / tax / discount are admin-recorded per order. Download opens a clean printable invoice — choose “Save as PDF” in the print dialog. CSV export (Excel) is on the Orders page.</p>
+          </div>
+        );
+      })()}
+    </Modal>
 
     {/* Shipping label modal */}
     <Modal open={!!labelOrder} onClose={() => setLabelOrder(null)} title={`Shipping Label — ${labelOrder?.order_number || ''}`}>
