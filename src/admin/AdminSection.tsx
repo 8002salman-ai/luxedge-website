@@ -8,7 +8,8 @@ import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } fr
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
-import { listCategories, createCategory, updateCategory, deleteCategory } from '../features/catalog/repository';
+import { listCategories, createCategory, updateCategory, deleteCategory, listProducts, setDbToken } from '../features/catalog/repository';
+import type { CatalogProduct } from '../features/catalog/types';
 import { AIImportPanel } from './AIImportPanel';
 import { loadProviderSettings, saveProviderSettings } from '../features/ai/providers';
 import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RULES } from '../features/ai/pricing';
@@ -181,72 +182,165 @@ function AdminLayout({ children }: { children: ReactNode }) {
 interface DashOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
 
 function ADashboard() {
-  const { products, users, reviews } = useApp();
+  const { users, reviews } = useApp();
   const [realOrders, setRealOrders] = useState<DashOrderRow[]>([]);
-  // REAL orders only (Stripe webhook → luxedge_orders). No demo numbers.
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+
+  // REAL data only (Stripe webhook orders + the DB catalog). No demo numbers.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
+    setDbToken(token);
     fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((d: { orders?: DashOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
       .catch(() => setRealOrders([]));
+    listProducts().then(setCatalog).catch(() => setCatalog([]));
   }, []);
-  const rev = realOrders.reduce((s, o) => s + Number(o.total || 0), 0);
-  const pending = realOrders.filter(o => o.status === 'awaiting_payment' || o.status === 'pending').length;
-  const pendingR = reviews.filter(r => r.status === 'pending').length;
-  const lowStock = products.filter(p => p.stock <= 10).length;
 
-  const stats = [
-    { l: 'Revenue', v: `$${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`, i: CurrencyDollar, c1: '#10b981', c2: '#059669', bg: 'from-emerald-500 to-teal-600' },
-    { l: 'Orders', v: realOrders.length, i: ShoppingCart, c1: '#3b82f6', c2: '#2563eb', bg: 'from-blue-500 to-indigo-600' },
-    { l: 'Customers', v: users.length, i: UsersIcon, c1: '#8b5cf6', c2: '#7c3aed', bg: 'from-violet-500 to-purple-600' },
-    { l: 'Products', v: products.length, i: Package, c1: '#0088ff', c2: '#00d2ff', bg: 'from-blue-500 to-cyan-400' },
+  const rev = realOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+  const pending = realOrders.filter(o => ['awaiting_payment', 'pending'].includes(String(o.status || ''))).length;
+  const pendingR = reviews.filter(r => r.status === 'pending').length;
+
+  // Catalog overview (full DB, not just storefront-active)
+  const totalProducts = catalog.length;
+  const activeProducts = catalog.filter(p => p.status === 'active').length;
+  const drafts = catalog.filter(p => p.status === 'draft').length;
+  const commerceReady = catalog.filter(p => p.commerceReadiness === 'COMMERCE_READY').length;
+  const lowStock = catalog.filter(p => Number(p.inventoryQty ?? 0) <= 10).length;
+  const aov = realOrders.length ? rev / realOrders.length : 0;
+
+  // Last 7 days revenue (real orders only)
+  const days: { label: string; total: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    const total = realOrders.filter(o => { const t = new Date(o.created_at); return t >= d && t < next; }).reduce((s, o) => s + Number(o.total || 0), 0);
+    days.push({ label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), total });
+  }
+  const maxDay = Math.max(...days.map(d => d.total), 1);
+  const weekRev = days.reduce((s, d) => s + d.total, 0);
+
+  // Order status breakdown
+  const statusMeta: { s: string; color: string; bg: string }[] = [
+    { s: 'paid', color: 'bg-emerald-500', bg: 'bg-emerald-100 text-emerald-700' },
+    { s: 'processing', color: 'bg-blue-500', bg: 'bg-blue-100 text-blue-700' },
+    { s: 'shipped', color: 'bg-sky-500', bg: 'bg-sky-100 text-sky-700' },
+    { s: 'delivered', color: 'bg-teal-500', bg: 'bg-teal-100 text-teal-700' },
+    { s: 'refunded', color: 'bg-amber-500', bg: 'bg-amber-100 text-amber-700' },
+    { s: 'pending', color: 'bg-gray-400', bg: 'bg-gray-100 text-gray-600' },
+  ];
+  const statusCounts = statusMeta.map(m => ({ ...m, n: realOrders.filter(o => String(o.status || '') === m.s).length }));
+  const statusTotal = statusCounts.reduce((a, b) => a + b.n, 0);
+
+  const kpis = [
+    { l: 'Revenue', v: `$${rev.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, sub: `${realOrders.length} orders`, i: CurrencyDollar, bg: 'from-emerald-500 to-teal-600', c1: '#10b981', c2: '#059669' },
+    { l: 'Avg order value', v: `$${aov.toFixed(2)}`, sub: 'per order', i: TrendUp, bg: 'from-violet-500 to-purple-600', c1: '#8b5cf6', c2: '#7c3aed' },
+    { l: 'Products', v: totalProducts, sub: `${activeProducts} live on storefront`, i: Package, bg: 'from-blue-500 to-cyan-400', c1: '#3b82f6', c2: '#00d2ff' },
+    { l: 'Commerce-ready', v: commerceReady, sub: `${drafts} drafts waiting`, i: CheckCircle, bg: 'from-sky-500 to-blue-600', c1: '#0ea5e9', c2: '#2563eb' },
+    { l: 'Customers', v: users.length, sub: 'registered accounts', i: UsersIcon, bg: 'from-indigo-500 to-violet-600', c1: '#6366f1', c2: '#7c3aed' },
+    { l: 'Low stock', v: lowStock, sub: 'need restock', i: Warning, bg: 'from-amber-500 to-orange-600', c1: '#f59e0b', c2: '#ea580c' },
   ];
 
   return <div className="space-y-3.5">
-    <div className="flex items-center justify-between">
+    {/* Header */}
+    <div className="flex items-center justify-between flex-wrap gap-2">
       <div>
         <h1 className="text-lg font-bold text-gray-900 tracking-tight">Dashboard</h1>
-        <p className="text-[11px] text-gray-500">Welcome back! Here's what's happening.</p>
+        <p className="text-[11px] text-gray-500">Welcome back! Here's what's happening at Luxedge.</p>
       </div>
-      <Link to="/admin/ai-import" className="px-3 py-2 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-[1.03]"
-        style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
-        <MagicWand size={12} /> AI Import
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link to="/" target="_blank" className="px-3 py-2 rounded-lg text-[11px] font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><Eye size={12} /> View store</Link>
+        <Link to="/admin/ai-import" className="btn-glow px-3 py-2 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-[1.03]"
+          style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
+          <MagicWand size={12} /> AI Import
+        </Link>
+      </div>
     </div>
 
-    {/* Stats Grid */}
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-      {stats.map((s, i) => (
-        <div key={i} className="card-lift bg-white rounded-xl p-3.5 border border-gray-100 overflow-hidden relative">
-          <div className="absolute top-0 right-0 w-16 h-16 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10" style={{ background: `linear-gradient(135deg, ${s.c1}, ${s.c2})` }} />
-          <div className="flex items-center justify-between mb-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-md`}>
-              <s.i size={14} className="text-white" />
-            </div>
+    {/* Store Overview hero — catalog truth + 7-day revenue */}
+    <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm card-lift">
+      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-300/80">Store Overview</p>
+          <div className="flex items-end gap-6 mt-2 flex-wrap">
+            <div><p className="text-2xl font-bold text-white leading-none">{totalProducts}</p><p className="text-[10px] text-blue-200/70 mt-1">Total products</p></div>
+            <div><p className="text-2xl font-bold text-emerald-400 leading-none">{activeProducts}</p><p className="text-[10px] text-blue-200/70 mt-1">Active on storefront</p></div>
+            <div><p className="text-2xl font-bold text-amber-300 leading-none">{drafts}</p><p className="text-[10px] text-blue-200/70 mt-1">Drafts</p></div>
+            <div><p className="text-2xl font-bold text-cyan-300 leading-none">{commerceReady}</p><p className="text-[10px] text-blue-200/70 mt-1">Commerce-ready</p></div>
           </div>
-          <p className="text-lg font-bold text-gray-900 leading-none">{s.v}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-300/80">Revenue (7 days)</p>
+          <p className="text-xl font-bold text-white mt-1">${weekRev.toFixed(2)}</p>
+          <p className="text-[10px] text-blue-200/70">{realOrders.length} orders all-time · ${rev.toFixed(2)}</p>
+        </div>
+      </div>
+      <div className="bg-white px-5 py-3">
+        <div className="flex items-end gap-1.5 h-16">
+          {days.map((d, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+              <div className="w-full rounded-t-md bg-gradient-to-t from-blue-500 to-cyan-400 transition-all"
+                style={{ height: `${Math.max((d.total / maxDay) * 52, d.total > 0 ? 5 : 2)}px`, opacity: d.total > 0 ? 1 : 0.2 }} />
+              <span className="text-[8px] text-gray-400 font-medium uppercase">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* KPI mini-cards */}
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+      {kpis.map((s, i) => (
+        <div key={i} className="card-lift bg-white rounded-xl p-3 border border-gray-100 overflow-hidden relative hover:shadow-md transition-shadow">
+          <div className="absolute top-0 right-0 w-14 h-14 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10" style={{ background: `linear-gradient(135deg, ${s.c1}, ${s.c2})` }} />
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-sm mb-2`}><s.i size={13} className="text-white" /></div>
+          <p className="text-base font-bold text-gray-900 leading-none truncate">{s.v}</p>
           <p className="text-[10px] text-gray-500 font-medium mt-1">{s.l}</p>
-          <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: `linear-gradient(90deg, ${s.c1}55, ${s.c2}55)` }} />
+          <p className="text-[9px] text-gray-400 truncate">{s.sub}</p>
         </div>
       ))}
     </div>
 
-    {/* Alerts + Quick Tools Row */}
-    <div className="grid lg:grid-cols-3 gap-2.5">
-      <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+    {/* Alerts — only when something needs attention */}
+    {(lowStock > 0 || pending > 0 || pendingR > 0) && (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         {[
           { on: lowStock > 0, grad: 'from-sky-50 to-orange-50', b: 'border-sky-100', i: Warning, ic: 'bg-sky-100', tc: 'text-blue-600', n: lowStock, l: 'Low stock items', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/products' },
           { on: pending > 0, grad: 'from-blue-50 to-indigo-50', b: 'border-blue-100', i: ShoppingCart, ic: 'bg-blue-100', tc: 'text-blue-600', n: pending, l: 'Pending orders', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/orders' },
           { on: pendingR > 0, grad: 'from-purple-50 to-pink-50', b: 'border-purple-100', i: Star, ic: 'bg-purple-100', tc: 'text-purple-600', n: pendingR, l: 'Reviews pending', t: 'text-purple-800', s: 'text-purple-700', to: '/admin/reviews' },
         ].map((a, idx) => a.on ? (
-          <Link key={idx} to={a.to} className={`bg-gradient-to-br ${a.grad} border ${a.b} rounded-xl p-3 card-lift group`}>
-            <div className="flex items-center gap-2 mb-1.5"><div className={`w-7 h-7 ${a.ic} rounded-lg flex items-center justify-center`}><a.i size={13} className={a.tc} /></div><span className={`font-bold ${a.t}`}>{a.n}</span></div>
-            <p className={`text-[11px] ${a.s} font-medium leading-tight`}>{a.l}</p>
-            <p className={`text-[9px] font-semibold ${a.s} opacity-70 group-hover:opacity-100 flex items-center gap-0.5 mt-1 transition-opacity`}>View <ArrowRight size={9} /></p>
+          <Link key={idx} to={a.to} className={`bg-gradient-to-br ${a.grad} border ${a.b} rounded-xl p-2.5 card-lift group flex items-center gap-2.5`}>
+            <div className={`w-8 h-8 ${a.ic} rounded-lg flex items-center justify-center shrink-0`}><a.i size={14} className={a.tc} /></div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-[11px] ${a.s} font-medium leading-tight`}>{a.l}</p>
+              <p className={`font-bold ${a.t}`}>{a.n} <span className={`text-[9px] font-semibold ${a.s} opacity-70 group-hover:opacity-100 transition-opacity`}>· View <ArrowRight size={9} className="inline" /></span></p>
+            </div>
           </Link>
-        ) : <div key={idx} className="hidden" />)}
+        ) : null)}
+      </div>
+    )}
+
+    {/* Status breakdown + Quick AI Tools */}
+    <div className="grid lg:grid-cols-3 gap-2.5">
+      <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift lg:col-span-2">
+        <h3 className="font-bold text-[11px] text-gray-800 mb-2.5 flex items-center gap-1.5"><Receipt size={11} className="text-blue-500" />Order Status</h3>
+        {statusTotal === 0 ? (
+          <p className="text-[11px] text-gray-400 py-4 text-center">No orders yet — the status split will appear here.</p>
+        ) : (
+          <>
+            <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+              {statusCounts.filter(x => x.n > 0).map((x, i) => (
+                <div key={i} className={x.color} style={{ width: `${(x.n / statusTotal) * 100}%` }} title={`${x.s}: ${x.n}`} />
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5">
+              {statusCounts.map((x, i) => (
+                <span key={i} className="text-[10px] text-gray-600 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${x.color}`} />{x.s} · <b>{x.n}</b></span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Quick AI Tools */}
@@ -289,13 +383,9 @@ function ADashboard() {
           </tr>
         </thead>
         <tbody>
-          {realOrders.slice(0,5).map(o => (
+          {realOrders.slice(0, 5).map(o => (
             <tr key={o.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
-              <td className="px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-semibold text-[11px] text-gray-900">{o.order_number}</span>
-                </div>
-              </td>
+              <td className="px-4 py-2"><span className="font-mono font-semibold text-[11px] text-gray-900">{o.order_number}</span></td>
               <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.customer_email || '—'}</td>
               <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{new Date(o.created_at).toLocaleDateString()}</td>
               <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${Number(o.total || 0).toFixed(2)}</td>
