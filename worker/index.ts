@@ -31,6 +31,10 @@ import omnisendStatusHandler from '../api/omnisend/status';
 import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
+import crmWelcomeHandler from '../api/crm/welcome';
+import crmLeadHandler from '../api/crm/lead';
+import crmListHandler from '../api/crm/list';
+import crmAssistantHandler from '../api/crm/assistant';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -64,6 +68,10 @@ const ROUTES: Route[] = [
   { path: '/api/email/send', handler: emailSendHandler },
   { path: '/api/email/status', handler: emailStatusHandler },
   { path: '/api/email/routes', handler: emailRoutesHandler },
+  { path: '/api/crm/welcome', handler: crmWelcomeHandler },
+  { path: '/api/crm/lead', handler: crmLeadHandler },
+  { path: '/api/crm/list', handler: crmListHandler },
+  { path: '/api/crm/assistant', handler: crmAssistantHandler },
 ];
 
 /**

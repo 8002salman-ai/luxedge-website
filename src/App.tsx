@@ -4,6 +4,9 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import CookieConsent from './components/CookieConsent';
+import WelcomePopup from './components/WelcomePopup';
+import WhatsAppButton from './components/WhatsAppButton';
+import AIAssistant from './components/AIAssistant';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
@@ -1005,6 +1008,9 @@ function SLayout({ children }: { children: ReactNode }) {
       <Footer />
       <CartDrawer />
       <CookieConsent />
+      <WelcomePopup />
+      <WhatsAppButton />
+      <AIAssistant />
     </div>
   );
 }

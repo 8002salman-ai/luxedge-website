@@ -112,6 +112,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
     { to: '/admin/marketing-traffic', icon: TrendUp, label: 'Marketing & Traffic' },
     { to: '/admin/email-marketing', icon: PaperPlaneRight, label: 'Email Marketing ⭐' },
+    { to: '/admin/crm', icon: UsersIcon, label: 'CRM (Leads) ⭐' },
     { to: '/admin/variant-gen', icon: Stack, label: 'Variant Gen ⭐' },
     { to: '/admin/ai', icon: Robot, label: 'AI Hub ⭐' },
     { to: '/admin/ai-import', icon: Robot, label: 'AI Import ⭐' },
@@ -4381,6 +4382,181 @@ function AAIImport() {
   return <AIImportPanel />;
 }
 // ============================================================================
+interface CRMLead {
+  id: string; email?: string | null; name?: string | null; phone?: string | null;
+  source?: string | null; page_url?: string | null; coupon_code?: string | null;
+  coupon_used?: boolean | null; coupon_used_at?: string | null; opted_in?: boolean | null;
+  metadata?: unknown; created_at?: string | null;
+}
+
+// CRM (Leads) — every welcome-popup email, WhatsApp inquiry and AI chat lands
+// here. Search, source/coupon filters, CSV export (Excel/HubSpot-ready).
+function ACRM() {
+  const { notify } = useApp();
+  const [leads, setLeads] = useState<CRMLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [source, setSource] = useState('');
+  const [couponUsed, setCouponUsed] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr('');
+    try {
+      const token = getAccessToken();
+      const q = new URLSearchParams();
+      if (search) q.set('search', search);
+      if (source) q.set('source', source);
+      if (couponUsed !== '') q.set('couponUsed', couponUsed);
+      const r = await fetch(`/api/crm/list?${q.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json().catch(() => null);
+      if (Array.isArray(j?.leads)) setLeads(j.leads);
+      else { setLeads([]); setErr(j?.error || 'Could not load leads.'); }
+    } catch (e) { setLeads([]); setErr(`Request failed: ${(e as Error).message}`); }
+    finally { setLoading(false); }
+  }, [search, source, couponUsed]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const exportCsv = async () => {
+    try {
+      const token = getAccessToken();
+      const q = new URLSearchParams();
+      if (search) q.set('search', search);
+      if (source) q.set('source', source);
+      if (couponUsed !== '') q.set('couponUsed', couponUsed);
+      q.set('format', 'csv');
+      const r = await fetch(`/api/crm/list?${q.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+      const text = await r.text();
+      if (!r.ok) { notify('CSV export failed', 'error'); return; }
+      const blob = new Blob([text], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `luxedge-crm-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      notify('CSV downloaded — ready for Excel / HubSpot import', 'success');
+    } catch (e) { notify(`Export failed: ${(e as Error).message}`, 'error'); }
+  };
+
+  const sourceBadge: Record<string, string> = {
+    welcome_popup: 'bg-blue-100 text-blue-700',
+    whatsapp: 'bg-emerald-100 text-emerald-700',
+    ai_chat: 'bg-violet-100 text-violet-700',
+    manual: 'bg-gray-100 text-gray-600',
+  };
+  const sourceLabel: Record<string, string> = {
+    welcome_popup: 'Welcome coupon', whatsapp: 'WhatsApp', ai_chat: 'AI chat', manual: 'Manual',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><UsersIcon className="text-blue-600" size={22} /> CRM — Leads</h1>
+          <p className="text-xs text-gray-500">Every welcome coupon, WhatsApp inquiry &amp; AI chat, in one place.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => void load()} disabled={loading} className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5">
+            <ArrowClockwise size={13} /> {loading ? 'Loading…' : 'Refresh'}
+          </button>
+          <button onClick={exportCsv} className="btn-glow px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5">
+            <Download size={13} /> Export CSV (Excel / HubSpot)
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-gray-100 p-3 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[180px]">
+          <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search email, name, phone, coupon…"
+            className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all" />
+        </div>
+        <select value={source} onChange={(e) => setSource(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 bg-white">
+          <option value="">All sources</option>
+          <option value="welcome_popup">Welcome coupon</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="ai_chat">AI chat</option>
+          <option value="manual">Manual</option>
+        </select>
+        <select value={couponUsed} onChange={(e) => setCouponUsed(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 bg-white">
+          <option value="">Coupon: any</option>
+          <option value="0">Not used</option>
+          <option value="1">Used</option>
+        </select>
+      </div>
+
+      {/* HubSpot-ready note */}
+      <div className="bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-100 rounded-xl p-3 text-[11px] text-sky-800 flex items-start gap-2">
+        <ShareNetwork size={14} className="mt-0.5 shrink-0 text-sky-600" />
+        <p>
+          <b>HubSpot-ready.</b> The CSV maps directly to HubSpot contact fields (email, name, phone, source, page URL, coupon). To sync automatically, connect HubSpot later and map these columns — no schema changes needed.
+        </p>
+      </div>
+
+      {err && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">{err}</div>}
+
+      {loading ? (
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center text-xs text-gray-400">Loading leads…</div>
+      ) : leads.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
+          <UsersIcon size={36} className="mx-auto text-gray-200 mb-3" />
+          <p className="text-sm text-gray-500 font-medium">No leads yet</p>
+          <p className="text-xs text-gray-400 mt-1">They appear here when visitors claim the welcome coupon, click WhatsApp or chat with Luxie.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[9px] uppercase tracking-wider text-gray-400 border-b border-gray-100 bg-gray-50/60">
+                  <th className="px-3 py-2.5 font-semibold">Contact</th>
+                  <th className="px-3 py-2.5 font-semibold">Source</th>
+                  <th className="px-3 py-2.5 font-semibold">Page</th>
+                  <th className="px-3 py-2.5 font-semibold">Coupon</th>
+                  <th className="px-3 py-2.5 font-semibold">Status</th>
+                  <th className="px-3 py-2.5 font-semibold">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((l) => (
+                  <tr key={l.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
+                    <td className="px-3 py-2.5">
+                      <p className="text-[12px] font-semibold text-gray-900">{l.name || '—'}</p>
+                      <p className="text-[11px] text-gray-500">{l.email || l.phone || 'no contact'}</p>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${sourceBadge[l.source || 'manual'] || sourceBadge.manual}`}>
+                        {sourceLabel[l.source || 'manual'] || l.source}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5"><span className="text-[11px] text-gray-500 font-mono truncate max-w-[140px] block">{l.page_url || '—'}</span></td>
+                    <td className="px-3 py-2.5"><span className="text-[11px] font-mono font-semibold text-indigo-700">{l.coupon_code || '—'}</span></td>
+                    <td className="px-3 py-2.5">
+                      {l.coupon_used ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700">Used ✓</span>
+                      ) : l.coupon_code ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-700">Unused</span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-[11px] text-gray-500 whitespace-nowrap">
+                      {l.created_at ? new Date(l.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-3 py-2 border-t border-gray-50 text-[11px] text-gray-400">{leads.length} lead{leads.length !== 1 ? 's' : ''} · newest first</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AEmailMarketing() {
   const { notify } = useApp();
   const [status, setStatus] = useState<{ configured: boolean; connected: boolean; message?: string; audience?: number; platform?: string } | null>(null);
@@ -5054,6 +5230,7 @@ export default function AdminSection() {
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />
+      <Route path="crm" element={<AdminLayout><ACRM /></AdminLayout>} />
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
     </AdminErrorBoundary>

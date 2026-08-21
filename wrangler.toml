@@ -21,7 +21,6 @@ run_worker_first = true
 # destination addresses (8002salman@gmail.com) is free on all plans.
 [[send_email]]
 name = "SEND_MAIL"
-type = "send_email"
 
 # Plain-text env (non-secret). Secrets are set with `wrangler secret put`.
 [vars]
