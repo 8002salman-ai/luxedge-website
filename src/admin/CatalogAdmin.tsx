@@ -6,12 +6,12 @@
 // repository (admin JWT → Supabase RLS). No fake facts: UNKNOWN stays
 // UNKNOWN, merchandising flags are admin decisions, delete prefers archive.
 // ============================================================================
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, CaretUp, CaretDown, X, Download, List, Megaphone, Warning, Brain,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -34,6 +34,9 @@ import {
   COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
   type CommerceReadiness,
 } from '../features/catalog/commerceReadiness';
+import { callAIProvider } from '../features/ai/client';
+import { loadAIProviders, loadProviderSettings, resolveProviderChain } from '../features/ai/providers';
+import { parseHtmlPage } from '../features/ai/importer';
 
 const I = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
 const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
@@ -108,7 +111,11 @@ export function CatalogProductsPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // "All statuses" hides archived rows — archive is a folder, not a status
+  // you keep scrolling past. Archived products are only visible when the
+  // user explicitly picks the "Archived" filter (or clicks the chip).
   const filtered = useMemo(() => products.filter((p) => {
+    if (fStatus === 'all' && p.status === 'archived') return false;
     if (fStatus !== 'all' && p.status !== fStatus) return false;
     if (fCat !== 'all' && p.categoryId !== fCat) return false;
     if (fReady !== 'all' && (p.commerceReadiness ?? null) !== (fReady === 'none' ? null : fReady)) return false;
@@ -188,7 +195,18 @@ export function CatalogProductsPage() {
     }
   };
 
+  const onRestore = async (id: string) => {
+    try {
+      await setProductStatus(id, 'draft');
+      notify('Product restored to Draft');
+      await load();
+    } catch (e) {
+      notify(`Could not restore: ${(e as Error).message}`, 'error');
+    }
+  };
+
   const nonActive = useMemo(() => filtered.filter((p) => p.status !== 'active'), [filtered]);
+  const archivedCount = useMemo(() => products.filter((p) => p.status === 'archived').length, [products]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -244,7 +262,16 @@ export function CatalogProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Products</h1>
-          <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} commerce-ready on storefront · {products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} active but not commerce-ready</p>
+          <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} commerce-ready on storefront · {products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} active but not commerce-ready · {archivedCount} archived</p>
+          {archivedCount > 0 && (
+            <button
+              onClick={() => setFStatus(fStatus === 'archived' ? 'all' : 'archived')}
+              className={`mt-1 inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${fStatus === 'archived' ? 'bg-red-50 text-red-700 border-red-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+              title="Show or hide the archived folder"
+            >
+              {fStatus === 'archived' ? '← Back to all products' : `View archived folder (${archivedCount})`}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.size > 0 ? (
@@ -405,9 +432,13 @@ export function CatalogProductsPage() {
                   <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 whitespace-nowrap">
-                      <button onClick={() => toggleActive(p)} title={p.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 hover:bg-gray-100 rounded shrink-0">
-                        {p.status === 'active' ? <ToggleRight size={17} className="text-green-500" /> : <ToggleLeft size={17} className="text-gray-400" />}
-                      </button>
+                      {p.status === 'archived' ? (
+                        <button onClick={() => onRestore(p.id)} title="Restore to Draft" className="p-2 hover:bg-amber-50 rounded text-amber-600 shrink-0"><Copy size={16} /></button>
+                      ) : (
+                        <button onClick={() => toggleActive(p)} title={p.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 hover:bg-gray-100 rounded shrink-0">
+                          {p.status === 'active' ? <ToggleRight size={17} className="text-green-500" /> : <ToggleLeft size={17} className="text-gray-400" />}
+                        </button>
+                      )}
                       <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600 shrink-0"><PencilSimple size={16} /></button>
                       <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600 shrink-0"><Copy size={16} /></button>
                       <button onClick={() => nav(`/#/product/${p.id}`)} title="Preview" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
@@ -511,18 +542,19 @@ function AiIntelPanel({ product }: { product: CatalogProduct }) {
 // ============================================================================
 // PRODUCT EDITOR
 // ============================================================================
-type EditorTab = 'general' | 'pricing' | 'inventory' | 'shipping' | 'images' | 'variants' | 'seo' | 'promotions' | 'commerce';
+type EditorTab = 'general' | 'pricing' | 'inventory' | 'shipping' | 'images' | 'variants' | 'promotions' | 'commerce' | 'seo';
 
-const TABS: { id: EditorTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'general', label: 'General', icon: <Package size={14} /> },
-  { id: 'pricing', label: 'Pricing', icon: <CurrencyDollar size={14} /> },
+// SEO is deliberately LAST — the owner asked for it to come at the end.
+const TABS: { id: EditorTab; label: string; icon: React.ReactNode; required?: boolean }[] = [
+  { id: 'general', label: 'General', icon: <Package size={14} />, required: true },
+  { id: 'pricing', label: 'Pricing', icon: <CurrencyDollar size={14} />, required: true },
   { id: 'inventory', label: 'Inventory', icon: <Stack size={14} /> },
   { id: 'shipping', label: 'Shipping', icon: <Truck size={14} /> },
-  { id: 'images', label: 'Images', icon: <ImageIcon size={14} /> },
+  { id: 'images', label: 'Images', icon: <ImageIcon size={14} />, required: true },
   { id: 'variants', label: 'Variants', icon: <List size={14} /> },
-  { id: 'seo', label: 'SEO', icon: <Globe size={14} /> },
   { id: 'promotions', label: 'Promotions', icon: <Tag size={14} /> },
   { id: 'commerce', label: 'Commerce', icon: <Truck size={14} /> },
+  { id: 'seo', label: 'SEO', icon: <Globe size={14} /> },
 ];
 
 export function CatalogProductEditor() {
@@ -536,6 +568,8 @@ export function CatalogProductEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<EditorTab>('general');
+  // Quick Add = compact one-screen form; Detail Add = full tabbed editor.
+  const [mode, setMode] = useState<'quick' | 'detail'>('quick');
   const [p, setP] = useState<CatalogProduct | null>(null);
 
   const load = useCallback(async () => {
@@ -669,11 +703,8 @@ export function CatalogProductEditor() {
   if (loading) return <div className="text-center py-20 text-gray-400">Loading…</div>;
   if (!p) return null;
 
-  const meta = buildProductMeta(p);
-  const jsonLd = buildProductJsonLd(p);
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button onClick={() => nav('/admin/products')} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft size={20} /></button>
@@ -682,7 +713,13 @@ export function CatalogProductEditor() {
             <p className="text-sm text-gray-500">{isNew ? 'Create a new catalog product' : p.name}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {isNew && (
+            <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+              <button onClick={() => setMode('quick')} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick Add</button>
+              <button onClick={() => setMode('detail')} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail Add</button>
+            </div>
+          )}
           <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className={`${I} w-auto`} aria-label="Product status">
             <option value="draft">Draft</option>
             <option value="ready">Ready</option>
@@ -696,24 +733,28 @@ export function CatalogProductEditor() {
         </div>
       </div>
 
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`shrink-0 px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${tab === t.id ? 'bg-blue-500 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}>
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      {isNew && mode === 'quick' && <QuickAddForm product={p} cats={cats} onChange={setP} />}
 
-      <div className="bg-white rounded-xl border p-5">
+      {isNew && mode === 'detail' && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`shrink-0 px-3.5 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${tab === t.id ? 'bg-blue-500 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(!isNew || mode === 'detail') && <div className="bg-white rounded-xl border p-5">
         {/* ── GENERAL ── */}
         {tab === 'general' && (
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2"><label className={L}>Product name *</label><input value={p.name} onChange={(e) => set('name', e.target.value)} className={I} placeholder="e.g. Interactive Squeaky Enrichment Toy for Dogs" /></div>
-            <div><label className={L}>Short title (optional)</label><input value={p.shortTitle || ''} onChange={(e) => set('shortTitle', e.target.value)} className={I} /></div>
-            <div><label className={L}>Subtitle (optional)</label><input value={p.subtitle || ''} onChange={(e) => set('subtitle', e.target.value)} className={I} /></div>
-            <div className="sm:col-span-2"><label className={L}>Short description</label><textarea value={p.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} rows={2} className={I} /></div>
-            <div className="sm:col-span-2"><label className={L}>Description</label><textarea value={p.description} onChange={(e) => set('description', e.target.value)} rows={6} className={I} placeholder="Concise opening benefit, key features, practical use, sizing, care. No fake claims." /></div>
+            <div className="sm:col-span-2"><label className={L}>Product name <span className="text-red-500">*</span> <span className="normal-case font-normal text-gray-400">required</span></label><input value={p.name} onChange={(e) => set('name', e.target.value)} className={I} placeholder="e.g. Interactive Squeaky Enrichment Toy for Dogs" /></div>
+            <div><label className={L}>Short title <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={p.shortTitle || ''} onChange={(e) => set('shortTitle', e.target.value)} className={I} /></div>
+            <div><label className={L}>Subtitle <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={p.subtitle || ''} onChange={(e) => set('subtitle', e.target.value)} className={I} /></div>
+            <div className="sm:col-span-2"><label className={L}>Short description <span className="normal-case font-normal text-gray-400">(optional)</span></label><textarea value={p.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} rows={2} className={I} /></div>
+            <div className="sm:col-span-2"><label className={L}>Description <span className="normal-case font-normal text-gray-400">(optional)</span></label><textarea value={p.description} onChange={(e) => set('description', e.target.value)} rows={6} className={I} placeholder="Concise opening benefit, key features, practical use, sizing, care. No fake claims." /></div>
             <div><label className={L}>Category</label>
               <select value={p.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
                 <option value="">— Uncategorized —</option>
@@ -734,7 +775,7 @@ export function CatalogProductEditor() {
                 />
               </div>
             </div>
-            <div className="sm:col-span-2"><label className={L}>Owner notes (admin only)</label><textarea value={p.ownerNotes || ''} onChange={(e) => set('ownerNotes', e.target.value)} rows={2} className={I} /></div>
+            <div className="sm:col-span-2"><label className={L}>Owner notes <span className="normal-case font-normal text-gray-400">(admin only)</span></label><textarea value={p.ownerNotes || ''} onChange={(e) => set('ownerNotes', e.target.value)} rows={2} className={I} /></div>
           </div>
         )}
 
@@ -743,7 +784,7 @@ export function CatalogProductEditor() {
           <div className="grid sm:grid-cols-2 gap-4">
             <div><label className={L}>Supplier cost (USD)</label><input type="number" min="0" step="0.01" value={p.costPrice || ''} onChange={(e) => set('costPrice', +e.target.value)} className={I} /></div>
             <div><label className={L}>Landed cost (USD) — freight verified</label><input type="number" min="0" step="0.01" value={p.landedCost || ''} onChange={(e) => set('landedCost', +e.target.value)} className={I} /></div>
-            <div><label className={L}>Retail price (USD) *</label><input type="number" min="0" step="0.01" value={p.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} /></div>
+            <div><label className={L}>Retail price (USD) <span className="text-red-500">*</span> <span className="normal-case font-normal text-gray-400">required</span></label><input type="number" min="0" step="0.01" value={p.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} /></div>
             <div><label className={L}>Compare-at price (USD) — genuine promo value only</label><input type="number" min="0" step="0.01" value={p.compareAtPrice || ''} onChange={(e) => set('compareAtPrice', +e.target.value)} className={I} /></div>
             <div className="sm:col-span-2 bg-gray-50 rounded-lg p-4 text-sm">
               <p className="font-semibold mb-1">Margin check</p>
@@ -795,34 +836,7 @@ export function CatalogProductEditor() {
         {tab === 'variants' && <VariantManager product={p} onProduct={(next) => setP(next)} />}
 
         {/* ── SEO ── */}
-        {tab === 'seo' && (
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2"><label className={L}>SEO title</label><input value={p.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} className={I} /></div>
-            <div className="sm:col-span-2"><label className={L}>Meta description</label><textarea value={p.seoDescription} onChange={(e) => set('seoDescription', e.target.value)} rows={3} className={I} /></div>
-            <div className="sm:col-span-2">
-              <label className={L}>SEO keywords</label>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                {p.seoKeywords.map((k) => (
-                  <span key={k} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{k}<button onClick={() => set('seoKeywords', p.seoKeywords.filter((x) => x !== k))}><X size={11} /></button></span>
-                ))}
-                <input
-                  className="flex-1 min-w-[140px] px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
-                  placeholder="Add keyword + Enter"
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = (e.target as HTMLInputElement).value.trim(); if (v) set('seoKeywords', [...p.seoKeywords, v]); (e.target as HTMLInputElement).value = ''; } }}
-                />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Globe size={13} />Live SEO preview (deterministic — no fake data)</p>
-                <p className="text-sm font-semibold text-blue-900">{meta.title}</p>
-                <p className="text-xs text-gray-500">{meta.canonical}</p>
-                <p className="text-xs text-gray-600 mt-1">{meta.description}</p>
-                <details className="mt-2"><summary className="text-xs text-blue-700 cursor-pointer">Product JSON-LD</summary><pre className="mt-1 text-[10px] bg-white rounded p-2 overflow-auto max-h-40">{JSON.stringify(jsonLd, null, 1)}</pre></details>
-              </div>
-            </div>
-          </div>
-        )}
+        {tab === 'seo' && <SeoTab product={p} cats={cats} set={set} />}
 
         {/* ── COMMERCE / READINESS ── */}
         {tab === 'commerce' && (
@@ -911,51 +925,385 @@ export function CatalogProductEditor() {
         )}
 
         {/* ── PROMOTIONS ── */}
-        {tab === 'promotions' && (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-end gap-4">
-              <div>
-                <label className={L}>Sale enabled</label>
-                <div className="flex items-center gap-2">
-                  <input id="sale-on" type="checkbox" checked={p.saleEnabled} onChange={(e) => set('saleEnabled', e.target.checked)} className="w-4 h-4" />
-                  <label htmlFor="sale-on" className="text-sm text-gray-600">Apply a store discount to this product</label>
-                </div>
-              </div>
-              <div><label className={L}>Discount type</label>
-                <select value={p.discountType || 'percent'} onChange={(e) => set('discountType', e.target.value as CatalogProduct['discountType'])} className={I}>
-                  <option value="percent">Percentage (%)</option>
-                  <option value="fixed">Fixed amount ($)</option>
-                </select>
-              </div>
-              <div><label className={L}>Discount value</label><input type="number" min="0" step="0.01" value={p.discountValue ?? ''} onChange={(e) => set('discountValue', e.target.value ? +e.target.value : undefined)} className={I} /></div>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {([
-                ['featured', 'Featured', 'Show in featured/top-picks sections'],
-                ['newArrival', 'New arrival', 'Show in New Arrivals section'],
-                ['promoted', 'Promoted', 'Highlight in promotions'],
-              ] as const).map(([key, label, hint]) => (
-                <label key={key} className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input type="checkbox" checked={Boolean(p[key])} onChange={(e) => set(key, e.target.checked)} className="w-4 h-4 mt-0.5" />
-                  <span><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-gray-400">{hint}</span></span>
-                </label>
-              ))}
-              {([
-                ['trending', 'Trending', 'Only with real evidence or an explicit owner merchandising decision'],
-                ['bestRated', 'Best rated', 'Only with verified customer ratings'],
-                ['bestSeller', 'Best seller', 'Only with verified sales evidence'],
-              ] as const).map(([key, label, hint]) => (
-                <label key={key} className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                  <input type="checkbox" checked={Boolean(p[key])} onChange={(e) => set(key, e.target.checked)} className="w-4 h-4 mt-0.5" />
-                  <span><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-amber-600">{hint}</span></span>
-                </label>
-              ))}
-            </div>
+        {tab === 'promotions' && <PromoTab product={p} set={set} />}
+      </div>}
+    </div>
+  );
+}
+
+// ============================================================================
+// SEO TAB (with one-click AI generation)
+// ============================================================================
+function SeoTab({ product, cats, set }: { product: CatalogProduct; cats: CatalogCategory[]; set: <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => void }) {
+  const { notify } = useApp();
+  const [busy, setBusy] = useState(false);
+
+  const addKeyword = (k: string) => { const v = k.trim(); if (v && !product.seoKeywords.includes(v)) set('seoKeywords', [...product.seoKeywords, v]); };
+  const removeKeyword = (k: string) => set('seoKeywords', product.seoKeywords.filter((x) => x !== k));
+
+  const generateWithAI = async () => {
+    if (!product.name.trim()) { notify('Enter the product name first', 'error'); return; }
+    setBusy(true);
+    try {
+      const providers = loadAIProviders();
+      const settings = loadProviderSettings();
+      const { primary } = resolveProviderChain(providers, settings);
+      if (!primary) throw new Error('No AI provider enabled — enable one in AI Hub.');
+      const category = cats.find((c) => c.id === product.categoryId)?.name || product.categoryName || '';
+      const prompt = `Write premium, honest SEO for this pet product for Luxedge (a US pet store).
+Product name: ${product.name}
+Brand: ${product.brand || 'Luxedge'}
+Category: ${category || 'unknown'}
+Short description: ${product.shortDescription || ''}
+Long description: ${product.description || ''}
+
+Return ONLY JSON with EXACTLY these keys:
+{"seoTitle": "<=60 chars, factual, no fake claims", "metaDescription": "<=160 chars, factual", "focusKeyword": "one primary keyword", "seoKeywords": ["5-8 keywords"], "slug": "url-friendly-slug"}
+No other text.`;
+      const text = await callAIProvider(prompt, providers, undefined, 'You write honest, factual ecommerce SEO. Never invent claims, prices or reviews.');
+      const obj = text.match(/(\{[\s\S]*\})/);
+      const parsed = obj ? JSON.parse(obj[1]) : null;
+      if (!parsed) throw new Error('AI returned no usable SEO JSON');
+      const kw = Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.map(String).slice(0, 8) : [];
+      const slug = String(parsed.slug || product.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90);
+      set('seoTitle', String(parsed.seoTitle || '').trim());
+      set('seoDescription', String(parsed.metaDescription || '').trim());
+      set('seoKeywords', kw);
+      if (slug) set('canonicalSlug', slug);
+      if (parsed.focusKeyword) set('seoKeywords', kw.includes(String(parsed.focusKeyword)) ? kw : [String(parsed.focusKeyword), ...kw]);
+      notify('SEO generated — review before saving');
+    } catch (e) {
+      notify(`AI SEO failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const meta = buildProductMeta(product);
+  const jsonLd = buildProductJsonLd(product);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-indigo-50 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={15} />SEO & Meta — write nothing, let AI do it</p>
+          <p className="text-xs text-indigo-600 mt-0.5">One click generates a factual SEO title, meta description, keywords and slug from your product name (DeepSeek, secure server-side). You can still edit everything.</p>
+        </div>
+        <button onClick={generateWithAI} disabled={busy || !product.name.trim()} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+          <Sparkle size={15} />{busy ? 'Generating…' : 'Generate SEO with AI'}
+        </button>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2"><label className={L}>SEO title</label><input value={product.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} className={I} placeholder="Auto-generated or write your own" /></div>
+        <div className="sm:col-span-2"><label className={L}>Meta description</label><textarea value={product.seoDescription} onChange={(e) => set('seoDescription', e.target.value)} rows={3} className={I} placeholder="Auto-generated or write your own" /></div>
+        <div className="sm:col-span-2">
+          <label className={L}>SEO keywords</label>
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {product.seoKeywords.map((k) => (
+              <span key={k} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">{k}<button onClick={() => removeKeyword(k)}><X size={11} /></button></span>
+            ))}
+            <input
+              className="flex-1 min-w-[140px] px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+              placeholder="Add keyword + Enter"
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addKeyword((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}
+            />
           </div>
-        )}
+        </div>
+        <div className="sm:col-span-2">
+          <div className="bg-blue-50 rounded-lg p-4">
+            <p className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1.5"><Globe size={13} />Live SEO preview (deterministic — no fake data)</p>
+            <p className="text-sm font-semibold text-blue-900">{meta.title}</p>
+            <p className="text-xs text-gray-500">{meta.canonical}</p>
+            <p className="text-xs text-gray-600 mt-1">{meta.description}</p>
+            <details className="mt-2"><summary className="text-xs text-blue-700 cursor-pointer">Product JSON-LD</summary><pre className="mt-1 text-[10px] bg-white rounded p-2 overflow-auto max-h-40">{JSON.stringify(jsonLd, null, 1)}</pre></details>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+// ============================================================================
+// PROMOTIONS TAB (simpler + AI-assisted suggestions)
+// ============================================================================
+function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => void }) {
+  const { notify } = useApp();
+
+  // Deterministic economics-based suggestion — clearly a suggestion, never a
+  // fake claim. Margin math only; merchandising flags stay owner decisions.
+  const suggest = () => {
+    const margin = product.costPrice > 0 && product.price > 0 ? (1 - product.costPrice / product.price) * 100 : null;
+    if (margin == null) { notify('Enter supplier cost + retail price first', 'error'); return; }
+    // A 10% discount keeps margin healthy when there is at least 40% gross.
+    if (margin >= 45) {
+      set('saleEnabled', true);
+      set('discountType', 'percent');
+      set('discountValue', 10);
+      set('compareAtPrice', product.price > 0 ? Math.round(product.price * 100) / 100 : 0);
+      notify(`Suggested: 10% off keeps ~${(margin - 10).toFixed(0)}% margin — review before saving.`);
+    } else {
+      notify(`Margin is ${margin.toFixed(0)}% — a sale is not suggested (would drop below a healthy margin).`, 'error');
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-indigo-50 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={15} />Promotions — simplified</p>
+          <p className="text-xs text-indigo-600 mt-0.5">AI checks your economics and suggests a safe discount. Trending / Best rated / Best seller are NEVER auto-suggested — they need real evidence.</p>
+        </div>
+        <button onClick={suggest} className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+          <Sparkle size={15} />Suggest a sale (economics)
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <div>
+          <label className={L}>Sale enabled</label>
+          <div className="flex items-center gap-2">
+            <input id="sale-on" type="checkbox" checked={product.saleEnabled} onChange={(e) => set('saleEnabled', e.target.checked)} className="w-4 h-4" />
+            <label htmlFor="sale-on" className="text-sm text-gray-600">Apply a store discount to this product</label>
+          </div>
+        </div>
+        <div><label className={L}>Discount type</label>
+          <select value={product.discountType || 'percent'} onChange={(e) => set('discountType', e.target.value as CatalogProduct['discountType'])} className={I}>
+            <option value="percent">Percentage (%)</option>
+            <option value="fixed">Fixed amount ($)</option>
+          </select>
+        </div>
+        <div><label className={L}>Discount value</label><input type="number" min="0" step="0.01" value={product.discountValue ?? ''} onChange={(e) => set('discountValue', e.target.value ? +e.target.value : undefined)} className={I} /></div>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        {([
+          ['featured', 'Featured', 'Show in featured/top-picks sections'],
+          ['newArrival', 'New arrival', 'Show in New Arrivals section'],
+          ['promoted', 'Promoted', 'Highlight in promotions'],
+        ] as const).map(([key, label, hint]) => (
+          <label key={key} className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+            <input type="checkbox" checked={Boolean(product[key])} onChange={(e) => set(key, e.target.checked)} className="w-4 h-4 mt-0.5" />
+            <span><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-gray-400">{hint}</span></span>
+          </label>
+        ))}
+        {([
+          ['trending', 'Trending', 'Only with real evidence or an explicit owner merchandising decision'],
+          ['bestRated', 'Best rated', 'Only with verified customer ratings'],
+          ['bestSeller', 'Best seller', 'Only with verified sales evidence'],
+        ] as const).map(([key, label, hint]) => (
+          <label key={key} className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+            <input type="checkbox" checked={Boolean(product[key])} onChange={(e) => set(key, e.target.checked)} className="w-4 h-4 mt-0.5" />
+            <span><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-amber-600">{hint}</span></span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// QUICK ADD FORM (compact one-screen product creation)
+// ============================================================================
+function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void }) {
+  const set = <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => onChange({ ...product, [k]: v });
+  const [imgUrl, setImgUrl] = useState('');
+  const [imgAlt, setImgAlt] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const addByUrl = () => {
+    const u = imgUrl.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) { window.alert('Enter a valid image URL (https://…)'); return; }
+    const isFirst = product.images.length === 0;
+    onChange({ ...product, images: [...product.images, { id: uid(), productId: product.id, url: u, altText: imgAlt.trim(), kind: 'product', isPrimary: isFirst, sortOrder: product.images.length, variantId: null }] });
+    setImgUrl(''); setImgAlt('');
+  };
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const room = Math.max(0, 5 - product.images.length);
+    const picked = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, room);
+    if (!picked.length) { window.alert('Max 5 images'); return; }
+    setUploading(true);
+    try {
+      const startLen = product.images.length;
+      const added: CatalogImage[] = [];
+      for (const f of picked) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('read failed'));
+          r.readAsDataURL(f);
+        });
+        // Upload the file to Supabase Storage server-side (admin-only) so the
+        // URL is durable, not a browser blob that vanishes on refresh.
+        let url = dataUrl;
+        try {
+          const token = getAccessToken();
+          const r = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ productId: product.id || 'new', filename: f.name, contentType: f.type, base64: dataUrl }),
+          });
+          const j = await r.json().catch(() => null);
+          if (r.ok && j?.publicUrl) url = String(j.publicUrl);
+        } catch { /* keep data URL */ }
+        added.push({ id: uid(), productId: product.id, url, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
+      }
+      onChange({ ...product, images: [...product.images, ...added] });
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const removeImg = (idx: number) => {
+    const removed = product.images[idx];
+    let imgs = product.images.filter((_, i) => i !== idx);
+    if (removed?.isPrimary && imgs.length > 0 && !imgs.some((i) => i.isPrimary)) {
+      imgs = imgs.map((img, i) => ({ ...img, isPrimary: i === 0 }));
+    }
+    onChange({ ...product, images: imgs });
+  };
+
+  const setMain = (idx: number) => onChange({ ...product, images: product.images.map((img, i) => ({ ...img, isPrimary: i === idx })) });
+
+  return (
+    <div className="bg-white rounded-xl border p-5 space-y-4">
+      <p className="text-xs text-gray-500">Quick Add — only the essentials. Everything else defaults to safe values and can be refined later in Detail Add. <span className="text-red-500">*</span> = required.</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div className="sm:col-span-2">
+          <label className={L}>Product name <span className="text-red-500">*</span></label>
+          <input value={product.name} onChange={(e) => set('name', e.target.value)} className={I} placeholder="e.g. Interactive Squeaky Enrichment Toy for Dogs" autoFocus />
+        </div>
+        <div>
+          <label className={L}>Category</label>
+          <select value={product.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
+            <option value="">— Uncategorized —</option>
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div><label className={L}>Brand</label><input value={product.brand} onChange={(e) => set('brand', e.target.value)} className={I} /></div>
+        <div>
+          <label className={L}>Retail price (USD) <span className="text-red-500">*</span></label>
+          <input type="number" min="0" step="0.01" value={product.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} placeholder="0.00" />
+        </div>
+        <div><label className={L}>Supplier cost (USD) — optional</label><input type="number" min="0" step="0.01" value={product.costPrice || ''} onChange={(e) => set('costPrice', +e.target.value)} className={I} placeholder="Optional" /></div>
+      </div>
+
+      {/* Images — upload up to 5, URL add, thumbnail picker */}
+      <div>
+        <label className={L}>Images (up to 5) — first image is the main thumbnail <span className="text-red-500">*</span></label>
+        {product.images.length > 0 && (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+            {product.images.map((img, i) => (
+              <div key={img.id || i} className="relative group aspect-square rounded-lg overflow-hidden border-2 border-gray-200">
+                <img src={img.url} alt={img.altText || ''} className="w-full h-full object-cover" />
+                {img.isPrimary && <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded">MAIN</span>}
+                <button type="button" onClick={() => removeImg(i)} className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 hover:bg-red-600" title="Remove image">✕</button>
+                {!img.isPrimary && (
+                  <button type="button" onClick={() => setMain(i)} className="absolute inset-x-0 bottom-0 py-0.5 bg-black/50 text-white text-[9px] font-semibold opacity-0 group-hover:opacity-100" title="Set as main thumbnail">Set as main</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading || product.images.length >= 5} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-medium border border-blue-200 disabled:opacity-50 flex items-center gap-1.5">
+            <UploadSimple size={15} />{uploading ? 'Uploading…' : `Upload from PC (${product.images.length}/5)`}
+          </button>
+          <input value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addByUrl(); } }} className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Paste image URL + Enter" />
+          <input value={imgAlt} onChange={(e) => setImgAlt(e.target.value)} className="hidden sm:block flex-1 min-w-[120px] px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Alt text (optional)" />
+          <button type="button" onClick={addByUrl} className="px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium">Add URL</button>
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">Tip: paste a product image URL to add it instantly. Uploaded files are stored in Supabase Storage so they survive a refresh.</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared image upload helper — sends a data URL to the admin-only storage
+// endpoint and returns a durable public URL. Falls back to the data URL when
+// storage is unavailable (the row then persists only if the URL is kept, so
+// callers should surface the warning honestly).
+// ---------------------------------------------------------------------------
+async function uploadImageToStorage(dataUrl: string, filename: string, contentType: string): Promise<{ url: string; stored: boolean }> {
+  try {
+    const token = getAccessToken();
+    const r = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ productId: 'product', filename, contentType, base64: dataUrl }),
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j?.publicUrl) return { url: String(j.publicUrl), stored: true };
+    return { url: dataUrl, stored: false };
+  } catch {
+    return { url: dataUrl, stored: false };
+  }
+}
+
+/**
+ * Remove a solid/light background from an image using edge flood-fill.
+ * Pure client-side canvas — no API key, no external service. Best results on
+ * product shots with a plain (white/light) backdrop; not a magic cutout for
+ * busy scenes. Returns a PNG data URL.
+ */
+async function removeImageBackground(dataUrl: string): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Could not load image'));
+    i.src = dataUrl;
+  });
+  const maxDim = 1200;
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = imageData;
+
+  // Seed color = average of the four corners (the presumed backdrop).
+  const corner = (x: number, y: number) => {
+    const i = (y * width + x) * 4;
+    return [data[i], data[i + 1], data[i + 2]];
+  };
+  const corners = [corner(0, 0), corner(width - 1, 0), corner(0, height - 1), corner(width - 1, height - 1)];
+  const seed = [
+    Math.round(corners.reduce((s, c) => s + c[0], 0) / corners.length),
+    Math.round(corners.reduce((s, c) => s + c[1], 0) / corners.length),
+    Math.round(corners.reduce((s, c) => s + c[2], 0) / corners.length),
+  ];
+  const tol = 40;
+  const near = (r: number, g: number, b: number) =>
+    Math.abs(r - seed[0]) <= tol && Math.abs(g - seed[1]) <= tol && Math.abs(b - seed[2]) <= tol;
+
+  // BFS from every border pixel, clearing connected background regions.
+  const visited = new Uint8Array(width * height);
+  const stack: number[] = [];
+  for (let x = 0; x < width; x++) { stack.push(x, (height - 1) * width + x); }
+  for (let y = 0; y < height; y++) { stack.push(y * width, y * width + width - 1); }
+  while (stack.length) {
+    const p = stack.pop()!;
+    if (visited[p]) continue;
+    const i = p * 4;
+    if (!near(data[i], data[i + 1], data[i + 2])) continue;
+    visited[p] = 1;
+    data[i + 3] = 0; // transparent
+    const x = p % width;
+    const y = (p / width) | 0;
+    if (x > 0) stack.push(p - 1);
+    if (x < width - 1) stack.push(p + 1);
+    if (y > 0) stack.push(p - width);
+    if (y < height - 1) stack.push(p + width);
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
 }
 
 // ============================================================================
@@ -965,6 +1313,9 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
   const { notify } = useApp();
   const [url, setUrl] = useState('');
   const [alt, setAlt] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState<number | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const addByUrl = () => {
     const u = url.trim();
@@ -976,12 +1327,66 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
     notify('Image added — save the product to persist');
   };
 
-  const move = (idx: number, dir: -1 | 1) => {
-    const imgs = [...product.images];
-    const to = idx + dir;
-    if (to < 0 || to >= imgs.length) return;
-    [imgs[idx], imgs[to]] = [imgs[to], imgs[idx]];
-    onProduct({ ...product, images: imgs });
+  const addByFile = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const room = Math.max(0, 5 - product.images.length);
+    const picked = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, room);
+    if (!picked.length) { notify('Max 5 images total', 'error'); return; }
+    setUploading(true);
+    try {
+      const startLen = product.images.length;
+      const added: CatalogImage[] = [];
+      for (const f of picked) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('read failed'));
+          r.readAsDataURL(f);
+        });
+        const { url: stored, stored: ok } = await uploadImageToStorage(dataUrl, f.name, f.type);
+        added.push({ id: uid(), productId: product.id, url: stored, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
+        if (!ok) notify(`Storage upload unavailable — image kept locally (${f.name})`, 'error');
+      }
+      onProduct({ ...product, images: [...product.images, ...added] });
+      notify(picked.length === 1 ? 'Image uploaded' : `${picked.length} images uploaded`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  // Fetch ALL images from a product page URL and add them (deduped, up to 5).
+  const importAllFromUrl = async () => {
+    const u = url.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) { notify('Enter a valid page/image URL', 'error'); return; }
+    setUploading(true);
+    try {
+      // If it's a direct image URL, just add it.
+      if (/\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(u)) { addByUrl(); return; }
+      const token = getAccessToken();
+      const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(u)}`, {
+        headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => null);
+        notify(j?.error || `Page fetch failed (HTTP ${r.status})`, 'error');
+        return;
+      }
+      const parsed = parseHtmlPage(await r.text());
+      const found = parsed.images.filter((i) => i.startsWith('http'));
+      if (!found.length) { notify('No product images found on that page.', 'error'); return; }
+      const existing = new Set(product.images.map((i) => i.url));
+      const fresh = found.filter((i) => !existing.has(i)).slice(0, 5 - product.images.length);
+      if (!fresh.length) { notify('All images from that page are already added (max 5).', 'error'); return; }
+      const startLen = product.images.length;
+      onProduct({
+        ...product,
+        images: [...product.images, ...fresh.map((u2, i) => ({ id: uid(), productId: product.id, url: u2, altText: '', kind: 'product' as const, isPrimary: startLen === 0 && i === 0, sortOrder: startLen + i, variantId: null }))],
+      });
+      notify(`Imported ${fresh.length} image${fresh.length === 1 ? '' : 's'} from the page — delete the ones you do not want.`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const setPrimary = (idx: number) => {
@@ -1001,58 +1406,80 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
     onProduct({ ...product, images: product.images.map((img, i) => (i === idx ? { ...img, ...patch } : img)) });
   };
 
+  // Remove background client-side, then persist the result to storage.
+  const onRemoveBackground = async (idx: number) => {
+    const img = product.images[idx];
+    if (!img) return;
+    setProcessing(idx);
+    try {
+      const removed = await removeImageBackground(img.url);
+      const { url: stored } = await uploadImageToStorage(removed, `bg-removed-${idx}.png`, 'image/png');
+      onProduct({ ...product, images: product.images.map((x, i) => (i === idx ? { ...x, url: stored } : x)) });
+      notify('Background removed — the new version is saved as the image.');
+    } catch (e) {
+      notify(`Background removal failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 items-end">
-        <div className="flex-1 min-w-[220px]"><label className={L}>Image URL (https)</label><input value={url} onChange={(e) => setUrl(e.target.value)} className={I} placeholder="https://…/product.jpg" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addByUrl(); } }} /></div>
-        <div className="flex-1 min-w-[160px]"><label className={L}>Alt text</label><input value={alt} onChange={(e) => setAlt(e.target.value)} className={I} /></div>
-        <button onClick={addByUrl} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add image</button>
+      {/* Add bar: upload from PC + URL + alt */}
+      <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+        <div className="flex flex-wrap gap-2 items-end">
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addByFile(e.target.files)} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading || product.images.length >= 5} className="px-3.5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5">
+            <UploadSimple size={15} />{uploading ? 'Working…' : `Upload from PC (${product.images.length}/5)`}
+          </button>
+          <div className="flex-1 min-w-[200px]">
+            <input value={url} onChange={(e) => setUrl(e.target.value)} className={I} placeholder="Image URL — or paste a product page to fetch ALL its images" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); importAllFromUrl(); } }} />
+          </div>
+          <div className="flex-1 min-w-[140px]"><input value={alt} onChange={(e) => setAlt(e.target.value)} className={I} placeholder="Alt text (optional)" /></div>
+          <button onClick={addByUrl} disabled={uploading} className="px-3.5 py-2 bg-gray-800 hover:bg-gray-900 disabled:opacity-50 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add URL</button>
+          <button onClick={importAllFromUrl} disabled={uploading} className="px-3.5 py-2 border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 rounded-lg text-sm flex items-center gap-1.5" title="Fetch every image found on the pasted page URL and add them all (max 5)">
+            <Download size={15} />Fetch all from page
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">Up to 5 images. Uploads are stored in Supabase Storage (durable). Paste a product page URL + “Fetch all from page” to pull every image at once, then ✕ the ones you do not want.</p>
       </div>
-      <p className="text-xs text-gray-400">Only legitimate supplier/product imagery. Products without acceptable imagery must not be activated as premium listings.</p>
 
-      <div className="space-y-3">
-        {product.images.map((img, idx) => (
-          <div key={img.id || idx} className="flex gap-3 p-3 border rounded-xl items-start">
-            <img src={img.url} alt={img.altText || img.url} className="w-20 h-20 rounded-lg object-cover bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.25'; }} />
-            <div className="flex-1 space-y-2">
-              <div className="flex flex-wrap gap-2 items-center">
-                <input value={img.altText} onChange={(e) => update(idx, { altText: e.target.value })} className={`${I} flex-1 min-w-[160px]`} placeholder="Alt text" />
-                <button onClick={() => setPrimary(idx)} className={`px-2.5 py-1.5 rounded text-xs font-semibold ${img.isPrimary ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                  {img.isPrimary ? '✓ Primary' : 'Set primary'}
-                </button>
-                <button onClick={() => move(idx, -1)} disabled={idx === 0} className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30"><CaretUp size={15} /></button>
-                <button onClick={() => move(idx, 1)} disabled={idx === product.images.length - 1} className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30"><CaretDown size={15} /></button>
-                <button onClick={() => remove(idx)} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash size={15} /></button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <select
-                  value={img.variantId || ''}
-                  onChange={(e) => update(idx, { variantId: e.target.value || null })}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded-lg"
-                  aria-label="Variant image link">
-                  <option value="">No variant link</option>
-                  {product.variants.map((v) => (
-                    <option key={v.id} value={v.id}>{Object.entries(v.attributes).map(([k, val]) => `${k}: ${val}`).join(' · ') || v.sku || v.id}</option>
-                  ))}
-                </select>
-                <select
-                  value={img.kind}
-                  onChange={(e) => update(idx, { kind: e.target.value as CatalogImage['kind'] })}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded-lg"
-                  aria-label="Image kind">
-                  <option value="product">Product</option>
-                  <option value="lifestyle">Lifestyle</option>
-                  <option value="creative">Creative</option>
-                  <option value="video">Video</option>
-                </select>
+      {/* Image grid with thumbnail picker */}
+      {product.images.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 border border-dashed rounded-xl"><ImageIcon size={28} className="mx-auto mb-2 text-gray-300" />No images yet — upload or add at least one.</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {product.images.map((img, idx) => (
+            <div key={img.id || idx} className={`relative group rounded-xl overflow-hidden border-2 transition-all ${img.isPrimary ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'}`}>
+              <button type="button" onClick={() => setPrimary(idx)} className="block w-full" title="Click to make this the main thumbnail">
+                <img src={img.url} alt={img.altText || ''} className="w-full aspect-square object-cover bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.25'; }} />
+              </button>
+              {img.isPrimary && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded">MAIN</span>}
+              <button type="button" onClick={() => remove(idx)} className="absolute top-1.5 right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 hover:bg-red-600 shadow" title="Remove image">✕</button>
+              <div className="p-1.5 space-y-1.5 bg-white">
+                <input value={img.altText} onChange={(e) => update(idx, { altText: e.target.value })} className="w-full px-1.5 py-1 border border-gray-200 rounded text-[11px]" placeholder="Alt text" />
+                <div className="flex gap-1 flex-wrap">
+                  <select value={img.kind} onChange={(e) => update(idx, { kind: e.target.value as CatalogImage['kind'] })} className="text-[10px] px-1 py-0.5 border border-gray-200 rounded" aria-label="Image kind">
+                    <option value="product">Product</option>
+                    <option value="lifestyle">Lifestyle</option>
+                    <option value="creative">Creative</option>
+                    <option value="video">Video</option>
+                  </select>
+                  <select value={img.variantId || ''} onChange={(e) => update(idx, { variantId: e.target.value || null })} className="text-[10px] px-1 py-0.5 border border-gray-200 rounded max-w-[110px]" aria-label="Variant image link">
+                    <option value="">No variant</option>
+                    {product.variants.map((v) => (
+                      <option key={v.id} value={v.id}>{Object.entries(v.attributes).map(([k, val]) => `${k}: ${val}`).join(' · ') || v.sku || v.id}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => onRemoveBackground(idx)} disabled={processing === idx} className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50" title="Remove solid background (client-side)">
+                    {processing === idx ? 'Removing…' : 'Remove bg'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {product.images.length === 0 && (
-          <div className="text-center py-10 text-gray-400 border border-dashed rounded-xl"><ImageIcon size={28} className="mx-auto mb-2 text-gray-300" />No images yet — add at least one.</div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1062,6 +1489,8 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
 // ============================================================================
 function VariantManager({ product, onProduct }: { product: CatalogProduct; onProduct: (p: CatalogProduct) => void }) {
   const { notify } = useApp();
+  // Variants are OPTIONAL — collapsed by default, expand only when needed.
+  const [open, setOpen] = useState(() => product.variants.length > 0);
   const [v, setV] = useState<{ color: string; size: string; sku: string; price: string; qty: string }>({ color: '', size: '', sku: '', price: '', qty: '' });
 
   const add = () => {
@@ -1081,35 +1510,50 @@ function VariantManager({ product, onProduct }: { product: CatalogProduct; onPro
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-gray-50 rounded-lg p-3 flex flex-wrap gap-2 items-end">
-        <div><label className={L}>Color</label><input value={v.color} onChange={(e) => setV({ ...v, color: e.target.value })} className={I} placeholder="Gray" /></div>
-        <div><label className={L}>Size</label><input value={v.size} onChange={(e) => setV({ ...v, size: e.target.value })} className={I} placeholder="Large" /></div>
-        <div><label className={L}>SKU</label><input value={v.sku} onChange={(e) => setV({ ...v, sku: e.target.value })} className={I} /></div>
-        <div><label className={L}>Price</label><input type="number" step="0.01" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} className={I} placeholder={String(product.price)} /></div>
-        <div><label className={L}>Stock</label><input type="number" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} className={I} /></div>
-        <button onClick={add} className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add variant</button>
-      </div>
-      <p className="text-xs text-gray-400">Only genuine variant options. Assign a variant image in the Images tab — never guess a variant→image link.</p>
+    <div className="space-y-3">
+      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-3 border rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+        <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <List size={16} className="text-gray-500" />
+          Variants <span className="text-xs font-normal text-gray-400">— optional, only when the product has options like color/size</span>
+        </span>
+        <span className={`text-xs font-semibold ${open ? 'text-blue-600' : 'text-gray-500'}`}>
+          {product.variants.length > 0 ? `${product.variants.length} added` : 'Click to expand'}
+          <span className="ml-1">{open ? '▲' : '▼'}</span>
+        </span>
+      </button>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead><tr className="text-left text-xs text-gray-500 uppercase"><th className="px-3 py-2">Options</th><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Price</th><th className="px-3 py-2">Compare</th><th className="px-3 py-2">Stock</th><th className="px-3 py-2"></th></tr></thead>
-          <tbody>
-            {product.variants.map((x) => (
-              <tr key={x.id} className="border-t">
-                <td className="px-3 py-2">{Object.entries(x.attributes).map(([k, val]) => <span key={k} className="mr-2"><span className="text-gray-400">{k}:</span> {val}</span>)}</td>
-                <td className="px-3 py-2"><input value={x.sku} onChange={(e) => update(x.id, { sku: e.target.value })} className="px-2 py-1 border rounded text-xs" /></td>
-                <td className="px-3 py-2"><input type="number" step="0.01" value={x.price ?? ''} onChange={(e) => update(x.id, { price: e.target.value ? +e.target.value : null })} className="px-2 py-1 border rounded text-xs w-20" /></td>
-                <td className="px-3 py-2"><input type="number" step="0.01" value={x.compareAtPrice ?? ''} onChange={(e) => update(x.id, { compareAtPrice: e.target.value ? +e.target.value : null })} className="px-2 py-1 border rounded text-xs w-20" /></td>
-                <td className="px-3 py-2"><input type="number" value={x.inventoryQty} onChange={(e) => update(x.id, { inventoryQty: +e.target.value })} className="px-2 py-1 border rounded text-xs w-20" /></td>
-                <td className="px-3 py-2"><button onClick={() => remove(x.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash size={14} /></button></td>
-              </tr>
-            ))}
-            {product.variants.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No variants — sold as one option.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {open && (
+        <>
+          <div className="bg-gray-50 rounded-lg p-3 flex flex-wrap gap-2 items-end">
+            <div><label className={L}>Color</label><input value={v.color} onChange={(e) => setV({ ...v, color: e.target.value })} className={I} placeholder="Gray" /></div>
+            <div><label className={L}>Size</label><input value={v.size} onChange={(e) => setV({ ...v, size: e.target.value })} className={I} placeholder="Large" /></div>
+            <div><label className={L}>SKU</label><input value={v.sku} onChange={(e) => setV({ ...v, sku: e.target.value })} className={I} /></div>
+            <div><label className={L}>Price</label><input type="number" step="0.01" value={v.price} onChange={(e) => setV({ ...v, price: e.target.value })} className={I} placeholder={String(product.price)} /></div>
+            <div><label className={L}>Stock</label><input type="number" value={v.qty} onChange={(e) => setV({ ...v, qty: e.target.value })} className={I} /></div>
+            <button onClick={add} className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1.5"><Plus size={15} />Add variant</button>
+          </div>
+          <p className="text-xs text-gray-400">Only genuine variant options. Assign a variant image in the Images tab — never guess a variant→image link.</p>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-left text-xs text-gray-500 uppercase"><th className="px-3 py-2">Options</th><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Price</th><th className="px-3 py-2">Compare</th><th className="px-3 py-2">Stock</th><th className="px-3 py-2"></th></tr></thead>
+              <tbody>
+                {product.variants.map((x) => (
+                  <tr key={x.id} className="border-t">
+                    <td className="px-3 py-2">{Object.entries(x.attributes).map(([k, val]) => <span key={k} className="mr-2"><span className="text-gray-400">{k}:</span> {val}</span>)}</td>
+                    <td className="px-3 py-2"><input value={x.sku} onChange={(e) => update(x.id, { sku: e.target.value })} className="px-2 py-1 border rounded text-xs" /></td>
+                    <td className="px-3 py-2"><input type="number" step="0.01" value={x.price ?? ''} onChange={(e) => update(x.id, { price: e.target.value ? +e.target.value : null })} className="px-2 py-1 border rounded text-xs w-20" /></td>
+                    <td className="px-3 py-2"><input type="number" step="0.01" value={x.compareAtPrice ?? ''} onChange={(e) => update(x.id, { compareAtPrice: e.target.value ? +e.target.value : null })} className="px-2 py-1 border rounded text-xs w-20" /></td>
+                    <td className="px-3 py-2"><input type="number" value={x.inventoryQty} onChange={(e) => update(x.id, { inventoryQty: +e.target.value })} className="px-2 py-1 border rounded text-xs w-20" /></td>
+                    <td className="px-3 py-2"><button onClick={() => remove(x.id)} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash size={14} /></button></td>
+                  </tr>
+                ))}
+                {product.variants.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">No variants — sold as one option.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import aiGenerateHandler from '../api/ai/generate';
 import aiTestHandler from '../api/ai/test';
 import aiCreditsHandler from '../api/ai/openrouter-credits';
 import importImagesHandler from '../api/import-images';
+import uploadImageHandler from '../api/upload-image';
 import checkoutHandler from '../api/checkout';
 import webhookHandler from '../api/webhook';
 import salmanOsHandler from '../api/salman-os';
@@ -48,6 +49,7 @@ const ROUTES: Route[] = [
   { path: '/api/ai/openrouter-credits', handler: aiCreditsHandler },
   { path: '/api/fetch-page', handler: fetchPageHandler },
   { path: '/api/import-images', handler: importImagesHandler },
+  { path: '/api/upload-image', handler: uploadImageHandler },
   { path: '/api/checkout', handler: checkoutHandler },
   { path: '/api/webhook', handler: webhookHandler },
   { path: '/api/salman-os', handler: salmanOsHandler },
