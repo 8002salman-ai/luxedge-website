@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -705,32 +705,30 @@ export function CatalogProductEditor() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => nav('/admin/products')} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft size={20} /></button>
-          <div>
-            <h1 className="text-2xl font-bold">{isNew ? 'Add New Product' : 'Edit Product'}</h1>
-            <p className="text-sm text-gray-500">{isNew ? 'Create a new catalog product' : p.name}</p>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
+        <button onClick={() => nav('/admin/products')} className="p-1.5 hover:bg-gray-100 rounded-lg shrink-0"><ArrowLeft size={16} /></button>
+        <h1 className="font-bold text-gray-800 whitespace-nowrap">{isNew ? 'Add Product' : 'Edit Product'}</h1>
+        <span className="h-4 w-px bg-gray-200 shrink-0" aria-hidden="true" />
+        {isNew && (
+          <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50 shrink-0">
+            <button onClick={() => setMode('quick')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick</button>
+            <button onClick={() => setMode('detail')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail</button>
           </div>
-        </div>
-        <div className="flex gap-2 items-center">
-          {isNew && (
-            <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
-              <button onClick={() => setMode('quick')} className={`btn-glow px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'quick' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>⚡ Quick Add</button>
-              <button onClick={() => setMode('detail')} className={`btn-glow px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${mode === 'detail' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>Detail Add</button>
-            </div>
-          )}
-          <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className={`${I} w-auto`} aria-label="Product status">
+        )}
+        <div className="flex-1" />
+        <div className="relative shrink-0">
+          <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className="appearance-none pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs font-medium bg-white cursor-pointer" aria-label="Product status">
             <option value="draft">Draft</option>
             <option value="ready">Ready</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="archived">Archived</option>
           </select>
-          <button onClick={handleSave} disabled={saving} className="btn-glow px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-2">
-            <FloppyDisk size={16} />{saving ? 'Saving…' : 'Save Product'}
-          </button>
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"><CaretDown size={11} /></span>
         </div>
+        <button onClick={handleSave} disabled={saving} className="btn-glow px-4 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0">
+          <FloppyDisk size={14} />{saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
 
       {isNew && mode === 'quick' && <QuickAddForm product={p} cats={cats} onChange={setP} />}
