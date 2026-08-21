@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
 import { ChatTeardropDots } from '@phosphor-icons/react';
 
 const WA_LINK = 'https://wa.me/14409418002'; // owner's WhatsApp: +1 440-941-8002
 
 // Floating WhatsApp button (bottom-left, away from the assistant bubble).
 // Opens wa.me with a pre-filled inquiry and fires a CRM lead (source=whatsapp)
-// so every inquiry lands in the admin CRM.
+// only when the visitor actually clicks — every real inquiry lands in the CRM.
 export default function WhatsAppButton() {
-  useEffect(() => {
+  const openChat = () => {
+    // Best-effort lead capture on real click (never blocks the chat).
     try {
       fetch('/api/crm/lead', {
         method: 'POST',
@@ -15,11 +15,8 @@ export default function WhatsAppButton() {
         body: JSON.stringify({ source: 'whatsapp', pageUrl: window.location.pathname, name: 'WhatsApp visitor', optedIn: false }),
       }).catch(() => undefined);
     } catch {
-      /* best-effort lead capture */
+      /* ignore */
     }
-  }, []);
-
-  const openChat = () => {
     const text = encodeURIComponent('Hi Luxedge! I have a question about your pet products. 🐾');
     window.open(`${WA_LINK}?text=${text}`, '_blank', 'noopener,noreferrer');
   };
