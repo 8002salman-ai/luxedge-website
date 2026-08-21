@@ -19,6 +19,7 @@ import { getAccessToken } from '../services/supabase';
 import {
   setDbToken, listProducts, getProduct, createProduct, updateProduct, setProductStatus,
   archiveProduct, hardDeleteProduct, duplicateProduct, saveProductImages, saveProductVariants,
+  createCategory,
   listCategories, listCoupons, createCoupon, updateCoupon, deleteCoupon,
   listOffers, createOffer, updateOffer, deleteOffer, getStoreSettings, saveStoreSettings,
   uid,
@@ -569,6 +570,9 @@ export function CatalogProductEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<EditorTab>('general');
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [addingCat, setAddingCat] = useState(false);
   // Quick Add = compact one-screen form; Detail Add = full tabbed editor;
   // AI Import = the shared AI product import engine (research → review → draft).
   const [mode, setMode] = useState<'quick' | 'detail' | 'ai'>('quick');
@@ -702,6 +706,26 @@ export function CatalogProductEditor() {
   const addTag = (t: string) => { const v = t.trim(); if (v && !p?.tags.includes(v)) set('tags', [...(p?.tags || []), v]); };
   const removeTag = (t: string) => set('tags', (p?.tags || []).filter((x) => x !== t));
 
+  // Create a category on the fly (persists to Supabase) and select it.
+  const addCategory = async (name: string): Promise<CatalogCategory | null> => {
+    const n = name.trim();
+    if (!n) { notify('Category name is required', 'error'); return null; }
+    const existing = cats.find((c) => c.name.toLowerCase() === n.toLowerCase());
+    if (existing) { set('categoryId', existing.id); notify(`Category "${existing.name}" already exists — selected`, 'error'); return existing; }
+    setAddingCat(true);
+    try {
+      const c = await createCategory({ name: n });
+      setCats((prev) => [...prev, c]);
+      set('categoryId', c.id);
+      notify(`Category "${c.name}" added`);
+      setNewCatOpen(false); setNewCatName('');
+      return c;
+    } catch (e) {
+      notify(`Could not save category: ${(e as Error).message}`, 'error');
+      return null;
+    } finally { setAddingCat(false); }
+  };
+
   if (loading) return <div className="text-center py-20 text-gray-400">Loading…</div>;
   if (!p) return null;
 
@@ -738,7 +762,7 @@ export function CatalogProductEditor() {
         )}
       </div>
 
-      {isNew && mode === 'quick' && <QuickAddForm product={p} cats={cats} onChange={setP} />}
+      {isNew && mode === 'quick' && <QuickAddForm product={p} cats={cats} onChange={setP} onAddCategory={addCategory} />}
 
       {isNew && mode === 'ai' && <AIImportPanel />}
 
@@ -762,11 +786,21 @@ export function CatalogProductEditor() {
             <div><label className={L}>Subtitle <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={p.subtitle || ''} onChange={(e) => set('subtitle', e.target.value)} className={I} /></div>
             <div className="sm:col-span-2"><label className={L}>Short description <span className="normal-case font-normal text-gray-400">(optional)</span></label><textarea value={p.shortDescription} onChange={(e) => set('shortDescription', e.target.value)} rows={2} className={I} /></div>
             <div className="sm:col-span-2"><label className={L}>Description <span className="normal-case font-normal text-gray-400">(optional)</span></label><textarea value={p.description} onChange={(e) => set('description', e.target.value)} rows={6} className={I} placeholder="Concise opening benefit, key features, practical use, sizing, care. No fake claims." /></div>
-            <div><label className={L}>Category</label>
-              <select value={p.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
-                <option value="">— Uncategorized —</option>
-                {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+            <div>
+              <label className={L}>Category</label>
+              <div className="flex gap-1.5">
+                <select value={p.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
+                  <option value="">— Uncategorized —</option>
+                  {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button type="button" onClick={() => { setNewCatOpen(!newCatOpen); setNewCatName(''); }} className="shrink-0 px-3 border border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-semibold whitespace-nowrap">+ Add</button>
+              </div>
+              {newCatOpen && (
+                <div className="flex gap-1.5 mt-1.5">
+                  <input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addCategory(newCatName); }} placeholder="New category name" className={I} autoFocus />
+                  <button type="button" onClick={() => void addCategory(newCatName)} disabled={addingCat || !newCatName.trim()} className="shrink-0 px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold whitespace-nowrap">{addingCat ? 'Adding…' : 'Add'}</button>
+                </div>
+              )}
             </div>
             <div><label className={L}>Brand <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={p.brand} onChange={(e) => set('brand', e.target.value)} className={I} placeholder="e.g. KONG" /></div>
             <div className="sm:col-span-2">
@@ -1110,8 +1144,17 @@ function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends k
 // ============================================================================
 // QUICK ADD FORM (compact one-screen product creation)
 // ============================================================================
-function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void }) {
+function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void; onAddCategory?: (name: string) => Promise<CatalogCategory | null> }) {
   const set = <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => onChange({ ...product, [k]: v });
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [addingCat, setAddingCat] = useState(false);
+
+  const addNewCat = async () => {
+    if (!onAddCategory) return;
+    setAddingCat(true);
+    try { const c = await onAddCategory(newCatName); if (c) set('categoryId', c.id); } finally { setAddingCat(false); }
+  };
 
   const removeTag = (t: string) => onChange({ ...product, tags: product.tags.filter((x) => x !== t) });
   const addTag = (raw: string) => {
@@ -1130,10 +1173,19 @@ function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; ca
         </div>
         <div>
           <label className={L}>Category</label>
-          <select value={product.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
-            <option value="">— Uncategorized —</option>
-            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <div className="flex gap-1.5">
+            <select value={product.categoryId || ''} onChange={(e) => set('categoryId', e.target.value || null)} className={I}>
+              <option value="">— Uncategorized —</option>
+              {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button type="button" onClick={() => { setNewCatOpen(!newCatOpen); setNewCatName(''); }} className="shrink-0 px-3 border border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-semibold whitespace-nowrap">+ Add</button>
+          </div>
+          {newCatOpen && (
+            <div className="flex gap-1.5 mt-1.5">
+              <input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addNewCat(); }} placeholder="New category name" className={I} autoFocus />
+              <button type="button" onClick={() => void addNewCat()} disabled={addingCat || !newCatName.trim()} className="shrink-0 px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold whitespace-nowrap">{addingCat ? 'Adding…' : 'Add'}</button>
+            </div>
+          )}
         </div>
         <div><label className={L}>Brand <span className="normal-case font-normal text-gray-400">(optional)</span></label><input value={product.brand} onChange={(e) => set('brand', e.target.value)} className={I} placeholder="e.g. KONG" /></div>
         <div>
