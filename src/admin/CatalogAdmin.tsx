@@ -1105,71 +1105,17 @@ function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends k
 // ============================================================================
 function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void }) {
   const set = <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => onChange({ ...product, [k]: v });
-  const [imgUrl, setImgUrl] = useState('');
-  const [imgAlt, setImgAlt] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
 
-  const addByUrl = () => {
-    const u = imgUrl.trim();
-    if (!u) return;
-    if (!/^https?:\/\//i.test(u)) { window.alert('Enter a valid image URL (https://…)'); return; }
-    const isFirst = product.images.length === 0;
-    onChange({ ...product, images: [...product.images, { id: uid(), productId: product.id, url: u, altText: imgAlt.trim(), kind: 'product', isPrimary: isFirst, sortOrder: product.images.length, variantId: null }] });
-    setImgUrl(''); setImgAlt('');
+  const removeTag = (t: string) => onChange({ ...product, tags: product.tags.filter((x) => x !== t) });
+  const addTag = (raw: string) => {
+    const t = raw.trim().replace(/,$/, '');
+    if (!t || product.tags.includes(t)) return;
+    onChange({ ...product, tags: [...product.tags, t] });
   };
-
-  const handleFiles = async (files: FileList | null) => {
-    if (!files || !files.length) return;
-    const room = Math.max(0, 5 - product.images.length);
-    const picked = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, room);
-    if (!picked.length) { window.alert('Max 5 images'); return; }
-    setUploading(true);
-    try {
-      const startLen = product.images.length;
-      const added: CatalogImage[] = [];
-      for (const f of picked) {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('read failed'));
-          r.readAsDataURL(f);
-        });
-        // Upload the file to Supabase Storage server-side (admin-only) so the
-        // URL is durable, not a browser blob that vanishes on refresh.
-        let url = dataUrl;
-        try {
-          const token = getAccessToken();
-          const r = await fetch('/api/upload-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ productId: product.id || 'new', filename: f.name, contentType: f.type, base64: dataUrl }),
-          });
-          const j = await r.json().catch(() => null);
-          if (r.ok && j?.publicUrl) url = String(j.publicUrl);
-        } catch { /* keep data URL */ }
-        added.push({ id: uid(), productId: product.id, url, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
-      }
-      onChange({ ...product, images: [...product.images, ...added] });
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
-
-  const removeImg = (idx: number) => {
-    const removed = product.images[idx];
-    let imgs = product.images.filter((_, i) => i !== idx);
-    if (removed?.isPrimary && imgs.length > 0 && !imgs.some((i) => i.isPrimary)) {
-      imgs = imgs.map((img, i) => ({ ...img, isPrimary: i === 0 }));
-    }
-    onChange({ ...product, images: imgs });
-  };
-
-  const setMain = (idx: number) => onChange({ ...product, images: product.images.map((img, i) => ({ ...img, isPrimary: i === idx })) });
 
   return (
     <div className="bg-white rounded-xl border p-5 space-y-4">
-      <p className="text-xs text-gray-500">Quick Add — only the essentials. Everything else defaults to safe values and can be refined later in Detail Add. <span className="text-red-500">*</span> = required.</p>
+      <p className="text-xs text-gray-500">Quick Add — essentials plus the fields SEO needs. Everything else defaults to safe values and can be refined later in Detail Add. <span className="text-red-500">*</span> = required.</p>
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="sm:col-span-2">
           <label className={L}>Product name <span className="text-red-500">*</span></label>
@@ -1188,35 +1134,33 @@ function QuickAddForm({ product, cats, onChange }: { product: CatalogProduct; ca
           <input type="number" min="0" step="0.01" value={product.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} placeholder="0.00" />
         </div>
         <div><label className={L}>Supplier cost (USD) — optional</label><input type="number" min="0" step="0.01" value={product.costPrice || ''} onChange={(e) => set('costPrice', +e.target.value)} className={I} placeholder="Optional" /></div>
+        <div className="sm:col-span-2">
+          <label className={L}>Short description <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+          <textarea value={product.shortDescription || ''} onChange={(e) => set('shortDescription', e.target.value)} rows={2} className={I} placeholder="One-line customer-facing summary (also used for SEO meta)." />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Description <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+          <textarea value={product.description || ''} onChange={(e) => set('description', e.target.value)} rows={4} className={I} placeholder="Concise opening benefit, key features, practical use, sizing, care. No fake claims." />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Tags</label>
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {product.tags.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">{t}<button type="button" onClick={() => removeTag(t)}><X size={11} /></button></span>
+            ))}
+            <input
+              className="flex-1 min-w-[140px] px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+              placeholder="Add tag + Enter"
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = ''; } }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Images — upload up to 5, URL add, thumbnail picker */}
+      {/* Images — full editor (upload to storage, URL, fetch-all, main picker, bg removal, alt) */}
       <div>
-        <label className={L}>Images (up to 5) — first image is the main thumbnail <span className="text-red-500">*</span></label>
-        {product.images.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
-            {product.images.map((img, i) => (
-              <div key={img.id || i} className="relative group aspect-square rounded-lg overflow-hidden border-2 border-gray-200">
-                <img src={img.url} alt={img.altText || ''} className="w-full h-full object-cover" />
-                {img.isPrimary && <span className="absolute top-1 left-1 px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-bold rounded">MAIN</span>}
-                <button type="button" onClick={() => removeImg(i)} className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 hover:bg-red-600" title="Remove image">✕</button>
-                {!img.isPrimary && (
-                  <button type="button" onClick={() => setMain(i)} className="absolute inset-x-0 bottom-0 py-0.5 bg-black/50 text-white text-[9px] font-semibold opacity-0 group-hover:opacity-100" title="Set as main thumbnail">Set as main</button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading || product.images.length >= 5} className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-sm font-medium border border-blue-200 disabled:opacity-50 flex items-center gap-1.5">
-            <UploadSimple size={15} />{uploading ? 'Uploading…' : `Upload from PC (${product.images.length}/5)`}
-          </button>
-          <input value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addByUrl(); } }} className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Paste image URL + Enter" />
-          <input value={imgAlt} onChange={(e) => setImgAlt(e.target.value)} className="hidden sm:block flex-1 min-w-[120px] px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Alt text (optional)" />
-          <button type="button" onClick={addByUrl} className="px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium">Add URL</button>
-        </div>
-        <p className="text-xs text-gray-400 mt-1.5">Tip: paste a product image URL to add it instantly. Uploaded files are stored in Supabase Storage so they survive a refresh.</p>
+        <label className={L}>Images (up to 5) — click an image to make it the main thumbnail <span className="text-red-500">*</span></label>
+        <ImageManager product={product} onProduct={onChange} />
       </div>
     </div>
   );
