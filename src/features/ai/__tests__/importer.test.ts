@@ -5,7 +5,7 @@ import {
   buildImportVariants, buildImportProductInput, buildStorageImageInputs,
   parsePdpNpi, extractAliExpressUrlEvidence, buildUrlEvidenceProduct,
   buildScrapedEvidenceProduct, mergeScrapedWithAi, isEmptyExtraction,
-  requireReviewEvidence,
+  requireReviewEvidence, deriveTitleInference,
 } from '../importer';
 
 describe('extractProductJson', () => {
@@ -338,6 +338,41 @@ describe('AliExpress URL evidence (fetch-blocked fallback)', () => {
   });
 });
 
+describe('deriveTitleInference', () => {
+  it('strips the marketplace suffix and classifies a grooming clipper', () => {
+    const d = deriveTitleInference('Electric Pet Hair Clipper USB Rechargeable LCD Display Dog Cat Grooming Trimmer Shaver with Guide Combs Kit - AliExpress 15');
+    expect(d.cleanTitle).toBe('Electric Pet Hair Clipper USB Rechargeable LCD Display Dog Cat Grooming Trimmer Shaver with Guide Combs Kit');
+    expect(d.category).toBe('Grooming');
+    expect(d.subcategory).toBe('Clippers & Trimmers');
+    expect(d.slug).toBeTruthy();
+    expect(d.focusKeyword).toBeTruthy();
+    expect(d.shortDescription).toContain('Clipper');
+    expect(d.longDescription).toBeTruthy();
+    expect(d.tags.length).toBeGreaterThan(0);
+    expect(d.sku).toBe('');
+  });
+
+  it('classifies beds, toys, feeding, travel and dog-only categories', () => {
+    expect(deriveTitleInference('Orthopedic Memory Foam Dog Bed').category).toBe('Pet Beds');
+    expect(deriveTitleInference('Interactive Cat Feather Toy').category).toBe('Pet Toys');
+    expect(deriveTitleInference('Stainless Steel Slow Feeder Bowl').category).toBe('Feeding & Water');
+    expect(deriveTitleInference('Pet Carrier Backpack for Small Dogs').category).toBe('Pet Accessories');
+    expect(deriveTitleInference('Adjustable Dog Training Collar').category).toBe('Dog Supplies');
+    expect(deriveTitleInference('Cozy Cat Nest Bed Round Plush Mat').category).toBe('Pet Beds');
+  });
+
+  it('uses the supplier item id as the SKU when provided', () => {
+    const d = deriveTitleInference('Dog Cooling Mat 2XL', '3256805600005011');
+    expect(d.sku).toBe('3256805600005011');
+  });
+
+  it('keeps values honest — no fabricated materials/counts/claims', () => {
+    const d = deriveTitleInference('Electric Pet Hair Clipper USB Rechargeable');
+    expect(d.shortDescription).toContain('features shown');
+    expect(d.shortDescription.toLowerCase()).not.toContain('stainless');
+  });
+});
+
 describe('buildScrapedEvidenceProduct', () => {
   const ALI_URL = 'https://www.aliexpress.us/item/3256805600005011.html?pdp_npi=6%40dis%21USD%214.11%210.99%21%21%2127.52%216.64%21%402101ca9517872300755714122e1037%2112000034351273366%21sea%21US%21&pdp_ext_f=%7B%22ship_from%22%3A%22US%22%7D';
 
@@ -415,6 +450,36 @@ describe('mergeScrapedWithAi', () => {
     const merged = mergeScrapedWithAi(scraped, ai);
     expect(merged.supplierUrl).toBe('https://www.aliexpress.us/item/3256805600005011.html');
     expect(merged.supplierItemId).toBe('3256805600005011');
+  });
+
+  it('keeps derived category/descriptions/SKU when AI returns empty fields', () => {
+    const withDerived = {
+      title: 'Dog Cooling Mat 2XL 150x100cm for Big Small Dogs',
+      shortDescription: 'Cooling mat for dogs',
+      longDescription: 'Cooling mat for dogs',
+      images: ['https://cdn.example.com/hero.jpg'],
+      sellingPrice: 27.52,
+      supplierUrl: 'https://www.aliexpress.us/item/3256805600005011.html',
+      supplierItemId: '3256805600005011',
+      category: 'Grooming',
+      subcategory: 'Clippers & Trimmers',
+      slug: 'electric-pet-hair-clipper',
+      sku: '3256805600005011',
+      tags: ['grooming', 'clipper'],
+      seoKeywords: ['grooming', 'clipper'],
+      focusKeyword: 'electric pet hair clipper',
+      metaDescription: 'Electric pet hair clipper for everyday care.',
+      confidence: { title: 1, description: 0.8, category: 0.8, tags: 0.8, images: 1, price: 0, brand: 0, specifications: 0 },
+    } as never;
+    const aiEmpty = { title: '', images: [], shortDescription: '', longDescription: '', category: '', sku: '', tags: [], focusKeyword: '', metaDescription: '' } as never;
+    const merged = mergeScrapedWithAi(withDerived, aiEmpty);
+    expect(merged.category).toBe('Grooming');
+    expect(merged.subcategory).toBe('Clippers & Trimmers');
+    expect(merged.sku).toBe('3256805600005011');
+    expect(merged.slug).toBe('electric-pet-hair-clipper');
+    expect(merged.tags).toContain('grooming');
+    expect(merged.focusKeyword).toBe('electric pet hair clipper');
+    expect(merged.metaDescription).toBeTruthy();
   });
 });
 

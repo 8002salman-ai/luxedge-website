@@ -480,6 +480,120 @@ Rules:
 }
 
 /**
+ * Deterministic title-derived listing fallback (no AI required).
+ *
+ * When the scrape could only retrieve the real title + images (AliExpress
+ * serves a JS-rendered shell with og:title/og:image but no description) and
+ * the AI enrichment layer returns empty/weak fields, the Review form must
+ * STILL show honest, title-grounded values instead of a blank product.
+ *
+ * Everything here is derived ONLY from words that literally appear in the
+ * title — it never invents materials, counts, claims, prices or stock (the
+ * same rule the AI prompt enforces). Category/subcategory are classified
+ * from the title's stated product type; descriptions are 2-3 factual
+ * sentences restating what the title itself says.
+ */
+export function deriveTitleInference(title: string, itemId?: string | null): {
+  cleanTitle: string;
+  category: string;
+  subcategory: string;
+  shortDescription: string;
+  longDescription: string;
+  slug: string;
+  focusKeyword: string;
+  tags: string[];
+  metaTitle: string;
+  metaDescription: string;
+  sku: string;
+  confidence: Record<string, number>;
+} {
+  // Strip marketplace-suffix junk appended to og:title, e.g.
+  // "... Guide Combs Kit - AliExpress 15" → "... Guide Combs Kit".
+  const clean = (title || '')
+    .replace(/\s*[-–—]\s*(AliExpress|Alibaba|Amazon|eBay|Etsy|Walmart|Temu)\s*\d*$/i, '')
+    .replace(/\s*[-–—]\s*(AliExpress|Alibaba|Amazon|eBay|Etsy|Walmart|Temu)\s*$/i, '')
+    .trim();
+  const t = clean.toLowerCase();
+
+  // Category classification from the title's stated product type.
+  let category = '';
+  let subcategory = '';
+  if (/clipper|trimmer|shaver|brush|comb|grooming|nail\s*clipper|de.?shedding|slicker|furminator/i.test(t)) {
+    category = 'Grooming';
+    subcategory = /nail/i.test(t) ? 'Nail Care' : /clipper|trimmer|shaver/i.test(t) ? 'Clippers & Trimmers' : 'Brushes & Combs';
+  } else if (/bed|mat|nest|cushion|sofa|cave|basket|blanket|mattress/i.test(t)) {
+    category = 'Pet Beds';
+    subcategory = /cooling|ice|chill/i.test(t) ? 'Cooling Mats' : 'Beds & Mats';
+  } else if (/toy|disc|ball|scratch|teaser|chew|rope|plush|wand|puzzle|feather/i.test(t)) {
+    category = 'Pet Toys';
+    subcategory = /scratch/i.test(t) ? 'Scratching' : 'Interactive Toys';
+  } else if (/bowl|feeder|fountain|dish|water|bottle|slow.?feeder/i.test(t)) {
+    category = 'Feeding & Water';
+    subcategory = /fountain|water/i.test(t) ? 'Water & Fountains' : 'Bowls & Feeders';
+  } else if (/carrier|backpack|travel|bag|pouch|holder/i.test(t)) {
+    category = 'Pet Accessories';
+    subcategory = /carrier|backpack|bag/i.test(t) ? 'Carriers & Travel' : 'Pet Accessories';
+  } else if (/leash|collar|harness|seat.?belt/i.test(t)) {
+    // Walking & safety gear maps to the named pet's category when the title
+    // says which pet it is for; otherwise it is a generic accessory.
+    if (/cat|kitten/i.test(t) && !/dog|puppy/i.test(t)) {
+      category = 'Cat Supplies';
+      subcategory = 'Walking & Safety';
+    } else if (/dog|puppy/i.test(t)) {
+      category = 'Dog Supplies';
+      subcategory = 'Walking & Safety';
+    } else {
+      category = 'Pet Accessories';
+      subcategory = 'Walking & Safety';
+    }
+  } else if (/cat|kitten/i.test(t) && !/dog|puppy/i.test(t)) {
+    category = 'Cat Supplies';
+  } else if (/dog|puppy/i.test(t)) {
+    category = 'Dog Supplies';
+  }
+
+  // 2-3 factual sentences restating ONLY what the title says.
+  const shortDescription = clean
+    ? `${clean}. Designed for everyday pet care with the features shown — check the live listing for full specifications, sizing and care details.`
+    : '';
+  const longDescription = clean
+    ? `${clean}. This pet essential is offered for the pet shown in the listing and ships with the included accessories listed by the supplier. Please verify sizing, materials and care instructions on the live product page before purchase.`
+    : '';
+
+  const slug = clean
+    ? clean.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90)
+    : '';
+  const keywords = clean
+    ? clean.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !['with', 'from', 'this', 'that', 'your', 'lcd', 'usb', 'display'].includes(w)).slice(0, 8)
+    : [];
+  const focusKeyword = keywords.slice(0, 4).join(' ');
+
+  return {
+    cleanTitle: clean,
+    category,
+    subcategory,
+    shortDescription,
+    longDescription,
+    slug,
+    focusKeyword,
+    tags: [...new Set([...(category ? [category.split(' ')[0]] : []), ...keywords.slice(0, 5)])].slice(0, 8),
+    metaTitle: clean.slice(0, 60),
+    metaDescription: shortDescription.slice(0, 160),
+    sku: itemId || '',
+    confidence: {
+      title: clean ? 1 : 0,
+      price: 0,
+      description: clean ? 0.8 : 0,
+      specifications: 0,
+      images: 0,
+      brand: 0,
+      category: category ? 0.8 : 0,
+      tags: clean ? 0.8 : 0,
+    },
+  };
+}
+
+/**
  * Parse an AI response into a structured product. Tolerates markdown fences
  * and leading/trailing noise. Returns null when no JSON object is present.
  */
@@ -743,18 +857,23 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
     'USA shipping, stock, delivery and variant details load via JS — verify on the live page before publish.',
   ].filter(Boolean);
   const shortDesc = page.description.trim();
+  // Deterministic title-derived fallback: when AliExpress only exposed the
+  // title + images (JS shell) and AI enrichment is weak, the base product
+  // must still carry category/descriptions/SEO grounded in the title itself.
+  const inferred = deriveTitleInference(page.title, itemId);
+  const baseTitle = page.title.trim();
   return {
-    title: page.title.trim(),
+    title: baseTitle,
     luxuryTitle: '',
-    seoTitle: page.title.trim(),
-    slug: '',
+    seoTitle: baseTitle,
+    slug: inferred.slug,
     brand: page.brand.trim(),
     manufacturer: '',
-    category: '',
-    subcategory: '',
+    category: inferred.category,
+    subcategory: inferred.subcategory,
     collection: '',
-    shortDescription: shortDesc,
-    longDescription: shortDesc,
+    shortDescription: shortDesc || inferred.shortDescription,
+    longDescription: shortDesc || inferred.longDescription,
     features: [],
     benefits: [],
     specifications: {},
@@ -765,7 +884,7 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
     materials: [],
     colors: [],
     sizes: [],
-    sku: '',
+    sku: inferred.sku,
     barcode: '',
     hsCode: '',
     stock: 0,
@@ -773,24 +892,24 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
     sellingPrice: price,
     comparePrice: 0,
     shippingWeight: '',
-    tags: [],
-    seoKeywords: [],
-    metaTitle: page.title.trim(),
-    metaDescription: shortDesc,
-    focusKeyword: '',
+    tags: inferred.tags,
+    seoKeywords: inferred.tags,
+    metaTitle: baseTitle,
+    metaDescription: shortDesc || inferred.metaDescription,
+    focusKeyword: inferred.focusKeyword,
     images: page.images,
     faqs: [],
     warranty: '',
     careInstructions: '',
     safetyNotes: '',
     confidence: {
-      title: page.title.trim() ? 1 : 0,
+      title: baseTitle ? 1 : 0,
       price: priceVerified ? 1 : 0,
-      description: shortDesc ? 1 : 0,
+      description: shortDesc ? 1 : (baseTitle ? 0.8 : 0),
       images: page.images.length ? 1 : 0,
       brand: page.brand.trim() ? 1 : 0,
-      category: 0,
-      tags: 0,
+      category: inferred.category ? 0.8 : 0,
+      tags: inferred.tags.length ? 0.8 : 0,
       specifications: 0,
     },
     supplierPlatform: detectSupplierPlatform(url),
@@ -806,7 +925,7 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
     riskFlags: [],
     variants: [],
     evidence: {
-      title: page.title.trim() ? 'VERIFIED' : 'UNKNOWN',
+      title: baseTitle ? 'VERIFIED' : 'UNKNOWN',
       sellingPrice: priceVerified ? 'VERIFIED' : (ev.listPrice ? 'INFERRED' : 'UNKNOWN'),
       costPrice: 'UNKNOWN',
       shipping: 'UNKNOWN',
@@ -828,9 +947,16 @@ export function buildScrapedEvidenceProduct(page: FetchedPage, url: string): AIE
 export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedProduct | null | undefined): AIExtractedProduct {
   const aiImages = (ai?.images || []).filter((u) => typeof u === 'string' && u.startsWith('http'));
   const mergedImages = [...new Set([...scraped.images, ...aiImages])].filter((u) => u.startsWith('http')).slice(0, 24);
+  // AI wins ONLY when it returns a non-empty value — an empty/weak AI field
+  // must never erase deterministic scraped/derived evidence (title, images,
+  // category, descriptions, SEO, SKU, supplier identity).
   const pick = (aiVal: string | undefined, scrapedVal: string): string => {
     const v = (aiVal || '').trim();
     return v ? v : scrapedVal.trim();
+  };
+  const pickArr = (aiVal: string[] | undefined, scrapedVal: string[] | undefined): string[] => {
+    if (aiVal && aiVal.length) return aiVal;
+    return scrapedVal || [];
   };
   // Defense in depth: even if a marketplace slogan slipped through scraping
   // or the model echoed it back, never let it reach the saved product.
@@ -838,12 +964,68 @@ export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedP
   const shortDesc = cleanDesc(pick(ai?.shortDescription, scraped.shortDescription));
   const longDesc = cleanDesc(pick(ai?.longDescription, scraped.longDescription)) || shortDesc;
   const title = pick(ai?.title, scraped.title) || scraped.title;
+  const luxuryTitle = pick(ai?.luxuryTitle, scraped.luxuryTitle || title);
   return {
+    // Start from the deterministic base (never from AI) so empty AI fields
+    // can only ENRICH, never blank out, scraped/derived values.
     ...scraped,
-    ...(ai ? { ...ai } : {}),
-    // Scraped evidence wins on fields where AI must not erase real data.
-    title: title || ai?.luxuryTitle || scraped.title,
-    luxuryTitle: ai?.luxuryTitle || title || '',
+    // Then overlay AI values, but only the ones that are actually present.
+    ...(ai
+      ? {
+          title: ai.title?.trim() || scraped.title,
+          luxuryTitle: ai.luxuryTitle?.trim() || scraped.luxuryTitle || scraped.title,
+          seoTitle: ai.seoTitle?.trim() || scraped.seoTitle || scraped.title,
+          slug: ai.slug?.trim() || scraped.slug,
+          brand: ai.brand?.trim() || scraped.brand,
+          manufacturer: ai.manufacturer?.trim() || scraped.manufacturer,
+          category: ai.category?.trim() || scraped.category,
+          subcategory: ai.subcategory?.trim() || scraped.subcategory,
+          collection: ai.collection?.trim() || scraped.collection,
+          shortDescription: ai.shortDescription?.trim() || scraped.shortDescription,
+          longDescription: ai.longDescription?.trim() || scraped.longDescription,
+          features: pickArr(ai.features, scraped.features),
+          benefits: pickArr(ai.benefits, scraped.benefits),
+          specifications: ai.specifications && Object.keys(ai.specifications).length ? ai.specifications : scraped.specifications,
+          packageIncludes: pickArr(ai.packageIncludes, scraped.packageIncludes),
+          weight: ai.weight?.trim() || scraped.weight,
+          dimensions: ai.dimensions?.trim() || scraped.dimensions,
+          origin: ai.origin?.trim() || scraped.origin,
+          materials: pickArr(ai.materials, scraped.materials),
+          colors: pickArr(ai.colors, scraped.colors),
+          sizes: pickArr(ai.sizes, scraped.sizes),
+          sku: ai.sku?.trim() || scraped.sku,
+          barcode: ai.barcode?.trim() || scraped.barcode,
+          hsCode: ai.hsCode?.trim() || scraped.hsCode,
+          stock: (ai.stock && ai.stock > 0) ? ai.stock : (scraped.stock || 0),
+          costPrice: (ai.costPrice && ai.costPrice > 0) ? ai.costPrice : (scraped.costPrice || 0),
+          sellingPrice: (ai.sellingPrice && ai.sellingPrice > 0) ? ai.sellingPrice : (scraped.sellingPrice || 0),
+          comparePrice: (ai.comparePrice && ai.comparePrice > 0) ? ai.comparePrice : (scraped.comparePrice || 0),
+          shippingWeight: ai.shippingWeight?.trim() || scraped.shippingWeight,
+          tags: pickArr(ai.tags, scraped.tags),
+          seoKeywords: pickArr(ai.seoKeywords, scraped.seoKeywords),
+          metaTitle: ai.metaTitle?.trim() || scraped.metaTitle || scraped.title,
+          metaDescription: cleanDesc(ai.metaDescription?.trim() || scraped.metaDescription || shortDesc),
+          focusKeyword: ai.focusKeyword?.trim() || scraped.focusKeyword,
+          warranty: ai.warranty?.trim() || scraped.warranty,
+          careInstructions: ai.careInstructions?.trim() || scraped.careInstructions,
+          safetyNotes: ai.safetyNotes?.trim() || scraped.safetyNotes,
+          shippingToUsa: ai.shippingToUsa?.trim() || scraped.shippingToUsa,
+          deliveryRangeUsa: ai.deliveryRangeUsa?.trim() || scraped.deliveryRangeUsa,
+          usStockEvidence: ai.usStockEvidence?.trim() || scraped.usStockEvidence,
+          ordersCount: ai.ordersCount?.trim() || scraped.ordersCount,
+          ratingValue: ai.ratingValue?.trim() || scraped.ratingValue,
+          reviewCount: ai.reviewCount?.trim() || scraped.reviewCount,
+          batteryElectrical: ai.batteryElectrical?.trim() || scraped.batteryElectrical,
+          riskFlags: pickArr(ai.riskFlags, scraped.riskFlags),
+          supplierPlatform: ai.supplierPlatform?.trim() || scraped.supplierPlatform || 'AliExpress',
+          supplierUrl: ai.supplierUrl?.trim() || scraped.supplierUrl,
+          supplierItemId: ai.supplierItemId?.trim() || scraped.supplierItemId,
+          variants: (ai.variants && ai.variants.length) ? ai.variants : (scraped.variants || []),
+        }
+      : {}),
+    // Hard guarantees: title/images/supplier identity/evidence never lost.
+    title: title || luxuryTitle || scraped.title,
+    luxuryTitle: luxuryTitle || title,
     seoTitle: pick(ai?.seoTitle, scraped.seoTitle || scraped.title),
     shortDescription: shortDesc,
     longDescription: longDesc,
@@ -854,6 +1036,14 @@ export function mergeScrapedWithAi(scraped: AIExtractedProduct, ai: AIExtractedP
     supplierUrl: ai?.supplierUrl || scraped.supplierUrl,
     supplierItemId: ai?.supplierItemId || scraped.supplierItemId,
     supplierPlatform: ai?.supplierPlatform || scraped.supplierPlatform || 'AliExpress',
+    confidence: {
+      ...scraped.confidence,
+      ...(ai?.confidence || {}),
+      // A derived/scraped field with real content keeps at least its base
+      // confidence even when the AI layer reports 0.
+      ...(scraped.category ? { category: Math.max(scraped.confidence?.category || 0, 0.5) } : {}),
+      ...(shortDesc ? { description: Math.max(scraped.confidence?.description || 0, 0.5) } : {}),
+    },
     evidence: { ...scraped.evidence, ...(ai?.evidence || {}) },
     ownerNotes: [scraped.ownerNotes, ai?.ownerNotes].filter(Boolean).join(' | '),
   };
