@@ -28,6 +28,8 @@ import cjHandler from '../api/suppliers/cj';
 import hermesIngestHandler from '../api/hermes/ingest';
 import googleAdsHandler from '../api/market-demand/google-ads';
 import omnisendStatusHandler from '../api/omnisend/status';
+import emailSendHandler from '../api/email/send';
+import emailStatusHandler from '../api/email/status';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -58,6 +60,8 @@ const ROUTES: Route[] = [
   { path: '/api/hermes/ingest', handler: hermesIngestHandler },
   { path: '/api/market-demand/google-ads', handler: googleAdsHandler },
   { path: '/api/omnisend/status', handler: omnisendStatusHandler },
+  { path: '/api/email/send', handler: emailSendHandler },
+  { path: '/api/email/status', handler: emailStatusHandler },
 ];
 
 /**
@@ -153,6 +157,9 @@ interface AssetsFetcher {
 
 export interface Env {
   ASSETS: AssetsFetcher;
+  SEND_MAIL?: {
+    send: (msg: { from: string; to: string; subject: string; html?: string; text?: string; reply_to?: string }) => Promise<void>;
+  };
 }
 
 export default {
@@ -160,7 +167,10 @@ export default {
     const url = new URL(request.url);
     const route = ROUTES.find((r) => r.path === url.pathname);
     if (route) {
-      const req = makeReq(request, url);
+      const req = makeReq(request, url) as IncomingMessage & { env?: Env };
+      // Attach runtime bindings so api/* handlers (Vercel-style, env-less)
+      // can reach worker bindings such as the send_email SEND_MAIL binding.
+      req.env = env;
       const res = makeRes() as ShimRes;
       try {
         await route.handler(req, res);

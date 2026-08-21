@@ -4385,6 +4385,34 @@ function AEmailMarketing() {
   const { notify } = useApp();
   const [status, setStatus] = useState<{ configured: boolean; connected: boolean; message?: string; audience?: number; platform?: string } | null>(null);
   const [checking, setChecking] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ configured?: boolean; inbound?: { enabled?: boolean; destination?: string; routes?: string[] }; outbound?: { sender?: string; bindingPresent?: boolean; note?: string } } | null>(null);
+  const [testMail, setTestMail] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [testMailMsg, setTestMailMsg] = useState('');
+
+  const checkEmail = async () => {
+    try {
+      const token = getAccessToken();
+      const r = await fetch('/api/email/status', { headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json().catch(() => null);
+      setEmailStatus(j);
+    } catch { setEmailStatus(null); }
+  };
+  useEffect(() => { void checkEmail(); }, []);
+
+  const sendTestEmail = async () => {
+    setTestMail('sending'); setTestMailMsg('');
+    try {
+      const token = getAccessToken();
+      const r = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: '8002salman@gmail.com', subject: 'Luxedge — Cloudflare email test', text: 'Hi Salman,\n\nThis is a test email sent from sales@luxedge.us through Cloudflare Email Routing / Email Sending. If you received this, outbound email from the site works.\n\n— Luxedge' }),
+      });
+      const j = await r.json().catch(() => null);
+      if (j?.ok) { setTestMail('sent'); setTestMailMsg('Test email sent to 8002salman@gmail.com — check your Gmail inbox.'); notify('Test email sent', 'success'); }
+      else { setTestMail('failed'); setTestMailMsg(j?.error || 'Could not send test email.'); notify(j?.error || 'Send failed', 'error'); }
+    } catch (e) { setTestMail('failed'); setTestMailMsg(`Request failed: ${(e as Error).message}`); }
+  };
 
   const check = async () => {
     setChecking(true);
@@ -4427,6 +4455,64 @@ function AEmailMarketing() {
         {status?.audience !== undefined && (
           <p className="text-sm mt-2 font-medium text-green-800">Contact list: <span className="font-bold">{status.audience.toLocaleString()}</span> contacts</p>
         )}
+      </div>
+
+      {/* Cloudflare Email Routing & Sending */}
+      <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CloudArrowUp size={20} className="text-blue-600" />
+            <div>
+              <h2 className="font-bold text-gray-900">Email Routing & Sending — Cloudflare</h2>
+              <p className="text-xs text-gray-500">Inbound forwarding + outbound sender for Luxedge (sales@luxedge.us).</p>
+            </div>
+          </div>
+          <button onClick={checkEmail} className="text-xs text-blue-600 hover:underline font-medium">Refresh status</button>
+        </div>
+
+        <div className="mt-4 grid sm:grid-cols-2 gap-3">
+          {/* Inbound */}
+          <div className="bg-white rounded-xl border border-blue-100 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Inbound — Forwarding</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+              <p className="text-sm font-semibold text-gray-800">Email Routing active</p>
+            </div>
+            <p className="text-xs text-gray-600">
+              Emails to <b>anything@luxedge.us</b> (incl. <b>sales@luxedge.us</b>) forward to{' '}
+              <b>{emailStatus?.inbound?.destination || '8002salman@gmail.com'}</b> — set up via the Cloudflare API.
+            </p>
+            <div className="mt-2 space-y-0.5">
+              {(emailStatus?.inbound?.routes || ['sales@luxedge.us → 8002salman@gmail.com', 'anything@luxedge.us → 8002salman@gmail.com']).map((r, i) => (
+                <p key={i} className="text-[11px] font-mono text-blue-700 bg-blue-50 rounded px-2 py-0.5">{r}</p>
+              ))}
+            </div>
+          </div>
+
+          {/* Outbound */}
+          <div className="bg-white rounded-xl border border-blue-100 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Outbound — Sender</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`w-2.5 h-2.5 rounded-full ${emailStatus?.outbound?.bindingPresent ? 'bg-green-500' : 'bg-amber-500'}`} />
+              <p className="text-sm font-semibold text-gray-800">sales@luxedge.us {emailStatus?.outbound?.bindingPresent ? '· binding ready' : '· binding pending'}</p>
+            </div>
+            <p className="text-xs text-gray-600">{emailStatus?.outbound?.note || 'Emails are sent from sales@luxedge.us via the Cloudflare send_email binding.'}</p>
+            <button onClick={sendTestEmail} disabled={testMail === 'sending'} className="btn-glow mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5">
+              <PaperPlaneRight size={13} /> {testMail === 'sending' ? 'Sending…' : 'Send test email to 8002salman@gmail.com'}
+            </button>
+            {testMailMsg && <p className={`mt-2 text-[11px] ${testMail === 'sent' ? 'text-green-700' : 'text-red-600'}`}>{testMailMsg}</p>}
+          </div>
+        </div>
+
+        {/* DNS checklist */}
+        <div className="mt-3 bg-white/70 rounded-xl border border-blue-100 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">DNS records (deliverability)</p>
+          <div className="grid sm:grid-cols-3 gap-2 text-[11px]">
+            <div className="bg-blue-50 rounded-lg p-2.5"><p className="font-semibold text-gray-800">MX (inbound)</p><p className="text-gray-500 font-mono break-all">route1/2/3.mx.cloudflare.net — already live ✓</p></div>
+            <div className="bg-blue-50 rounded-lg p-2.5"><p className="font-semibold text-gray-800">SPF (outbound)</p><p className="text-gray-500 font-mono break-all">v=spf1 include:_spf.mx.cloudflare.net ~all</p></div>
+            <div className="bg-blue-50 rounded-lg p-2.5"><p className="font-semibold text-gray-800">DKIM (outbound)</p><p className="text-gray-500">Add the DKIM key Cloudflare generates under Email → Email Sending (dashboard).</p></div>
+          </div>
+        </div>
       </div>
 
       {/* Setup card */}
