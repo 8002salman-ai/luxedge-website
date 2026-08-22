@@ -12,6 +12,7 @@ import {
   buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence, isEmptyExtraction,
 } from '../App';
 import type { AIProvider, AIExtractedProduct, ImportHistoryEntry } from '../App';
+import { loadProviderSettings } from '../features/ai/providers';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
 import { getAccessToken } from '../services/supabase';
 import {
@@ -78,10 +79,13 @@ export function AIImportPanel() {
   const [saving, setSaving] = useState(false);
   const [dupProduct, setDupProduct] = useState<{ id: string; name: string } | null>(null);
 
-  // Providers
+  // Providers — 'auto' uses the configured default/fallback routing (Settings
+  // → AI Providers); any other value forces that provider for this import and
+  // keeps the configured fallback for automatic failover on the server.
   const [aiProviders] = useState<AIProvider[]>(() => {
     return loadAIProviders();
   });
+  const [importProvider, setImportProvider] = useState<string>('auto');
 
   // ClockCounterClockwise
   const [history, setHistory] = useState<ImportHistoryEntry[]>(() => {
@@ -191,7 +195,7 @@ export function AIImportPanel() {
       let aiJsonParsed = false;
       try {
         const prompt = buildExtractionPrompt(rawContent, source);
-        const aiText = await callAIProvider(prompt, aiProviders, (m) => addLog(m));
+        const aiText = await callAIProvider(prompt, aiProviders, (m) => addLog(m), undefined, importProvider);
         addLog('AI RESULT: 200 — provider replied');
         addLog('Parsing AI response…');
         const jsonMatch = aiText.match(/\{[\s\S]*\}/);
@@ -237,8 +241,11 @@ export function AIImportPanel() {
       setSelectedImgs(allImages.slice(0, 6));
       setHeroImg(allImages[0] || '');
 
-      // FloppyDisk history
-      const activeProvider = aiProviders.find(p => p.isDefault && p.enabled) || aiProviders.find(p => p.enabled);
+      // FloppyDisk history — record the provider actually used for this import.
+      const activeProvider =
+        (importProvider !== 'auto' && aiProviders.find(p => p.id === importProvider))
+        || aiProviders.find(p => p.isDefault && p.enabled)
+        || aiProviders.find(p => p.enabled);
       const entry: ImportHistoryEntry = {
         id: `imp-${Date.now()}`, source: source === 'url' ? urlInput : source, sourceType: source,
         date: new Date().toISOString(), provider: activeProvider?.name||'Unknown',
@@ -520,16 +527,38 @@ export function AIImportPanel() {
           </div>
         )}
 
-        <div className="border rounded-xl p-4 bg-sky-50 border-sky-200">
-          <p className="text-xs font-semibold text-blue-700 mb-1">⚡ AI Provider</p>
+        <div className="border rounded-xl p-4 bg-sky-50 border-sky-200 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs font-semibold text-blue-700">⚡ AI Provider</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {aiProviders.find(p => p.id === 'qwen' && p.enabled) && (
+                <button type="button" onClick={() => setImportProvider('qwen')}
+                  className={"px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors " + (importProvider === 'qwen' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700 border border-amber-300 hover:bg-amber-100')}>
+                  {'\u{1F9F9}'} Use Qwen (Private Ollama)
+                </button>
+              )}
+              <select value={importProvider} onChange={e => setImportProvider(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg bg-white border border-blue-200 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                <option value="auto">Auto — settings default → fallback</option>
+                {aiProviders.filter(p => p.enabled).map(p => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.defaultModel})</option>
+                ))}
+              </select>
+            </div>
+          </div>
           {(() => {
             // The SERVER is the authority on keys (/api/ai/status). Client
             // localStorage toggles only affect routing, never real availability.
-            const active = aiProviders.find(p=>p.isDefault&&p.enabled) || aiProviders.find(p=>p.enabled) || aiProviders[0];
-            return active
-              ? <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}</p>
-              : <p className="text-xs text-red-600">No AI provider enabled — check AI Hub → AI Providers.</p>;
+            const active = (importProvider !== 'auto' && aiProviders.find(p => p.id === importProvider))
+              || aiProviders.find(p => p.isDefault && p.enabled)
+              || aiProviders.find(p => p.enabled)
+              || aiProviders[0];
+            const fallback = (aiProviders.find(p => p.id === loadProviderSettings().fallbackProviderId && p.id !== (importProvider !== 'auto' ? importProvider : undefined)));
+            if (!active) return <p className="text-xs text-red-600">No AI provider enabled — check AI Hub → AI Providers.</p>;
+            const note = fallback ? ` · auto-fallback: ${fallback.name}` : '';
+            return <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}{note}</p>;
           })()}
+          <p className="text-[10px] text-blue-600/80">Server falls back automatically when the primary provider is unavailable (e.g. Qwen → DeepSeek → Codex). No keys ever reach the browser.</p>
         </div>
       </div>
     );

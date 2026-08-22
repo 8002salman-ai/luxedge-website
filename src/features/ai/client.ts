@@ -170,15 +170,29 @@ export async function serverProviderStatus(): Promise<ProviderStatusMap> {
  * Call the active AI provider through the server proxy.
  * Kept signature-compatible with the legacy in-browser callAIProvider so
  * existing call sites (AI import, marketing copy) keep working unchanged.
+ *
+ * `providerIdOverride` (optional) lets a caller force a specific provider for
+ * this call (e.g. the private Qwen model in AI Import) while keeping the
+ * configured fallback chain — the server fails over to the fallback provider
+ * only when the forced primary actually errors.
  */
 export async function callAIProvider(
   prompt: string,
   providers: AIProvider[],
   onProgress?: (m: string) => void,
-  system?: string
+  system?: string,
+  providerIdOverride?: string
 ): Promise<string> {
   const settings = loadProviderSettings();
   let { primary, fallback } = resolveProviderChain(providers, settings);
+  if (providerIdOverride && providerIdOverride !== 'auto') {
+    const forced = providers.find((p) => p.id === providerIdOverride && p.enabled);
+    if (!forced) {
+      throw new Error(`Provider "${providerIdOverride}" is not enabled. Enable it in AI Hub → AI Provider Configuration.`);
+    }
+    primary = forced;
+    if (fallback && fallback.id === primary.id) fallback = null;
+  }
   // The server is the authority on which providers actually have keys. A stale
   // all-disabled client config must not dead-end the import: fall back to the
   // configured routing defaults (deepseek → codex) and let the server answer
@@ -191,6 +205,7 @@ export async function callAIProvider(
   if (!primary) {
     throw new Error('No AI provider enabled. Enable one in AI Hub → AI Provider Configuration.');
   }
-  onProgress?.(`Using ${primary.name} (${primary.defaultModel}) via secure server proxy…`);
+  if (fallback && fallback.id === primary.id) fallback = null;
+  onProgress?.(`Using ${primary.name} (${primary.defaultModel}) via secure server proxy${fallback ? ` · fallback: ${fallback.name} if unavailable` : ''}…`);
   return serverGenerateWithFallback(prompt, primary.id, primary.defaultModel, fallback?.id, system);
 }
