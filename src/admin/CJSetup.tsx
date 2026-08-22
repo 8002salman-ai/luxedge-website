@@ -7,6 +7,7 @@ import {
   EyeSlash, FloppyDisk
 } from '@phosphor-icons/react';
 import { CjSupplierAdapter } from '../features/suppliers/cj/adapter';
+import { getAccessToken } from '../services/supabase';
 
 /* ── Types ── */
 type Health = 'not_configured' | 'online' | 'offline' | 'rate_limited' | 'configured';
@@ -53,7 +54,8 @@ export default function CJSetup() {
   /* ── Load current key status ── */
   const loadKeyStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/cj-key', { credentials: 'include' });
+      const token = getAccessToken();
+      const res = await fetch('/api/admin/cj-key', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (res.ok) {
         const data = await res.json() as { configured: boolean; masked: string | null };
         if (data.configured) setMaskedKey(data.masked);
@@ -69,10 +71,13 @@ export default function CJSetup() {
     setSaving(true);
     setSaveNote('');
     try {
+      const token = getAccessToken();
       const res = await fetch('/api/admin/cj-key', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ key: apiKey.trim() }),
       });
       const data = await res.json() as { ok?: boolean; masked?: string; error?: string };
