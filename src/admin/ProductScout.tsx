@@ -759,6 +759,25 @@ export default function ProductScout() {
         </button>
       </div>
 
+      {cjHealth === 'not_configured' && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs">
+          <p className="font-bold text-sky-800 mb-1">
+            CJ Supplier API — key not configured yet
+          </p>
+          <p className="text-sky-700 mb-2">
+            CJ API key is <b>server-side only</b> (it never enters the browser). Get the key from{' '}
+            <a href="https://www.cjdropshipping.com" target="_blank" rel="noopener noreferrer" className="underline text-sky-800">cjdropshipping.com → My API</a>{' '}
+            and set it on the Cloudflare worker from your terminal (project folder):
+          </p>
+          <code className="block bg-white border border-sky-200 rounded-lg px-3 py-2 font-mono text-[11px] text-sky-900 select-all">
+            npx wrangler secret put CJ_API_KEY --name luxedge-production
+          </code>
+          <p className="text-sky-600 mt-2">
+            Paste the key when prompted, then press <b>Refresh</b> here — status should flip to ONLINE and CJ search unlocks.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="w-10 h-10 shrink-0 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
           <Target size={20} className="text-white" />
