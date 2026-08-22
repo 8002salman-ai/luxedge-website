@@ -4540,9 +4540,11 @@ function ACRM() {
     whatsapp: 'bg-emerald-100 text-emerald-700',
     ai_chat: 'bg-violet-100 text-violet-700',
     manual: 'bg-gray-100 text-gray-600',
+    newsletter: 'bg-amber-100 text-amber-700',
   };
   const sourceLabel: Record<string, string> = {
     welcome_popup: 'Welcome coupon', whatsapp: 'WhatsApp', ai_chat: 'AI chat', manual: 'Manual',
+    newsletter: 'Newsletter',
   };
 
   return (
@@ -4575,6 +4577,7 @@ function ACRM() {
           <option value="whatsapp">WhatsApp</option>
           <option value="ai_chat">AI chat</option>
           <option value="manual">Manual</option>
+          <option value="newsletter">Newsletter</option>
         </select>
         <select value={couponUsed} onChange={(e) => setCouponUsed(e.target.value)} className="px-2.5 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 bg-white">
           <option value="">Coupon: any</option>

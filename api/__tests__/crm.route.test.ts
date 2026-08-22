@@ -18,6 +18,8 @@ const welcomeHandler = (await import('../crm/welcome.js')).default;
 const leadHandler = (await import('../crm/lead.js')).default;
 const listHandler = (await import('../crm/list.js')).default;
 const assistantHandler = (await import('../crm/assistant.js')).default;
+const subscribeHandler = (await import('../crm/subscribe.js')).default;
+const { isMissingTable } = await import('../crm/_lib.js');
 
 const SECRET = '0123456789abcdef0123456789abcdef';
 const originalEnv: Record<string, string | undefined> = {
@@ -245,5 +247,123 @@ describe('/api/crm/assistant', () => {
     expect(captured.body).toMatchObject({ provider: 'canned' });
     expect(JSON.stringify(captured.body)).toMatch(/WhatsApp|sales@luxedge\.us/);
     expect(JSON.stringify(captured.body)).not.toMatch(/deepseek.*(sk-|key)/i);
+  });
+});
+
+describe('/api/crm/subscribe', () => {
+  beforeEach(resetEnv);
+  afterEach(restoreEnv);
+
+  it('rejects non-POST with 405', async () => {
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('GET'), server);
+    expect(captured.status).toBe(405);
+  });
+
+  it('rejects a missing/invalid email', async () => {
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('POST', { email: 'not-an-email' }), server);
+    expect(captured.status).toBe(400);
+    expect(JSON.stringify(captured.body)).toMatch(/email/i);
+  });
+
+  it('fails soft with an honest note when the server DB is not configured', async () => {
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('POST', { email: 'visitor@example.com' }), server);
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({ ok: true, leadSaved: false });
+    expect(JSON.stringify(captured.body)).not.toMatch(/sb_secret|eyJ|sk-[A-Za-z0-9]{20,}/i);
+  });
+
+  it('inserts a newsletter lead (source=newsletter) and confirms saved', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    // First call: SELECT existing → empty. Second call: INSERT → 201 row.
+    const calls: { url: string; body?: string }[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, body: init?.body ? String(init.body) : undefined });
+      if (url.includes('/rest/v1/crm_leads?')) return new Response('[]', { status: 200 });
+      if (url.endsWith('/rest/v1/crm_leads')) {
+        const body = JSON.parse(String(init?.body));
+        expect(body.source).toBe('newsletter');
+        expect(body.opted_in).toBe(true);
+        expect(body.coupon_code).toBeNull();
+        return new Response(JSON.stringify([{ id: body.id }]), { status: 201 });
+      }
+      return new Response('{}', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('POST', { email: 'New.Fan@Example.com ' }), server);
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({ ok: true, leadSaved: true });
+    // email lowercased + trimmed before insert
+    expect(calls.some((c) => c.body?.includes('"new.fan@example.com"'))).toBe(true);
+    // never echoes the service role key
+    expect(JSON.stringify(captured.body)).not.toMatch(/svc-role|sb_secret|eyJ/i);
+  });
+
+  it('does not insert a duplicate — returns alreadySubscribed when a row exists', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/crm_leads?'))      return new Response(JSON.stringify([{ id: 'lead-1' }]), { status: 200 });
+      return new Response('{}', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('POST', { email: 'dup@example.com' }), server);
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({ ok: true, leadSaved: true, alreadySubscribed: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the SELECT, never an INSERT
+  });
+
+  it('does NOT misreport a check-constraint error as a missing table (the newsletter bug)', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    const constraintError = JSON.stringify({
+      code: '23514',
+      message: 'new row for relation "crm_leads" violates check constraint "crm_leads_source_check"',
+      details: 'Failing row contains (..., newsletter, ...).',
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/crm_leads?')) return new Response('[]', { status: 200 });
+      return new Response(constraintError, { status: 400 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { captured, server } = makeRes();
+    await subscribeHandler(makeReq('POST', { email: 'constraint@example.com' }), server);
+    // Real failure surfaced as a 502 — NOT a misleading "table missing" note.
+    expect(captured.status).toBe(502);
+    expect(JSON.stringify(captured.body)).not.toMatch(/table is not created|migration 0017|CRM table is not created/i);
+  });
+});
+
+describe('isMissingTable', () => {
+  it('returns false for a check-constraint error that merely mentions the table name', () => {
+    const e = {
+      ok: false,
+      status: 400,
+      data: { code: '23514', message: 'new row for relation "crm_leads" violates check constraint "crm_leads_source_check"' },
+    };
+    expect(isMissingTable(e)).toBe(false);
+  });
+
+  it('returns false for an OK response', () => {
+    expect(isMissingTable({ ok: true, status: 200, data: [] })).toBe(false);
+  });
+
+  it('returns true for PostgREST 404 (table not found)', () => {
+    expect(isMissingTable({ ok: false, status: 404, data: { message: 'Not found' } })).toBe(true);
+  });
+
+  it('returns true for PGRST205 / PGRST301 / 42P01 / relation-does-not-exist', () => {
+    expect(isMissingTable({ ok: false, status: 400, data: { code: 'PGRST205', message: 'Could not find the table public.crm_leads' } })).toBe(true);
+    expect(isMissingTable({ ok: false, status: 400, data: { code: 'PGRST301', message: 'table not found' } })).toBe(true);
+    expect(isMissingTable({ ok: false, status: 400, data: { code: '42P01', message: 'relation "crm_leads" does not exist' } })).toBe(true);
+    expect(isMissingTable({ ok: false, status: 400, data: { code: '42P01', message: 'relation "public.crm_leads" does not exist' } })).toBe(true);
   });
 });

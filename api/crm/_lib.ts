@@ -43,6 +43,12 @@ export async function supabaseFetch(
 
 /** True when the error is a missing crm_leads table (migration not applied yet). */
 export function isMissingTable(e: { ok: boolean; status: number; data: unknown }): boolean {
-  // PostgREST reports a missing table as PGRST205 / relation does not exist / 42P01.
-  return !e.ok && /crm_leads|PGRST205|42P01|relation .* does not exist/i.test(JSON.stringify(e.data || ''));
+  // A missing table is reported by PostgREST as 404 with PGRST205 / PGRST301,
+  // or by Postgres as 42P01 "relation ... does not exist". Anything else — e.g.
+  // a check-constraint violation whose message merely *mentions* the table name
+  // ("new row for relation \"crm_leads\" violates check constraint ...") — is NOT
+  // a missing table and must never be reported as one.
+  if (e.ok) return false;
+  if (e.status === 404) return true;
+  return /PGRST205|PGRST301|42P01|relation .* does not exist/i.test(JSON.stringify(e.data || ''));
 }
