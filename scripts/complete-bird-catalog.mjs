@@ -48,22 +48,31 @@ async function adminToken() {
   return d.access_token;
 }
 
-async function cj(path, opts = {}, tok) {
-  const r = await fetch(`${API}/api/suppliers/cj${path}`, {
+async function cj(query, opts = {}, tok) {
+  const r = await fetch(`${API}/api/suppliers/cj?${query}`, {
     ...opts,
     headers: { Authorization: `Bearer ${tok}`, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
   });
   const d = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(`CJ ${path}: HTTP ${r.status} ${JSON.stringify(d).slice(0, 200)}`);
+  if (!r.ok) throw new Error(`CJ ${query}: HTTP ${r.status} ${JSON.stringify(d).slice(0, 200)}`);
   return d;
 }
 
+const PET_BIRD_TOKENS = ['parrot', 'parakeet', 'budgie', 'finch', 'canary', 'cockatiel', 'conure', 'lovebird', 'millet', 'aviary', 'bird feeder', 'bird feed', 'bird seed'];
+const POULTRY_TOKENS = ['chicken', 'poultry', 'goose', 'duck', 'turkey', 'coop', 'hen'];
+
 function birdScore(t) {
   const s = t.toLowerCase();
-  const kw = ['bird', 'parrot', 'parakeet', 'budgie', 'finch', 'canary', 'cockatiel', 'conure', 'seed', 'millet', 'feed'];
   let hits = 0;
-  for (const k of kw) if (s.includes(k)) hits++;
+  for (const k of PET_BIRD_TOKENS) if (s.includes(k)) hits++;
+  // poultry-only items (e.g. chicken coops) are not pet-bird supplies
+  if (POULTRY_TOKENS.some((k) => s.includes(k)) && !PET_BIRD_TOKENS.some((k) => s.includes(k))) return 0;
   return hits;
+}
+
+function isPetBird(t) {
+  const s = t.toLowerCase();
+  return PET_BIRD_TOKENS.some((k) => s.includes(k));
 }
 
 function round2(n) { return Math.round(n * 100) / 100; }
@@ -82,14 +91,14 @@ async function main() {
   const tok = await adminToken();
   console.log('✓ admin token');
 
-  const health = await cj('/?action=health', {}, tok);
+  const health = await cj('action=health', {}, tok);
   console.log('CJ health:', health.health, '—', health.detail || '');
   if (health.health !== 'online') {
     console.log('STOP: CJ not online. Set CJ_API_KEY via:  npx wrangler secret put CJ_API_KEY --name luxedge-production');
     process.exit(1);
   }
 
-  const started = await cj('/?action=start', {
+  const started = await cj('action=start', {
     method: 'POST',
     body: JSON.stringify({ provider: 'cj', requestedBudget: 250 }),
   }, tok);
@@ -97,19 +106,30 @@ async function main() {
   const runId = started.runId;
   console.log(`✓ run ${runId} budget=${started.hardBudget}`);
 
-  // search
-  const queries = ['bird feed', 'bird seed', 'parrot food'];
+  // search — broad first, add queries only while we lack 5 pet-bird picks
+  const queries = ['bird', 'parrot', 'bird seed'];
+  const seen = new Set();
   let records = [];
   for (const q of queries) {
-    const s = await cj(`/?action=search&q=${encodeURIComponent(q)}&market=US&size=30&runId=${runId}`, {}, tok);
-    if (s.records?.length) { records = s.records; console.log(`✓ search "${q}" -> ${s.total} total, ${s.records.length} normalized`); break; }
-    console.log(`search "${q}" -> ${s.records?.length || 0} records ${s.warning ? '(' + s.warning + ')' : ''}`);
+    if (records.filter((r) => isPetBird(r.title)).length >= 5) break;
+    const s = await cj(`action=search&q=${encodeURIComponent(q)}&market=US&size=50&runId=${runId}`, {}, tok);
+    if (!s.records?.length) {
+      console.log(`search "${q}" -> 0 records ${s.warning ? '(' + s.warning + ')' : ''}`);
+      continue;
+    }
+    console.log(`✓ search "${q}" -> ${s.total} total, ${s.records.length} normalized`);
+    for (const r of s.records) {
+      if (r && r.productId && !seen.has(r.productId)) {
+        seen.add(r.productId);
+        records.push(r);
+      }
+    }
   }
   if (!records.length) { console.log('STOP: no candidates'); process.exit(1); }
 
-  // bird-relevant, prefer US verified + free shipping + sane cost
+  // pet-bird relevant, prefer US verified + free shipping + sane cost
   const scored = records
-    .filter((r) => r && r.title && birdScore(r.title) >= 2)
+    .filter((r) => r && r.title && isPetBird(r.title))
     .map((r) => ({
       r,
       score: birdScore(r.title) * 10
@@ -128,15 +148,21 @@ async function main() {
   // details + freight
   const completed = [];
   for (const { r } of picks) {
-    const det = await cj(`/?action=product&pid=${encodeURIComponent(r.productId)}&market=US&runId=${runId}`, {}, tok);
-    const rec = det.record;
-    if (!rec) { console.log(`  ! ${r.productId}: no detail (${det.warning || '?'})`); continue; }
+    let rec = null;
+    try {
+      const det = await cj(`action=product&pid=${encodeURIComponent(r.productId)}&market=US&runId=${runId}`, {}, tok);
+      rec = det.record || null;
+      if (!rec) console.log(`  ! ${r.productId}: no detail (${det.warning || 'unverifiable'})`);
+    } catch (e) {
+      console.log(`  ! ${r.productId}: detail failed (${String(e.message).slice(0, 90)})`);
+    }
+    if (!rec) continue;
 
     const v = rec.selectedVariant || null;
     const images = (rec.images || []).filter(Boolean);
     let freight = null;
     if (v?.variantId && v.originCountry) {
-      const f = await cj('/?action=freight', {
+      const f = await cj('action=freight', {
         method: 'POST',
         body: JSON.stringify({ vid: v.variantId, startCountryCode: v.originCountry, endCountryCode: 'US', runId }),
       }, tok);
@@ -239,7 +265,7 @@ async function main() {
     else { console.log(`  ~ ${d.slug} stays ${patch.commerce_readiness}: "${c.cjTitle.slice(0, 55)}"`); }
   }
 
-  await cj('/?action=finish', { method: 'POST', body: JSON.stringify({ runId, status: 'completed' }) }, tok).catch(() => {});
+  await cj('action=finish', { method: 'POST', body: JSON.stringify({ runId, status: 'completed' }) }, tok).catch(() => {});
   console.log(`\nDONE — updated=${updated} published=${published} skipped=${skipped} (budget usage via action=budget)`);
 }
 

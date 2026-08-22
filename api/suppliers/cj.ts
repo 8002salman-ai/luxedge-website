@@ -68,18 +68,33 @@ async function runContextFor(req: IncomingMessage): Promise<{ run: CjRunContext 
   return { run: new CjDurableRunContext(ledger, runId, row.budget) };
 }
 
+// Event-based body reader (NOT `for await`) so it works both on Vercel's Node
+// runtime and the Cloudflare Worker shim (makeReq is a plain EventEmitter,
+// not async-iterable — `for await` throws and becomes HTTP 500 there).
 async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  let raw = '';
-  for await (const chunk of req) {
-    raw += chunk;
-    if (raw.length > 1_000_000) break;
-  }
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
+  return new Promise((resolve) => {
+    let raw = '';
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw) as Record<string, unknown>);
+      } catch {
+        resolve({});
+      }
+    };
+    req.on('data', (chunk: Buffer) => {
+      raw += chunk.toString('utf8');
+      if (raw.length > 1_000_000) finish();
+    });
+    req.on('end', finish);
+    req.on('error', () => finish());
+  });
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
