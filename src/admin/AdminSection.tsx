@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, serverQwenHealth } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, serverQwenHealth, serverQwenGenerate } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { listCategories, createCategory, updateCategory, deleteCategory, listProducts, setDbToken } from '../features/catalog/repository';
@@ -4164,6 +4164,14 @@ function AAIHub() {
     configured: boolean; cloudflareAuth: string; ollama: string; model: string; modelFound: boolean; generation: string; error?: string;
   } | null>(null);
   const [checkingQwen, setCheckingQwen] = useState(false);
+  const [qwenQuick, setQwenQuick] = useState<{
+    status: 'idle' | 'testing' | 'ok' | 'fail';
+    reply?: string;
+    len?: number;
+    model?: string;
+    matched?: boolean;
+    error?: string;
+  }>({ status: 'idle' });
 
   /** Verify the server-side scrape path works (SCRAPE_DO_TOKEN configured → scrape.do, else public fallback). */
   const testScraping = async () => {
@@ -4214,6 +4222,24 @@ function AAIHub() {
   };
 
   useEffect(() => { runQwenHealth(); }, []);
+
+  /** Real generation round-trip: prompt → Cloudflare Access → Colab Ollama → qwen3.5:9b. */
+  const runQwenQuickTest = async () => {
+    setQwenQuick({ status: 'testing' });
+    try {
+      const r = await serverQwenGenerate('Reply exactly: LUXEDGE-QWEN-OK');
+      const reply = (r.response || '').trim();
+      setQwenQuick({
+        status: 'ok',
+        reply: reply.slice(0, 300),
+        len: reply.length,
+        model: r.model || 'qwen3.5:9b',
+        matched: reply.includes('LUXEDGE-QWEN-OK'),
+      });
+    } catch (e: any) {
+      setQwenQuick({ status: 'fail', error: (e?.message || 'Generation failed').slice(0, 160) });
+    }
+  };
 
   const testProvider = async (provider: AIProvider) => {
     setTesting(provider.id);
@@ -4301,11 +4327,18 @@ const providerIcons: Record<string, string> = {
           <h2 className="font-bold text-sm text-amber-800 flex items-center gap-2">
             <span>{'\u{1F9F9}'}</span> Qwen3.5-9B-Colab (Private Ollama)
           </h2>
-          <button onClick={runQwenHealth} disabled={checkingQwen}
-            className="px-3 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
-            {checkingQwen ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
-            {checkingQwen ? 'Checking...' : 'Test Qwen Connection'}
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={runQwenHealth} disabled={checkingQwen}
+              className="px-3 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
+              {checkingQwen ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
+              {checkingQwen ? 'Checking...' : 'Test Qwen Connection'}
+            </button>
+            <button onClick={runQwenQuickTest} disabled={qwenQuick.status === 'testing'}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors">
+              {qwenQuick.status === 'testing' ? <SpinnerGap size={12} className="animate-spin" /> : <Lightning size={12} />}
+              {qwenQuick.status === 'testing' ? 'Generating…' : 'Qwen Quick Test'}
+            </button>
+          </div>
         </div>
         {qwenHealth ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
@@ -4339,6 +4372,31 @@ const providerIcons: Record<string, string> = {
           <p className="text-sm text-amber-600">Checking Qwen connection…</p>
         )}
         {qwenHealth?.error && <p className="text-xs text-red-600 mt-2">{qwenHealth.error}</p>}
+        {qwenQuick.status === 'ok' && (
+          <div className="mt-3 bg-white border rounded-xl p-3 text-xs">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className={"font-bold px-2 py-0.5 rounded-full " + (qwenQuick.matched ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>
+                {qwenQuick.matched ? '✓ LUXEDGE-QWEN-OK received' : 'Reply did not match marker'}
+              </span>
+              <span className="text-gray-600">Raw reply length: <span className="font-bold text-gray-900">{qwenQuick.len}</span> chars</span>
+              <span className="text-gray-400">model: {qwenQuick.model}</span>
+            </div>
+            {qwenQuick.reply && (
+              <p className="mt-2 font-mono text-[11px] text-gray-600 bg-gray-50 border rounded-lg p-2 break-words">
+                {qwenQuick.reply}
+              </p>
+            )}
+            {!qwenQuick.matched && qwenQuick.reply && (
+              <p className="mt-1 text-amber-600">Tunnel is UP but the reply was unexpected — check the Colab notebook serving qwen3.5:9b.</p>
+            )}
+          </div>
+        )}
+        {qwenQuick.status === 'fail' && (
+          <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
+            <span className="font-bold">Generation failed:</span> {qwenQuick.error}
+            <p className="mt-1 text-red-500">Tunnel still down — restart the Colab notebook / cloudflared tunnel, then tap Quick Test again.</p>
+          </div>
+        )}
         <p className="text-[10px] text-amber-500 mt-2">Private Ollama on Google Colab behind Cloudflare Access. Credentials stay server-side — never in the browser. Colab runtimes disconnect: if OFFLINE, restart the Colab notebook or its tunnel.</p>
       </div>
 
