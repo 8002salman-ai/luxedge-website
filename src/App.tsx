@@ -22,7 +22,7 @@ import {
   ChevronDown, ChevronRight, ArrowLeft, Upload01,
   Globe01, Clock, Send01, Headphones01, Stars01,
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
-  Sliders01,
+  Sliders01, Feather,
 } from '@untitledui/icons';
 
 // ============================================================================
@@ -231,7 +231,7 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b18', slug:'cattle-care-basics-small-farms', title:'Cattle Care Basics for Small Farms: Feed, Health & Handling', excerpt:'Raising cattle on a small farm is rewarding — and a real responsibility. Here are the fundamentals of keeping a healthy herd.', content:'Whether you keep a few beef cattle or a small dairy herd, the basics of cattle care are the same. Get these right and most problems never start.\n\n## Water Comes First\nCattle drink a lot — up to 20 gallons a day in hot weather. Clean, accessible water is the single most important thing you can provide.\n\n## Feed According to Stage\nNutrition needs change with age, weight, pregnancy, and season. Pasture alone rarely covers winter needs; hay and mineral supplements fill the gap. Work with a vet or nutritionist on a ration.\n\n## Minerals Are Not Optional\nLoose mineral supplements prevent a long list of deficiency problems, from weak calves to poor coats. Provide free-choice minerals year-round.\n\n## Health Basics\nLearn the normal signs — appetite, rumination, manure, and demeanor. Any sudden change deserves attention. Keep a working relationship with a large-animal vet before you need one.\n\n## Handling with Confidence\nCattle read body language. Move slowly, work from their shoulder, and use low-stress handling. A calm herd is safer and easier to manage.\n\n## Hoof and Parasite Care\nSchedule hoof trimming as needed and follow a parasite control program recommended for your region.\n\n## Records Keep You Honest\nTrack weights, vaccinations, and treatments. Simple records turn guesswork into decisions and make vet visits far more useful.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cattle','livestock','farm','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-20' },
 ];
 
-export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories'];
+export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies'];
 const CAT_META: Record<string, { desc: string }> = {
   'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
   'Cat Supplies': { desc: 'Play, comfort & everyday cat essentials' },
@@ -240,6 +240,7 @@ const CAT_META: Record<string, { desc: string }> = {
   'Feeding & Water': { desc: 'Considered pieces for daily mealtimes' },
   'Grooming': { desc: 'Simple tools for everyday care' },
   'Pet Accessories': { desc: 'Useful pieces for life together' },
+  'Bird Supplies': { desc: 'Seed, feed & care essentials for feathered friends' },
 };
 
 function firstUsableImage(product: Product | undefined): string | undefined {
@@ -511,6 +512,13 @@ const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { 
       { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Nail Care', to: '/category/grooming' }] },
     ],
   },
+  {
+    label: 'Birds', to: '/category/bird-supplies',
+    groups: [
+      { title: 'Feeding', links: [{ label: 'Bird Feed', to: '/category/bird-supplies' }, { label: 'Seed & Treats', to: '/category/bird-supplies' }] },
+      { title: 'Care', links: [{ label: 'Cages & Accessories', to: '/category/bird-supplies' }, { label: 'Perches & Swings', to: '/category/bird-supplies' }] },
+    ],
+  },
 ];
 
 function Header() {
@@ -554,6 +562,7 @@ function Header() {
     { l: 'Cat', to: '/category/cat-supplies' },
     { l: 'Horses', to: '/shop?q=horse' },
     { l: 'Livestock', to: '/shop?q=livestock' },
+    { l: 'Birds', to: '/category/bird-supplies' },
     { l: 'Food & Feeding', to: '/category/feeding-water' },
     { l: 'Toys', to: '/category/pet-toys' },
     { l: 'Beds', to: '/category/pet-beds' },
@@ -1642,6 +1651,7 @@ function HomePage() {
               {[
                 { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=300&h=300&fit=crop' },
                 { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&h=300&fit=crop' },
+                { label: 'Birds', to: '/category/bird-supplies', img: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=300&h=300&fit=crop' },
                 { label: 'Horse', to: '/shop?q=horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=300&h=300&fit=crop' },
                 { label: 'Livestock', to: '/shop?q=livestock', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=300&h=300&fit=crop' },
               ].map((pet, index) => (
@@ -1681,6 +1691,7 @@ function HomePage() {
                 { label: 'Toys', to: '/category/pet-toys', icon: <Star01 strokeWidth={1.5} size={14} /> },
                 { label: 'Travel', to: '/category/pet-accessories', icon: <Globe01 strokeWidth={1.5} size={14} /> },
                 { label: 'Cat Essentials', to: '/category/cat-supplies', icon: <Stars01 strokeWidth={1.5} size={14} /> },
+                { label: 'Birds', to: '/category/bird-supplies', icon: <Feather strokeWidth={1.5} size={14} /> },
                 { label: 'New Arrivals', to: '/shop', icon: <Zap strokeWidth={1.5} size={14} /> },
               ].map((cat) => (
                 <Link key={cat.label} to={cat.to} className="category-pill">
