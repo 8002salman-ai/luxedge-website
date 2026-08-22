@@ -591,7 +591,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 h-14 lg:h-14 flex items-center justify-between gap-3">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
         <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.svg" alt="Luxedge" className="h-8 sm:h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
+          <img src="/luxedge-mark.png" alt="Luxedge" className="h-8 sm:h-8 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
             <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
             <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
@@ -709,7 +709,7 @@ function Footer() {
           {/* Col 1 — Brand */}
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-3 mb-3 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.svg" alt="Luxedge" className="w-10 h-10 transition-transform duration-300 group-hover:scale-105" />
+              <img src="/luxedge-mark.png" alt="Luxedge" className="w-10 h-10 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-brand text-lg font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
                 <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
