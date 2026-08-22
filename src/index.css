@@ -756,8 +756,8 @@ input[type="number"] { -moz-appearance: textfield; }
 .promo-strip-inner { display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 0.5rem 1rem; font-size: 0.72rem; color: var(--color-luxe-charcoal); }
 .promo-strip-inner a { font-weight: 700; color: var(--color-luxe-gold-dark); text-decoration: underline; text-underline-offset: 2px; }
 
-/* ── CAT WALK (playful decorative layer) ── */
-.catwalk-layer {
+/* ── BIRD PERCH (playful decorative layer) ── */
+.birdperch-layer {
   position: fixed;
   inset: 0;
   z-index: 45;
@@ -765,76 +765,56 @@ input[type="number"] { -moz-appearance: textfield; }
   overflow: hidden;
 }
 
-.catwalk-cat {
+.birdperch-bird {
   position: absolute;
-  will-change: left;
-  filter: drop-shadow(0 2px 3px rgba(27, 31, 39, 0.18));
+  will-change: left, top, transform;
+  filter: drop-shadow(0 2px 3px rgba(27, 31, 39, 0.16));
+  opacity: 0;
+  animation: birdperch-in 1.4s ease-out forwards;
 }
-.catwalk-cat svg {
+.birdperch-bird svg {
   display: block;
-  transform-origin: center bottom;
+  transform-origin: 30% 60%;
 }
 
-/* walk: gentle body bob + stepping legs + tail sway */
-.catwalk-walk svg {
-  animation: catwalk-bob 0.42s ease-in-out infinite alternate;
+/* calm: slow bob + tail sway + occasional head tilt */
+.birdperch-bird svg {
+  animation: birdperch-bob 2.6s ease-in-out infinite alternate;
 }
-.catwalk-walk .catwalk-leg {
-  animation: catwalk-step 0.42s ease-in-out infinite alternate;
+.birdperch-bird .birdperch-tail {
+  transform-origin: 50% 100%;
+  animation: birdperch-tail 3.2s ease-in-out infinite alternate;
 }
-.catwalk-walk .catwalk-leg-a { transform-origin: 50% 0; }
-.catwalk-walk .catwalk-leg-b { animation-delay: 0.21s; transform-origin: 50% 0; }
-.catwalk-walk .catwalk-tail { animation: catwalk-tail 1.1s ease-in-out infinite alternate; transform-origin: 70% 80%; }
-
-/* sit: tucked, still legs, slight settle */
-.catwalk-sit svg {
-  animation: catwalk-sit 0.9s ease-out both;
+.birdperch-bird .birdperch-wing {
+  transform-origin: 20% 50%;
+  animation: birdperch-wing 5s ease-in-out infinite alternate;
 }
-.catwalk-sit .catwalk-leg {
-  animation: none;
+.birdperch-bird:nth-child(2n) svg {
+  animation-delay: 0.4s;
 }
-.catwalk-sit .catwalk-leg-b {
-  display: none;
-}
-.catwalk-sit .catwalk-tail {
-  animation: catwalk-tail 1.6s ease-in-out infinite alternate;
-  transform-origin: 70% 80%;
+.birdperch-bird:nth-child(3n) .birdperch-tail {
+  animation-delay: 1.2s;
 }
 
-/* jump: leap up and land */
-.catwalk-jump svg {
-  animation: catwalk-jump 0.9s cubic-bezier(0.33, 1, 0.68, 1) both;
+@keyframes birdperch-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.catwalk-jump .catwalk-leg {
-  animation: none;
+@keyframes birdperch-bob {
+  from { transform: translateY(0) rotate(0deg); }
+  to   { transform: translateY(-1.4px) rotate(1.5deg); }
 }
-
-@keyframes catwalk-bob {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-1.6px); }
-}
-@keyframes catwalk-step {
+@keyframes birdperch-tail {
   from { transform: rotate(0deg); }
-  to   { transform: rotate(14deg); }
+  to   { transform: rotate(7deg); }
 }
-@keyframes catwalk-tail {
+@keyframes birdperch-wing {
   from { transform: rotate(0deg); }
-  to   { transform: rotate(-14deg); }
-}
-@keyframes catwalk-sit {
-  from { transform: translateY(6px) scaleY(0.92); }
-  to   { transform: translateY(0) scaleY(1); }
-}
-@keyframes catwalk-jump {
-  0%   { transform: translateY(0); }
-  30%  { transform: translateY(-46px) rotate(-6deg); }
-  55%  { transform: translateY(-52px) rotate(2deg); }
-  75%  { transform: translateY(-8px) rotate(0deg); }
-  100% { transform: translateY(0); }
+  to   { transform: rotate(8deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .catwalk-layer { display: none; }
+  .birdperch-layer { display: none; }
 }
 
 /* ── RESPONSIVE ── */

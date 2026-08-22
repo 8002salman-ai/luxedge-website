@@ -160,10 +160,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
       style={{ background: 'linear-gradient(180deg, #0b1120 0%, #111c34 55%, #0b1120 100%)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.04)' }}>
       {/* Brand */}
       <div className="px-3.5 py-4 border-b border-white/[0.06] flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/40"
-          style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }}>
-          <ShieldCheck size={15} className="text-white" />
-        </div>
+        <img src="/luxedge-mark.png" alt="Luxedge" className="w-9 h-9 rounded-lg object-contain shadow-lg shadow-blue-900/40" />
         <div className="leading-tight">
           <span className="font-bold text-sm text-white tracking-tight block">Luxedge</span>
           <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-medium">Admin Console</span>

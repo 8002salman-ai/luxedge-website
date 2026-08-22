@@ -7,7 +7,7 @@ import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
 import AIAssistant from './components/AIAssistant';
-import CatWalk from './components/CatWalk';
+import BirdPerch from './components/BirdPerch';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
@@ -1028,7 +1028,7 @@ function SLayout({ children }: { children: ReactNode }) {
       <WelcomePopup />
       <WhatsAppButton />
       <AIAssistant />
-      <CatWalk />
+      <BirdPerch />
     </div>
   );
 }
