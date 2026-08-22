@@ -15,7 +15,7 @@ import type { AIProvider } from './types';
 // fallback. This matches DEFAULT_PROVIDER_SETTINGS (deepseek → codex) and the
 // owner's requested chain. OpenAI/others remain available but are NOT default.
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemini-2.0-flash-exp:free', 'meta-llama/llama-3.1-8b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'gpt-4o-mini'], defaultModel: 'google/gemini-2.0-flash-exp:free', enabled: true, isDefault: false },
+  { id: 'openrouter', name: 'OpenRouter', models: ['google/gemma-4-31b-it:free', 'google/gemma-4-26b-a4b-it:free', 'z-ai/glm-5.2:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free'], defaultModel: 'google/gemma-4-31b-it:free', enabled: true, isDefault: false },
   { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
   { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: true },
   { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },

@@ -277,7 +277,7 @@ export function defaultModelFor(providerId: string): string {
     case 'deepseek': return 'deepseek-v4-flash';
     case 'anthropic': return 'claude-haiku-4-5-20251001';
     case 'gemini': return 'gemini-2.0-flash-exp';
-    case 'openrouter': return 'google/gemini-2.0-flash-exp:free';
+    case 'openrouter': return 'google/gemma-4-31b-it:free';
     default: return '';
   }
 }

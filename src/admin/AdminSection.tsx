@@ -4335,7 +4335,7 @@ const providerIcons: Record<string, string> = {
               </div>
               {provider.id === 'openrouter' && (
                 <p className="text-xs text-gray-400 mt-2">
-                  Free models: google/gemini-2.0-flash-exp:free, meta-llama/llama-3.1-8b-instruct:free
+                  Free models: google/gemma-4-31b-it:free, z-ai/glm-5.2:free, nvidia/nemotron-3-super-120b-a12b:free, openrouter/free
                   <br />Paid models require credits. <a href="https://openrouter.ai/docs" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Docs</a>
                 </p>
               )}

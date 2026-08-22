@@ -306,7 +306,7 @@ export const DEFAULT_MODEL_HELP: Record<ProviderId, string> = {
   deepseek: 'deepseek-chat',
   openai: 'gpt-4o-mini',
   anthropic: 'claude-haiku-4-5-20251001',
-  openrouter: 'google/gemini-2.0-flash-exp:free',
+  openrouter: 'google/gemma-4-31b-it:free',
   gemini: 'gemini-2.0-flash-exp',
 };
 
@@ -315,7 +315,7 @@ const PREMIUM_MODEL: Record<ProviderId, string> = {
   deepseek: 'deepseek-reasoner',
   openai: 'gpt-4o',
   anthropic: 'claude-sonnet-4-6',
-  openrouter: 'meta-llama/llama-3.1-8b-instruct:free',
+  openrouter: 'google/gemma-4-26b-a4b-it:free',
   gemini: 'gemini-1.5-pro',
 };
 
