@@ -333,7 +333,37 @@ export class CjDurableRunContext implements CjRunContext {
   }
 }
 
-/** CJ API Key configured on the server? */
+/** Read CJ API key from env or Supabase app_settings (async, cached 60s). */
+let _cachedKey: string | null = null;
+let _cacheTs = 0;
+const CACHE_TTL = 60_000;
+
+async function readCjKeyFromDb(): Promise<string | null> {
+  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!url || !key) return null;
+  try {
+    const res = await fetch(`${url}/rest/v1/app_settings?key=eq.CJ_API_KEY&select=value`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as Array<{ value: string }>;
+    return rows[0]?.value?.trim() || null;
+  } catch { return null; }
+}
+
+export async function getCjApiKey(): Promise<string> {
+  const now = Date.now();
+  if (_cachedKey && now - _cacheTs < CACHE_TTL) return _cachedKey;
+  const envKey = (process.env.CJ_API_KEY || '').trim();
+  if (envKey) { _cachedKey = envKey; _cacheTs = now; return envKey; }
+  const dbKey = await readCjKeyFromDb();
+  if (dbKey) { _cachedKey = dbKey; _cacheTs = now; return dbKey; }
+  return '';
+}
+
+/** CJ API Key configured on the server? (sync check — env only) */
 export function cjConfigured(): boolean {
   return !!(process.env.CJ_API_KEY || '').trim();
 }
@@ -409,8 +439,8 @@ async function cjFetch(
 }
 
 async function rawAccessToken(): Promise<{ accessToken: string; refreshToken: string }> {
-  const key = (process.env.CJ_API_KEY || '').trim();
-  if (!key) throw new Error('CJ_API_KEY not configured on the server');
+  const key = await getCjApiKey();
+  if (!key) throw new Error('CJ_API_KEY not configured on the server — add it in Admin → CJ Supplier Setup');
   const res = await cjFetch('/authentication/getAccessToken', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, ArrowLeft, Plug, CheckCircle, XCircle, Warning,
-  MagnifyingGlass, Truck, Copy, ArrowClockwise,
-  ShieldCheck, Database, CreditCard, Globe, MagnifyingGlass as SearchIcon, Eye
+  MagnifyingGlass, Truck, ArrowClockwise,
+  ShieldCheck, Database, CreditCard, Globe, MagnifyingGlass as SearchIcon, Eye,
+  EyeSlash, FloppyDisk
 } from '@phosphor-icons/react';
 import { CjSupplierAdapter } from '../features/suppliers/cj/adapter';
 
@@ -14,20 +15,25 @@ type CJRecord = { title: string; sellPrice: number | null; imageUrl: string | nu
 const CARD = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 const BTN = 'inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200';
 
-/* ── Helpers ── */
-function copyText(text: string) { navigator.clipboard.writeText(text).then(() => {}, () => {}); }
-
 /* ── Component ── */
 export default function CJSetup() {
   const nav = useNavigate();
   const [health, setHealth] = useState<Health>('not_configured');
   const [healthDetail, setHealthDetail] = useState('');
   const [checking, setChecking] = useState(false);
+
+  // API Key form
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [maskedKey, setMaskedKey] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState('');
+
+  // Test search
   const [testQuery, setTestQuery] = useState('dog toy');
   const [testResults, setTestResults] = useState<CJRecord[]>([]);
   const [testRunning, setTestRunning] = useState(false);
   const [testNote, setTestNote] = useState('');
-  const [copiedCmd, setCopiedCmd] = useState(false);
 
   /* ── Health check ── */
   const checkHealth = useCallback(async () => {
@@ -44,7 +50,46 @@ export default function CJSetup() {
     setChecking(false);
   }, []);
 
-  useEffect(() => { void checkHealth(); }, [checkHealth]);
+  /* ── Load current key status ── */
+  const loadKeyStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/cj-key', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json() as { configured: boolean; masked: string | null };
+        if (data.configured) setMaskedKey(data.masked);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { void checkHealth(); void loadKeyStatus(); }, [checkHealth, loadKeyStatus]);
+
+  /* ── Save API key ── */
+  const saveKey = async () => {
+    if (!apiKey.trim()) { setSaveNote('Enter a CJ API key first'); return; }
+    setSaving(true);
+    setSaveNote('');
+    try {
+      const res = await fetch('/api/admin/cj-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ key: apiKey.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; masked?: string; error?: string };
+      if (data.ok) {
+        setMaskedKey(data.masked || null);
+        setApiKey('');
+        setSaveNote('✓ Key saved — testing connection...');
+        // Re-check health
+        setTimeout(() => { void checkHealth(); }, 500);
+      } else {
+        setSaveNote(`Error: ${data.error || 'Failed to save'}`);
+      }
+    } catch {
+      setSaveNote('Network error — could not save key');
+    }
+    setSaving(false);
+  };
 
   /* ── Test search ── */
   const runTestSearch = async () => {
@@ -65,7 +110,6 @@ export default function CJSetup() {
 
   const isOnline = health === 'online' || health === 'configured';
   const isOffline = health === 'offline' || health === 'not_configured';
-  const WRANGLER_CMD = 'npx wrangler secret put CJ_API_KEY --name luxedge-production';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -98,7 +142,7 @@ export default function CJSetup() {
             {isOnline ? 'CJ Supplier — ONLINE' : health === 'rate_limited' ? 'CJ Supplier — Rate Limited' : 'CJ Supplier — Not Configured'}
           </p>
           <p className="text-sm text-gray-600 mt-0.5">
-            {isOnline ? (healthDetail || 'CJ authentication succeeded — ready to search and source products') : health === 'rate_limited' ? 'Too many requests — wait a few minutes before retrying' : 'API key not found on the server — add it below to enable product sourcing'}
+            {isOnline ? (healthDetail || 'CJ authentication succeeded — ready to search and source products') : health === 'rate_limited' ? 'Too many requests — wait a few minutes before retrying' : 'Enter your CJ API key below to enable product sourcing'}
           </p>
         </div>
         {isOnline && (
@@ -110,15 +154,15 @@ export default function CJSetup() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── Left: Setup Instructions ── */}
+        {/* ── Left: API Key Input ── */}
         <div className="space-y-5">
-          {/* API Key Configuration */}
+          {/* API Key Form */}
           <div className={CARD}>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
                 <CreditCard size={16} className="text-white" />
               </div>
-              <h3 className="font-bold text-gray-900">API Key Configuration</h3>
+              <h3 className="font-bold text-gray-900">CJ API Key</h3>
             </div>
 
             <div className="space-y-3">
@@ -127,32 +171,54 @@ export default function CJSetup() {
                   <ShieldCheck size={14} />
                   <span className="font-semibold">Server-side only</span>
                 </div>
-                <p className="text-xs text-gray-500">The API key is stored as a Cloudflare Worker secret — it never touches the browser, logs, or client code.</p>
+                <p className="text-xs text-gray-500">Stored securely in your database — never exposed to the browser, logs, or client code.</p>
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-700">Step 1: Get your CJ API Key</p>
-                <ol className="text-xs text-gray-600 space-y-1 ml-4 list-decimal">
-                  <li>Go to <a href="https://cjdropshipping.com" target="_blank" rel="noopener" className="text-blue-600 hover:underline inline-flex items-center gap-0.5">cjdropshipping.com <Eye size={10} /></a></li>
-                  <li>Log in → My API → API Key</li>
-                  <li>Copy the key (format: <code className="bg-gray-100 px-1 rounded">CJ#####@api@...</code>)</li>
-                </ol>
-              </div>
+              {maskedKey && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
+                  <CheckCircle size={16} className="text-green-600 shrink-0" />
+                  <span className="text-sm text-green-800">Current key: <code className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{maskedKey}</code></span>
+                </div>
+              )}
 
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-700">Step 2: Add the key to the server</p>
-                <div className="bg-gray-900 rounded-xl p-3 font-mono text-xs text-green-400 flex items-center justify-between gap-2">
-                  <code className="break-all">{WRANGLER_CMD}</code>
-                  <button onClick={() => { copyText(WRANGLER_CMD); setCopiedCmd(true); setTimeout(() => setCopiedCmd(false), 2000); }} className="shrink-0 p-1.5 hover:bg-gray-700 rounded-lg transition-colors">
-                    {copiedCmd ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-400" />}
+                <label className="text-sm font-semibold text-gray-700">Enter CJ API Key</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input
+                      type={showKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={e => setApiKey(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && saveKey()}
+                      placeholder="CJ#####@api@..."
+                      className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                    />
+                    <button
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                    >
+                      {showKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={saveKey}
+                    disabled={saving || !apiKey.trim()}
+                    className={`${BTN} bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 shrink-0`}
+                  >
+                    {saving ? <ArrowClockwise size={14} className="animate-spin" /> : <FloppyDisk size={14} />}
+                    {saving ? 'Saving...' : 'Save Key'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400">Run this in the project directory. Paste your key when prompted.</p>
+                {saveNote && (
+                  <p className={`text-xs ${saveNote.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{saveNote}</p>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-700">Step 3: Verify connection</p>
-                <p className="text-xs text-gray-500">Click "Refresh Status" above — status should change to <span className="text-green-600 font-semibold">ONLINE</span>.</p>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">Don't have a key? Get one from:</p>
+                <a href="https://cjdropshipping.com" target="_blank" rel="noopener" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-0.5">
+                  cjdropshipping.com → My API → API Key <Eye size={10} />
+                </a>
               </div>
             </div>
           </div>

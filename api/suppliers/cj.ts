@@ -32,7 +32,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin, getBearerToken } from '../_lib/auth.js';
 import {
-  cjConfigured, cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
+  cjAccessToken, cjSearchProducts, cjProductQuery, cjFreightCalculate, cjSafeError,
   CjDurableRunLedger, CjDurableRunContext, CJ_POINT_BUDGET_EXHAUSTED, CJ_DURABLE_LEDGER_UNAVAILABLE,
   type CjRunContext, type CjServerPointUsage,
 } from '../_lib/cj.js';
@@ -113,30 +113,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   // ---------------- health ----------------
   if (action === 'health') {
-    if (!cjConfigured()) {
+    try {
+      await cjAccessToken(); // cheapest real auth probe (reads key from env OR Supabase)
+      sendJson(res, 200, { provider: 'cj', health: 'online', detail: 'CJ authentication succeeded' });
+    } catch (e: any) {
+      const isNotConfigured = /not configured/i.test(e?.message || '');
       sendJson(res, 200, {
         provider: 'cj',
-        health: 'not_configured',
-        detail: 'CJ_API_KEY is not set in the server environment. Supplier discovery returns zero records until it is configured.',
+        health: isNotConfigured ? 'not_configured' : 'offline',
+        detail: isNotConfigured
+          ? 'CJ_API_KEY not found — add it in Admin → CJ Supplier Setup'
+          : cjSafeError(e),
       });
-      return;
     }
-    try {
-      await cjAccessToken(); // cheapest real auth probe
-      sendJson(res, 200, { provider: 'cj', health: 'online', detail: 'CJ authentication succeeded' });
-    } catch (e) {
-      sendJson(res, 200, { provider: 'cj', health: 'offline', detail: cjSafeError(e) });
-    }
-    return;
-  }
-
-  if (!cjConfigured()) {
-    sendJson(res, 200, {
-      provider: 'cj',
-      health: 'not_configured',
-      records: [],
-      warning: 'CJ_API_KEY is not configured on the server — add it to the server env (never the browser).',
-    });
     return;
   }
 
