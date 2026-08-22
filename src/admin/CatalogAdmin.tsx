@@ -1027,7 +1027,7 @@ export function CatalogProductEditor() {
 
       {isNew && mode === 'ai' && <AIImportPanel />}
 
-      {isNew && mode === 'detail' && (
+      {(!isNew || mode === 'detail') && (
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
