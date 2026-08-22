@@ -531,12 +531,6 @@ export function AIImportPanel() {
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-xs font-semibold text-blue-700">⚡ AI Provider</p>
             <div className="flex items-center gap-2 flex-wrap">
-              {aiProviders.find(p => p.id === 'qwen' && p.enabled) && (
-                <button type="button" onClick={() => setImportProvider('qwen')}
-                  className={"px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors " + (importProvider === 'qwen' ? 'bg-amber-500 text-white' : 'bg-white text-amber-700 border border-amber-300 hover:bg-amber-100')}>
-                  {'\u{1F9F9}'} Use Qwen (Private Ollama)
-                </button>
-              )}
               <select value={importProvider} onChange={e => setImportProvider(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg bg-white border border-blue-200 text-xs font-semibold text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300">
                 <option value="auto">Auto — settings default → fallback</option>
@@ -558,7 +552,7 @@ export function AIImportPanel() {
             const note = fallback ? ` · auto-fallback: ${fallback.name}` : '';
             return <p className="text-xs text-blue-800">{active.name} · {active.defaultModel}{note}</p>;
           })()}
-          <p className="text-[10px] text-blue-600/80">Server falls back automatically when the primary provider is unavailable (e.g. Qwen → DeepSeek → Codex). No keys ever reach the browser.</p>
+          <p className="text-[10px] text-blue-600/80">Server falls back automatically when the primary provider is unavailable (e.g. DeepSeek → Codex). No keys ever reach the browser.</p>
         </div>
       </div>
     );

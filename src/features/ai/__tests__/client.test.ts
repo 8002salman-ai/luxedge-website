@@ -4,8 +4,8 @@
 // Verifies callAIProvider's provider override + fallback chain contract:
 //   - default routing uses the configured default (deepseek) with the
 //     configured fallback (codex)
-//   - a providerIdOverride forces the primary provider (e.g. private Qwen)
-//     while keeping the configured fallback for server-side failover
+//   - a providerIdOverride forces a non-default provider as primary while
+//     keeping the configured fallback for server-side failover
 //   - an override that is disabled/unknown throws instead of silently
 //     switching to another provider
 //   - nothing secret is ever sent to /api/ai/generate
@@ -18,7 +18,7 @@ function providers(): AIProvider[] {
   return [
     { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: true },
     { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
-    { id: 'qwen', name: 'Qwen3.5-9B-Colab', models: ['qwen3.5:9b'], defaultModel: 'qwen3.5:9b', enabled: true, isDefault: false },
+    { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
   ];
 }
 
@@ -49,21 +49,21 @@ describe('callAIProvider', () => {
     expect(lastBody.fallback).toBe('codex');
   });
 
-  it('forces the private Qwen provider as primary while keeping the fallback', async () => {
+  it('forces a non-default provider as primary while keeping the fallback', async () => {
     stubFetch();
     const progress: string[] = [];
-    const out = await callAIProvider('test', providers(), (m) => progress.push(m), undefined, 'qwen');
+    const out = await callAIProvider('test', providers(), (m) => progress.push(m), undefined, 'anthropic');
     expect(out).toBe('LUXEDGE-QWEN-OK');
-    expect(lastBody.provider).toBe('qwen');
-    expect(lastBody.model).toBe('qwen3.5:9b');
+    expect(lastBody.provider).toBe('anthropic');
+    expect(lastBody.model).toBe('claude-haiku-4-5-20251001');
     expect(lastBody.fallback).toBe('codex');
-    expect(progress.some((m) => m.includes('Qwen3.5-9B-Colab') && m.includes('Codex'))).toBe(true);
+    expect(progress.some((m) => m.includes('Anthropic Claude') && m.includes('Codex'))).toBe(true);
   });
 
   it('throws when the override provider is disabled or unknown', async () => {
     stubFetch();
-    const disabled = providers().map((p) => (p.id === 'qwen' ? { ...p, enabled: false } : p));
-    await expect(callAIProvider('test', disabled, undefined, undefined, 'qwen')).rejects.toThrow(/not enabled/i);
+    const disabled = providers().map((p) => (p.id === 'anthropic' ? { ...p, enabled: false } : p));
+    await expect(callAIProvider('test', disabled, undefined, undefined, 'anthropic')).rejects.toThrow(/not enabled/i);
     await expect(callAIProvider('test', providers(), undefined, undefined, 'does-not-exist')).rejects.toThrow(/not enabled/i);
   });
 
@@ -76,7 +76,7 @@ describe('callAIProvider', () => {
 
   it('never sends secrets to the server proxy', async () => {
     stubFetch();
-    await callAIProvider('test', providers(), undefined, 'be nice', 'qwen');
+    await callAIProvider('test', providers(), undefined, 'be nice', 'anthropic');
     const serialized = JSON.stringify(lastBody);
     expect(serialized).not.toMatch(/api[_-]?key|secret|Bearer\s+\S+|sk-[A-Za-z0-9]{10,}/i);
   });

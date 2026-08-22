@@ -11,7 +11,6 @@
 // ============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { qwenGenerate, qwenConfigured } from './qwen.js';
 
 /** Hard cap on outbound provider calls — prevents hung serverless functions. */
 export const FETCH_TIMEOUT_MS = 45_000;
@@ -72,7 +71,6 @@ export const PROVIDER_ENV: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
   gemini: 'GEMINI_API_KEY',
-  qwen: 'QWEN_API_BASE_URL',
 };
 
 export const PROVIDER_NAMES: Record<string, string> = {
@@ -82,13 +80,9 @@ export const PROVIDER_NAMES: Record<string, string> = {
   anthropic: 'Anthropic Claude',
   openrouter: 'OpenRouter',
   gemini: 'Google Gemini',
-  qwen: 'Qwen3.5-9B-Colab',
 };
 
 export function isConfigured(providerId: string): boolean {
-  // Qwen is a private Ollama behind Cloudflare Access — it needs its own
-  // credential set (base URL + CF Access service token), not a single key.
-  if (providerId === 'qwen') return qwenConfigured();
   const envName = PROVIDER_ENV[providerId];
   if (!envName) return false;
   return Boolean(process.env[envName] && process.env[envName]!.trim());
@@ -99,7 +93,6 @@ export function configuredProviders(): string[] {
 }
 
 export function providerKey(providerId: string): string {
-  if (providerId === 'qwen') return 'cf-access'; // credentials live in qwen.ts (never exposed)
   const envName = PROVIDER_ENV[providerId];
   if (!envName) return '';
   const primary = process.env[envName] || '';
@@ -187,10 +180,6 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       const text = d?.content?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Anthropic returned no text');
       return text;
-    }
-    case 'qwen': {
-      // Private Ollama (qwen3.5:9b) behind Cloudflare Access Service Auth.
-      return qwenGenerate(prompt, system);
     }
     case 'codex': {
       // OpenAI Codex uses the Responses API (OpenAI-compatible bearer auth).
@@ -289,7 +278,6 @@ export function defaultModelFor(providerId: string): string {
     case 'anthropic': return 'claude-haiku-4-5-20251001';
     case 'gemini': return 'gemini-2.0-flash-exp';
     case 'openrouter': return 'google/gemini-2.0-flash-exp:free';
-    case 'qwen': return 'qwen3.5:9b';
     default: return '';
   }
 }

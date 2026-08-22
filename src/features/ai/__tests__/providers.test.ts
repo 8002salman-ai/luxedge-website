@@ -70,16 +70,16 @@ describe('loadAIProviders', () => {
     expect(deepseek?.enabled).toBe(true);
   });
 
-  it('includes the private Qwen provider (Qwen3.5-9B-Colab, qwen3.5:9b) without replacing defaults', () => {
-    const qwen = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'qwen');
-    expect(qwen).toBeDefined();
-    expect(qwen?.name).toBe('Qwen3.5-9B-Colab');
-    expect(qwen?.models).toContain('qwen3.5:9b');
-    expect(qwen?.defaultModel).toBe('qwen3.5:9b');
-    expect(qwen?.enabled).toBe(true);
-    expect(qwen?.isDefault).toBe(false);
-    // existing providers untouched
+  it('registry keeps the standard providers and no removed/private providers', () => {
+    const ids = DEFAULT_AI_PROVIDERS.map((p) => p.id);
+    expect(ids).toContain('deepseek');
+    expect(ids).toContain('codex');
+    expect(ids).toContain('openai');
+    expect(ids).toContain('anthropic');
+    expect(ids).not.toContain('qwen');
+    // DeepSeek remains the default; every provider has at least one model
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.isDefault).toBe(true);
+    expect(DEFAULT_AI_PROVIDERS.every((p) => p.models.length > 0 && p.defaultModel)).toBe(true);
   });
 
   it('self-heals a stale all-disabled stored config back to defaults', () => {

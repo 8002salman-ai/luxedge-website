@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, serverQwenHealth, serverQwenGenerate } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { listCategories, createCategory, updateCategory, deleteCategory, listProducts, setDbToken } from '../features/catalog/repository';
@@ -1566,7 +1566,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
             <p className="font-semibold mb-1">🔒 Luxedge V2: keys live on the server, never in the browser</p>
             <p>AI provider keys and scraping tokens are read from environment variables by the /api serverless functions. They are never stored in localStorage, never shipped in the bundle, and never logged.</p>
           </div>
-          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → GearSix → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.<br />Private Qwen (Ollama on Colab): <code className="font-mono text-xs">QWEN_API_BASE_URL, QWEN_MODEL, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET</code> (Cloudflare Access service token — server-side only, never <code className="font-mono text-xs">VITE_*</code>).</p>
+          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → GearSix → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.</p>
           {envStatus ? (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Server status</p>
@@ -4160,19 +4160,6 @@ function AAIHub() {
   const [orCredits, setOrCredits] = useState<{ total: number; used: number } | null>(null);
   const [checkingCredits, setCheckingCredits] = useState(false);
   const [scrapeTest, setScrapeTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'fail'; msg: string }>({ status: 'idle', msg: '' });
-  const [qwenHealth, setQwenHealth] = useState<{
-    configured: boolean; cloudflareAuth: string; ollama: string; model: string; modelFound: boolean; generation: string; error?: string;
-  } | null>(null);
-  const [checkingQwen, setCheckingQwen] = useState(false);
-  const [qwenQuick, setQwenQuick] = useState<{
-    status: 'idle' | 'testing' | 'ok' | 'fail';
-    reply?: string;
-    len?: number;
-    model?: string;
-    matched?: boolean;
-    error?: string;
-  }>({ status: 'idle' });
-
   /** Verify the server-side scrape path works (SCRAPE_DO_TOKEN configured → scrape.do, else public fallback). */
   const testScraping = async () => {
     setScrapeTest({ status: 'testing', msg: 'Testing server-side page fetch…' });
@@ -4211,36 +4198,6 @@ function AAIHub() {
     }).catch(() => setServerStatus({}));
   }, []);
 
-  const runQwenHealth = async () => {
-    setCheckingQwen(true);
-    try {
-      const h = await serverQwenHealth();
-      setQwenHealth(h);
-    } catch (e: any) {
-      setQwenHealth({ configured: false, cloudflareAuth: 'UNKNOWN', ollama: 'UNKNOWN', model: 'qwen3.5:9b', modelFound: false, generation: 'SKIPPED', error: e?.message?.slice(0, 120) || 'Health check failed' });
-    } finally { setCheckingQwen(false); }
-  };
-
-  useEffect(() => { runQwenHealth(); }, []);
-
-  /** Real generation round-trip: prompt → Cloudflare Access → Colab Ollama → qwen3.5:9b. */
-  const runQwenQuickTest = async () => {
-    setQwenQuick({ status: 'testing' });
-    try {
-      const r = await serverQwenGenerate('Reply exactly: LUXEDGE-QWEN-OK');
-      const reply = (r.response || '').trim();
-      setQwenQuick({
-        status: 'ok',
-        reply: reply.slice(0, 300),
-        len: reply.length,
-        model: r.model || 'qwen3.5:9b',
-        matched: reply.includes('LUXEDGE-QWEN-OK'),
-      });
-    } catch (e: any) {
-      setQwenQuick({ status: 'fail', error: (e?.message || 'Generation failed').slice(0, 160) });
-    }
-  };
-
   const testProvider = async (provider: AIProvider) => {
     setTesting(provider.id);
     try {
@@ -4261,7 +4218,7 @@ function AAIHub() {
   };
 
 const providerIcons: Record<string, string> = {
-    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}', qwen: '\u{1F9F9}'
+    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
   };
 
   return (
@@ -4320,85 +4277,6 @@ const providerIcons: Record<string, string> = {
           </p>
         </div>
       )}
-
-      {/* Qwen3.5-9B-Colab (private Ollama) Status Card */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-sm text-amber-800 flex items-center gap-2">
-            <span>{'\u{1F9F9}'}</span> Qwen3.5-9B-Colab (Private Ollama)
-          </h2>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={runQwenHealth} disabled={checkingQwen}
-              className="px-3 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
-              {checkingQwen ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
-              {checkingQwen ? 'Checking...' : 'Test Qwen Connection'}
-            </button>
-            <button onClick={runQwenQuickTest} disabled={qwenQuick.status === 'testing'}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors">
-              {qwenQuick.status === 'testing' ? <SpinnerGap size={12} className="animate-spin" /> : <Lightning size={12} />}
-              {qwenQuick.status === 'testing' ? 'Generating…' : 'Qwen Quick Test'}
-            </button>
-          </div>
-        </div>
-        {qwenHealth ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="bg-white rounded-xl p-3">
-              <p className="font-semibold text-gray-600 mb-1">Cloudflare Access auth</p>
-              <p className={"font-bold " + (qwenHealth.cloudflareAuth === 'PASS' ? 'text-green-600' : qwenHealth.cloudflareAuth === 'FAIL' ? 'text-red-600' : 'text-gray-500')}>
-                {qwenHealth.cloudflareAuth === 'PASS' ? 'PASS' : qwenHealth.cloudflareAuth === 'FAIL' ? 'FAIL' : 'UNKNOWN'}
-              </p>
-            </div>
-            <div className="bg-white rounded-xl p-3">
-              <p className="font-semibold text-gray-600 mb-1">Ollama runtime</p>
-              <p className={"font-bold " + (qwenHealth.ollama === 'ONLINE' ? 'text-green-600' : qwenHealth.ollama === 'OFFLINE' ? 'text-red-600' : 'text-gray-500')}>
-                {qwenHealth.ollama === 'ONLINE' ? 'ONLINE' : qwenHealth.ollama === 'OFFLINE' ? 'OFFLINE' : 'UNKNOWN'}
-              </p>
-            </div>
-            <div className="bg-white rounded-xl p-3">
-              <p className="font-semibold text-gray-600 mb-1">Model</p>
-              <p className="font-bold text-gray-800">{qwenHealth.model || 'qwen3.5:9b'}</p>
-              <p className={"text-[10px] " + (qwenHealth.modelFound ? 'text-green-600' : 'text-amber-600')}>
-                {qwenHealth.modelFound ? 'present in /api/tags' : 'not found in /api/tags'}
-              </p>
-            </div>
-            <div className="bg-white rounded-xl p-3">
-              <p className="font-semibold text-gray-600 mb-1">Generation test</p>
-              <p className={"font-bold " + (qwenHealth.generation === 'PASS' ? 'text-green-600' : qwenHealth.generation === 'FAIL' ? 'text-red-600' : 'text-gray-500')}>
-                {qwenHealth.generation === 'PASS' ? 'PASS' : qwenHealth.generation === 'FAIL' ? 'FAIL' : 'SKIPPED'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-amber-600">Checking Qwen connection…</p>
-        )}
-        {qwenHealth?.error && <p className="text-xs text-red-600 mt-2">{qwenHealth.error}</p>}
-        {qwenQuick.status === 'ok' && (
-          <div className="mt-3 bg-white border rounded-xl p-3 text-xs">
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className={"font-bold px-2 py-0.5 rounded-full " + (qwenQuick.matched ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>
-                {qwenQuick.matched ? '✓ LUXEDGE-QWEN-OK received' : 'Reply did not match marker'}
-              </span>
-              <span className="text-gray-600">Raw reply length: <span className="font-bold text-gray-900">{qwenQuick.len}</span> chars</span>
-              <span className="text-gray-400">model: {qwenQuick.model}</span>
-            </div>
-            {qwenQuick.reply && (
-              <p className="mt-2 font-mono text-[11px] text-gray-600 bg-gray-50 border rounded-lg p-2 break-words">
-                {qwenQuick.reply}
-              </p>
-            )}
-            {!qwenQuick.matched && qwenQuick.reply && (
-              <p className="mt-1 text-amber-600">Tunnel is UP but the reply was unexpected — check the Colab notebook serving qwen3.5:9b.</p>
-            )}
-          </div>
-        )}
-        {qwenQuick.status === 'fail' && (
-          <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700">
-            <span className="font-bold">Generation failed:</span> {qwenQuick.error}
-            <p className="mt-1 text-red-500">Tunnel still down — restart the Colab notebook / cloudflared tunnel, then tap Quick Test again.</p>
-          </div>
-        )}
-        <p className="text-[10px] text-amber-500 mt-2">Private Ollama on Google Colab behind Cloudflare Access. Credentials stay server-side — never in the browser. Colab runtimes disconnect: if OFFLINE, restart the Colab notebook or its tunnel.</p>
-      </div>
 
       {/* AI Providers */}
       <div className="bg-white rounded-2xl border border-purple-200 p-5">
@@ -4469,11 +4347,6 @@ const providerIcons: Record<string, string> = {
               {provider.id === 'deepseek' && (
                 <p className="text-xs text-gray-400 mt-2">
                   Budget-friendly and fast. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Get API key</a>
-                </p>
-              )}
-              {provider.id === 'qwen' && (
-                <p className="text-xs text-gray-400 mt-2">
-                  Private Ollama on Google Colab (qwen3.5:9b) behind Cloudflare Access. Configure server env vars: <code className="font-mono">QWEN_API_BASE_URL, QWEN_MODEL, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET</code> — never in the browser.
                 </p>
               )}
             </div>

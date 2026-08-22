@@ -95,7 +95,6 @@ import {
 import {
   callAIProvider, serverGenerate, serverTestProvider,
   serverOpenRouterCredits, serverProviderStatus,
-  serverQwenHealth, serverQwenGenerate,
 } from "./features/ai/client";
 import type { ProviderStatus, ProviderStatusMap } from "./features/ai/client";
 import {
@@ -118,7 +117,7 @@ export type {
 export {
   DEFAULT_AI_PROVIDERS, loadAIProviders, saveAIProviders, resolveActiveProvider,
   callAIProvider, serverGenerate, serverTestProvider, serverOpenRouterCredits,
-  serverProviderStatus, serverQwenHealth, serverQwenGenerate,
+  serverProviderStatus,
   fetchPageContent, buildExtractionPrompt,
   extractProductJson, parseHtmlPage, normalizeProductTitle,
   extractAliExpressItemId, assessAliExpressRisk, deriveImportReadiness,

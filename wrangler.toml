@@ -30,10 +30,6 @@ DEPLOYMENT_ENV = "production"
 # itself is a SECRET (wrangler secret put CLOUDFLARE_API_TOKEN).
 CLOUDFLARE_ACCOUNT_ID = "f542683e97458480452b0b8ef37a898a"
 CLOUDFLARE_ZONE_ID = "33109dc6283b9e9cdafc2d1a0b05b6f8"
-# Private Qwen (Ollama on Colab) — non-secret. CF_ACCESS_CLIENT_ID and
-# CF_ACCESS_CLIENT_SECRET are secrets (wrangler secret put).
-QWEN_API_BASE_URL = "https://ollama.luxedge.us"
-QWEN_MODEL = "qwen3.5:9b"
 
 [env.staging]
 name = "luxedge-cloudflare-staging"
