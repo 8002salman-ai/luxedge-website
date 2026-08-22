@@ -14,6 +14,7 @@ import { AIImportPanel } from './AIImportPanel';
 import { loadProviderSettings, saveProviderSettings } from '../features/ai/providers';
 import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RULES } from '../features/ai/pricing';
 import ProductScout from './ProductScout';
+import CJSetup from './CJSetup';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
@@ -148,6 +149,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
     {
       title: 'System',
       items: [
+        { to: '/admin/cj-setup', icon: Package, label: 'CJ Supplier', g: 'linear-gradient(135deg,#10b981,#06b6d4)', dot: '#34d399' },
         { to: '/admin/settings', icon: GearSix, label: 'Settings', g: 'linear-gradient(135deg,#94a3b8,#64748b)', dot: '#cbd5e1' },
       ],
     },
@@ -5290,6 +5292,7 @@ export default function AdminSection() {
       <Route path="scout" element={<AdminLayout><ProductScout /></AdminLayout>} />
       <Route path="ai-control" element={<AdminLayout><AiControlCenter /></AdminLayout>} />
       <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
+      <Route path="cj-setup" element={<AdminLayout><CJSetup /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />
