@@ -23,6 +23,7 @@ import {
   listCategories, listCoupons, createCoupon, updateCoupon, deleteCoupon,
   listOffers, createOffer, updateOffer, deleteOffer, getStoreSettings, saveStoreSettings,
   uid,
+  type ProductInput,
 } from '../features/catalog/repository';
 import { listRecommendations } from '../features/hermes/repository';
 import type { HermesRecommendationRow } from '../features/hermes/types';
@@ -39,6 +40,10 @@ import { callAIProvider } from '../features/ai/client';
 import { loadAIProviders, loadProviderSettings, resolveProviderChain } from '../features/ai/providers';
 import { parseHtmlPage } from '../features/ai/importer';
 import { AIImportPanel } from './AIImportPanel';
+import {
+  parseCsvImport, classifyDuplicates,
+  type CsvImportRow, type DuplicateMatch, type DupCandidate,
+} from '../features/catalog/csvImport';
 
 const I = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
 const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
@@ -97,6 +102,7 @@ export function CatalogProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [csvOpen, setCsvOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -289,6 +295,9 @@ export function CatalogProductsPage() {
               Select all Draft/Inactive ({nonActive.length})
             </button>
           ) : null}
+          <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
+            <UploadSimple size={16} />CSV Import
+          </button>
           <button onClick={() => nav('/admin/products/new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2">
             <Plus size={16} />Add Product
           </button>
@@ -480,7 +489,253 @@ export function CatalogProductsPage() {
           <button onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="flex-1 py-2.5 border rounded-lg disabled:opacity-50">Cancel</button>
         </div>
       </Modal>
+
+      <CsvImportModal
+        open={csvOpen}
+        onClose={() => { if (!csvOpen) return; setCsvOpen(false); }}
+        existing={products}
+        cats={cats}
+        notify={notify}
+        onImported={load}
+      />
     </div>
+  );
+}
+
+// ============================================================================
+// CSV BULK IMPORT MODAL (Zeedrop / supplier CSV → Luxedge drafts)
+//
+// Paste or upload a CSV, preview parsed rows, flag duplicates (item ID > URL >
+// normalized title), then import the selected rows as DRAFT products with
+// images + variants. Auto-publish is NEVER allowed here.
+// ============================================================================
+function CsvImportModal({ open, onClose, existing, cats, notify, onImported }: {
+  open: boolean;
+  onClose: () => void;
+  existing: CatalogProduct[];
+  cats: CatalogCategory[];
+  notify: (msg: string, kind?: 'success' | 'error') => void;
+  onImported: () => Promise<void>;
+}) {
+  const [text, setText] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [preview, setPreview] = useState<{ row: CsvImportRow; duplicate: DuplicateMatch | null }[] | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setText(''); setFileName(''); setPreview(null); setSelected(new Set()); setErrors([]);
+  };
+
+  const parse = () => {
+    const res = parseCsvImport(text);
+    if (res.rows.length === 0) {
+      setErrors(['No product rows found. Make sure the CSV has a title/name column and at least one data row.']);
+      setPreview(null);
+      return;
+    }
+    const candidates: DupCandidate[] = existing.map((p) => ({
+      id: p.id, name: p.name, supplierUrl: p.supplierUrl, supplierProductRef: p.supplierProductRef,
+    }));
+    const classified = classifyDuplicates(res.rows, candidates);
+    setPreview(classified);
+    setErrors([
+      ...res.skipped.map((s) => `Row ${s.line}: ${s.reason} (skipped)`),
+      ...res.warnings,
+      ...(res.rows.length > 50 ? [`Large import (${res.rows.length} rows) — imported as drafts, review before publishing.`] : []),
+    ]);
+    // Auto-select non-duplicate rows only
+    setSelected(new Set(classified.map((_, i) => i).filter((i) => !classified[i].duplicate)));
+  };
+
+  const onFile = (f: File | null) => {
+    if (!f) return;
+    setFileName(f.name);
+    const reader = new FileReader();
+    reader.onload = () => setText(String(reader.result ?? ''));
+    reader.readAsText(f);
+  };
+
+  const toggle = (i: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
+  const selectAll = () => setSelected(new Set(preview ? preview.map((_, i) => i) : []));
+  const clearAll = () => setSelected(new Set());
+
+  const importSelected = async () => {
+    if (!preview) return;
+    setBusy(true);
+    let created = 0, dupSkipped = 0, failed = 0;
+    const fails: string[] = [];
+    for (const i of [...selected]) {
+      const { row, duplicate } = preview[i];
+      if (duplicate) { dupSkipped++; continue; }
+      try {
+        const catName = row.category?.trim().toLowerCase();
+        const catId = catName ? cats.find((c) => c.name.toLowerCase() === catName)?.id ?? null : null;
+        const input: ProductInput = {
+          name: row.name,
+          shortDescription: row.shortDescription,
+          description: row.description,
+          price: row.price,
+          compareAtPrice: row.compareAtPrice,
+          costPrice: row.costPrice,
+          sku: row.sku,
+          inventoryQty: row.inventoryQty,
+          shippingCost: row.shippingCost,
+          freeShipping: row.freeShipping,
+          brand: row.brand || 'Luxedge',
+          categoryId: catId,
+          tags: row.tags,
+          supplierSource: row.supplierSource || 'Zeedrop',
+          supplierUrl: row.supplierUrl,
+          supplierProductRef: row.supplierProductRef,
+          status: 'draft',
+          ogImage: row.images[0] || undefined,
+          evidenceNotes: `Imported via CSV${fileName ? ` (${fileName})` : ''}${row.supplierSource ? ` from ${row.supplierSource}` : ''}`,
+        };
+        const product = await createProduct(input);
+        if (row.images.length > 0) {
+          await saveProductImages(product.id, row.images.map((url, n) => ({
+            url, isPrimary: n === 0, sortOrder: n, kind: 'product' as const,
+          })));
+        }
+        if (row.variants.length > 0) {
+          await saveProductVariants(product.id, row.variants.map((v) => ({ attributes: v.attributes })));
+        }
+        created++;
+      } catch (e) {
+        failed++;
+        fails.push(`${row.name.slice(0, 48)}: ${(e as Error).message}`);
+      }
+    }
+    notify(
+      `CSV import: ${created} created as draft${dupSkipped ? ` · ${dupSkipped} duplicates skipped` : ''}${failed ? ` · ${failed} failed` : ''}`,
+      failed ? 'error' : 'success',
+    );
+    if (fails.length) setErrors(fails.slice(0, 6));
+    setBusy(false);
+    reset();
+    await onImported();
+  };
+
+  const DUP_LABEL: Record<string, string> = {
+    supplierProductRef: 'Duplicate — same supplier item ID',
+    supplierUrl: 'Duplicate — same supplier URL',
+    title: 'Duplicate — same title',
+  };
+
+  return (
+    <Modal isOpen={open} onClose={() => { if (!busy) onClose(); }} title="CSV Bulk Import — creates DRAFT products" size="lg">
+      <div className="space-y-4">
+        <div className="text-xs text-gray-500 leading-relaxed">
+          Paste a Zeedrop / supplier CSV or upload a file. Recognized columns: title/name, price, compare/cost price,
+          images (URLs separated by comma or newline), description, variants (<code className="bg-gray-100 px-1 rounded">Color:Red; Size:M</code>),
+          supplier URL, item ID, source, brand, category, sku, stock, shipping cost, tags.
+          Everything imports as <b>DRAFT</b> — nothing publishes automatically.
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+          />
+          <button onClick={() => fileRef.current?.click()} className="px-3 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 flex items-center gap-1.5">
+            <UploadSimple size={13} />{fileName || 'Upload .csv'}
+          </button>
+          <button
+            onClick={parse}
+            disabled={!text.trim()}
+            className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-xs font-semibold"
+          >
+            Parse CSV
+          </button>
+          {fileName && (
+            <button onClick={() => { setFileName(''); setText(''); setPreview(null); }} className="px-3 py-2 text-xs text-gray-500 hover:text-red-500">Clear file</button>
+          )}
+        </div>
+
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={'title,price,images,supplier url\nPremium Dog Toy,12.99,https://…/a.jpg | https://…/b.jpg,https://supplier.com/item/123'}
+          rows={6}
+          className={`${I} font-mono text-xs`}
+        />
+
+        {errors.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-xs space-y-1 max-h-28 overflow-auto">
+            {errors.map((e, i) => <div key={i}>• {e}</div>)}
+          </div>
+        )}
+
+        {preview && (
+          <>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>{preview.length} rows parsed · {selected.size} selected</span>
+              <span className="flex gap-2">
+                <button onClick={selectAll} className="hover:text-indigo-600 font-semibold">Select all</button>
+                <button onClick={clearAll} className="hover:text-red-500 font-semibold">Clear</button>
+              </span>
+            </div>
+            <div className="border rounded-lg overflow-auto max-h-72">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-2 py-2 text-left"><input type="checkbox" checked={selected.size === preview.length && preview.length > 0} onChange={(e) => (e.target.checked ? selectAll() : clearAll())} /></th>
+                    <th className="px-2 py-2 text-left">Title</th>
+                    <th className="px-2 py-2 text-left">Price</th>
+                    <th className="px-2 py-2 text-left">Images</th>
+                    <th className="px-2 py-2 text-left">Supplier ref / URL</th>
+                    <th className="px-2 py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {preview.map(({ row, duplicate }, i) => (
+                    <tr key={i} className={duplicate ? 'bg-red-50/50' : ''}>
+                      <td className="px-2 py-1.5">
+                        <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} disabled={!!duplicate} />
+                      </td>
+                      <td className="px-2 py-1.5 max-w-[220px] truncate" title={row.name}>{row.name}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">{row.price != null ? `$${row.price}` : '—'}</td>
+                      <td className="px-2 py-1.5">{row.images.length > 0 ? `${row.images.length} img` : <span className="text-amber-600">no images</span>}</td>
+                      <td className="px-2 py-1.5 max-w-[160px] truncate">{row.supplierProductRef || row.supplierUrl || '—'}</td>
+                      <td className="px-2 py-1.5">
+                        {duplicate ? (
+                          <span className="text-red-600 font-medium" title={duplicate.product.name}>⚠ {DUP_LABEL[duplicate.field]}</span>
+                        ) : (
+                          <span className="text-gray-400">draft</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={importSelected}
+                disabled={busy || selected.size === 0}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                {busy ? 'Importing…' : <>Import {selected.size} as Draft <FloppyDisk size={15} /></>}
+              </button>
+              <button onClick={() => { if (!busy) onClose(); }} className="px-6 py-2.5 border rounded-lg text-sm font-semibold disabled:opacity-40">Cancel</button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 
