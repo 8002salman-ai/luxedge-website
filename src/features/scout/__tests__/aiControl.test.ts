@@ -189,16 +189,16 @@ describe('per-provider switches', () => {
 
 describe('fallback + failure', () => {
   it('primary failure → enabled+configured fallback used', async () => {
-    const { calls, generate } = makeGenerate({ fail: (p) => p === 'deepseek' });
+    const { calls, generate } = makeGenerate({ fail: (p) => p === 'openrouter' });
     const r = await routerGenerate('p', {
       task: 'MARKET_INTELLIGENCE',
-      control: withProviders(['deepseek', 'anthropic']),
-      configured: ['deepseek', 'anthropic'],
+      control: withProviders(['openrouter', 'deepseek']),
+      configured: ['openrouter', 'deepseek'],
       generate,
     });
     expect(r.fallbackUsed).toBe(true);
-    expect(r.provider).toBe('anthropic');
-    expect(calls.some((c) => c.provider === 'anthropic')).toBe(true);
+    expect(r.provider).toBe('deepseek');
+    expect(calls.some((c) => c.provider === 'deepseek')).toBe(true);
   });
 
   it('fallback disabled → error after capped retries, no fallback call', async () => {
@@ -303,7 +303,7 @@ describe('cost strategies', () => {
       'LISTING_GENERATE',
       ['deepseek', 'openai'],
     );
-    // LISTING_GENERATE primary = anthropic (unconfigured), fallback = deepseek
+    // LISTING_GENERATE primary = openrouter (unconfigured), fallback = deepseek
     expect(sel?.provider).toBe('deepseek');
   });
 

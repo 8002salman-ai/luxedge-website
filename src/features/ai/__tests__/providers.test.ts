@@ -50,9 +50,11 @@ describe('loadAIProviders', () => {
     });
     const providers = loadAIProviders(storage);
     const deepseek = providers.find((p) => p.id === 'deepseek');
-    expect(deepseek?.isDefault).toBe(true);
+    // The old shipped default (deepseek marked default) migrates to OpenRouter.
+    expect(deepseek?.isDefault).toBe(false);
     expect(deepseek?.defaultModel).toBe('deepseek-chat');
     expect(deepseek && 'apiKey' in deepseek).toBe(false);
+    expect(providers.find((p) => p.id === 'openrouter')?.isDefault).toBe(true);
     // defaults still present
     expect(providers.length).toBeGreaterThanOrEqual(DEFAULT_AI_PROVIDERS.length);
     expect(JSON.stringify(providers)).not.toContain('sk-ds-super-secret');
@@ -63,11 +65,12 @@ describe('loadAIProviders', () => {
     expect(providers.length).toBe(DEFAULT_AI_PROVIDERS.length);
   });
 
-  it('defaults to DeepSeek as the default provider (owner chain: deepseek → codex)', () => {
-    expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('deepseek');
-    const deepseek = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek');
-    expect(deepseek?.defaultModel).toBe('deepseek-v4-flash');
-    expect(deepseek?.enabled).toBe(true);
+  it('defaults to OpenRouter as the default provider (owner chain: openrouter → deepseek)', () => {
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('openrouter');
+    const or = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter');
+    expect(or?.defaultModel).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+    expect(or?.enabled).toBe(true);
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.enabled).toBe(true);
   });
 
   it('registry keeps the standard providers and no removed/private providers', () => {
@@ -77,8 +80,8 @@ describe('loadAIProviders', () => {
     expect(ids).toContain('openai');
     expect(ids).toContain('anthropic');
     expect(ids).not.toContain('qwen');
-    // DeepSeek remains the default; every provider has at least one model
-    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.isDefault).toBe(true);
+    // OpenRouter is the default; every provider has at least one model
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter')?.isDefault).toBe(true);
     expect(DEFAULT_AI_PROVIDERS.every((p) => p.models.length > 0 && p.defaultModel)).toBe(true);
   });
 
@@ -86,8 +89,8 @@ describe('loadAIProviders', () => {
     const allDisabled = DEFAULT_AI_PROVIDERS.map((p) => ({ ...p, enabled: false }));
     const providers = loadAIProviders(memoryStorage({ luxedge_ai_providers: JSON.stringify(allDisabled) }));
     expect(providers.some((p) => p.enabled)).toBe(true);
-    expect(providers.find((p) => p.id === 'deepseek')?.enabled).toBe(true);
-    expect(providers.find((p) => p.isDefault)?.id).toBe('deepseek');
+    expect(providers.find((p) => p.id === 'openrouter')?.enabled).toBe(true);
+    expect(providers.find((p) => p.isDefault)?.id).toBe('openrouter');
   });
 });
 
@@ -157,10 +160,20 @@ describe('resolveActiveProvider', () => {
 });
 
 describe('provider routing settings', () => {
-  it('defaults to DeepSeek primary + Codex fallback', () => {
-    expect(DEFAULT_PROVIDER_SETTINGS.defaultProviderId).toBe('deepseek');
-    expect(DEFAULT_PROVIDER_SETTINGS.fallbackProviderId).toBe('codex');
+  it('defaults to OpenRouter primary + DeepSeek fallback', () => {
+    expect(DEFAULT_PROVIDER_SETTINGS.defaultProviderId).toBe('openrouter');
+    expect(DEFAULT_PROVIDER_SETTINGS.fallbackProviderId).toBe('deepseek');
     expect(loadProviderSettings(memoryStorage({}))).toEqual(DEFAULT_PROVIDER_SETTINGS);
+  });
+
+  it('migrates the old shipped default chain (deepseek → codex) to openrouter → deepseek', () => {
+    const s = memoryStorage({ luxedge_ai_provider_settings: JSON.stringify({ defaultProviderId: 'deepseek', fallbackProviderId: 'codex' }) });
+    expect(loadProviderSettings(s)).toEqual({ defaultProviderId: 'openrouter', fallbackProviderId: 'deepseek' });
+  });
+
+  it('preserves an explicit owner customization that is not the old shipped default', () => {
+    const s = memoryStorage({ luxedge_ai_provider_settings: JSON.stringify({ defaultProviderId: 'anthropic', fallbackProviderId: 'gemini' }) });
+    expect(loadProviderSettings(s)).toEqual({ defaultProviderId: 'anthropic', fallbackProviderId: 'gemini' });
   });
 
   it('round-trips default/fallback and treats empty fallback as null', () => {

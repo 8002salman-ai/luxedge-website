@@ -11,13 +11,13 @@
 
 import type { AIProvider } from './types';
 
-// Default provider is DeepSeek (fast/cheap research + extraction); Codex is the
-// fallback. This matches DEFAULT_PROVIDER_SETTINGS (deepseek → codex) and the
-// owner's requested chain. OpenAI/others remain available but are NOT default.
+// Default provider is OpenRouter (free nvidia/nemotron-3-super model — no
+// credits needed); DeepSeek is the fallback and Codex remains available.
+// This matches DEFAULT_PROVIDER_SETTINGS (openrouter → deepseek).
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id: 'openrouter', name: 'OpenRouter', models: ['nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free', 'cohere/north-mini-code:free', 'google/gemma-4-31b-it:free', 'z-ai/glm-5.2:free'], defaultModel: 'nvidia/nemotron-3-super-120b-a12b:free', enabled: true, isDefault: false },
+  { id: 'openrouter', name: 'OpenRouter', models: ['nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free', 'cohere/north-mini-code:free', 'google/gemma-4-31b-it:free', 'z-ai/glm-5.2:free'], defaultModel: 'nvidia/nemotron-3-super-120b-a12b:free', enabled: true, isDefault: true },
   { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: true },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
   { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
   { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: false },
   { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
@@ -49,6 +49,17 @@ export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[
     const merged: AIProvider[] = stored.map((p) => sanitizeProvider(p || {}));
     for (const def of DEFAULT_AI_PROVIDERS) {
       if (!merged.some((p) => p.id === def.id)) merged.push({ ...def });
+    }
+    // Migrate the previous shipped default (deepseek) to OpenRouter in stored
+    // configs so an upgrade can't pin a stale default. Explicit owner choices
+    // are kept: only flip when deepseek was the marked default and OpenRouter
+    // is available/enabled.
+    const markedDefault = merged.find((p) => p.isDefault);
+    if (markedDefault && markedDefault.id === 'deepseek' && merged.some((p) => p.id === 'openrouter' && p.enabled)) {
+      const orIdx = merged.findIndex((p) => p.id === 'openrouter');
+      const dsIdx = merged.findIndex((p) => p.id === 'deepseek');
+      if (orIdx >= 0) merged[orIdx] = { ...merged[orIdx], isDefault: true };
+      if (dsIdx >= 0) merged[dsIdx] = { ...merged[dsIdx], isDefault: false };
     }
     // Self-healing: a stale all-disabled config (e.g. from an old save) must
     // never leave the import flow without a provider. The SERVER decides which
@@ -83,8 +94,8 @@ export interface AIProviderSettings {
 }
 
 export const DEFAULT_PROVIDER_SETTINGS: AIProviderSettings = {
-  defaultProviderId: 'deepseek',
-  fallbackProviderId: 'codex',
+  defaultProviderId: 'openrouter',
+  fallbackProviderId: 'deepseek',
 };
 
 const PROVIDER_SETTINGS_KEY = 'luxedge_ai_provider_settings';
@@ -95,9 +106,17 @@ export function loadProviderSettings(storage?: Pick<Storage, 'getItem'>): AIProv
     const raw = (storage || (typeof window !== 'undefined' ? window.localStorage : null))?.getItem(PROVIDER_SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_PROVIDER_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<AIProviderSettings>;
+    // Migrate the previous shipped default chain (deepseek → codex) to the new
+    // default chain (openrouter → deepseek). Explicit owner customizations are
+    // preserved — only the exact old shipped default is rewritten.
+    const isOldShippedDefault = parsed.defaultProviderId === 'deepseek' && parsed.fallbackProviderId === 'codex';
     return {
-      defaultProviderId: typeof parsed.defaultProviderId === 'string' && parsed.defaultProviderId ? parsed.defaultProviderId : DEFAULT_PROVIDER_SETTINGS.defaultProviderId,
-      fallbackProviderId: typeof parsed.fallbackProviderId === 'string' && parsed.fallbackProviderId ? parsed.fallbackProviderId : null,
+      defaultProviderId: isOldShippedDefault
+        ? DEFAULT_PROVIDER_SETTINGS.defaultProviderId
+        : typeof parsed.defaultProviderId === 'string' && parsed.defaultProviderId ? parsed.defaultProviderId : DEFAULT_PROVIDER_SETTINGS.defaultProviderId,
+      fallbackProviderId: isOldShippedDefault
+        ? DEFAULT_PROVIDER_SETTINGS.fallbackProviderId
+        : typeof parsed.fallbackProviderId === 'string' && parsed.fallbackProviderId ? parsed.fallbackProviderId : null,
     };
   } catch {
     return { ...DEFAULT_PROVIDER_SETTINGS };

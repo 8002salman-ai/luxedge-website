@@ -165,11 +165,11 @@ export async function callAIProvider(
   }
   // The server is the authority on which providers actually have keys. A stale
   // all-disabled client config must not dead-end the import: fall back to the
-  // configured routing defaults (deepseek → codex) and let the server answer
-  // honestly if the key is missing there.
+  // configured routing defaults (openrouter → deepseek) and let the server
+  // answer honestly if the key is missing there.
   if (!primary) {
     const defaults = DEFAULT_AI_PROVIDERS.filter((p) => p.enabled);
-    primary = defaults.find((p) => p.id === settings.defaultProviderId) || defaults.find((p) => p.id === 'deepseek') || defaults[0] || null;
+    primary = defaults.find((p) => p.id === settings.defaultProviderId) || defaults.find((p) => p.id === 'openrouter') || defaults[0] || null;
     if (settings.fallbackProviderId) fallback = defaults.find((p) => p.id === settings.fallbackProviderId) || null;
   }
   if (!primary) {

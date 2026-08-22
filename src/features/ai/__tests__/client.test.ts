@@ -2,8 +2,8 @@
 // LUXEDGE — AI CLIENT TESTS
 //
 // Verifies callAIProvider's provider override + fallback chain contract:
-//   - default routing uses the configured default (deepseek) with the
-//     configured fallback (codex)
+//   - default routing uses the configured default (openrouter) with the
+//     configured fallback (deepseek)
 //   - a providerIdOverride forces a non-default provider as primary while
 //     keeping the configured fallback for server-side failover
 //   - an override that is disabled/unknown throws instead of silently
@@ -16,7 +16,8 @@ import type { AIProvider } from '../types';
 
 function providers(): AIProvider[] {
   return [
-    { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: true },
+    { id: 'openrouter', name: 'OpenRouter', models: ['nvidia/nemotron-3-super-120b-a12b:free'], defaultModel: 'nvidia/nemotron-3-super-120b-a12b:free', enabled: true, isDefault: true },
+    { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
     { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
     { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
   ];
@@ -44,9 +45,9 @@ describe('callAIProvider', () => {
     stubFetch();
     const out = await callAIProvider('test', providers());
     expect(out).toBe('LUXEDGE-QWEN-OK');
-    expect(lastBody.provider).toBe('deepseek');
-    expect(lastBody.model).toBe('deepseek-v4-flash');
-    expect(lastBody.fallback).toBe('codex');
+    expect(lastBody.provider).toBe('openrouter');
+    expect(lastBody.model).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+    expect(lastBody.fallback).toBe('deepseek');
   });
 
   it('forces a non-default provider as primary while keeping the fallback', async () => {
@@ -56,8 +57,8 @@ describe('callAIProvider', () => {
     expect(out).toBe('LUXEDGE-QWEN-OK');
     expect(lastBody.provider).toBe('anthropic');
     expect(lastBody.model).toBe('claude-haiku-4-5-20251001');
-    expect(lastBody.fallback).toBe('codex');
-    expect(progress.some((m) => m.includes('Anthropic Claude') && m.includes('Codex'))).toBe(true);
+    expect(lastBody.fallback).toBe('deepseek');
+    expect(progress.some((m) => m.includes('Anthropic Claude') && m.includes('DeepSeek'))).toBe(true);
   });
 
   it('throws when the override provider is disabled or unknown', async () => {
@@ -70,8 +71,8 @@ describe('callAIProvider', () => {
   it('uses auto-routing when the override is the literal "auto" value', async () => {
     stubFetch();
     await callAIProvider('test', providers(), undefined, undefined, 'auto');
-    expect(lastBody.provider).toBe('deepseek');
-    expect(lastBody.fallback).toBe('codex');
+    expect(lastBody.provider).toBe('openrouter');
+    expect(lastBody.fallback).toBe('deepseek');
   });
 
   it('never sends secrets to the server proxy', async () => {

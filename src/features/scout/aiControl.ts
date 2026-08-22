@@ -156,9 +156,9 @@ export const DEFAULT_AI_CONTROL_CONFIG: AiControlConfig = {
   costStrategy: 'BALANCED',
   secondOpinion: 'IMPORTANT_ONLY',
   providers: [
-    { id: 'deepseek', name: 'DeepSeek', enabled: true, tasks: [...AI_TASKS], costRank: 1, dailyCallLimit: 0 },
-    { id: 'openai', name: 'OpenAI', enabled: false, tasks: [...AI_TASKS], costRank: 2, dailyCallLimit: 0 },
-    { id: 'openrouter', name: 'OpenRouter', enabled: false, tasks: [...AI_TASKS], costRank: 3, dailyCallLimit: 0 },
+    { id: 'openrouter', name: 'OpenRouter', enabled: true, tasks: [...AI_TASKS], costRank: 1, dailyCallLimit: 0 },
+    { id: 'deepseek', name: 'DeepSeek', enabled: true, tasks: [...AI_TASKS], costRank: 2, dailyCallLimit: 0 },
+    { id: 'openai', name: 'OpenAI', enabled: false, tasks: [...AI_TASKS], costRank: 3, dailyCallLimit: 0 },
     { id: 'gemini', name: 'Google Gemini', enabled: false, tasks: [...AI_TASKS], costRank: 4, dailyCallLimit: 0 },
     { id: 'anthropic', name: 'Anthropic Claude', enabled: false, tasks: [...AI_TASKS], costRank: 5, dailyCallLimit: 0 },
   ],
@@ -173,15 +173,15 @@ export const DEFAULT_AI_CONTROL_CONFIG: AiControlConfig = {
     optimization: true,
   },
   routing: [
-    { task: 'MARKET_INTELLIGENCE', primary: 'deepseek', fallback: 'anthropic' },
-    { task: 'PRODUCT_ANALYSIS', primary: 'deepseek', fallback: 'anthropic' },
-    { task: 'LISTING_GENERATE', primary: 'anthropic', fallback: 'deepseek' },
-    { task: 'FACTUAL_QA', primary: 'anthropic', fallback: 'openai' },
-    { task: 'SECOND_OPINION', primary: 'openai', fallback: 'anthropic' },
-    { task: 'PRODUCT_DISCOVERY', primary: 'deepseek', fallback: 'openai' },
-    { task: 'PRICING', primary: 'deepseek', fallback: 'openai' },
-    { task: 'CREATIVE', primary: 'anthropic', fallback: 'openai' },
-    { task: 'OPTIMIZATION', primary: 'openai', fallback: 'anthropic' },
+    { task: 'MARKET_INTELLIGENCE', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'PRODUCT_ANALYSIS', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'LISTING_GENERATE', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'FACTUAL_QA', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'SECOND_OPINION', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'PRODUCT_DISCOVERY', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'PRICING', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'CREATIVE', primary: 'openrouter', fallback: 'deepseek' },
+    { task: 'OPTIMIZATION', primary: 'openrouter', fallback: 'deepseek' },
   ],
   disagreementThreshold: 10,
 };
@@ -204,18 +204,35 @@ export function loadAiControlConfig(storage?: Pick<Storage, 'getItem'>): AiContr
     const raw = (storage || window.localStorage).getItem(CONFIG_KEY);
     if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<AiControlConfig>;
+    // Migrate the previous shipped default control (openrouter disabled,
+    // deepseek primary) so Product Scout AI routes through OpenRouter after an
+    // upgrade. Configs where the owner already enabled OpenRouter are kept as-is.
+    const orCtl = Array.isArray(parsed.providers) ? parsed.providers.find((p) => p.id === 'openrouter') : undefined;
+    const oldShippedDefault = !!orCtl && orCtl.enabled === false;
+    const providers = Array.isArray(parsed.providers) && parsed.providers.length
+      ? base.providers.map((def) => {
+          const p = parsed.providers!.find((x) => x.id === def.id);
+          if (!p) return def;
+          const mergedP = { ...def, ...p, tasks: Array.isArray(p.tasks) && p.tasks.length ? p.tasks : [...def.tasks] };
+          if (oldShippedDefault) {
+            if (mergedP.id === 'openrouter') return { ...mergedP, enabled: true, costRank: 1 };
+            if (mergedP.id === 'deepseek') return { ...mergedP, enabled: true, costRank: 2 };
+          }
+          return mergedP;
+        })
+      : base.providers;
+    const routing = Array.isArray(parsed.routing) && parsed.routing.length
+      ? (oldShippedDefault
+          ? parsed.routing.map((r) => ({ task: r.task, primary: 'openrouter' as ProviderId, fallback: 'deepseek' as ProviderId }))
+          : parsed.routing)
+      : base.routing;
     return {
       ...base,
       ...parsed,
       emergencyPause: base.emergencyPause,
-      providers: Array.isArray(parsed.providers) && parsed.providers.length
-        ? base.providers.map((def) => {
-            const p = parsed.providers!.find((x) => x.id === def.id);
-            return p ? { ...def, ...p, tasks: Array.isArray(p.tasks) && p.tasks.length ? p.tasks : [...def.tasks] } : def;
-          })
-        : base.providers,
+      providers,
       features: parsed.features ? { ...base.features, ...parsed.features } : base.features,
-      routing: Array.isArray(parsed.routing) && parsed.routing.length ? parsed.routing : base.routing,
+      routing,
     };
   } catch {
     return base;
@@ -379,10 +396,20 @@ export function selectProvider(
   const soMode = config.secondOpinion;
   if (opts?.important && (soMode === 'ALWAYS' || soMode === 'IMPORTANT_ONLY')) {
     const others = usable.filter((p) => p.id !== chosen!.id);
+    // The second opinion must be a DIFFERENT provider than the primary — a
+    // routing rule whose primary/fallback resolves to the chosen provider is
+    // skipped so the extra opinion adds real signal instead of re-running the
+    // same model.
     const soRule = config.routing.find((r) => r.task === 'SECOND_OPINION');
     const so = soRule
-      ? providerOf(soRule.primary) || providerOf(soRule.fallback) || others[0]
-      : others[0];
+      ? (() => {
+          const soPrimary = providerOf(soRule.primary);
+          if (soPrimary && soPrimary.id !== chosen!.id) return soPrimary;
+          const soFallback = providerOf(soRule.fallback);
+          if (soFallback && soFallback.id !== chosen!.id) return soFallback;
+          return others[0] || null;
+        })()
+      : others[0] || null;
     if (so) {
       sel.secondOpinion = {
         provider: so.id,
