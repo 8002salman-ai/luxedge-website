@@ -320,7 +320,14 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
   const [notif, setNotif] = useState<string | null>(null);
-  const notify = (m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); };
+  // Stable identity: components (e.g. CatalogProductEditor) depend on `notify`
+  // inside useCallback/useEffect deps. An unmemoized notify was recreated on
+  // every AppProvider render, which itself re-renders every time notify()
+  // fires (setNotif) — so calling notify() during editing (e.g. "Image
+  // added") retriggered any effect that listed notify as a dependency,
+  // silently reloading/resetting in-progress form state right after the
+  // update it was supposed to confirm.
+  const notify = useCallback((m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); }, []);
   const [cartOpen, setCartOpen] = useState(false);
   const openCart = useCallback(() => setCartOpen(true), []);
   const closeCart = useCallback(() => setCartOpen(false), []);
