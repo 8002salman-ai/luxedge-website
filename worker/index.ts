@@ -19,6 +19,8 @@ import aiStatusHandler from '../api/ai/status';
 import aiGenerateHandler from '../api/ai/generate';
 import aiTestHandler from '../api/ai/test';
 import aiCreditsHandler from '../api/ai/openrouter-credits';
+import qwenHandler from '../api/ai/qwen';
+import qwenHealthHandler from '../api/ai/qwen-health';
 import importImagesHandler from '../api/import-images';
 import uploadImageHandler from '../api/upload-image';
 import checkoutHandler from '../api/checkout';
@@ -55,6 +57,8 @@ const ROUTES: Route[] = [
   { path: '/api/ai/generate', handler: aiGenerateHandler },
   { path: '/api/ai/test', handler: aiTestHandler },
   { path: '/api/ai/openrouter-credits', handler: aiCreditsHandler },
+  { path: '/api/ai/qwen', handler: qwenHandler },
+  { path: '/api/ai/qwen/health', handler: qwenHealthHandler },
   { path: '/api/fetch-page', handler: fetchPageHandler },
   { path: '/api/import-images', handler: importImagesHandler },
   { path: '/api/upload-image', handler: uploadImageHandler },

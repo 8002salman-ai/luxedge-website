@@ -70,6 +70,18 @@ describe('loadAIProviders', () => {
     expect(deepseek?.enabled).toBe(true);
   });
 
+  it('includes the private Qwen provider (Qwen3.5-9B-Colab, qwen3.5:9b) without replacing defaults', () => {
+    const qwen = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'qwen');
+    expect(qwen).toBeDefined();
+    expect(qwen?.name).toBe('Qwen3.5-9B-Colab');
+    expect(qwen?.models).toContain('qwen3.5:9b');
+    expect(qwen?.defaultModel).toBe('qwen3.5:9b');
+    expect(qwen?.enabled).toBe(true);
+    expect(qwen?.isDefault).toBe(false);
+    // existing providers untouched
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.isDefault).toBe(true);
+  });
+
   it('self-heals a stale all-disabled stored config back to defaults', () => {
     const allDisabled = DEFAULT_AI_PROVIDERS.map((p) => ({ ...p, enabled: false }));
     const providers = loadAIProviders(memoryStorage({ luxedge_ai_providers: JSON.stringify(allDisabled) }));

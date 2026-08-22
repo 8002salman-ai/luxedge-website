@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect, useCallback, ReactNode, Component } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
-import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
+import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus, serverQwenHealth } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { listCategories, createCategory, updateCategory, deleteCategory, listProducts, setDbToken } from '../features/catalog/repository';
@@ -99,62 +99,111 @@ function AdminLayout({ children }: { children: ReactNode }) {
   useEffect(() => { setMobSide(false); }, [loc.pathname]);
   if (!ready || !user || !isAdmin) return null;
 
-  const links = [
-    { to: '/admin', icon: SquaresFour, label: 'Dashboard' },
-    { to: '/admin/products', icon: Package, label: 'Products' },
-    { to: '/admin/promotions', icon: Tag, label: 'Promotions' },
-    { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
-    { to: '/admin/users', icon: UsersIcon, label: 'Users' },
-    { to: '/admin/categories', icon: TreeStructure, label: 'Categories' },
-    { to: '/admin/reviews', icon: Star, label: 'Reviews' },
-    { to: '/admin/blogs', icon: FileText, label: 'Blog Posts' },
-    { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Engine ⭐' },
-    { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen ⭐' },
-    { to: '/admin/marketing-traffic', icon: TrendUp, label: 'Marketing & Traffic' },
-    { to: '/admin/email-marketing', icon: PaperPlaneRight, label: 'Email Marketing ⭐' },
-    { to: '/admin/crm', icon: UsersIcon, label: 'CRM (Leads) ⭐' },
-    { to: '/admin/variant-gen', icon: Stack, label: 'Variant Gen ⭐' },
-    { to: '/admin/ai', icon: Robot, label: 'AI Hub ⭐' },
-    { to: '/admin/ai-import', icon: Robot, label: 'AI Import ⭐' },
-    { to: '/admin/scout', icon: Target, label: 'Product Scout ⭐' },
-    { to: '/admin/ai-control', icon: Cpu, label: 'AI Control ⭐' },
-    { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence ⭐' },
-    { to: '/admin/settings', icon: GearSix, label: 'Settings' },
+  // Premium sidebar: grouped sections, each item gets its own gradient icon
+  // tile, and the active item glows with the Luxedge blue→violet gradient.
+  // Phosphor icons type their weight prop strictly (IconWeight); type the nav
+  // icon loosely so any Phosphor icon works cleanly in the gradient tile.
+  type NavIcon = React.ComponentType<Record<string, unknown>>;
+  type NavItem = { to: string; icon: NavIcon; label: string; g: string; dot: string };
+  const sections: { title: string; items: NavItem[] }[] = [
+    {
+      title: 'Overview',
+      items: [
+        { to: '/admin', icon: SquaresFour, label: 'Dashboard', g: 'linear-gradient(135deg,#3b82f6,#22d3ee)', dot: '#38bdf8' },
+      ],
+    },
+    {
+      title: 'Catalog',
+      items: [
+        { to: '/admin/products', icon: Package, label: 'Products', g: 'linear-gradient(135deg,#8b5cf6,#a855f7)', dot: '#a78bfa' },
+        { to: '/admin/promotions', icon: Tag, label: 'Promotions', g: 'linear-gradient(135deg,#ec4899,#f43f5e)', dot: '#f472b6' },
+        { to: '/admin/orders', icon: ShoppingCart, label: 'Orders', g: 'linear-gradient(135deg,#10b981,#14b8a6)', dot: '#34d399' },
+        { to: '/admin/users', icon: UsersIcon, label: 'Users', g: 'linear-gradient(135deg,#6366f1,#3b82f6)', dot: '#818cf8' },
+        { to: '/admin/categories', icon: TreeStructure, label: 'Categories', g: 'linear-gradient(135deg,#f59e0b,#f97316)', dot: '#fbbf24' },
+        { to: '/admin/reviews', icon: Star, label: 'Reviews', g: 'linear-gradient(135deg,#eab308,#f59e0b)', dot: '#facc15' },
+        { to: '/admin/blogs', icon: FileText, label: 'Blog Posts', g: 'linear-gradient(135deg,#0ea5e9,#06b6d4)', dot: '#38bdf8' },
+      ],
+    },
+    {
+      title: 'Marketing',
+      items: [
+        { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Engine', g: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', dot: '#818cf8' },
+        { to: '/admin/marketing', icon: Megaphone, label: 'Marketing Gen', g: 'linear-gradient(135deg,#d946ef,#ec4899)', dot: '#e879f9' },
+        { to: '/admin/marketing-traffic', icon: TrendUp, label: 'Marketing & Traffic', g: 'linear-gradient(135deg,#06b6d4,#2563eb)', dot: '#22d3ee' },
+        { to: '/admin/email-marketing', icon: PaperPlaneRight, label: 'Email Marketing', g: 'linear-gradient(135deg,#38bdf8,#6366f1)', dot: '#60a5fa' },
+        { to: '/admin/crm', icon: UsersIcon, label: 'CRM (Leads)', g: 'linear-gradient(135deg,#22c55e,#84cc16)', dot: '#4ade80' },
+      ],
+    },
+    {
+      title: 'AI Studio',
+      items: [
+        { to: '/admin/variant-gen', icon: Stack, label: 'Variant Gen', g: 'linear-gradient(135deg,#8b5cf6,#d946ef)', dot: '#c084fc' },
+        { to: '/admin/ai', icon: Robot, label: 'AI Hub', g: 'linear-gradient(135deg,#4f46e5,#7c3aed)', dot: '#818cf8' },
+        { to: '/admin/ai-import', icon: Robot, label: 'AI Import', g: 'linear-gradient(135deg,#9333ea,#c026d3)', dot: '#c084fc' },
+        { to: '/admin/scout', icon: Target, label: 'Product Scout', g: 'linear-gradient(135deg,#f43f5e,#fb923c)', dot: '#fb7185' },
+        { to: '/admin/ai-control', icon: Cpu, label: 'AI Control', g: 'linear-gradient(135deg,#0ea5e9,#8b5cf6)', dot: '#60a5fa' },
+        { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence', g: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', dot: '#a78bfa' },
+      ],
+    },
+    {
+      title: 'System',
+      items: [
+        { to: '/admin/settings', icon: GearSix, label: 'Settings', g: 'linear-gradient(135deg,#94a3b8,#64748b)', dot: '#cbd5e1' },
+      ],
+    },
   ];
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
-    <aside className={`flex flex-col shrink-0 ${mobile ? 'w-full h-full' : 'w-56 h-screen sticky top-0 hidden lg:flex'}`}
-      style={{ background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}>
-      <div className="p-3 border-b border-white/5 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-md flex items-center justify-center font-bold text-[10px]"
-          style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>
-          <ShieldCheck size={14} className="text-white" />
+    <aside className={`flex flex-col shrink-0 ${mobile ? 'w-full h-full' : 'w-60 h-screen sticky top-0 hidden lg:flex'}`}
+      style={{ background: 'linear-gradient(180deg, #0b1120 0%, #111c34 55%, #0b1120 100%)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.04)' }}>
+      {/* Brand */}
+      <div className="px-3.5 py-4 border-b border-white/[0.06] flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/40"
+          style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }}>
+          <ShieldCheck size={15} className="text-white" />
         </div>
-        <span className="font-bold text-sm text-white tracking-tight">Luxedge</span>
-        {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1 hover:bg-white/10 rounded-md"><X size={14} className="text-slate-400" /></button>}
+        <div className="leading-tight">
+          <span className="font-bold text-sm text-white tracking-tight block">Luxedge</span>
+          <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-medium">Admin Console</span>
+        </div>
+        {mobile && <button onClick={() => setMobSide(false)} className="ml-auto p-1.5 hover:bg-white/10 rounded-lg"><X size={14} className="text-slate-400" /></button>}
       </div>
-      <nav className="flex-1 p-1.5 space-y-0.5 overflow-y-auto">
-        {links.map(l => {
-          const isActive = loc.pathname === l.to;
-          return (
-            <Link key={l.to} to={l.to}
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 group relative ${
-                isActive ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}>
-              {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r-full" style={{ background: 'linear-gradient(180deg, #3b82f6, #8b5cf6)' }} />}
-              <l.icon size={14} className={isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'} />
-              {l.label}
-            </Link>
-          );
-        })}
+
+      <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+        {sections.map(sec => (
+          <div key={sec.title}>
+            <p className="px-2.5 mb-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600">{sec.title}</p>
+            <div className="space-y-0.5">
+              {sec.items.map(l => {
+                const isActive = loc.pathname === l.to;
+                const Icon = l.icon;
+                return (
+                  <Link key={l.to} to={l.to}
+                    className={`group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[12px] font-medium transition-all duration-200 ${
+                      isActive ? 'text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                    style={isActive ? { background: 'linear-gradient(90deg, rgba(59,130,246,0.22), rgba(139,92,246,0.10))', boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.25)' } : undefined}>
+                    {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: 'linear-gradient(180deg,#60a5fa,#a78bfa)' }} />}
+                    <span className={`w-6.5 h-6.5 min-w-[26px] min-h-[26px] w-[26px] h-[26px] rounded-md flex items-center justify-center text-white transition-all duration-200 ${isActive ? 'scale-105' : 'opacity-90 group-hover:scale-105 group-hover:opacity-100'}`}
+                      style={{ background: l.g, boxShadow: isActive ? `0 2px 10px ${l.dot}40` : '0 1px 4px rgba(0,0,0,0.3)' }}>
+                      <Icon size={13} weight="bold" />
+                    </span>
+                    {l.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
-      <div className="p-1.5 border-t border-white/5 space-y-0.5">
-        <Link to="/" className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white px-2.5 py-1 rounded-md hover:bg-white/5 transition-colors">
-          <ArrowLeft size={10} />Store
+
+      <div className="p-2 border-t border-white/[0.06] space-y-0.5">
+        <Link to="/" className="flex items-center gap-2 text-[11px] text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+          <span className="w-[26px] h-[26px] rounded-md bg-white/5 flex items-center justify-center"><ArrowLeft size={12} /></span>Store
         </Link>
         <button onClick={() => { void signOut().then(() => nav('/admin/login')); }}
-          className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 px-2.5 py-1 rounded-md hover:bg-red-500/10 w-full transition-colors">
-          <SignOut size={10} />Logout
+          className="flex items-center gap-2 text-[11px] text-red-400 hover:text-red-300 px-2.5 py-1.5 rounded-lg hover:bg-red-500/10 w-full transition-colors">
+          <span className="w-[26px] h-[26px] rounded-md bg-red-500/10 flex items-center justify-center"><SignOut size={12} /></span>Logout
         </button>
       </div>
     </aside>
@@ -165,13 +214,28 @@ function AdminLayout({ children }: { children: ReactNode }) {
       <Sidebar />
       {mobSide && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setMobSide(false)} /><div className="absolute left-0 top-0 h-full w-64"><Sidebar mobile /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 lg:px-6 z-40">
-          <button onClick={() => setMobSide(true)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg"><List size={18} /></button>
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 hidden sm:block">{user?.name || 'Admin'}</span>
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>A</div>
+        <header className="h-14 shrink-0 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between gap-3 px-4 lg:px-6 z-40">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => setMobSide(true)} className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg"><List size={18} /></button>
+            <div className="hidden md:flex items-center gap-2 bg-gray-100/80 border border-gray-200 rounded-lg px-3 py-1.5 w-64">
+              <MagnifyingGlass size={13} className="text-gray-400" />
+              <input placeholder="Search…" className="bg-transparent text-xs outline-none w-full placeholder:text-gray-400" />
+              <span className="text-[9px] text-gray-400 border border-gray-300 rounded px-1 py-px font-medium">⌘K</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />Live
+            </span>
+            <button className="relative p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors">
+              <ShieldCheck size={16} />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }} />
+            </button>
+            <div className="flex items-center gap-2 pl-1.5 border-l border-gray-200">
+              <span className="text-xs font-medium text-gray-700 hidden sm:block">{user?.name || 'Admin'}</span>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20 ring-2 ring-white"
+                style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{String(user?.name || 'A').charAt(0).toUpperCase()}</div>
+            </div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto min-w-0 p-3 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
@@ -1502,7 +1566,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
             <p className="font-semibold mb-1">🔒 Luxedge V2: keys live on the server, never in the browser</p>
             <p>AI provider keys and scraping tokens are read from environment variables by the /api serverless functions. They are never stored in localStorage, never shipped in the bundle, and never logged.</p>
           </div>
-          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → GearSix → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.</p>
+          <p className="text-sm text-gray-500">Set these env vars in your hosting dashboard (Vercel → Project → GearSix → Environment Variables) and redeploy. Variable names: <code className="font-mono text-xs">OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, SCRAPE_DO_TOKEN</code> — see <code className="font-mono text-xs">.env.example</code>.<br />Private Qwen (Ollama on Colab): <code className="font-mono text-xs">QWEN_API_BASE_URL, QWEN_MODEL, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET</code> (Cloudflare Access service token — server-side only, never <code className="font-mono text-xs">VITE_*</code>).</p>
           {envStatus ? (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Server status</p>
@@ -4096,6 +4160,10 @@ function AAIHub() {
   const [orCredits, setOrCredits] = useState<{ total: number; used: number } | null>(null);
   const [checkingCredits, setCheckingCredits] = useState(false);
   const [scrapeTest, setScrapeTest] = useState<{ status: 'idle' | 'testing' | 'ok' | 'fail'; msg: string }>({ status: 'idle', msg: '' });
+  const [qwenHealth, setQwenHealth] = useState<{
+    configured: boolean; cloudflareAuth: string; ollama: string; model: string; modelFound: boolean; generation: string; error?: string;
+  } | null>(null);
+  const [checkingQwen, setCheckingQwen] = useState(false);
 
   /** Verify the server-side scrape path works (SCRAPE_DO_TOKEN configured → scrape.do, else public fallback). */
   const testScraping = async () => {
@@ -4135,6 +4203,18 @@ function AAIHub() {
     }).catch(() => setServerStatus({}));
   }, []);
 
+  const runQwenHealth = async () => {
+    setCheckingQwen(true);
+    try {
+      const h = await serverQwenHealth();
+      setQwenHealth(h);
+    } catch (e: any) {
+      setQwenHealth({ configured: false, cloudflareAuth: 'UNKNOWN', ollama: 'UNKNOWN', model: 'qwen3.5:9b', modelFound: false, generation: 'SKIPPED', error: e?.message?.slice(0, 120) || 'Health check failed' });
+    } finally { setCheckingQwen(false); }
+  };
+
+  useEffect(() => { runQwenHealth(); }, []);
+
   const testProvider = async (provider: AIProvider) => {
     setTesting(provider.id);
     try {
@@ -4155,7 +4235,7 @@ function AAIHub() {
   };
 
 const providerIcons: Record<string, string> = {
-    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
+    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}', qwen: '\u{1F9F9}'
   };
 
   return (
@@ -4214,6 +4294,53 @@ const providerIcons: Record<string, string> = {
           </p>
         </div>
       )}
+
+      {/* Qwen3.5-9B-Colab (private Ollama) Status Card */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-sm text-amber-800 flex items-center gap-2">
+            <span>{'\u{1F9F9}'}</span> Qwen3.5-9B-Colab (Private Ollama)
+          </h2>
+          <button onClick={runQwenHealth} disabled={checkingQwen}
+            className="px-3 py-1.5 bg-white border border-amber-200 rounded-lg text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1.5 transition-colors">
+            {checkingQwen ? <SpinnerGap size={12} className="animate-spin" /> : <ArrowClockwise size={12} />}
+            {checkingQwen ? 'Checking...' : 'Test Qwen Connection'}
+          </button>
+        </div>
+        {qwenHealth ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div className="bg-white rounded-xl p-3">
+              <p className="font-semibold text-gray-600 mb-1">Cloudflare Access auth</p>
+              <p className={"font-bold " + (qwenHealth.cloudflareAuth === 'PASS' ? 'text-green-600' : qwenHealth.cloudflareAuth === 'FAIL' ? 'text-red-600' : 'text-gray-500')}>
+                {qwenHealth.cloudflareAuth === 'PASS' ? 'PASS' : qwenHealth.cloudflareAuth === 'FAIL' ? 'FAIL' : 'UNKNOWN'}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl p-3">
+              <p className="font-semibold text-gray-600 mb-1">Ollama runtime</p>
+              <p className={"font-bold " + (qwenHealth.ollama === 'ONLINE' ? 'text-green-600' : qwenHealth.ollama === 'OFFLINE' ? 'text-red-600' : 'text-gray-500')}>
+                {qwenHealth.ollama === 'ONLINE' ? 'ONLINE' : qwenHealth.ollama === 'OFFLINE' ? 'OFFLINE' : 'UNKNOWN'}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl p-3">
+              <p className="font-semibold text-gray-600 mb-1">Model</p>
+              <p className="font-bold text-gray-800">{qwenHealth.model || 'qwen3.5:9b'}</p>
+              <p className={"text-[10px] " + (qwenHealth.modelFound ? 'text-green-600' : 'text-amber-600')}>
+                {qwenHealth.modelFound ? 'present in /api/tags' : 'not found in /api/tags'}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl p-3">
+              <p className="font-semibold text-gray-600 mb-1">Generation test</p>
+              <p className={"font-bold " + (qwenHealth.generation === 'PASS' ? 'text-green-600' : qwenHealth.generation === 'FAIL' ? 'text-red-600' : 'text-gray-500')}>
+                {qwenHealth.generation === 'PASS' ? 'PASS' : qwenHealth.generation === 'FAIL' ? 'FAIL' : 'SKIPPED'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-amber-600">Checking Qwen connection…</p>
+        )}
+        {qwenHealth?.error && <p className="text-xs text-red-600 mt-2">{qwenHealth.error}</p>}
+        <p className="text-[10px] text-amber-500 mt-2">Private Ollama on Google Colab behind Cloudflare Access. Credentials stay server-side — never in the browser. Colab runtimes disconnect: if OFFLINE, restart the Colab notebook or its tunnel.</p>
+      </div>
 
       {/* AI Providers */}
       <div className="bg-white rounded-2xl border border-purple-200 p-5">
@@ -4284,6 +4411,11 @@ const providerIcons: Record<string, string> = {
               {provider.id === 'deepseek' && (
                 <p className="text-xs text-gray-400 mt-2">
                   Budget-friendly and fast. <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Get API key</a>
+                </p>
+              )}
+              {provider.id === 'qwen' && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Private Ollama on Google Colab (qwen3.5:9b) behind Cloudflare Access. Configure server env vars: <code className="font-mono">QWEN_API_BASE_URL, QWEN_MODEL, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET</code> — never in the browser.
                 </p>
               )}
             </div>
@@ -4491,7 +4623,7 @@ function ACRM() {
       <div className="bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-100 rounded-xl p-3 text-[11px] text-sky-800 flex items-start gap-2">
         <ShareNetwork size={14} className="mt-0.5 shrink-0 text-sky-600" />
         <p>
-          <b>HubSpot-ready.</b> The CSV maps directly to HubSpot contact fields (email, name, phone, source, page URL, coupon). To sync automatically, connect HubSpot later and map these columns — no schema changes needed.
+          <b>HubSpot-ready.</b> The CSV maps directly to HubSpot contact fields — email, phone and first/last name are standard HubSpot properties; source, page URL and coupon map to custom properties (once in the import wizard). To sync automatically, connect HubSpot later — no schema changes needed.
         </p>
       </div>
 

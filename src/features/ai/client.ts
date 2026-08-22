@@ -127,6 +127,36 @@ export async function serverOpenRouterCredits(): Promise<{ total: number; used: 
   return { total: data.total || 0, used: data.used || 0 };
 }
 
+export interface QwenHealthStatus {
+  configured: boolean;
+  cloudflareAuth: 'PASS' | 'FAIL' | 'UNKNOWN';
+  ollama: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
+  model: string;
+  modelFound: boolean;
+  generation: 'PASS' | 'FAIL' | 'SKIPPED';
+  error?: string;
+}
+
+/** Detailed health of the private Qwen provider (admin-only, no secrets returned). */
+export async function serverQwenHealth(): Promise<QwenHealthStatus> {
+  const data = await get<Partial<QwenHealthStatus>>('/ai/qwen/health');
+  return {
+    configured: !!data.configured,
+    cloudflareAuth: data.cloudflareAuth || 'UNKNOWN',
+    ollama: data.ollama || 'UNKNOWN',
+    model: data.model || 'qwen3.5:9b',
+    modelFound: !!data.modelFound,
+    generation: data.generation || 'SKIPPED',
+    error: data.error,
+  };
+}
+
+/** Generate via the private Qwen provider through the secure server proxy. */
+export async function serverQwenGenerate(prompt: string): Promise<{ model: string; response: string }> {
+  const data = await post<{ model: string; response: string }>('/ai/qwen', { prompt });
+  return { model: data.model || 'qwen3.5:9b', response: data.response || '' };
+}
+
 /** Which providers have keys configured on the server (booleans only). */
 export async function serverProviderStatus(): Promise<ProviderStatusMap> {
   const data = await get<Partial<ProviderStatusMap>>('/ai/status');

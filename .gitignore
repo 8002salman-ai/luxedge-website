@@ -38,6 +38,13 @@ Thumbs.db
 .vercel/
 
 # Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+*.env
+secrets/
+qwen-colab.env
+# Private Qwen (Ollama on Colab) credentials
 .env*
 
 # Supabase CLI temp
