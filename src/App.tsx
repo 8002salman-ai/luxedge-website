@@ -954,7 +954,7 @@ function PCardPremium({ product }: { product: Product }) {
 // Per-route document title + meta description + canonical for SEO
 function RouteTitle() {
   const { pathname } = useLocation();
-  const { products } = useApp();
+  const { products, blogs } = useApp();
   useEffect(() => {
     const brand = "Luxedge";
     const segs = pathname.split("/").filter(Boolean);
@@ -1002,12 +1002,16 @@ function RouteTitle() {
     else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — free shipping on orders over $50."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
-    else if (segs[0] === "blog") { set(segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"); desc("Pet care tips and insights from the Luxedge team."); }
+    else if (segs[0] === "blog") {
+      const post = segs[1] && segs[1] !== "write" ? blogs.find(b => b.slug === segs[1]) : undefined;
+      set(post ? post.title : (segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"));
+      desc(post ? (post.excerpt || post.content.slice(0, 155)) : "Pet care tips and insights from the Luxedge team.");
+    }
     else if (segs[0] === "login") { set("Sign In"); desc("Sign in to your Luxedge account."); }
     else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
     else if (segs[0] === "admin") { set("Admin Dashboard"); }
     else set("Luxedge");
-  }, [pathname, products]); // products re-run so PDP titles resolve once the catalog loads
+  }, [pathname, products, blogs]); // products re-run so PDP titles resolve once the catalog loads
   return null;
 }
 
@@ -1557,6 +1561,7 @@ function HomePage() {
   const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
+  const [nlSaved, setNlSaved] = useState(false);
   // Catalog Launch Phase — every section remains REAL catalog data. The
   // homepage is intentionally art-directed: weak/collage-heavy supplier
   // images stay available in Shop but are not promoted into editorial slots.
@@ -1955,11 +1960,13 @@ function HomePage() {
           <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
           {nlDone ? (
             <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
-              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list!</p>
-              <p className="text-xs text-luxe-white/65">We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> locally and will let you know when email updates go live.</p>
+              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list! 🐾</p>
+              <p className="text-xs text-luxe-white/65">{nlSaved
+                ? <>We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> to your Luxedge account team — you'll hear from us soon.</>
+                : <>We recorded <span className="text-luxe-gold-light font-medium">{nlEmail}</span> and will let you know when email updates go live.</>}</p>
             </div>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); if (nlEmail.trim()) { try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: nlEmail.trim(), at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } setNlDone(true); } }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <form onSubmit={e => { e.preventDefault(); if (!nlEmail.trim()) return; const em = nlEmail.trim(); try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: em, at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } fetch('/api/crm/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, pageUrl: window.location.href }) }).then(r => r.json()).then((d: { ok?: boolean; leadSaved?: boolean }) => { setNlSaved(!!(d && d.ok && d.leadSaved)); }).catch(() => setNlSaved(false)).finally(() => setNlDone(true)); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
                 className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
               <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
@@ -3364,6 +3371,51 @@ function BlogDetailPage() {
   const relatedPosts = allBlogs.filter(b => b.slug !== slug && b.status === 'published').slice(0, 3);
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+
+  // SEO: canonical + meta description + BlogPosting & BreadcrumbList JSON-LD
+  useEffect(() => {
+    if (!post) return;
+    const setMeta = (n: string, c: string) => {
+      let el = document.head.querySelector(`meta[name="${n}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', n); document.head.appendChild(el); }
+      el.setAttribute('content', c);
+    };
+    setMeta('description', (post.excerpt || post.content.slice(0, 155)));
+    let canonical = document.head.querySelector('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement('link'); canonical.setAttribute('rel', 'canonical'); document.head.appendChild(canonical); }
+    canonical.setAttribute('href', `https://luxedge.us/blog/${post.slug}`);
+    const jsonLd = [
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us/' },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://luxedge.us/blog' },
+          { '@type': 'ListItem', position: 3, name: post.title, item: `https://luxedge.us/blog/${post.slug}` },
+        ],
+      },
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: post.excerpt || post.content.slice(0, 155),
+        image: post.image || undefined,
+        datePublished: post.date,
+        dateModified: post.date,
+        author: { '@type': 'Person', name: post.authorName || 'Luxedge' },
+        publisher: { '@type': 'Organization', name: 'Luxedge', url: 'https://luxedge.us' },
+        mainEntityOfPage: `https://luxedge.us/blog/${post.slug}`,
+        keywords: post.tags.join(', '),
+      },
+    ];
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'blog-jsonld';
+    script.text = JSON.stringify(jsonLd);
+    document.getElementById('blog-jsonld')?.remove();
+    document.head.appendChild(script);
+    return () => { document.getElementById('blog-jsonld')?.remove(); };
+  }, [post?.id, post?.slug]);
 
   if (!post) return (
     <div className="min-h-[60vh] flex items-center justify-center">

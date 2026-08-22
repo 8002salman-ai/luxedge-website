@@ -322,6 +322,40 @@ function ADashboard() {
       </div>
     </div>
 
+    {/* Create Product — three quick entry points (Quick / Detail / AI Import) */}
+    <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm card-lift">
+      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-3.5 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"><Plus size={18} className="text-white" /></div>
+          <div>
+            <p className="text-sm font-bold text-white leading-tight">Create Product</p>
+            <p className="text-[10px] text-blue-100/80">Add to your catalog — all new products start as DRAFT</p>
+          </div>
+        </div>
+        <span className="px-2.5 py-1 rounded-full bg-white/15 text-[10px] font-semibold text-white backdrop-blur">DRAFT ONLY · no auto-publish</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-white">
+        <Link to="/admin/products/new?mode=quick" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-blue-50 to-white p-4 hover:border-blue-300 hover:shadow-md transition-all">
+          <div className="w-9 h-9 rounded-lg bg-blue-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><Lightning size={16} weight="fill" /></div>
+          <p className="font-bold text-[13px] text-gray-900">⚡ Quick Add</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Fast one-screen form — title, price, cost & basic details.</p>
+          <p className="text-[11px] font-semibold text-blue-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open Quick Add →</p>
+        </Link>
+        <Link to="/admin/products/new?mode=detail" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-indigo-50 to-white p-4 hover:border-indigo-300 hover:shadow-md transition-all">
+          <div className="w-9 h-9 rounded-lg bg-indigo-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><List size={16} weight="fill" /></div>
+          <p className="font-bold text-[13px] text-gray-900">📋 Detail Add</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Full editor — images, variants, SEO, pricing & promotions.</p>
+          <p className="text-[11px] font-semibold text-indigo-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open Detail Add →</p>
+        </Link>
+        <Link to="/admin/products/new?mode=ai" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-violet-50 to-white p-4 hover:border-violet-300 hover:shadow-md transition-all">
+          <div className="w-9 h-9 rounded-lg bg-violet-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><MagicWand size={16} weight="fill" /></div>
+          <p className="font-bold text-[13px] text-gray-900">✨ AI Import</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Paste any product URL — AI researches & builds the listing.</p>
+          <p className="text-[11px] font-semibold text-violet-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open AI Import →</p>
+        </Link>
+      </div>
+    </div>
+
     {/* Store Overview hero — catalog truth + 7-day revenue */}
     <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm card-lift">
       <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 px-5 py-4 flex items-center justify-between flex-wrap gap-3">

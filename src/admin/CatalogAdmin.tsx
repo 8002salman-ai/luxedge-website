@@ -7,7 +7,7 @@
 // UNKNOWN, merchandising flags are admin decisions, delete prefers archive.
 // ============================================================================
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
@@ -830,7 +830,13 @@ export function CatalogProductEditor() {
   const [addingCat, setAddingCat] = useState(false);
   // Quick Add = compact one-screen form; Detail Add = full tabbed editor;
   // AI Import = the shared AI product import engine (research → review → draft).
-  const [mode, setMode] = useState<'quick' | 'detail' | 'ai'>('quick');
+  // The mode can be deep-linked via ?mode=quick|detail|ai (e.g. from the
+  // Dashboard Create Product cards).
+  const [searchParams] = useSearchParams();
+  const urlMode = searchParams.get('mode');
+  const [mode, setMode] = useState<'quick' | 'detail' | 'ai'>(
+    urlMode === 'detail' || urlMode === 'ai' ? urlMode : 'quick',
+  );
   const [p, setP] = useState<CatalogProduct | null>(null);
 
   const load = useCallback(async () => {
