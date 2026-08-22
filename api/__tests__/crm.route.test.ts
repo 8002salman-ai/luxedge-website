@@ -41,12 +41,12 @@ const ADMIN_TOKEN = signToken({ sub: 'adm-1', email: 'admin@luxedge.us', exp: fu
 const BUYER_TOKEN = signToken({ sub: 'buy-1', email: 'buyer@luxedge.us', exp: futureExp });
 
 interface CapturedResponse { status: number; body: unknown; text: string }
-function makeReq(method: string, body?: unknown, token?: string): IncomingMessage {
+function makeReq(method: string, body?: unknown, token?: string, url = '/api/crm/x'): IncomingMessage {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (token !== undefined) headers.authorization = `Bearer ${token}`;
   const r = {
     method,
-    url: '/api/crm/x',
+    url,
     headers,
     socket: { remoteAddress: '127.0.0.1' },
   } as unknown as IncomingMessage & { __body?: string };
@@ -180,6 +180,45 @@ describe('/api/crm/list', () => {
     const { captured, server } = makeRes();
     await listHandler(makeReq('GET', undefined, ADMIN_TOKEN), server);
     expect(captured.status).toBe(503);
+  });
+
+  it('emits a HubSpot-ready CSV with firstname/lastname split and safe escaping', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    const rows = [
+      { id: 'lead-1', email: 'jane@example.com', name: 'Jane "JJ" Doe', phone: '+1 555 0100', source: 'welcome_popup', page_url: 'https://luxedge.us/', coupon_code: 'LUX10-ABC123', coupon_used: false, coupon_used_at: null, opted_in: true, created_at: '2026-08-21T10:00:00Z' },
+      { id: 'lead-2', email: 'bob@example.com', name: 'Bob', phone: null, source: 'whatsapp', page_url: null, coupon_code: null, coupon_used: true, coupon_used_at: '2026-08-21T11:00:00Z', opted_in: false, created_at: '2026-08-21T11:00:00Z' },
+    ];
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(rows), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { captured, server } = makeRes();
+    await listHandler(makeReq('GET', undefined, ADMIN_TOKEN, '/api/crm/list?format=csv'), server);
+    expect(captured.status).toBe(200);
+    const lines = captured.text.split('\n');
+    expect(lines[0]).toBe('"id","email","firstname","lastname","phone","source","page_url","coupon_code","coupon_used","coupon_used_at","opted_in","created_at"');
+    expect(lines[1]).toContain('"jane@example.com"');
+    expect(lines[1]).toContain('"Jane","""JJ"" Doe"'); // split at first space + quote escaping
+    expect(lines[1]).toContain('"LUX10-ABC123"');
+    expect(lines[1]).toContain('"LUX10-ABC123"');
+    expect(lines[2]).toContain('"Bob",""'); // no last name -> empty cell
+    expect(lines[2]).toContain('"true"');
+    // no secrets ever
+    expect(captured.text).not.toMatch(/svc-role|sb_secret|eyJ/i);
+  });
+
+  it('applies source and couponUsed filters to CSV rows', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    const rows = [
+      { id: 'lead-1', email: 'a@example.com', name: 'A', source: 'welcome_popup', coupon_used: false, created_at: '2026-08-21T10:00:00Z' },
+      { id: 'lead-2', email: 'b@example.com', name: 'B', source: 'whatsapp', coupon_used: true, created_at: '2026-08-21T11:00:00Z' },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(rows), { status: 200 })));
+    const { captured, server } = makeRes();
+    await listHandler(makeReq('GET', undefined, ADMIN_TOKEN, '/api/crm/list?format=csv&source=whatsapp&couponUsed=1'), server);
+    expect(captured.status).toBe(200);
+    expect(captured.text).toContain('b@example.com');
+    expect(captured.text).not.toContain('a@example.com');
   });
 });
 

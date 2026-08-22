@@ -76,10 +76,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (format === 'csv') {
-      const header = ['id', 'email', 'name', 'phone', 'source', 'page_url', 'coupon_code', 'coupon_used', 'coupon_used_at', 'opted_in', 'created_at'];
+      // HubSpot contact import uses firstname/lastname (not a combined name).
+      // email/phone map to standard HubSpot properties; everything else is a
+      // custom property the owner maps once in the import wizard.
+      const header = ['id', 'email', 'firstname', 'lastname', 'phone', 'source', 'page_url', 'coupon_code', 'coupon_used', 'coupon_used_at', 'opted_in', 'created_at'];
       const lines = [header.map(csvCell).join(',')];
       for (const row of rows) {
-        lines.push([row.id, row.email, row.name, row.phone, row.source, row.page_url, row.coupon_code, row.coupon_used ? 'true' : 'false', row.coupon_used_at, row.opted_in ? 'true' : 'false', row.created_at].map(csvCell).join(','));
+        const fullName = (row.name || '').trim();
+        const sp = fullName.indexOf(' ');
+        const firstname = sp === -1 ? fullName : fullName.slice(0, sp);
+        const lastname = sp === -1 ? '' : fullName.slice(sp + 1).trim();
+        lines.push([row.id, row.email, firstname, lastname, row.phone, row.source, row.page_url, row.coupon_code, row.coupon_used ? 'true' : 'false', row.coupon_used_at, row.opted_in ? 'true' : 'false', row.created_at].map(csvCell).join(','));
       }
       sendText(res, 200, lines.join('\n'));
       return;
