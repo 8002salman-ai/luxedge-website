@@ -862,7 +862,7 @@ function Footer() {
             </div>
             <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/55">
               <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
-              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</span>
+              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments powered by Stripe.' : 'Payments launching soon — keep exploring the collection.'}</span>
             </div>
           </div>
         </div>
@@ -1964,7 +1964,7 @@ function HomePage() {
                 { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-Day Easy Returns' },
                 { icon: <ShieldTick strokeWidth={1.5} size={13} />, text: 'Thoughtfully Curated' },
                 { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Customer Support' },
-                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Secure Checkout' },
+                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Encrypted Connection' },
               ].map((item, i) => (
                 <span key={i} className="trust-pill">
                   {item.icon}
@@ -2498,7 +2498,13 @@ function CheckoutPage() {
     setCouponInput('');
   };
 
+  // Payment provider state — a single isolated integration point. Nothing is
+  // charged until the owner configures a real provider (Stripe keys). Until
+  // then checkout uses a polished disabled state that never fakes an order.
+  const paymentsConfigured = !!(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY;
+
   const handleCheckout = async () => {
+    if (!paymentsConfigured) return; // disabled state — never submit a fake order
     if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     setSubmitting(true);
     setPayError('');
@@ -2537,8 +2543,8 @@ function CheckoutPage() {
         </div>
       )}
       <div className="max-w-6xl mx-auto px-4 py-10">
-        <p className="eyebrow mb-2">Secure Checkout</p>
-        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Checkout</h1>
+        <p className="eyebrow mb-2">Checkout</p>
+        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Complete Your Order</h1>
         <div className="grid lg:grid-cols-5 gap-8">
           {/* ──── LEFT: Contact + Shipping ──── */}
           <div className="lg:col-span-3 space-y-6">
@@ -2623,17 +2629,25 @@ function CheckoutPage() {
                   </div>
                 </div>
               </div>
-              <button onClick={handleCheckout} disabled={submitting}
-                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
-                {submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
-                {submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
+              <button onClick={handleCheckout} disabled={!paymentsConfigured || submitting}
+                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
+                {!paymentsConfigured ? (
+                  'Payments Coming Soon'
+                ) : submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
+                {!paymentsConfigured ? null : submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
               </button>
-              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details.</p>
+              {!paymentsConfigured && (
+                <div className="mt-4 rounded-xl bg-luxe-gold-soft border border-luxe-gold/20 p-4 text-center">
+                  <p className="text-[13px] font-semibold text-luxe-black">We're wiring up payments right now.</p>
+                  <p className="text-xs text-luxe-gray mt-1">Your cart is saved — nothing has been charged. Check back shortly, or email <a className="underline text-luxe-gold-dark" href="mailto:hello@luxedge.us?subject=Checkout+question">hello@luxedge.us</a>.</p>
+                </div>
+              )}
+              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details." : 'Luxedge never stores card details — payment is handled by a trusted provider.'}</p>
               <div className="mt-4 pt-4 border-t space-y-2.5">
                 {[
                   { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Standard shipping 7–14 days' },
                   { i: RefreshCcw01, t: '30-day hassle-free returns' },
-                  { i: ShieldTick, t: 'Secure SSL checkout' },
+                  { i: ShieldTick, t: 'Encrypted connection' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
                     <b.i strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />{b.t}
@@ -3168,8 +3182,8 @@ function FAQPage() {
       { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'We accept Visa, MasterCard, American Express, Discover, and PayPal. Online payment processing is currently in demo mode — a real provider (Stripe/PayPal) is being integrated, and card details are never stored or transmitted until then.' },
-      { q: 'Is my payment information secure?', a: 'Online payments are currently in demo mode — no card details are stored or transmitted. When a real provider (Stripe/PayPal) is connected, transactions will be processed through a PCI-compliant provider.' },
+      { q: 'What payment methods do you accept?', a: 'We are connecting a trusted payment provider (Stripe) and will accept all major cards as soon as it is live. Nothing is charged until then — your cart stays saved and secure.' },
+      { q: 'Is my payment information secure?', a: 'Yes. Luxedge never sees or stores card details — payment is handled entirely by our PCI-compliant provider (Stripe) once checkout goes live.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
     { c: 'Products & Quality', qs: [
