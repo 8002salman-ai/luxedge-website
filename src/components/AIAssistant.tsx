@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Robot, X, PaperPlaneRight, SpinnerGap } from '@phosphor-icons/react';
+import { X, PaperPlaneRight, SpinnerGap } from '@phosphor-icons/react';
 
 interface ChatMsg { role: 'user' | 'assistant'; content: string }
 
@@ -53,7 +53,7 @@ export default function AIAssistant() {
       {!open && (
         <button onClick={() => setOpen(true)} aria-label="Open AI assistant"
           className="fixed bottom-5 right-5 z-[125] w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-500/30 flex items-center justify-center transition-all hover:scale-110 group">
-          <Robot size={24} weight="fill" />
+          <img src="/luxedge-mark.png" alt="Luxedge" className="w-9 h-9 rounded-full bg-white object-contain p-1" />
           <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white" />
         </button>
       )}
@@ -62,8 +62,8 @@ export default function AIAssistant() {
         <div className="fixed bottom-5 right-5 z-[125] w-[360px] max-w-[calc(100vw-2rem)] h-[480px] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-100">
           {/* Header */}
           <div className="px-4 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 flex items-center gap-2.5 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-white/15 border border-white/25 flex items-center justify-center">
-              <Robot size={16} weight="fill" className="text-white" />
+            <div className="w-8 h-8 rounded-full bg-white border border-white/40 flex items-center justify-center overflow-hidden">
+              <img src="/luxedge-mark.png" alt="Luxedge" className="w-full h-full object-contain p-1" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-[13px] font-bold leading-tight">Luxie — AI Assistant</p>

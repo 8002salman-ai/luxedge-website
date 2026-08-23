@@ -7,7 +7,6 @@ import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
 import AIAssistant from './components/AIAssistant';
-import BirdPerch from './components/BirdPerch';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
@@ -580,7 +579,7 @@ function Header() {
 
   return (<>
     {/* ── Rotating promo bar ── */}
-    <div className="site-utility-bar relative" style={{ minHeight: 24 }}>
+    <div className="site-utility-bar relative" style={{ minHeight: 30 }}>
       {[
         { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Free Shipping on Orders $50+' },
         { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Easy Returns' },
@@ -595,7 +594,7 @@ function Header() {
 
     {/* ── Main header ── */}
     <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
-      <div className="max-w-7xl mx-auto px-4 h-14 lg:h-14 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3 lg:gap-6">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
         <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
           <img src="/luxedge-mark.png" alt="Luxedge" className="h-12 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
@@ -606,21 +605,21 @@ function Header() {
         </Link>
 
         {/* Search — refined pill */}
-        <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-4">
+        <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-5">
           <div className="site-search">
             <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
             <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
-              className="flex-1 px-2.5 py-2 text-[13px] text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
+              className="flex-1 px-2.5 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
             <button type="submit" className="site-search-submit">
               Search
             </button>
           </div>
         </form>
 
-        <div className="flex items-center gap-0.5 sm:gap-1">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           {user ? (
             <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
                 <span className="w-7 h-7 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[11px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
                 <span className="hidden lg:block text-[11px] font-medium">{user.name.split(' ')[0]}</span>
               </button>
@@ -632,12 +631,12 @@ function Header() {
               </div></>}
             </div>
           ) : (
-            <Link to="/login" className="flex items-center gap-1 p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-              <UserIcon strokeWidth={1.5} size={16} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
+            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+              <UserIcon strokeWidth={1.5} size={17} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
             </Link>
           )}
-          <button onClick={openCart} className="relative p-1.5 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag01 strokeWidth={1.5} size={17} />
+          <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
+            <ShoppingBag01 strokeWidth={1.5} size={18} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
           </button>
         </div>
@@ -645,10 +644,10 @@ function Header() {
 
       {/* ── Pet navigation bar ── */}
       <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
-        <div className="max-w-7xl mx-auto px-4 flex items-center h-9">
+        <div className="max-w-7xl mx-auto px-4 flex items-center h-11">
           {MEGA_MENU.map(m => (
             <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="nav-underline flex items-center gap-1 px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
+              <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
                 {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
               </Link>
               {mega === m.label && (
@@ -672,9 +671,9 @@ function Header() {
             </div>
           ))}
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="nav-underline px-3.5 py-2 text-[13px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
+            <Link key={c.l} to={c.to} className="nav-underline px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/shop?q=deal" className="ml-auto px-3.5 py-2 text-[13px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
+          <Link to="/shop?q=deal" className="ml-auto px-4 py-2 text-[13.5px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
       </nav>
 
@@ -700,9 +699,14 @@ function Header() {
 function Footer() {
   const { categories } = useApp();
 
-  // Compact footer: tight spacing, inline links, verified policy pages.
-  const FL = 'block text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors py-0.5';
-  const COLT = 'font-brand text-[11px] font-bold uppercase tracking-[0.22em] text-luxe-gold-light mb-2.5';
+  // Premium footer: readable typography, balanced 12-column grid, clean groupings.
+  const FL = 'block text-[13px] py-[3px] leading-relaxed text-luxe-white/70 hover:text-luxe-gold-light transition-colors';
+  const ColTitle = ({ children }: { children: ReactNode }) => (
+    <div className="mb-1">
+      <h4 className="font-brand text-[11px] font-bold uppercase tracking-[0.22em] text-luxe-gold-light">{children}</h4>
+      <span className="mt-2 block h-[2px] w-8 rounded-full bg-luxe-gold/70" aria-hidden="true" />
+    </div>
+  );
 
   return (
     <footer className="bg-luxe-black text-luxe-white">
@@ -710,22 +714,24 @@ function Footer() {
       <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
 
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-7 pb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-x-6 gap-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10">
 
-          {/* Col 1 — Brand */}
-          <div className="col-span-2">
+          {/* Col 1 — Brand (lg:col-span-4) */}
+          <div className="sm:col-span-2 lg:col-span-4">
             <Link to="/" className="flex items-center gap-3 mb-3 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.png" alt="Luxedge" className="w-14 h-14 transition-transform duration-300 group-hover:scale-105" />
+              <img src="/luxedge-mark.png" alt="Luxedge" className="w-12 h-12 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-brand text-lg font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
-                <span className="text-[8px] tracking-[0.3em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
+                <span className="text-[9px] tracking-[0.26em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
               </span>
             </Link>
-            <p className="text-luxe-white/60 text-[13px] leading-snug mb-3 max-w-xs">
-              Curating the world's best pet essentials so you shop with confidence. Premium quality, honest prices, delivered to your door.
+            <p className="text-sm leading-relaxed text-luxe-white/65 max-w-sm mb-5">
+              We source the best pet essentials from trusted suppliers around the world —
+              then choose the pieces worth bringing home. Quality you can count on,
+              honest prices, delivered to your door.
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               {[
                 { label: 'Facebook', letter: 'f' },
                 { label: 'Instagram', letter: 'i' },
@@ -733,35 +739,36 @@ function Footer() {
                 { label: 'YouTube', letter: 'Y' },
               ].map(s => (
                 <a key={s.label} href="#" title={s.label} aria-label={s.label}
-                  className="w-8 h-8 bg-luxe-white/5 border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold rounded-lg flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-luxe-white/70 group-hover:text-luxe-black text-xs font-bold">{s.letter.toUpperCase()}</span>
+                  className="w-9 h-9 rounded-full bg-luxe-white/[0.06] border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold flex items-center justify-center transition-all duration-300 group">
+                  <span className="text-luxe-white/80 group-hover:text-luxe-black text-sm font-bold">{s.letter.toUpperCase()}</span>
                 </a>
               ))}
             </div>
-            {/* Google Business address + map */}
-            <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer"
-              className="flex items-start gap-2 mt-3 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors group w-fit">
-              <MarkerPin01 strokeWidth={1.5} size={15} className="text-luxe-gold-light mt-0.5 shrink-0" />
-              <span>
-                5041 Courtside Dr,<br />Irving, TX 75038
-              </span>
-            </a>
-            <div className="mt-2.5 rounded-lg overflow-hidden border border-luxe-white/10 max-w-xs">
-              <iframe
-                title="Luxedge — 5041 Courtside Dr, Irving, TX 75038 on Google Maps"
-                src="https://www.google.com/maps?q=5041+Courtside+Dr,+Irving,+TX+75038&output=embed"
-                className="w-full h-28 block"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                allowFullScreen
-              />
+            {/* HQ card — clean address treatment (replaces awkward iframe) */}
+            <div className="mt-6 max-w-sm rounded-2xl bg-luxe-white/[0.04] border border-luxe-white/10 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-luxe-gold-light mb-3">Visit Luxedge HQ</p>
+              <div className="flex items-start gap-2.5">
+                <MarkerPin01 strokeWidth={1.5} size={17} className="text-luxe-gold-light mt-0.5 shrink-0" />
+                <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer"
+                  className="text-sm leading-snug text-luxe-white/85 hover:text-luxe-gold-light transition-colors">
+                  5041 Courtside Dr,<br />Irving, TX 75038
+                </a>
+              </div>
+              <div className="mt-2.5 flex items-center gap-2.5">
+                <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
+                <span className="text-[13px] text-luxe-white/70">Mon – Fri · 9:00 AM – 6:00 PM CT</span>
+              </div>
+              <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer"
+                className="mt-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
+                Get Directions <ArrowRight strokeWidth={2} size={14} />
+              </a>
             </div>
           </div>
 
           {/* Col 2 — Shop */}
-          <div>
-            <h4 className={COLT}>Shop</h4>
-            <nav className="space-y-0.5" aria-label="Shop">
+          <div className="lg:col-span-2">
+            <ColTitle>Shop</ColTitle>
+            <nav className="space-y-0" aria-label="Shop">
               <Link to="/category/dog-supplies" className={FL}>Dog</Link>
               <Link to="/category/cat-supplies" className={FL}>Cat</Link>
               <Link to="/category/pet-toys" className={FL}>Toys</Link>
@@ -773,9 +780,9 @@ function Footer() {
           </div>
 
           {/* Col 3 — Help */}
-          <div>
-            <h4 className={COLT}>Help</h4>
-            <nav className="space-y-0.5" aria-label="Help">
+          <div className="lg:col-span-2">
+            <ColTitle>Help</ColTitle>
+            <nav className="space-y-0" aria-label="Help">
               <Link to="/contact" className={FL}>Contact Us</Link>
               <Link to="/faq" className={FL}>FAQs</Link>
               <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
@@ -785,9 +792,9 @@ function Footer() {
           </div>
 
           {/* Col 4 — Company */}
-          <div>
-            <h4 className={COLT}>Company</h4>
-            <nav className="space-y-0.5" aria-label="Company">
+          <div className="lg:col-span-2">
+            <ColTitle>Company</ColTitle>
+            <nav className="space-y-0" aria-label="Company">
               <Link to="/about" className={FL}>About Us</Link>
               <Link to="/blog" className={FL}>Blog</Link>
               <Link to="/privacy" className={FL}>Privacy Policy</Link>
@@ -797,33 +804,40 @@ function Footer() {
           </div>
 
           {/* Col 5 — Contact */}
-          <div className="col-span-2 md:col-span-1">
-            <h4 className={COLT}>Contact</h4>
-            <div className="space-y-1.5">
-              <a href="mailto:hello@luxedge.us" className="flex items-center gap-2 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Mail01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
+          <div className="lg:col-span-2">
+            <ColTitle>Contact</ColTitle>
+            <div className="space-y-2.5">
+              <a href="mailto:hello@luxedge.us" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
+                <Mail01 strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
                 hello@luxedge.us
               </a>
-              <a href="tel:4409418002" className="flex items-center gap-2 text-[13px] text-luxe-white/70 hover:text-luxe-gold-light transition-colors">
-                <Phone strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
+              <a href="tel:4409418002" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
+                <Phone strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
                 (440) 941-8002
               </a>
-              <div className="flex items-center gap-2 text-[13px] text-luxe-white/70">
-                <Clock strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
-                Mon – Fri, 9AM – 6PM CT
+              <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
+                <Send01 strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
+                WhatsApp Us
+              </a>
+              <div className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75">
+                <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
+                Mon – Fri · 9AM – 6PM CT
               </div>
             </div>
+            <p className="mt-5 text-xs leading-relaxed text-luxe-white/50 max-w-[230px]">
+              Real people answer — reach out any time and we'll point you in the right direction.
+            </p>
           </div>
         </div>
       </div>
 
       {/* ── Categories Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            <span className="font-brand text-[11px] font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
+            <span className="font-brand text-[12px] font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
             {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
+              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-sm text-luxe-white/65 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
             ))}
           </div>
         </div>
@@ -831,44 +845,44 @@ function Footer() {
 
       {/* ── Trust & Payment Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2">
               {[
                 { icon: Truck01, text: 'Free Shipping $50+' },
-                { icon: RefreshCcw01, text: '30-Day Returns' },
+                { icon: RefreshCcw01, text: '30-Day Easy Returns' },
                 { icon: Headphones01, text: 'Customer Support' },
                 { icon: ShieldTick, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-luxe-white/70">
-                  <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold-light" />
+                <div key={i} className="flex items-center gap-2 text-[13px] text-luxe-white/75">
+                  <b.icon strokeWidth={1.5} size={16} className="text-luxe-gold-light" />
                   <span>{b.text}</span>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-luxe-white/45">{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</p>
+            <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/55">
+              <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
+              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments processed by Stripe.' : 'Online payments are in demo mode — a real provider is being integrated.'}</span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Bottom Bar ── */}
       <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p className="text-xs text-luxe-white/50">
-              © {new Date().getFullYear()} Luxedge. All rights reserved. | 5041 Courtside Dr, Irving, TX 75038
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+            <p className="text-[13px] text-luxe-white/55 text-center md:text-left">
+              © {new Date().getFullYear()} Luxedge. All rights reserved.
             </p>
-            <div className="flex items-center gap-3 flex-wrap justify-center">
-              <Link to="/privacy" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Privacy Policy</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/terms" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Terms of Service</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/returns" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Return Policy</Link>
-              <span className="text-luxe-white/20" aria-hidden="true">|</span>
-              <Link to="/shop" className="text-xs text-luxe-white/60 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
+            <div className="flex items-center gap-4 flex-wrap justify-center text-[13px]">
+              <Link to="/privacy" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Privacy</Link>
+              <Link to="/terms" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Terms</Link>
+              <Link to="/returns" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Returns</Link>
+              <Link to="/shop" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-luxe-white/50">
-              <Globe01 strokeWidth={1.5} size={12} className="text-luxe-gold-light" /> USD ($) · English
+            <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/55">
+              <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) · English
             </div>
           </div>
         </div>
@@ -889,7 +903,7 @@ function productGridClass(count: number): string {
   if (count === 2) return 'grid grid-cols-2 max-w-[460px] gap-2.5 sm:gap-3';
   if (count === 3) return 'grid grid-cols-2 sm:grid-cols-3 max-w-[700px] gap-2.5 sm:gap-3';
   if (count === 4) return 'grid grid-cols-2 sm:grid-cols-4 max-w-[940px] gap-2.5 sm:gap-3';
-  return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3';
+  return 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-2.5';
 }
 
 function PCard({ product }: { product: Product }) {
@@ -1039,7 +1053,6 @@ function SLayout({ children }: { children: ReactNode }) {
       <WelcomePopup />
       <WhatsAppButton />
       <AIAssistant />
-      <BirdPerch />
     </div>
   );
 }
@@ -1229,7 +1242,7 @@ function ProductDetailPage() {
   const relatedFallback = related.length === 0 ? products.filter(p => p.isActive && p.id !== product.id).slice(0, 4) : [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="pdp-shell w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
       {/* Breadcrumb */}
       <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
         <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
@@ -1241,9 +1254,9 @@ function ProductDetailPage() {
         <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
-      <div className="grid lg:grid-cols-2 gap-6 lg:gap-10">
+      <div className="pdp-grid grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 lg:gap-10 xl:gap-14">
         {/* LEFT: Image Gallery */}
-        <div className="lg:sticky lg:top-24 self-start">
+        <div className="pdp-gallery min-w-0 lg:sticky lg:top-24 self-start">
           {/* Mobile: swipeable gallery with image indicator dots */}
           <div
             ref={galleryRef}
@@ -1254,7 +1267,7 @@ function ProductDetailPage() {
             {product.images.map((img, i) => (
               <div key={i} className="w-full shrink-0 snap-center">
                 <div className="aspect-[4/3]">
-                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
                 </div>
               </div>
             ))}
@@ -1275,9 +1288,9 @@ function ProductDetailPage() {
 
           {/* Desktop: large main image + thumbnail rail */}
           <div className="hidden lg:block">
-            <div className="relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
+            <div className="pdp-main-frame relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
               <div className="aspect-[4/3]">
-                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="w-full h-full object-cover" />
+                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
               </div>
               {discount > 0 && (
                 <div className="absolute top-3 left-3 flex flex-col gap-1.5">
@@ -1300,7 +1313,7 @@ function ProductDetailPage() {
         </div>
 
         {/* RIGHT: Product Info — AliExpress-style premium */}
-        <div>
+        <div className="pdp-info min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             {product.brand && <span className="text-[11px] font-bold text-luxe-gold uppercase tracking-wider">{product.brand}</span>}
             {product.condition !== 'New' && <span className="text-[11px] text-gray-400">| {product.condition}</span>}
@@ -1566,10 +1579,17 @@ function HomePage() {
   // homepage is intentionally art-directed: weak/collage-heavy supplier
   // images stay available in Shop but are not promoted into editorial slots.
   const featured = products.filter(p => p.isActive);
-  const homepageVisualProducts = featured.filter((p) => !/(collar|leash|shoes|apparel|shirt|bowl|nest|flying disc|cooling)/i.test(p.name));
+  const homepageVisualProducts = featured.filter((p) => firstUsableImage(p));
   const topPicks = homepageVisualProducts.filter(p => p.featured);
   const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
-  const deals = homepageVisualProducts.filter(p => p.originalPrice > p.price).sort((a, b) => (1 - b.price / b.originalPrice) - (1 - a.price / a.originalPrice));
+  // Deals include either a real compare-at saving or an admin-enabled sale.
+  // Never invent a discount when the source catalog has no compare-at price.
+  const deals = homepageVisualProducts
+    .filter(p => p.saleEnabled || p.originalPrice > p.price)
+    .sort((a, b) => {
+      const saving = (p: Product) => p.originalPrice > p.price ? 1 - p.price / p.originalPrice : 0;
+      return saving(b) - saving(a);
+    });
   // Supplier sections are evidence-based: CJ rows appear only when the live
   // catalog explicitly records CJ as their source and they are customer-visible.
   const cjProducts = homepageVisualProducts.filter(p => /cjdropshipping|\bcj\b/i.test(`${p.supplierSource || ''} ${p.sourceType || ''} ${p.inventorySource || ''}`));
@@ -1578,8 +1598,9 @@ function HomePage() {
   const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
   const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
   const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
-  const heroDogImage = 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=900&h=700&fit=crop&auto=format&q=85';
-  const heroCatImage = 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=900&h=700&fit=crop&auto=format&q=85';
+  const heroDogImage = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=900&h=700&fit=crop&auto=format&q=88';
+  const heroCatImage = 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=900&h=700&fit=crop&auto=format&q=88';
+  const heroParrotImage = 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=900&h=700&fit=crop&auto=format&q=88';
   const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
   const categoryVisuals = [
     { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
@@ -1600,17 +1621,17 @@ function HomePage() {
       {/* ════════ EDITORIAL HERO ════════ */}
       <section className="home-hero">
         <div className="home-hero-wash" aria-hidden="true" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8 grid lg:grid-cols-[0.44fr_0.56fr] items-center gap-5 lg:gap-8">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-9 sm:py-10 lg:py-12 grid lg:grid-cols-[0.44fr_0.56fr] items-center gap-6 lg:gap-10">
           <div className="hero-stagger text-center lg:text-left">
-            <p className="eyebrow mb-3">Premium pet essentials</p>
+            <p className="eyebrow mb-4">Sourced worldwide. Chosen with care.</p>
             <h1 className="home-hero-title">
-              <span className="block">Everything Your Pet Loves,</span>
+              <span className="block">The Best Finds for Every Pet,</span>
               <span className="block">Thoughtfully <em>Curated.</em></span>
             </h1>
             <p className="home-hero-copy">
-              Premium essentials for walks, play, comfort and care — chosen to look good and work beautifully.
+              We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.
             </p>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <Link to="/shop" className="editorial-button editorial-button-dark">
                 Shop essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
               </Link>
@@ -1627,7 +1648,7 @@ function HomePage() {
 
           <div className="home-hero-visual">
             <div className="home-hero-accent" aria-hidden="true" />
-            <div className="home-hero-pet-collage" aria-label="Happy dog and cat">
+            <div className="home-hero-pet-collage" aria-label="Happy dog, cat and parrot">
               <Link to="/category/dog-supplies" className="home-hero-pet-card home-hero-dog-card group">
                 <img src={heroDogImage} alt="Happy dog" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
                 <span>Shop dog essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
@@ -1635,6 +1656,10 @@ function HomePage() {
               <Link to="/category/cat-supplies" className="home-hero-pet-card home-hero-cat-card group">
                 <img src={heroCatImage} alt="Relaxed cat" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
                 <span>Shop cat essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
+              </Link>
+              <Link to="/category/bird-supplies" className="home-hero-pet-card home-hero-parrot-card group">
+                <img src={heroParrotImage} alt="Colorful parrot" loading="eager" decoding="async" onError={onImageError} />
+                <span>Shop bird essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
               </Link>
               {heroProduct && <Link to={`/product/${heroProduct.id}`} className="home-hero-product-chip">
                 <span>Featured from the collection</span><strong>{heroProduct.name}</strong>
@@ -1661,11 +1686,11 @@ function HomePage() {
           <Reveal delay={40}>
             <div className="pet-avatar-grid">
               {[
-                { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=300&h=300&fit=crop' },
-                { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=300&h=300&fit=crop' },
-                { label: 'Birds', to: '/category/bird-supplies', img: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=300&h=300&fit=crop' },
-                { label: 'Horse', to: '/shop?q=horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=300&h=300&fit=crop' },
-                { label: 'Livestock', to: '/shop?q=livestock', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=300&h=300&fit=crop' },
+                { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Birds', to: '/category/bird-supplies', img: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Horse', to: '/shop?q=horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Livestock', to: '/shop?q=livestock', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
               ].map((pet, index) => (
                 <Reveal key={pet.label} delay={index * 60}>
                   <Link to={pet.to} className="pet-avatar-item">
@@ -1997,6 +2022,13 @@ function ShopPage() {
   const [onlyNew, setOnlyNew] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isDeals = q.toLowerCase() === 'deal';
+  const hasRealDeals = products.some(p => p.isActive && (p.saleEnabled || p.originalPrice > p.price));
+  const dealFallbackIds = new Set(
+    hasRealDeals ? [] : products
+      .filter(p => p.isActive && p.images.length > 0 && (p.featured || p.newArrival))
+      .slice(0, 12)
+      .map(p => p.id)
+  );
 
   // Sync when URL slug or query changes
   useEffect(() => { setCat(slug ? fromSlug(slug) : 'All'); }, [slug]);
@@ -2011,7 +2043,9 @@ function ShopPage() {
 
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
-    .filter(p => isDeals ? (p.originalPrice > p.price) : p.name.toLowerCase().includes(q.toLowerCase()))
+    .filter(p => isDeals
+      ? (p.saleEnabled || p.originalPrice > p.price || dealFallbackIds.has(p.id))
+      : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
     .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
     .filter(p => !onlyInStock || p.stock > 0)
@@ -2031,7 +2065,9 @@ function ShopPage() {
   };
 
   const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
-  const pageDesc = isDeals ? 'Products with compare-at savings, updated as new deals land.' : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
+  const pageDesc = isDeals
+    ? (hasRealDeals ? 'Real catalog offers and sale picks, updated as new deals land.' : 'Featured pet essentials selected from the current collection.')
+    : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
   const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
 
   const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
@@ -2101,7 +2137,7 @@ function ShopPage() {
     <div>
       {/* Page Header */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
-        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12">
+        <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12">
           <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
           <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
@@ -2110,7 +2146,7 @@ function ShopPage() {
 
       {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
       <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-16 lg:top-[7.1rem] z-30 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-        <div className="max-w-7xl mx-auto px-3 py-2.5 flex items-center gap-2">
+        <div className="max-w-[1440px] mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
             className="lg:hidden shrink-0 flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 border border-luxe-silver rounded-lg text-luxe-charcoal hover:border-luxe-gold/60 hover:text-luxe-gold transition-colors">
             <Sliders01 strokeWidth={1.5} size={14} /> Filter{activeFilters > 0 && <span className="w-4 h-4 rounded-full bg-luxe-gold text-white text-[9px] font-bold flex items-center justify-center">{activeFilters}</span>}
@@ -2152,7 +2188,7 @@ function ShopPage() {
       )}
 
       {/* Main content: sidebar + grid */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <div className="max-w-[1440px] mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <div className="flex gap-6">
           {/* Desktop sidebar */}
           <aside className="hidden lg:block w-56 shrink-0 bg-white border border-luxe-silver/70 rounded-2xl p-5 h-fit sticky top-16 shadow-sm">
