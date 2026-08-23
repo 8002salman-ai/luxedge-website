@@ -45,6 +45,7 @@ export interface Product {
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   supplierSource?: string;
   commerceReadiness?: string; sourceType?: string; inventorySource?: string;
+  deliveryMinDays?: number | null; deliveryMaxDays?: number | null;
 }
 interface CartItem { product: Product; quantity: number; }
 interface AppUser { id: string; email: string; name: string; role: 'admin' | 'buyer'; password?: string; isBlocked?: boolean; joined?: string; }
@@ -167,6 +168,8 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     usInventory: p.usInventory,
     commerceReadiness: p.commerceReadiness,
     sourceType: p.sourceType,
+    deliveryMinDays: p.deliveryMinDays,
+    deliveryMaxDays: p.deliveryMaxDays,
     inventorySource: p.inventorySource,
     seoTitle: p.seoTitle,
     seoDescription: p.seoDescription,
@@ -328,7 +331,12 @@ function AppProvider({ children }: { children: ReactNode }) {
   // update it was supposed to confirm.
   const notify = useCallback((m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); }, []);
   const [cartOpen, setCartOpen] = useState(false);
-  const openCart = useCallback(() => setCartOpen(true), []);
+  const openCart = useCallback(() => {
+    setCartOpen((wasOpen) => {
+      if (!wasOpen && cart.length > 0) trackEvent('view_cart', { currency: 'USD', value: cart.reduce((s, i) => s + i.product.price * i.quantity, 0), items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
+      return true;
+    });
+  }, [cart]);
   const closeCart = useCallback(() => setCartOpen(false), []);
 
   // Phase 3B: load the real storefront catalog from Supabase when it is
@@ -462,7 +470,11 @@ function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const addToCart = (p: Product) => { setCart(prev => { const ex = prev.find(i => i.product.id === p.id); return ex ? prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { product: p, quantity: 1 }]; }); setCartOpen(true); trackEvent('add_to_cart', { currency: 'USD', value: p.price, items: [{ item_id: p.id, item_name: p.name, price: p.price, quantity: 1 }], ...utmParams() }); notify(`Added to cart!`); };
-  const removeFromCart = (id: string) => setCart(p => p.filter(i => i.product.id !== id));
+  const removeFromCart = (id: string) => {
+    const removed = cart.find(i => i.product.id === id);
+    if (removed) trackEvent('remove_from_cart', { currency: 'USD', value: removed.product.price * removed.quantity, items: [{ item_id: removed.product.id, item_name: removed.product.name, price: removed.product.price, quantity: removed.quantity }], ...utmParams() });
+    setCart(p => p.filter(i => i.product.id !== id));
+  };
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
   // NOTE: real orders are created server-side by the Stripe webhook into
@@ -908,6 +920,8 @@ function productGridClass(count: number): string {
 
 function PCard({ product }: { product: Product }) {
   const { addToCart, reviews } = useApp();
+  const { pathname } = useLocation();
+  const selectProduct = () => trackEvent('select_item', { item_list_id: pathname || 'storefront', items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() });
   const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
   const secondImage = product.images.find((candidate) => candidate && candidate !== image);
   const hasCompareAt = product.originalPrice > product.price;
@@ -916,8 +930,7 @@ function PCard({ product }: { product: Product }) {
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
-    <article className="product-card group">
-      <Link to={`/product/${product.id}`} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
+    <article className="product-card group">        <Link to={`/product/${product.id}`} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
         <div className="product-card-media">
           <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
           {secondImage && (
@@ -1406,7 +1419,7 @@ function ProductDetailPage() {
               { icon: Truck01, t: 'Free ship $50+' },
               { icon: RefreshCcw01, t: '30-day returns' },
               { icon: ShieldTick, t: 'Thoughtfully curated' },
-              { icon: Lock01, t: 'Secure checkout' },
+              { icon: Lock01, t: 'Encrypted connection' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-2 p-2.5 bg-luxe-cream rounded-xl border border-luxe-silver/70">
                 <b.icon strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />
@@ -1414,6 +1427,10 @@ function ProductDetailPage() {
               </div>
             ))}
           </div>
+
+          {product.deliveryMinDays != null && product.deliveryMaxDays != null && (
+            <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Estimated delivery: {product.deliveryMinDays}–{product.deliveryMaxDays} business days</p>
+          )}
 
           {/* Ad: Below Product Information */}
           <AdSenseAd placement="product_below_info" />
@@ -1614,6 +1631,18 @@ function HomePage() {
     || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
     || catVisual
     || heroProduct;
+  // GA4: fire view_item_list once for the homepage featured order on load.
+  useEffect(() => {
+    if (topPicks.length === 0 && trendingProducts.length === 0) return;
+    const list = (topPicks.length ? topPicks : trendingProducts).slice(0, 20);
+    trackEvent('view_item_list', {
+      item_list_id: 'homepage-featured',
+      items: list.map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
+      ...utmParams(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
   const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
 
   return (
@@ -2058,6 +2087,17 @@ function ShopPage() {
       if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
       return 0;
     });
+
+  // GA4: fire view_item_list whenever the visible filtered set changes (max 20 rows).
+  useEffect(() => {
+    if (f.length === 0) return;
+    trackEvent('view_item_list', {
+      item_list_id: isDeals ? 'shop-deals' : `shop-${cat.toLowerCase().replace(/\s+/g, '-')}`,
+      items: f.slice(0, 20).map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
+      ...utmParams(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat, q, sort, maxPrice, minRating, onlyInStock, onlyFreeShipping, onlyNew]);
 
   const handleCatChange = (newCat: string) => {
     if (newCat === 'All') nav('/shop');
@@ -3154,7 +3194,7 @@ function ShippingPolicyPage() {
     <LegalPage title="Shipping Policy" updated="March 15, 2025">
       <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations soon.</p></LS>
       <LS t="Processing Time"><p>Orders are typically processed within <strong>1-3 business days</strong> after payment confirmation. You'll receive an email confirmation when your order has been shipped with tracking information.</p></LS>
-      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">7-12 business days</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr><tr><td className="px-4 py-2 border">Express Shipping</td><td className="px-4 py-2 border">2-4 business days</td><td className="px-4 py-2 border">$9.99</td></tr></tbody></table></div></LS>
+      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">5–14 business days (varies by product)</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Each product page shows its specific estimated delivery window. Express shipping is not currently offered.</p></div></LS>
       <LS t="Free Shipping"><p>Enjoy <strong>free standard shipping</strong> on all orders of $50 or more. This offer applies automatically at checkout — no coupon code needed.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
       <LS t="Delivery Delays"><p>While we strive to meet all estimated delivery windows, delays may occasionally occur due to high order volume, carrier issues, weather events, or other circumstances beyond our control. If your order is significantly delayed, please contact us and we'll investigate immediately.</p></LS>
@@ -3169,7 +3209,7 @@ function FAQPage() {
   const [open, setOpen] = useState<string | null>(null);
   const faqs = [
     { c: 'Orders & Shipping', qs: [
-      { q: 'How long does shipping take?', a: 'Standard shipping takes 7-12 business days. Express shipping delivers in 2-4 business days. Processing takes an additional 1-3 business days before shipment.' },
+      { q: 'How long does shipping take?', a: 'Standard delivery is estimated at 5–14 business days depending on the product (each product page shows its specific window). Processing takes an additional 1–3 business days before shipment. Express shipping is not currently offered.' },
       { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
       { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },

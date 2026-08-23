@@ -37,6 +37,7 @@ import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
+import googleFeedHandler from '../api/google-feed';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -76,6 +77,7 @@ const ROUTES: Route[] = [
   { path: '/api/crm/list', handler: crmListHandler },
   { path: '/api/crm/assistant', handler: crmAssistantHandler },
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
+  { path: '/google-products.xml', handler: googleFeedHandler },
 ];
 
 /**
