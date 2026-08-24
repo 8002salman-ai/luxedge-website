@@ -58,7 +58,7 @@ export interface Review {
   rating: number; comment: string; status: 'pending' | 'approved' | 'rejected';
   date: string;
 }
-export interface AdminCategory { id: string; name: string; isActive: boolean; subs: { id: string; name: string; isActive: boolean; }[]; }
+export interface AdminCategory { id: string; name: string; slug?: string; isActive: boolean; subs: { id: string; name: string; isActive: boolean; }[]; }
 export interface BlogPost {
   id: string; slug: string; title: string; excerpt: string; content: string;
   image: string; images: string[]; tags: string[];
@@ -189,7 +189,7 @@ function mapCatalogProduct(p: CatalogProduct): Product {
 }
 
 function mapCatalogCategory(c: CatalogCategory): AdminCategory {
-  return { id: c.id, name: c.name, isActive: c.isActive, subs: [] };
+  return { id: c.id, name: c.name, slug: c.slug, isActive: c.isActive, subs: [] };
 }
 // Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
 // users come from Supabase Auth and are never represented with passwords).
@@ -233,7 +233,7 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b18', slug:'cattle-care-basics-small-farms', title:'Cattle Care Basics for Small Farms: Feed, Health & Handling', excerpt:'Raising cattle on a small farm is rewarding — and a real responsibility. Here are the fundamentals of keeping a healthy herd.', content:'Whether you keep a few beef cattle or a small dairy herd, the basics of cattle care are the same. Get these right and most problems never start.\n\n## Water Comes First\nCattle drink a lot — up to 20 gallons a day in hot weather. Clean, accessible water is the single most important thing you can provide.\n\n## Feed According to Stage\nNutrition needs change with age, weight, pregnancy, and season. Pasture alone rarely covers winter needs; hay and mineral supplements fill the gap. Work with a vet or nutritionist on a ration.\n\n## Minerals Are Not Optional\nLoose mineral supplements prevent a long list of deficiency problems, from weak calves to poor coats. Provide free-choice minerals year-round.\n\n## Health Basics\nLearn the normal signs — appetite, rumination, manure, and demeanor. Any sudden change deserves attention. Keep a working relationship with a large-animal vet before you need one.\n\n## Handling with Confidence\nCattle read body language. Move slowly, work from their shoulder, and use low-stress handling. A calm herd is safer and easier to manage.\n\n## Hoof and Parasite Care\nSchedule hoof trimming as needed and follow a parasite control program recommended for your region.\n\n## Records Keep You Honest\nTrack weights, vaccinations, and treatments. Simple records turn guesswork into decisions and make vet visits far more useful.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cattle','livestock','farm','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-20' },
 ];
 
-export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies'];
+export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies', 'Horse', 'Cattle'];
 const CAT_META: Record<string, { desc: string }> = {
   'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
   'Cat Supplies': { desc: 'Play, comfort & everyday cat essentials' },
@@ -243,6 +243,8 @@ const CAT_META: Record<string, { desc: string }> = {
   'Grooming': { desc: 'Simple tools for everyday care' },
   'Pet Accessories': { desc: 'Useful pieces for life together' },
   'Bird Supplies': { desc: 'Seed, feed & care essentials for feathered friends' },
+  'Horse': { desc: 'Practical care and stable essentials for horses' },
+  'Cattle': { desc: 'Useful feeding and care essentials for cattle and livestock' },
 };
 
 function firstUsableImage(product: Product | undefined): string | undefined {
@@ -578,8 +580,8 @@ function Header() {
   const catNav = [
     { l: 'Dog', to: '/category/dog-supplies' },
     { l: 'Cat', to: '/category/cat-supplies' },
-    { l: 'Horses', to: '/shop?q=horse' },
-    { l: 'Livestock', to: '/shop?q=livestock' },
+    { l: 'Horses', to: '/category/horse' },
+    { l: 'Livestock', to: '/category/cattle' },
     { l: 'Birds', to: '/category/bird-supplies' },
     { l: 'Food & Feeding', to: '/category/feeding-water' },
     { l: 'Toys', to: '/category/pet-toys' },
@@ -743,19 +745,9 @@ function Footer() {
               then choose the pieces worth bringing home. Quality you can count on,
               honest prices, delivered to your door.
             </p>
-            <div className="flex gap-2.5">
-              {[
-                { label: 'Facebook', letter: 'f' },
-                { label: 'Instagram', letter: 'i' },
-                { label: 'TikTok', letter: 'T' },
-                { label: 'YouTube', letter: 'Y' },
-              ].map(s => (
-                <a key={s.label} href="#" title={s.label} aria-label={s.label}
-                  className="w-9 h-9 rounded-full bg-luxe-white/[0.06] border border-luxe-white/15 hover:bg-luxe-gold hover:border-luxe-gold flex items-center justify-center transition-all duration-300 group">
-                  <span className="text-luxe-white/80 group-hover:text-luxe-black text-sm font-bold">{s.letter.toUpperCase()}</span>
-                </a>
-              ))}
-            </div>
+                <Link to="/contact" className="inline-flex items-center gap-2 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
+              Talk to the Luxedge team <ArrowRight strokeWidth={2} size={14} />
+            </Link>
             {/* HQ card — clean address treatment (replaces awkward iframe) */}
             <div className="mt-6 max-w-sm rounded-2xl bg-luxe-white/[0.04] border border-luxe-white/10 p-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-luxe-gold-light mb-3">Visit Luxedge HQ</p>
@@ -787,7 +779,7 @@ function Footer() {
               <Link to="/category/pet-beds" className={FL}>Beds</Link>
               <Link to="/category/feeding-water" className={FL}>Feeding</Link>
               <Link to="/category/grooming" className={FL}>Grooming</Link>
-              <Link to="/shop" className={FL}>Deals</Link>
+              <Link to="/shop?q=deal" className={FL}>Deals</Link>
             </nav>
           </div>
 
@@ -848,8 +840,8 @@ function Footer() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
             <span className="font-brand text-[12px] font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
-            {categories.filter(c => c.isActive).map(c => (
-              <Link key={c.id} to={`/category/${toSlug(c.name)}`} className="text-sm text-luxe-white/65 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
+            {categories.filter(c => c.isActive && c.name !== 'Aquarium').map(c => (
+              <Link key={c.id} to={`/category/${c.slug || toSlug(c.name)}`} className="text-sm text-luxe-white/65 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
             ))}
           </div>
         </div>
@@ -891,7 +883,7 @@ function Footer() {
               <Link to="/privacy" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Privacy</Link>
               <Link to="/terms" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Terms</Link>
               <Link to="/returns" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Returns</Link>
-              <Link to="/shop" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</Link>
+              <a href="/sitemap.xml" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</a>
             </div>
             <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/55">
               <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) · English
@@ -1718,8 +1710,8 @@ function HomePage() {
                 { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Birds', to: '/category/bird-supplies', img: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Horse', to: '/shop?q=horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Livestock', to: '/shop?q=livestock', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Horse', to: '/category/horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Livestock', to: '/category/cattle', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
               ].map((pet, index) => (
                 <Reveal key={pet.label} delay={index * 60}>
                   <Link to={pet.to} className="pet-avatar-item">
@@ -2889,7 +2881,7 @@ function LoginPage() {
                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 accent-luxe-gold" defaultChecked />
                 Remember me
               </label>
-              <a href="#" className="text-luxe-gold hover:text-luxe-gold-dark transition-colors">Forgot password?</a>
+              <Link to="/contact" className="text-luxe-gold hover:text-luxe-gold-dark transition-colors">Need help signing in?</Link>
             </div>
 
             <button type="submit" disabled={loading}
