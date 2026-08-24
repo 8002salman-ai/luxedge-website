@@ -38,6 +38,7 @@ import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
 import googleFeedHandler from '../api/google-feed';
+import imgProxyHandler from '../api/img-proxy';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -78,6 +79,7 @@ const ROUTES: Route[] = [
   { path: '/api/crm/assistant', handler: crmAssistantHandler },
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
+  { path: '/api/img-proxy', handler: imgProxyHandler },
 ];
 
 /**

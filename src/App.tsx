@@ -73,6 +73,19 @@ const LUXEDGE_IMAGE_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURICo
   "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><rect width='100%' height='100%' fill='#F6F3EE'/><text x='50%' y='50%' font-family='Georgia, serif' font-size='64' letter-spacing='6' fill='#1A2440' text-anchor='middle' dominant-baseline='middle'>LUXEDGE</text></svg>"
 );
 
+/** Proxy CJ/external images through our worker to bypass CORS/ORB. */
+function proxiedImage(src: string): string {
+  if (!src || src.startsWith('data:')) return src;
+  try {
+    const u = new URL(src);
+    const hosts = ['cf.cjdropshipping.com', 'oss-cf.cjdropshipping.com', 'img.ltwebstatic.com', 'ae01.alicdn.com'];
+    if (hosts.some(h => u.hostname === h || u.hostname.endsWith('.' + h))) {
+      return '/api/img-proxy?url=' + encodeURIComponent(src);
+    }
+  } catch { /* not a URL, use as-is */ }
+  return src;
+}
+
 /** Swap a broken image to the branded fallback once (never loops). */
 function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
   const img = e.currentTarget;
@@ -148,7 +161,9 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     originalPrice: p.originalPrice,
     category: p.category || 'Pet Supplies',
     stock: p.stock,
-    images: p.images.length ? p.images : [],
+    images: p.images.length ? p.images.map(proxiedImage) : [],
+    // Ensure primary (hero) image is always first
+    // (catalog may return images in insertion order, not primary-first)
     imageAlts: p.imageAlts || [],
     rating: 0,
     reviews: 0,
@@ -248,7 +263,8 @@ const CAT_META: Record<string, { desc: string }> = {
 };
 
 function firstUsableImage(product: Product | undefined): string | undefined {
-  return product?.images.find((image) => Boolean(image));
+  const raw = product?.images.find((image) => Boolean(image));
+  return raw ? proxiedImage(raw) : undefined;
 }
 const toSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const fromSlug = (slug: string) => CAT_LIST.find(c => toSlug(c) === slug) || 'All';

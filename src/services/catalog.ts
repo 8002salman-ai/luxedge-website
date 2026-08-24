@@ -286,6 +286,10 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
           acc.set(img.product_id, list);
           return acc;
         }, new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>());
+        // Sort each product's images: primary first, then by insertion order
+        for (const [, imgs] of imagesByProduct) {
+          imgs.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+        }
       }
     } catch {
       /* product images unavailable — products still render with image_url */
