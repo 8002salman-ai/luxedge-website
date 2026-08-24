@@ -16,11 +16,11 @@ import type { AIProvider } from './types';
 // This matches DEFAULT_PROVIDER_SETTINGS (openrouter → deepseek).
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
   { id: 'openrouter', name: 'OpenRouter', models: ['nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free', 'cohere/north-mini-code:free', 'google/gemma-4-31b-it:free', 'z-ai/glm-5.2:free'], defaultModel: 'nvidia/nemotron-3-super-120b-a12b:free', enabled: true, isDefault: true },
-  { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: true, isDefault: false },
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
-  { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
-  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: true, isDefault: false },
-  { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: true, isDefault: false },
+  { id: 'gemini', name: 'Google Gemini', models: ['gemini-2.0-flash-exp', 'gemini-1.5-flash', 'gemini-1.5-pro'], defaultModel: 'gemini-2.0-flash-exp', enabled: false, isDefault: false },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: false, isDefault: false },
+  { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: false, isDefault: false },
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: false, isDefault: false },
+  { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: false, isDefault: false },
 ];
 
 const PROVIDER_IDS = new Set(DEFAULT_AI_PROVIDERS.map((p) => p.id));
@@ -95,7 +95,7 @@ export interface AIProviderSettings {
 
 export const DEFAULT_PROVIDER_SETTINGS: AIProviderSettings = {
   defaultProviderId: 'openrouter',
-  fallbackProviderId: 'deepseek',
+  fallbackProviderId: null,
 };
 
 const PROVIDER_SETTINGS_KEY = 'luxedge_ai_provider_settings';

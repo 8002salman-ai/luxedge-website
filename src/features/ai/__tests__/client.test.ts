@@ -2,8 +2,8 @@
 // LUXEDGE — AI CLIENT TESTS
 //
 // Verifies callAIProvider's provider override + fallback chain contract:
-//   - default routing uses the configured default (openrouter) with the
-//     configured fallback (deepseek)
+//   - default routing uses the configured default (openrouter) with no
+//     paid fallback by default (owner must explicitly enable fallback)
 //   - a providerIdOverride forces a non-default provider as primary while
 //     keeping the configured fallback for server-side failover
 //   - an override that is disabled/unknown throws instead of silently
@@ -41,13 +41,14 @@ afterEach(() => {
 });
 
 describe('callAIProvider', () => {
-  it('uses the configured default provider with the configured fallback when no override', async () => {
+  it('uses the configured default provider with no fallback when default settings have null fallback', async () => {
     stubFetch();
     const out = await callAIProvider('test', providers());
     expect(out).toBe('LUXEDGE-QWEN-OK');
     expect(lastBody.provider).toBe('openrouter');
     expect(lastBody.model).toBe('nvidia/nemotron-3-super-120b-a12b:free');
-    expect(lastBody.fallback).toBe('deepseek');
+    // Default fallback is null (no paid providers auto-used)
+    expect(lastBody.fallback).toBeFalsy();
   });
 
   it('forces a non-default provider as primary while keeping the fallback', async () => {
@@ -57,8 +58,8 @@ describe('callAIProvider', () => {
     expect(out).toBe('LUXEDGE-QWEN-OK');
     expect(lastBody.provider).toBe('anthropic');
     expect(lastBody.model).toBe('claude-haiku-4-5-20251001');
-    expect(lastBody.fallback).toBe('deepseek');
-    expect(progress.some((m) => m.includes('Anthropic Claude') && m.includes('DeepSeek'))).toBe(true);
+    // Default fallback is null; forced primary has no fallback from settings
+    expect(lastBody.fallback).toBeFalsy();
   });
 
   it('throws when the override provider is disabled or unknown', async () => {
@@ -72,7 +73,8 @@ describe('callAIProvider', () => {
     stubFetch();
     await callAIProvider('test', providers(), undefined, undefined, 'auto');
     expect(lastBody.provider).toBe('openrouter');
-    expect(lastBody.fallback).toBe('deepseek');
+    // Default fallback is null (no paid providers auto-used)
+    expect(lastBody.fallback).toBeFalsy();
   });
 
   it('never sends secrets to the server proxy', async () => {

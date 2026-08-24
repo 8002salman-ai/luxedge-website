@@ -65,12 +65,14 @@ describe('loadAIProviders', () => {
     expect(providers.length).toBe(DEFAULT_AI_PROVIDERS.length);
   });
 
-  it('defaults to OpenRouter as the default provider (owner chain: openrouter → deepseek)', () => {
+  it('defaults to OpenRouter as the default provider (owner chain: openrouter only, no paid fallbacks)', () => {
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('openrouter');
     const or = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter');
     expect(or?.defaultModel).toBe('nvidia/nemotron-3-super-120b-a12b:free');
     expect(or?.enabled).toBe(true);
-    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.enabled).toBe(true);
+    // DeepSeek/Codex disabled by default to prevent token burn on auto-runs
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.enabled).toBe(false);
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'codex')?.enabled).toBe(false);
   });
 
   it('registry keeps the standard providers and no removed/private providers', () => {
@@ -160,15 +162,15 @@ describe('resolveActiveProvider', () => {
 });
 
 describe('provider routing settings', () => {
-  it('defaults to OpenRouter primary + DeepSeek fallback', () => {
+  it('defaults to OpenRouter primary + no paid fallback', () => {
     expect(DEFAULT_PROVIDER_SETTINGS.defaultProviderId).toBe('openrouter');
-    expect(DEFAULT_PROVIDER_SETTINGS.fallbackProviderId).toBe('deepseek');
+    expect(DEFAULT_PROVIDER_SETTINGS.fallbackProviderId).toBeNull();
     expect(loadProviderSettings(memoryStorage({}))).toEqual(DEFAULT_PROVIDER_SETTINGS);
   });
 
-  it('migrates the old shipped default chain (deepseek → codex) to openrouter → deepseek', () => {
+  it('migrates the old shipped default chain (deepseek → codex) to openrouter → null', () => {
     const s = memoryStorage({ luxedge_ai_provider_settings: JSON.stringify({ defaultProviderId: 'deepseek', fallbackProviderId: 'codex' }) });
-    expect(loadProviderSettings(s)).toEqual({ defaultProviderId: 'openrouter', fallbackProviderId: 'deepseek' });
+    expect(loadProviderSettings(s)).toEqual({ defaultProviderId: 'openrouter', fallbackProviderId: null });
   });
 
   it('preserves an explicit owner customization that is not the old shipped default', () => {
