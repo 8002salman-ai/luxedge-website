@@ -1197,6 +1197,22 @@ function ProductDetailPage() {
     return () => { document.getElementById('product-jsonld')?.remove(); };
   }, [product?.id]);
 
+  // Removed/archived (or unknown-slug) product pages must never be indexed:
+  // noindex overrides the global 'index, follow' so Google drops stale URLs.
+  useEffect(() => {
+    if (product) return;
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    setMeta('robots', 'noindex, nofollow');
+    return () => {
+      const el = document.head.querySelector('meta[name="robots"]');
+      if (el && el.getAttribute('content') === 'noindex, nofollow') el.remove();
+    };
+  }, [product]);
+
   // Scroll to top on product change
   useEffect(() => { window.scrollTo(0, 0); setSelImg(0); setSelVariant(null); setQty(1); setTab('desc'); if (product) { trackEvent('view_item', { currency: 'USD', value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() }); } }, [id, product?.id]);
 
