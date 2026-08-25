@@ -306,52 +306,49 @@ function ADashboard() {
     { l: 'Low stock', v: lowStock, sub: 'need restock', i: Warning, bg: 'from-amber-500 to-orange-600', c1: '#f59e0b', c2: '#ea580c' },
   ];
 
-  return <div className="space-y-3.5">
+  return <div className="space-y-4">
     {/* Header */}
-    <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="flex items-center justify-between flex-wrap gap-3">
       <div>
-        <h1 className="text-lg font-bold text-gray-900 tracking-tight">Dashboard</h1>
-        <p className="text-[11px] text-gray-500">Welcome back! Here's what's happening at Luxedge.</p>
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+        <p className="text-xs text-gray-500 mt-0.5">Store performance and catalog overview.</p>
       </div>
       <div className="flex items-center gap-2">
-        <Link to="/" target="_blank" className="px-3 py-2 rounded-lg text-[11px] font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><Eye size={12} /> View store</Link>
-        <Link to="/admin/ai-import" className="btn-glow px-3 py-2 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1.5 shadow-lg shadow-purple-200 transition-all hover:scale-[1.03]"
-          style={{ background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
-          <MagicWand size={12} /> AI Import
+        <Link to="/" target="_blank" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><Eye size={13} /> View store</Link>
+        <Link to="/admin/ai-import" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 shadow-sm transition-all hover:brightness-110"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+          <MagicWand size={13} /> AI Import
         </Link>
       </div>
     </div>
 
-    {/* Create Product — three quick entry points (Quick / Detail / AI Import) */}
-    <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm card-lift">
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-3.5 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center"><Plus size={18} className="text-white" /></div>
+    {/* Add to catalog — quick entry points (Quick / Detail / AI Import) */}
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Plus size={14} className="text-gray-600" /></div>
           <div>
-            <p className="text-sm font-bold text-white leading-tight">Create Product</p>
-            <p className="text-[10px] text-blue-100/80">Add to your catalog — all new products start as DRAFT</p>
+            <p className="text-sm font-semibold text-gray-900 leading-tight">Add to Catalog</p>
+            <p className="text-[11px] text-gray-500">New products are saved as drafts and reviewed before publishing.</p>
           </div>
         </div>
-        <span className="px-2.5 py-1 rounded-full bg-white/15 text-[10px] font-semibold text-white backdrop-blur">DRAFT ONLY · no auto-publish</span>
+        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">Draft by default</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-white">
-        <Link to="/admin/products/new?mode=quick" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-blue-50 to-white p-4 hover:border-blue-300 hover:shadow-md transition-all">
-          <div className="w-9 h-9 rounded-lg bg-blue-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><Lightning size={16} weight="fill" /></div>
-          <p className="font-bold text-[13px] text-gray-900">⚡ Quick Add</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Fast one-screen form — title, price, cost & basic details.</p>
-          <p className="text-[11px] font-semibold text-blue-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open Quick Add →</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100">
+        <Link to="/admin/products/new?mode=quick" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5 group-hover:bg-blue-100 transition-colors"><Lightning size={15} weight="fill" /></div>
+          <p className="font-semibold text-[13px] text-gray-900">Quick Add</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Title, price, cost and the essentials — one screen.</p>
         </Link>
-        <Link to="/admin/products/new?mode=detail" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-indigo-50 to-white p-4 hover:border-indigo-300 hover:shadow-md transition-all">
-          <div className="w-9 h-9 rounded-lg bg-indigo-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><List size={16} weight="fill" /></div>
-          <p className="font-bold text-[13px] text-gray-900">📋 Detail Add</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Full editor — images, variants, SEO, pricing & promotions.</p>
-          <p className="text-[11px] font-semibold text-indigo-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open Detail Add →</p>
+        <Link to="/admin/products/new?mode=detail" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2.5 group-hover:bg-indigo-100 transition-colors"><List size={15} weight="fill" /></div>
+          <p className="font-semibold text-[13px] text-gray-900">Detail Add</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Full editor — images, variants, SEO, pricing and promotions.</p>
         </Link>
-        <Link to="/admin/products/new?mode=ai" className="group rounded-xl border border-gray-100 bg-gradient-to-br from-violet-50 to-white p-4 hover:border-violet-300 hover:shadow-md transition-all">
-          <div className="w-9 h-9 rounded-lg bg-violet-500 text-white flex items-center justify-center mb-2.5 shadow-sm group-hover:scale-105 transition-transform"><MagicWand size={16} weight="fill" /></div>
-          <p className="font-bold text-[13px] text-gray-900">✨ AI Import</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Paste any product URL — AI researches & builds the listing.</p>
-          <p className="text-[11px] font-semibold text-violet-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Open AI Import →</p>
+        <Link to="/admin/products/new?mode=ai" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center mb-2.5 group-hover:bg-violet-100 transition-colors"><MagicWand size={15} weight="fill" /></div>
+          <p className="font-semibold text-[13px] text-gray-900">AI Import</p>
+          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Paste a product URL — AI researches and builds the listing.</p>
         </Link>
       </div>
     </div>

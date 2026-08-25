@@ -2845,7 +2845,8 @@ function LoginPage() {
     await new Promise(r => setTimeout(r, 400));
     const errMsg = await login(e, p);
     if (errMsg) { setErr(errMsg); setLoading(false); return; }
-    nav('/');
+    // Admin accounts go straight to the admin dashboard; customers go home.
+    nav(useAuthStore.getState().isAdmin ? '/admin' : '/');
   };
 
   const asGuest = () => { guestLogin(); nav(cart.length ? '/checkout' : '/'); };

@@ -47,6 +47,7 @@ interface ShimRes extends ServerResponse {
   _status: number;
   _headers: Record<string, string>;
   _body: string;
+  _chunks: Uint8Array[];
 }
 
 interface Route {
@@ -145,16 +146,27 @@ function makeRes(): ServerResponse {
     _status: 200,
     _headers: {} as Record<string, string>,
     _body: '',
+    _chunks: [] as Uint8Array[],
     statusCode: 200,
+    writeHead(status: number, headers?: Record<string, string>) {
+      res._status = status;
+      if (headers) {
+        for (const [k, v] of Object.entries(headers)) {
+          res.setHeader(k, v);
+        }
+      }
+    },
     setHeader(name: string, value: string) {
       res._headers[String(name).toLowerCase()] = String(value);
     },
     write(chunk: string | Uint8Array) {
-      res._body += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      if (typeof chunk === 'string') res._body += chunk;
+      else res._chunks.push(chunk);
     },
     end(chunk?: string | Uint8Array) {
       if (chunk !== undefined && chunk !== null) {
-        res._body += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        if (typeof chunk === 'string') res._body += chunk;
+        else res._chunks.push(chunk);
       }
     },
   };
@@ -200,7 +212,20 @@ export default {
       }
       const contentType =
         res._headers['content-type'] || 'text/plain; charset=utf-8';
-      return new Response(res._body || '', {
+      // Binary payloads (image proxy) must be returned as bytes — the string
+      // `_body` path corrupts them.
+      let body: BodyInit = res._body || '';
+      if (res._chunks.length > 0) {
+        const total = res._chunks.reduce((n: number, c: Uint8Array) => n + c.byteLength, 0);
+        const buf = new Uint8Array(total);
+        let off = 0;
+        for (const c of res._chunks) {
+          buf.set(c, off);
+          off += c.byteLength;
+        }
+        body = buf;
+      }
+      return new Response(body, {
         status: res._status,
         headers: { ...res._headers, 'content-type': contentType },
       });
