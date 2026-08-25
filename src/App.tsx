@@ -1725,7 +1725,7 @@ function HomePage() {
               {[
                 { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Birds', to: '/category/bird-supplies', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ara_ararauna_01.jpg/500px-Ara_ararauna_01.jpg' },
+                { label: 'Birds', to: '/category/bird-supplies', img: '/bird-avatar.jpg' },
                 { label: 'Horse', to: '/category/horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Livestock', to: '/category/cattle', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
               ].map((pet, index) => (
