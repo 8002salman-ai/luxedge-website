@@ -1,0 +1,256 @@
+{
+  "name": "Luxedge — Weekly SEO Cycle",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 7
+            }
+          ],
+          "triggerAtHour": 8,
+          "triggerAtMinute": 0
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111101",
+      "name": "Weekly Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-980, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://salman-os-swart.vercel.app/api/projects/luxedge/jobs/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-salman-os-token",
+              "value": "={{ $env.SALMAN_OS_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"module\": \"seo_research\",\n  \"environment\": \"production\"\n}",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111102",
+      "name": "Salman OS — run seo_research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-780, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Take the Hermes research result (keywords array) and expose it as a\n// JSON file for the executor + as JSON for the report.\nconst research = $input.first().json;\n// The research payload can be nested (results[].result.keywords) — flatten\n// defensively so a plain array or an envelope both work.\nlet keywords = research.keywords || research.data?.results?.[0]?.keywords || [];\nif (Array.isArray(research)) keywords = research;\nconst fileText = JSON.stringify(keywords, null, 2);\nreturn {\n  json: { count: keywords.length, keywords },\n  binary: {\n    data: {\n      data: Buffer.from(fileText).toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'weekly-keywords.json'\n    }\n  }\n};"
+      },
+      "id": "11111111-1111-4111-8111-111111111103",
+      "name": "Prepare k.json",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-580, 200]
+    },
+    {
+      "parameters": {
+        "fileName": "=C:\\Users\\basco\\Downloads\\luxedge-website\\.freebuff\\weekly-keywords.json",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111104",
+      "name": "Write weekly-keywords.json",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [-380, 200]
+    },
+    {
+      "parameters": {
+        "command": "node",
+        "arguments": "=scripts/salman-seo.mjs keywords --file .freebuff/weekly-keywords.json",
+        "options": {
+          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111105",
+      "name": "Apply keywords",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [-180, 120]
+    },
+    {
+      "parameters": {
+        "command": "node",
+        "arguments": "scripts/salman-seo.mjs sitemap",
+        "options": {
+          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111106",
+      "name": "Regenerate sitemap",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [-180, 280]
+    },
+    {
+      "parameters": {
+        "command": "cmd",
+        "arguments": "/c cd /d C:\\Users\\basco\\Downloads\\luxedge-website && git add -A && git commit -m \"SEO: weekly keyword cycle\" && git push origin main",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111107",
+      "name": "Commit & push",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [20, 120]
+    },
+    {
+      "parameters": {
+        "command": "cmd",
+        "arguments": "/c cd /d C:\\Users\\basco\\Downloads\\luxedge-website && set WRANGLER_SEND_METRICS=false&& npx wrangler deploy --name luxedge-production",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111108",
+      "name": "Deploy to Cloudflare",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [220, 120]
+    },
+    {
+      "parameters": {
+        "command": "node",
+        "arguments": "scripts/salman-seo.mjs verify",
+        "options": {
+          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111109",
+      "name": "Verify live",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [420, 120]
+    },
+    {
+      "parameters": {
+        "command": "node",
+        "arguments": "scripts/salman-seo.mjs audit",
+        "options": {
+          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111110",
+      "name": "Audit report",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [420, 280]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule": {
+      "main": [
+        [
+          {
+            "node": "Salman OS — run seo_research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salman OS — run seo_research": {
+      "main": [
+        [
+          {
+            "node": "Prepare k.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare k.json": {
+      "main": [
+        [
+          {
+            "node": "Write weekly-keywords.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write weekly-keywords.json": {
+      "main": [
+        [
+          {
+            "node": "Apply keywords",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Regenerate sitemap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply keywords": {
+      "main": [
+        [
+          {
+            "node": "Commit & push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regenerate sitemap": {
+      "main": [
+        [
+          {
+            "node": "Commit & push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit & push": {
+      "main": [
+        [
+          {
+            "node": "Deploy to Cloudflare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deploy to Cloudflare": {
+      "main": [
+        [
+          {
+            "node": "Verify live",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Audit report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

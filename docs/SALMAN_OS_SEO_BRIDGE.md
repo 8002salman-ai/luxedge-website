@@ -94,6 +94,13 @@ agent instruction:
 
 ## 3. n8n workflow (weekly automation)
 
+**Importable workflow:** [`n8n/luxedge-seo-weekly.json`](../n8n/luxedge-seo-weekly.json)
+— in n8n, **Workflows → ⋯ → Import from File**, then set `SALMAN_OS_TOKEN`
+(as an n8n environment variable) and the machine paths if the repo lives
+elsewhere. The flow is: weekly schedule → Salman OS `seo_research` → prepare
+`k.json` → apply keywords → regenerate sitemap → commit & push → deploy →
+verify + audit report.
+
 1. **Schedule** — Cron trigger, weekly (e.g. Monday 08:00).
 2. **Research** — Call Salman OS `POST /api/projects/luxedge/jobs/run` with
    `{ "module": "seo_research", "environment": "production" }` (or run Hermes
