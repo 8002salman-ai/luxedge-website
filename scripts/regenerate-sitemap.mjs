@@ -15,17 +15,11 @@ if (!URL || !KEY) { console.error('env missing'); process.exit(1); }
 const today = new Date().toISOString().slice(0, 10);
 const HEAD = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
-// Schema-aware: probe whether the 0016 commerce_readiness column exists.
-let hasReadiness = false;
-try {
-  const openApi = await (await fetch(`${URL}/rest/v1/`, { headers: { ...HEAD, Accept: 'application/openapi+json' } })).json();
-  const props = (openApi?.components?.schemas?.products || {}).properties || {};
-  hasReadiness = !!props.commerce_readiness;
-} catch { /* probe failure → derived fallback */ }
-
-const sel = hasReadiness
-  ? 'id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness'
-  : 'id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty';
+// The 0016 commerce_readiness column exists on production; select it always
+// (the OpenAPI schema probe is unreliable on some Supabase versions). The
+// stored value mirrors the storefront gate exactly, so it is authoritative
+// when present.
+const sel = 'id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness';
 const prods = await (await fetch(
   `${URL}/rest/v1/products?select=${sel}&status=in.(active,published)&limit=500`,
   { headers: HEAD },
@@ -36,7 +30,8 @@ const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 /** Mirror of the storefront commerce-ready gate (services/catalog.ts). */
 function commerceReady(p) {
-  if (hasReadiness && typeof p.commerce_readiness === 'string' && p.commerce_readiness) {
+  // Stored COMMERCE_READY is authoritative (same rule as isStorefrontReady).
+  if (typeof p.commerce_readiness === 'string' && p.commerce_readiness) {
     return p.commerce_readiness === 'COMMERCE_READY';
   }
   const src = String(p.supplier_source || '');
