@@ -421,7 +421,18 @@ function AppProvider({ children }: { children: ReactNode }) {
     if (!catalogLoaded) return;
     setCart(prev => {
       const valid = reconcileCart(prev, products);
-      return valid.length === prev.length ? prev : valid;
+      // Refresh each surviving line's product snapshot from the current
+      // catalog so repriced/updated listings always show live prices
+      // (quantity is kept — only the product data is re-synced).
+      const refreshed = valid.map(i => {
+        const cur = products.find(p => p.id === i.product.id);
+        return cur ? { ...i, product: cur } : i;
+      });
+      const changed = refreshed.length !== prev.length || refreshed.some((i, idx) => {
+        const old = prev[idx];
+        return !old || old.product.price !== i.product.price || old.product.name !== i.product.name;
+      });
+      return changed ? refreshed : prev;
     });
   }, [catalogLoaded, products]);
 
