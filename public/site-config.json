@@ -4,7 +4,7 @@
   "adsenseClientId": "ca-pub-5473713135927706",
   "publisherId": "pub-5473713135927706",
   "autoAdsEnabled": true,
-  "manualAdsEnabled": false,
+  "manualAdsEnabled": true,
   "density": "balanced",
   "showAdsOnMobile": true,
   "mobileDensity": "balanced",
@@ -17,13 +17,13 @@
     "account": true
   },
   "placements": {
-    "home_after_hero": { "enabled": false, "slot": "" },
+    "home_after_hero": { "enabled": true, "slot": "" },
     "home_after_categories": { "enabled": false, "slot": "" },
     "home_between_sections": { "enabled": false, "slot": "" },
     "shop_after_row": { "enabled": false, "slot": "" },
-    "product_below_info": { "enabled": false, "slot": "" },
+    "product_below_info": { "enabled": true, "slot": "" },
     "blog_in_article": { "enabled": false, "slot": "" },
-    "blog_after_article": { "enabled": false, "slot": "" }
+    "blog_after_article": { "enabled": true, "slot": "" }
   },
   "gaEnabled": false,
   "ga4Id": "",
