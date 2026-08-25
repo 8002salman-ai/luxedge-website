@@ -1623,9 +1623,9 @@ function HomePage() {
   const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
   const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
   const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
-  const heroDogImage = 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=900&h=700&fit=crop&auto=format&q=88';
-  const heroCatImage = 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=900&h=700&fit=crop&auto=format&q=88';
-  const heroParrotImage = 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=900&h=700&fit=crop&auto=format&q=88';
+  const heroDogImage = 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
+  const heroCatImage = 'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
+  const heroParrotImage = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Ara_ararauna_portrait_Rhodes.jpg/960px-Ara_ararauna_portrait_Rhodes.jpg';
   const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
   const categoryVisuals = [
     { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
@@ -1725,7 +1725,7 @@ function HomePage() {
               {[
                 { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Birds', to: '/category/bird-supplies', img: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=420&h=420&fit=crop&auto=format&q=88' },
+                { label: 'Birds', to: '/category/bird-supplies', img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Ara_ararauna_portrait_Rhodes.jpg/480px-Ara_ararauna_portrait_Rhodes.jpg' },
                 { label: 'Horse', to: '/category/horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
                 { label: 'Livestock', to: '/category/cattle', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
               ].map((pet, index) => (
