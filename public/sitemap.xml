@@ -1,79 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>https://luxedge.us/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/shop</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/about</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/faq</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/contact</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/shipping-policy</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/return-policy</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/privacy</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/terms</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/pet-toys</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/dog-supplies</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/cat-supplies</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/pet-beds</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/feeding-water</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/grooming</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/pet-accessories</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/horse</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/cattle</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/54eaefb2</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/category/bird-supplies</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/9ab8a1ef-2636-458e-9f37-d076a20b955d</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/9e1927f7-cde7-46bc-9e14-662dca6c6b3a</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/9de90d90-0ed9-4447-9dee-92f510fe931f</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/21bd7076-21ac-43af-af34-905c388177eb</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/e94fa84a-0e92-4336-9d2e-27d3cade7f5a</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/5f1e3ffa-2741-49de-8d5b-a40f7e0fce79</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/92a36b20-182a-4b35-949e-de45efbcc115</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/2373ff9c-c2fb-4d7c-8d85-3569cba51ac8</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/399018b5-db26-48b0-90c2-abf350bfb6cb</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/13489e05-55d4-4a59-8567-19a7c4e6fe07</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/0756fc60-8696-4a98-948a-59d2727df1e0</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/c8175001-aa77-4b9f-88db-c963fb9cd77f</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/5c2bdd0a-f5b4-4d25-b9b3-eed194e51bc0</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/58c9a22e-ecfc-46d4-b0ca-cb9053a12974</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/9967884e-61b2-4eb8-a00f-bc7fa871fa2d</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/cfe84525-74be-4f59-a8bb-97e34b5a2e19</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/d73c09b2-aba2-4f2f-8cf7-df124c6b90d1</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/262caafc-d24c-4202-b6a2-5d9c6918c083</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/5ca7ebf6-f610-45b6-b0eb-6fd41fd185b5</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/75e5102f-3e85-4542-8c0e-84055143235b</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/319f803b-be7f-4026-a7ef-a22d733b9a4a</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/b671d205-95be-474b-b950-5c18c856be13</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/c998bc95-043a-4aff-9090-8b9b9bf08991</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/d024097e-4c14-4f5b-bc97-578807eae405</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/0889cd90-1735-4622-bf6e-5ec4c4c3df6b</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/08c41ac2-92d6-42c6-83ac-48e34bc4907f</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/1041ccc8-9d84-4e62-bf47-621e8d66e67f</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/19d0b32c-0139-428c-977b-923786e301fb</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/f3dd855c-8ef5-4c53-a012-32f3a7ba9fa2</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/950f009b-5abe-4523-8550-81788ae324a6</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/9314e492-af35-4543-8211-2f9f755230e1</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/d8f9abfa-362c-4b42-993c-5b2863a64972</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/36b99839-2f5f-48b7-a987-27360869a861</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/fd3dc54a-ece4-4d03-abed-db21d1d49b96</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/b8ae0c88-cd6c-4af4-bef7-4dc4086de3b4</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/c4d6170d-68e4-4070-b164-f6284bfce2a6</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/product/1f276ed9-c013-4b89-b18a-b1169a65b26b</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/essential-supplies-new-puppy</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/cozy-corner-for-your-cat</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/grooming-routine-long-haired-pets</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/best-gifts-under-50-for-pets</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/interactive-toys-pet-enrichment</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/get-pet-to-drink-more-water</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/traveling-with-pets-tips</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/slow-feeding-explained</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/online-pet-shopping-safety-tips</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/holiday-pet-gift-guide</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/summer-pet-safety-checklist</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/senior-dog-comfort-guide</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/indoor-cat-enrichment-ideas</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/dog-training-basics-beginners</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/cat-health-wellness-tips</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/pet-travel-essentials-guide</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/bird-care-beginners-guide</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-<url><loc>https://luxedge.us/blog/equestrian-essentials-horse-care</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://luxedge.us/</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/shop</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/about</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/contact</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/privacy</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/terms</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/returns</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/shipping-policy</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/faq</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/pet-toys</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/dog-supplies</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/cat-supplies</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/pet-beds</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/feeding-water</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/grooming</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/pet-accessories</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/horse</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/cattle</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/bird-supplies</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/category/aquarium</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/essential-supplies-new-puppy</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/cozy-corner-for-your-cat</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/grooming-routine-long-haired-pets</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/best-gifts-under-50-for-pets</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/interactive-toys-pet-enrichment</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/get-pet-to-drink-more-water</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/traveling-with-pets-tips</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/slow-feeding-explained</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/online-pet-shopping-safety-tips</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/holiday-pet-gift-guide</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/summer-pet-safety-checklist</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/senior-dog-comfort-guide</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/indoor-cat-enrichment-ideas</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/dog-training-basics-beginners</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/cat-health-wellness-tips</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/pet-travel-essentials-guide</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/bird-care-beginners-guide</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/blog/equestrian-essentials-horse-care</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/dot-turtleneck-dog-bottoming-shirt</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/sisal-cat-scratch-board-wall-or-floor-scratch-pad</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/cute-cat-blankets-dog-pet-mat</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/nylon-anti-grind-dog-leash-collar</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/cooling-pet-mat-ice-silk-cooling-pad-for-cats-dogs</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/2pcs-pet-dog-seat-belt-leash-adjustable-pet-dog-cat-safety-leads-harness-car-vehicle-nylon-fabric-seatbelt-strap</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/ceramic-cat-face-food-bowl-easy-clean-pet-dish</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/durable-pet-cat-dog-vehicle-leash-nylon-adjustable-car-seat-dog-safety-belt-pet-leashes</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/dog-clothes-spring-and-summer-clothing</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/love-my-owneri-love-my-dog-pet-dog-bone-necklace</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/spot-pet-mat-waterproof-and-easy-to-clean-silicone-dog-mat-cat-mat-square-pet-placemat-pet-supplies-3</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/pet-dog-carrier-bag-carrier-for-dogs-backpack-out-double-shoulder-portable-travel-backpack-outdoor-dog-carrier-bag-travel</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/pet-shoes-wear-dog-shoes</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/pet-dog-collars-pet-training-dog-training-equipment</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/silicone-flying-saucer-funny-pets-dog-cat-toy-dog-game-flying-discs-resistant-chew-puppy-training-interactive-pet-supplies</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/dog-bed</loc><lastmod>2026-08-25</lastmod></url>
+  <url><loc>https://luxedge.us/product/cozy-cat-nest-bed-round-plush-mat</loc><lastmod>2026-08-25</lastmod></url>
 </urlset>

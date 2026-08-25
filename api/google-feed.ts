@@ -119,7 +119,7 @@ export default async function handler(_req: IncomingMessage, res: ServerResponse
       (a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.sort_order - b.sort_order,
     );
     const price = Number(p.price).toFixed(2);
-    const linkBase = `https://luxedge.us/product/${p.id}`;
+    const linkBase = `https://luxedge.us/product/${p.slug || p.id}`;
     const lines = [
       '<item>',
       `<g:id>${esc(p.id)}</g:id>`,

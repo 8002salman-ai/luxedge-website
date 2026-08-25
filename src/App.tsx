@@ -43,6 +43,7 @@ export interface Product {
   featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
   stockStatus?: string; usInventory?: boolean;
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
+  slug?: string;
   supplierSource?: string;
   commerceReadiness?: string; sourceType?: string; inventorySource?: string;
   deliveryMinDays?: number | null; deliveryMaxDays?: number | null;
@@ -189,6 +190,7 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     seoTitle: p.seoTitle,
     seoDescription: p.seoDescription,
     seoKeywords: p.seoKeywords,
+    slug: p.slug,
     supplierSource: p.supplierSource,
     variants: (p.variants || []).map((v) => ({
       id: v.id,
@@ -1085,7 +1087,7 @@ function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { products, addToCart, user, reviews: allReviews, setReviews, notify } = useApp();
   const nav = useNavigate();
-  const product = products.find(p => p.id === id);
+  const product = products.find(p => p.id === id || p.slug === id);
 
   // ALL hooks MUST be before any return
   const [qty, setQty] = useState(1);
@@ -1127,13 +1129,14 @@ function ProductDetailPage() {
       if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
       el.setAttribute('content', content);
     };
+    const pUrl = `https://luxedge.us/product/${product.slug || product.id}`;
     const setCanonical = () => {
-      const href = `https://luxedge.us/product/${product.id}`;
       let el = document.head.querySelector('link[rel="canonical"]');
       if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
-      el.setAttribute('href', href);
+      el.setAttribute('href', pUrl);
     };
     setMeta('description', product.shortDesc || product.description.slice(0, 155));
+    if (product.seoKeywords?.length) setMeta('keywords', product.seoKeywords.slice(0, 10).join(', '));
     setCanonical();
     if (product.images[0]) {
       const ogImg = document.head.querySelector('meta[property="og:image"]');
@@ -1147,7 +1150,7 @@ function ProductDetailPage() {
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us/' },
         { '@type': 'ListItem', position: 2, name: 'Shop', item: 'https://luxedge.us/shop' },
-        { '@type': 'ListItem', position: 3, name: product.name, item: `https://luxedge.us/product/${product.id}` },
+        { '@type': 'ListItem', position: 3, name: product.name, item: pUrl },
       ],
     }];
     const offers: Record<string, unknown> = {

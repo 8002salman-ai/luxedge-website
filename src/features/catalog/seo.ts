@@ -13,11 +13,11 @@ import { CatalogProduct, CatalogImage, effectivePrice } from './types';
 export const SITE_URL = 'https://luxedge.us';
 
 export function productUrl(p: Pick<CatalogProduct, 'id' | 'slug'>): string {
-  return `${SITE_URL}/#/product/${p.id}`;
+  return `${SITE_URL}/product/${p.slug || p.id}`;
 }
 
 export function shopUrl(categorySlug?: string): string {
-  return categorySlug ? `${SITE_URL}/#/category/${categorySlug}` : `${SITE_URL}/#/shop`;
+  return categorySlug ? `${SITE_URL}/category/${categorySlug}` : `${SITE_URL}/shop`;
 }
 
 export interface ProductMeta {
