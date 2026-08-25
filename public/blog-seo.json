@@ -1,0 +1,222 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-25T21:38:05.415Z",
+  "posts": [
+    {
+      "id": "b1",
+      "slug": "essential-supplies-new-puppy",
+      "title": "10 Essential Supplies Every New Puppy Needs",
+      "excerpt": "From comfy beds to chew-proof toys, here are the must-have products for welcoming a puppy into your home.",
+      "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-03-10",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b2",
+      "slug": "cozy-corner-for-your-cat",
+      "title": "How to Create the Perfect Cozy Corner for Your Cat",
+      "excerpt": "Cats love having a place to call their own. Here’s how to build a calming space your feline will adore.",
+      "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-03-05",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b3",
+      "slug": "grooming-routine-long-haired-pets",
+      "title": "A Simple Grooming Routine for Long-Haired Pets",
+      "excerpt": "Keep mats, tangles, and shedding under control with this easy weekly grooming routine.",
+      "image": "https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-02-28",
+      "authorName": "John Smith"
+    },
+    {
+      "id": "b4",
+      "slug": "best-gifts-under-50-for-pets",
+      "title": "Best Gift Ideas Under $50 for Dogs and Cats",
+      "excerpt": "Surprise your furry best friend with these thoughtful, premium pet gifts that cost less than fifty dollars.",
+      "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-02-20",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b5",
+      "slug": "interactive-toys-pet-enrichment",
+      "title": "Interactive Toys: A Beginner’s Guide to Pet Enrichment",
+      "excerpt": "Mental stimulation is just as important as exercise. Learn how interactive toys keep pets happy and sharp.",
+      "image": "https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-02-15",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b6",
+      "slug": "get-pet-to-drink-more-water",
+      "title": "How to Get Your Pet to Drink More Water",
+      "excerpt": "Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.",
+      "image": "https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-02-10",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b7",
+      "slug": "traveling-with-pets-tips",
+      "title": "Traveling with Pets: 7 Essential Tips",
+      "excerpt": "Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.",
+      "image": "https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-02-05",
+      "authorName": "Sarah Johnson"
+    },
+    {
+      "id": "b8",
+      "slug": "slow-feeding-explained",
+      "title": "Slow Feeding Explained: Why Your Dog Gobbles Food",
+      "excerpt": "Fast eating can cause bloating and digestive issues. Here’s how slow feeder bowls help.",
+      "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-01-30",
+      "authorName": "Mike Williams"
+    },
+    {
+      "id": "b9",
+      "slug": "online-pet-shopping-safety-tips",
+      "title": "10 Online Pet Shopping Safety Tips to Protect Your Money",
+      "excerpt": "Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.",
+      "image": "https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-01-25",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b10",
+      "slug": "choosing-the-right-dog-bed",
+      "title": "Choosing the Right Dog Bed: A Complete Guide",
+      "excerpt": "Size, support, and washability — here’s everything you need to pick the perfect bed for your dog.",
+      "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-01-20",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b11",
+      "slug": "sustainable-pet-care",
+      "title": "Sustainable Pet Care: How to Buy Better, Not More",
+      "excerpt": "Make environmentally conscious choices for your pets without sacrificing quality or comfort.",
+      "image": "https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-01-15",
+      "authorName": "Sarah Johnson"
+    },
+    {
+      "id": "b12",
+      "slug": "habits-happier-healthier-pet",
+      "title": "15 Everyday Habits for a Happier, Healthier Pet",
+      "excerpt": "Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.",
+      "image": "https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2025-01-10",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b13",
+      "slug": "how-to-stop-puppy-biting",
+      "title": "How to Stop a Puppy from Biting: A Step-by-Step Guide",
+      "excerpt": "Puppy nipping is normal — but it should not become a habit. Here is exactly how to teach gentle mouthing in a few weeks.",
+      "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-07-18",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b14",
+      "slug": "keep-dog-cool-in-summer",
+      "title": "How to Keep Your Dog Cool in Summer: 10 Real Tips",
+      "excerpt": "Heatstroke is a real summer danger for dogs. Learn the signs, the no-go rules, and the cooling products that actually help.",
+      "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-07-10",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b15",
+      "slug": "cat-hydration-water-fountains",
+      "title": "Why Cats Drink So Little — and How a Water Fountain Helps",
+      "excerpt": "Cats evolved to get moisture from prey, not bowls. Here is why they ignore still water and how to get them drinking more.",
+      "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-06-28",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b16",
+      "slug": "flying-with-pet-checklist",
+      "title": "Flying with a Dog or Cat: The Complete Checklist",
+      "excerpt": "From carrier rules to vet certificates, here is everything to prepare before flying with your pet — and what to pack in-cabin.",
+      "image": "https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-06-15",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b17",
+      "slug": "horse-grooming-essentials-beginners",
+      "title": "Horse Grooming Essentials: A Beginner’s Starter Kit",
+      "excerpt": "Good grooming keeps a horse healthy, comfortable, and easy to handle. Here is the starter kit every new owner needs.",
+      "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-05-30",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b18",
+      "slug": "cattle-care-basics-small-farms",
+      "title": "Cattle Care Basics for Small Farms: Feed, Health & Handling",
+      "excerpt": "Raising cattle on a small farm is rewarding — and a real responsibility. Here are the fundamentals of keeping a healthy herd.",
+      "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-05-20",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b19",
+      "slug": "best-bird-feeder-buyers-guide",
+      "title": "How to Choose the Best Bird Feeder for Your Backyard: 2026 Buyer’s Guide",
+      "excerpt": "Tube, hopper, or tray? Seed or no-seed? Here is exactly how to pick a bird feeder that fits your yard and attracts the birds you want.",
+      "image": "https://images.pexels.com/photos/7517035/pexels-photo-7517035.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-18",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b20",
+      "slug": "horse-grooming-kit-buyers-guide",
+      "title": "The Horse Grooming Kit Buyer’s Guide: What to Buy, What to Skip",
+      "excerpt": "Curry comb, brushes, hoof pick — what does a horse actually need? This guide breaks down the essentials and what to skip to save money.",
+      "image": "https://images.pexels.com/photos/1466205/pexels-photo-1466205.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-11",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b21",
+      "slug": "dog-car-safety-seat-belt-guide",
+      "title": "Dog Car Safety: The Best Seat Belt & Travel Setup for Road Trips",
+      "excerpt": "A loose dog in a moving car is a danger to everyone. Here is the right gear to keep your dog secure, comfortable, and safe on every drive.",
+      "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-04",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b22",
+      "slug": "dog-cooling-mat-buyers-guide",
+      "title": "How to Choose the Best Dog Cooling Mat: A 2026 Buyer’s Guide",
+      "excerpt": "Not all cooling mats work the same. Here is how to pick one your dog will actually use — and use it safely through the hottest months.",
+      "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-25",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b23",
+      "slug": "automatic-pet-feeder-buyers-guide",
+      "title": "Automatic Pet Feeders Explained: How to Pick the Right One for Your Cat or Dog",
+      "excerpt": "Portion control, scheduling, and power backup — here is what actually matters when you buy an automatic pet feeder.",
+      "image": "https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-21",
+      "authorName": "Admin"
+    },
+    {
+      "id": "b24",
+      "slug": "cat-window-perch-buyers-guide",
+      "title": "Cat Window Perch Buyer’s Guide: Give Your Cat the Best View in the House",
+      "excerpt": "Cats love high perches and window views. Here is how to choose a window perch that is safe, sturdy, and actually holds your cat.",
+      "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-14",
+      "authorName": "Admin"
+    }
+  ]
+}

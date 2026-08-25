@@ -39,6 +39,7 @@ import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
+import { maybeInjectSeo } from './seo-meta';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -232,10 +233,37 @@ export default {
     }
     // Everything else → static assets, with an explicit SPA fallback so
     // client-side routes (/admin, /product/:slug, …) serve index.html.
-    const assetRes = await env.ASSETS.fetch(request);
-    if (assetRes.status === 404 && !url.pathname.startsWith('/api/')) {
-      return env.ASSETS.fetch(new Request(url.origin + '/', request));
+    // Crawlers get per-route server-side SEO meta injected into the shell
+    // (title/description/canonical/JSON-LD) so Google can index each page
+    // with its real title instead of the generic one.
+    if (url.pathname.startsWith('/api/')) {
+      return env.ASSETS.fetch(request);
     }
-    return assetRes;
+    const lastSeg = url.pathname.split('/').filter(Boolean).pop() || '';
+    const isFileLike = lastSeg.includes('.');
+    if (isFileLike) {
+      return env.ASSETS.fetch(request);
+    }
+    const indexRes = await env.ASSETS.fetch(new Request(url.origin + '/', request));
+    if (request.method === 'GET' && indexRes.ok) {
+      const html = await indexRes.text();
+      const injected = await maybeInjectSeo(
+        html,
+        url.pathname,
+        url.origin,
+        request.headers.get('user-agent') || '',
+        env,
+      );
+      if (injected) {
+        return new Response(injected, {
+          status: 200,
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'public, max-age=60',
+          },
+        });
+      }
+    }
+    return indexRes;
   },
 };
