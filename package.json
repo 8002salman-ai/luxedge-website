@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "seo:audit": "node scripts/salman-seo.mjs audit",
+    "seo:apply": "node scripts/salman-seo.mjs keywords --file",
+    "seo:sitemap": "node scripts/salman-seo.mjs sitemap",
+    "seo:verify": "node scripts/salman-seo.mjs verify"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
