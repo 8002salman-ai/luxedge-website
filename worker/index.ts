@@ -246,6 +246,8 @@ export default {
     }
     const indexRes = await env.ASSETS.fetch(new Request(url.origin + '/', request));
     if (request.method === 'GET' && indexRes.ok) {
+      // Read the shell once and ALWAYS return a fresh Response — the original
+      // response body is consumed by text(), so returning it would 500.
       const html = await indexRes.text();
       const injected = await maybeInjectSeo(
         html,
@@ -263,6 +265,13 @@ export default {
           },
         });
       }
+      return new Response(html, {
+        status: indexRes.status,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'public, max-age=300',
+        },
+      });
     }
     return indexRes;
   },
