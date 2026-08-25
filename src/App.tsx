@@ -1041,7 +1041,10 @@ function RouteTitle() {
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
       // Real catalog product (never the demo ALL_PRODUCTS fixture).
-      const p = products.find((x) => x.id === decodeURIComponent(segs[1] || ""));
+      // Canonical storefront URLs are /product/<slug>, so match slug OR id
+      // exactly like ProductDetailPage does.
+      const seg = decodeURIComponent(segs[1] || "");
+      const p = products.find((x) => x.id === seg || x.slug === seg);
       set(p ? (p.seoTitle || p.name) : "Product");
       if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
