@@ -131,6 +131,9 @@ interface ProductRow {
   category_id?: string | null;
   brand?: string | null;
   status: string;
+  safety_class?: string | null;
+  safety_review_status?: string | null;
+  intended_species?: string | null;
   price?: number | null;
   compare_at_price?: number | null;
   cost_price?: number | null;
@@ -288,7 +291,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     categoryId: row.category_id || null,
     categoryName: cat?.name || '',
     brand: row.brand || 'Luxedge',
-    status: (['draft', 'ready', 'active', 'inactive', 'archived'].includes(row.status) ? row.status : row.status === 'published' ? 'active' : 'draft') as CatalogStatus,
+    status: (['draft', 'ready', 'active', 'inactive', 'archived', 'safety_hold'].includes(row.status) ? row.status : row.status === 'published' ? 'active' : 'draft') as CatalogStatus,
     price,
     compareAtPrice: compare > price ? compare : 0,
     costPrice: cost,
@@ -307,6 +310,9 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     usInventory: !!row.us_inventory,
     supplierSource: row.supplier_source || undefined,
     supplierProductRef: row.supplier_product_ref || undefined,
+    safetyClass: (row.safety_class as CatalogProduct['safetyClass']) || null,
+    safetyReviewStatus: (row.safety_review_status as CatalogProduct['safetyReviewStatus']) || null,
+    intendedSpecies: row.intended_species || null,
     // Prefer the persisted 0016 classification; derive honestly when absent
     // (pre-migration the column does not exist yet).
     commerceReadiness: (row.commerce_readiness as CatalogProduct['commerceReadiness']) || deriveCommerceReadiness({
@@ -506,6 +512,9 @@ export interface ProductInput {
   usInventory?: boolean;
   supplierSource?: string;
   supplierProductRef?: string;
+  safetyClass?: CatalogProduct['safetyClass'];
+  safetyReviewStatus?: CatalogProduct['safetyReviewStatus'];
+  intendedSpecies?: string | null;
   /** Commerce-readiness model fields (migration 0016). */
   commerceReadiness?: CatalogProduct['commerceReadiness'];
   sourceType?: CatalogProduct['sourceType'];
@@ -567,6 +576,9 @@ export function productToRow(input: ProductInput): Record<string, unknown> {
     us_inventory: input.usInventory ?? false,
     supplier_source: input.supplierSource ?? null,
     supplier_product_ref: input.supplierProductRef ?? null,
+    safety_class: input.safetyClass ?? null,
+    safety_review_status: input.safetyReviewStatus ?? null,
+    intended_species: input.intendedSpecies ?? null,
     commerce_readiness: input.commerceReadiness ?? null,
     source_type: input.sourceType ?? null,
     inventory_source: input.inventorySource ?? null,
@@ -645,6 +657,9 @@ const INPUT_FIELD_TO_COLUMNS: Record<keyof ProductInput, string[]> = {
   usInventory: ['us_inventory'],
   supplierSource: ['supplier_source'],
   supplierProductRef: ['supplier_product_ref'],
+  safetyClass: ['safety_class'],
+  safetyReviewStatus: ['safety_review_status'],
+  intendedSpecies: ['intended_species'],
   commerceReadiness: ['commerce_readiness'],
   sourceType: ['source_type'],
   inventorySource: ['inventory_source'],

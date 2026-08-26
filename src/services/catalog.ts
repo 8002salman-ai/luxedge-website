@@ -1,26 +1,26 @@
-// ============================================================================
-// LUXEDGE V2 — STOREFRONT CATALOG SERVICE (Phase 3B)
+﻿// ============================================================================
+// LUXEDGE V2 â€” STOREFRONT CATALOG SERVICE (Phase 3B)
 //
 // Loads the storefront catalog from Supabase when it is configured AND
-// reachable. Returns an EMPTY REAL CATALOG ({ products: [], categories, … })
-// when the database is reachable but has zero published products — a valid
+// reachable. Returns an EMPTY REAL CATALOG ({ products: [], categories, â€¦ })
+// when the database is reachable but has zero published products â€” a valid
 // empty DB result is NOT an error and must never trigger demo/fallback data.
 // Returns null ONLY for genuine failures (not configured, unreachable, schema
-// not provisioned) — and even then the caller must NOT fall back to demo
+// not provisioned) â€” and even then the caller must NOT fall back to demo
 // products (Phase 4E.1/4E.2: the storefront starts empty and stays empty
 // until genuinely approved products exist).
 //
 // DATA SOURCES (supabase/migrations/0004_reconcile_live.sql)
-//   categories     — active storefront categories
-//   products       — published products (status = 'published')
-//   product_images — product image urls (optional; tolerated on failure)
+//   categories     â€” active storefront categories
+//   products       â€” published products (status = 'published')
+//   product_images â€” product image urls (optional; tolerated on failure)
 //
-// PERMANENT STOREFRONT RULE (Phase 4E.1 §10): a product must NOT become
+// PERMANENT STOREFRONT RULE (Phase 4E.1 Â§10): a product must NOT become
 // customer-visible merely because it exists in `products` or is
 // PRODUCT_SHORTLISTED. Only `status = 'published'` rows ever render here, and
 // the future publish path additionally requires BUSINESS_QUALIFIED + QA PASS +
 // OWNER APPROVAL + listing factual QA PASS + creative/image quality gate PASS
-// + explicit publish authorization. AUTO PUBLISH = OFF for now — the engine
+// + explicit publish authorization. AUTO PUBLISH = OFF for now â€” the engine
 // only ever creates drafts.
 //
 // SECURITY
@@ -152,7 +152,7 @@ interface DbProductRow {
   cost_price?: number | null;
   landed_cost?: number | null;
   shipping_cost?: number | null;
-  // Migration 0016 — commerce readiness (may be absent pre-migration)
+  // Migration 0016 â€” commerce readiness (may be absent pre-migration)
   commerce_readiness?: string | null;
   source_type?: string | null;
   inventory_source?: string | null;
@@ -229,7 +229,7 @@ function tagsOf(v: unknown): string[] {
 /**
  * Load the storefront catalog from Supabase.
  * Returns an EMPTY REAL CATALOG when the DB is reachable but has zero
- * published products (intentional empty catalog — never demo fallback).
+ * published products (intentional empty catalog â€” never demo fallback).
  * Returns null only when: not configured, unreachable, schema not
  * provisioned, or the DB query itself failed.
  */
@@ -264,7 +264,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
     // Products without any price info are not ready for the storefront.
     const usable = published.filter((p) => num(p.price) > 0 || num(p.price_amount) > 0);
-    // Phase 4E.2 — a reachable DB with ZERO published products is a valid
+    // Phase 4E.2 â€” a reachable DB with ZERO published products is a valid
     // EMPTY REAL CATALOG, not an error. Never signal "use demo fallback".
     if (usable.length === 0) {
       return { products: [], categories, source: 'supabase' };
@@ -295,10 +295,10 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         }
       }
     } catch {
-      /* product images unavailable — products still render with image_url */
+      /* product images unavailable â€” products still render with image_url */
     }
 
-    // Optional: attach product variants (real options only — never invented).
+    // Optional: attach product variants (real options only â€” never invented).
     let variantsByProduct = new Map<string, DbVariantRow[]>();
     try {
       const varRows = await db.list<DbVariantRow>('product_variants', { limit: 1000 });
@@ -405,8 +405,8 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
     return { products, categories, source: 'supabase' };
   } catch {
-    // Unreachable / schema not provisioned / permission denied → null.
-    // The caller must NOT fall back to demo products — the storefront stays
+    // Unreachable / schema not provisioned / permission denied â†’ null.
+    // The caller must NOT fall back to demo products â€” the storefront stays
     // empty (Phase 4E.1/4E.2).
     return null;
   }
@@ -419,7 +419,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
  *   - When `commerce_readiness` exists and is non-null, it is authoritative.
  *   - Otherwise derive from persisted evidence: a real supplier source PLUS a
  *     real cost basis is required. Manufacturer retail-reference products
- *     (e.g. KONG official pages — authenticity proven, purchasing path NOT
+ *     (e.g. KONG official pages â€” authenticity proven, purchasing path NOT
  *     proven) have no cost basis and therefore never qualify.
  */
 function isStorefrontReady(p: DbProductRow): boolean {
@@ -446,7 +446,7 @@ function isStorefrontReady(p: DbProductRow): boolean {
 
 /**
  * Load storefront promotions: ACTIVE coupons + free-shipping strategy.
- * Failures degrade to a safe default (no coupons, free shipping OFF) — the
+ * Failures degrade to a safe default (no coupons, free shipping OFF) â€” the
  * storefront never shows coupons/shipping claims it cannot back.
  */
 export async function loadStorefrontPromotions(): Promise<StorePromotions> {
@@ -482,7 +482,7 @@ export async function loadStorefrontPromotions(): Promise<StorePromotions> {
       out.freeShippingThreshold = num(v.freeShippingThreshold) > 0 ? num(v.freeShippingThreshold) : 50;
     }
   } catch {
-    /* promotions unavailable — safe defaults */
+    /* promotions unavailable â€” safe defaults */
   }
   return out;
 }
