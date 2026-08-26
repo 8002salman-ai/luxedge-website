@@ -186,6 +186,23 @@ describe('/api/crm/lead', () => {
     expect(captured.status).toBe(200);
     expect(captured.body).toMatchObject({ ok: true, stored: false });
   });
+
+  it.each([
+    { label: 'omitted', payload: {}, expected: false },
+    { label: 'explicitly enabled', payload: { optedIn: true }, expected: true },
+  ])('records consent only when explicitly enabled ($label)', async ({ payload, expected }) => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    let saved: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      saved = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response('{}', { status: 201 });
+    }));
+    const { captured, server } = makeRes();
+    await leadHandler(makeReq('POST', { email: 'buyer@example.com', source: 'whatsapp', ...payload }), server);
+    expect(captured.status).toBe(200);
+    expect(saved?.opted_in).toBe(expected);
+  });
 });
 
 describe('/api/crm/list', () => {
