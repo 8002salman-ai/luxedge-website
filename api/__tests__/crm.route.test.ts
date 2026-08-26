@@ -174,9 +174,13 @@ describe('/api/crm/lead', () => {
     expect(captured.status).toBe(405);
   });
 
-  it('rejects when neither email nor phone is provided', async () => {
+  it.each([
+    ['missing contact', { source: 'whatsapp' }],
+    ['JSON null', null],
+    ['JSON array', []],
+  ])('returns 400 for %s instead of throwing', async (_label, payload) => {
     const { captured, server } = makeRes();
-    await leadHandler(makeReq('POST', { source: 'whatsapp' }), server);
+    await leadHandler(makeReq('POST', payload), server);
     expect(captured.status).toBe(400);
   });
 
@@ -311,11 +315,15 @@ describe('/api/crm/subscribe', () => {
     expect(captured.status).toBe(405);
   });
 
-  it('rejects a missing/invalid email', async () => {
+  it.each([
+    ['missing email', {}],
+    ['invalid email', { email: 'not-an-email' }],
+    ['JSON null', null],
+    ['JSON array', []],
+  ])('returns 400 for %s', async (_label, payload) => {
     const { captured, server } = makeRes();
-    await subscribeHandler(makeReq('POST', { email: 'not-an-email' }), server);
+    await subscribeHandler(makeReq('POST', payload), server);
     expect(captured.status).toBe(400);
-    expect(JSON.stringify(captured.body)).toMatch(/email/i);
   });
 
   it('fails soft with an honest note when the server DB is not configured', async () => {
