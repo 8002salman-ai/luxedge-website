@@ -110,7 +110,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     };
     const couponRes = await supabaseFetch(cfg, '/rest/v1/coupons', { method: 'POST', body: couponBody });
     if (!couponRes.ok) {
-      // uuid cast failure or policy issue — fall back to a code-only offer note.
+      // A coupon that was not persisted must never be presented as redeemable.
       sendJson(res, 502, {
         ok: false,
         error: 'Could not create the welcome coupon in the catalog. Try again in a moment.',

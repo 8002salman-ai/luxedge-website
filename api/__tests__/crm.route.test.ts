@@ -2,8 +2,8 @@
 // LUXEDGE — /api/crm/* ROUTE TESTS
 //
 // Verifies the CRM contract without any live HTTP:
-//   - /api/crm/welcome: 405 on wrong method, email validation, server-DB
-//     absent → preview coupon still returned (visitor never loses the offer),
+//   - /api/crm/welcome: 405 on wrong method, email validation, malformed
+//     payloads, server-DB absence → fail-closed response, consent handling,
 //     and no secret ever echoed.
 //   - /api/crm/lead: 405, contact validation, DB-absent honest degrade.
 //   - /api/crm/list: admin JWT required; non-admin 403; missing DB 503.
