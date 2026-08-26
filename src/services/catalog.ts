@@ -68,6 +68,8 @@ export interface CatalogProduct {
   seoKeywords: string[];
   sku?: string;
   supplierSource?: string;
+  supplierProductRef?: string;
+  supplierUrl?: string | null;
 }
 
 export interface CatalogVariant {
@@ -146,6 +148,7 @@ interface DbProductRow {
   seo_keywords?: unknown;
   supplier_source?: string | null;
   supplier_product_ref?: string | null;
+  supplier_url?: string | null;
   cost_price?: number | null;
   landed_cost?: number | null;
   shipping_cost?: number | null;
@@ -395,6 +398,8 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         seoKeywords: tagsOf(p.seo_keywords),
         sku: typeof p.sku === 'string' ? p.sku : undefined,
         supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
+        supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
+        supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
       };
     });
 

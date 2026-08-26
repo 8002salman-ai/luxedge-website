@@ -45,6 +45,8 @@ export interface Product {
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   slug?: string;
   supplierSource?: string;
+  supplierProductRef?: string;
+  supplierUrl?: string | null;
   commerceReadiness?: string; sourceType?: string; inventorySource?: string;
   deliveryMinDays?: number | null; deliveryMaxDays?: number | null;
 }
@@ -192,6 +194,8 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     seoKeywords: p.seoKeywords,
     slug: p.slug,
     supplierSource: p.supplierSource,
+    supplierProductRef: p.supplierProductRef,
+    supplierUrl: p.supplierUrl,
     variants: (p.variants || []).map((v) => ({
       id: v.id,
       color: v.attributes?.color || '',
@@ -1103,6 +1107,10 @@ function SLayout({ children }: { children: ReactNode }) {
 // ============================================================================
 // PRODUCT DETAIL PAGE
 // ============================================================================
+function isFoodOrFeedProduct(product: Pick<Product, 'name' | 'category' | 'tags'>): boolean {
+  return /\b(food|feed|seed|treats?|chews?|supplement|salt lick|bird seed)\b/i.test(`${product.name} ${product.category} ${product.tags.join(' ')}`);
+}
+
 function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { products, addToCart, user, reviews: allReviews, setReviews, notify } = useApp();
@@ -1477,6 +1485,22 @@ function ProductDetailPage() {
 
           {product.deliveryMinDays != null && product.deliveryMaxDays != null && (
             <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Estimated delivery: {product.deliveryMinDays}–{product.deliveryMaxDays} business days</p>
+          )}
+
+          {isFoodOrFeedProduct(product) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+              <p className="font-semibold">Pet food and feed safety notice</p>
+              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
+              {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
+            </div>
+          )}
+
+          {isFoodOrFeedProduct(product) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+              <p className="font-semibold">Pet food and feed safety notice</p>
+              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
+              {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
+            </div>
           )}
 
           {/* Ad: Below Product Information */}
@@ -3224,7 +3248,7 @@ function TermsPage() {
       <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
       <LS t="Shipping and Delivery"><p>Shipping availability, cost, and estimated delivery windows are shown at checkout or on the relevant product page. Estimates are not guarantees and may change because of supplier processing, carrier delays, weather, or events outside our control. Please review our Shipping Policy.</p></LS>
       <LS t="Returns, Replacements, and Refunds"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Unless applicable law requires otherwise, Luxedge does not offer change-of-mind refunds as a standard remedy. Nothing in these Terms limits a consumer right that cannot legally be waived.</p></LS>
-      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p></LS>
+      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p><p className="mt-2"><strong>Animal food and feed:</strong> Luxedge does not manufacture or independently certify animal food, feed, treats, supplements, or salt/mineral products. Check the label, ingredients, intended species, warnings, lot/expiry information, and applicable requirements before use. Do not use animal products as human food, and do not rely on a listing as an FDA approval, nutritional, disease-treatment, or veterinary claim. If a product lacks a verifiable supplier reference, label information, or destination support, we may remove or pause the listing. Stop use and contact a veterinarian if an animal has an adverse reaction.</p></LS>
       <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
       <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
       <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
@@ -3283,8 +3307,8 @@ function FAQPage() {
       { q: 'What payment methods do you accept?', a: 'Online payment is not currently enabled. No payment is taken and no paid order is created until a payment provider is connected and checkout confirms a successful transaction.' },
       { q: 'Is my payment information secure?', a: 'When checkout is enabled, payment is handled by the configured third-party provider and Luxedge does not store complete card details. Payment is not currently available and no charge is made until a successful transaction is confirmed.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
-    ]},
-    { c: 'Products & Quality', qs: [
+    ]},      { c: 'Products & Quality', qs: [
+      { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and shipping eligibility before use. Luxedge does not claim that a product is FDA-approved or provide veterinary or nutritional advice. Do not use animal products as human food; ask a veterinarian about dietary or safety questions.' },
       { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
       { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
