@@ -238,7 +238,7 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b6', slug:'get-pet-to-drink-more-water', title:'How to Get Your Pet to Drink More Water', excerpt:'Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.', content:'Pets often don\u2019t drink enough water. Here\u2019s how to keep them properly hydrated.\n\n## Upgrade to a Fountain\nMany pets prefer running water. A Stainless Steel Pet Water Fountain with triple filtration is irresistible to most cats and dogs.\n\n## Keep Bowls Clean\nPets refuse stale water. Wash bowls daily and refresh water at least twice a day.\n\n## Add Water to Food\nMix a little warm water into dry kibble or add broth to increase daily intake.\n\n## Multiple Stations\nPlace water bowls in several rooms so water is always nearby.\n\n## Watch the Signs\nCheck for dry gums, lethargy, or loss of appetite. If you\u2019re worried about dehydration, contact your vet.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['hydration','water fountain','health','cat and dog'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
   { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding — and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
   { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle — great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
-  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Curated stores like Luxedge use 256-bit SSL encryption.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, know the return policy. Luxedge offers 30-day hassle-free returns.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nPayPal and Stripe provide buyer protection layers.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
+  { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Luxedge uses HTTPS and publishes its policies clearly before you order.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, read the Luxedge return and replacement policy so you understand the available remedies.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nUse only payment methods presented by the checkout provider.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
   { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability — here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
   { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions — even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase — not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
   { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
@@ -630,8 +630,8 @@ function Header() {
     {/* ── Rotating promo bar ── */}
     <div className="site-utility-bar relative" style={{ minHeight: 30 }}>
       {[
-        { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Free Shipping on Orders $50+' },
-        { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Easy Returns' },
+        { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Shipping options shown at checkout' },
+        { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Return Requests' },
         { icon: <Headphones01 strokeWidth={1.5} size={12} />, text: 'Customer Support Mon–Fri 9AM–6PM CT' },
         { icon: <ShieldTick strokeWidth={1.5} size={12} />, text: 'Thoughtfully Curated — Quality You Can Trust' },
       ].map((promo, i) => (
@@ -888,8 +888,8 @@ function Footer() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2">
               {[
-                { icon: Truck01, text: 'Free Shipping $50+' },
-                { icon: RefreshCcw01, text: '30-Day Easy Returns' },
+                { icon: Truck01, text: 'Shipping options shown at checkout' },
+                { icon: RefreshCcw01, text: '30-Day Return Requests' },
                 { icon: Headphones01, text: 'Customer Support' },
                 { icon: ShieldTick, text: 'Thoughtfully Curated' },
               ].map((b, i) => (
@@ -1048,7 +1048,7 @@ function RouteTitle() {
       set(p ? (p.seoTitle || p.name) : "Product");
       if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
-    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — free shipping on orders over $50."); }
+    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — shipping options and any applicable promotions are shown before payment."); }
     else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
     else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
@@ -1056,7 +1056,7 @@ function RouteTitle() {
     else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
     else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
     else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
-    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — free shipping on orders over $50."); }
+    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — delivery estimates, shipping costs, and applicable promotions."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
     else if (segs[0] === "blog") {
@@ -1463,8 +1463,8 @@ function ProductDetailPage() {
           {/* Trust */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
-              { icon: Truck01, t: 'Free ship $50+' },
-              { icon: RefreshCcw01, t: '30-day returns' },
+              { icon: Truck01, t: 'Shipping shown at checkout' },
+              { icon: RefreshCcw01, t: 'Return requests within 30 days' },
               { icon: ShieldTick, t: 'Thoughtfully curated' },
               { icon: Lock01, t: 'Encrypted connection' },
             ].map((b, i) => (
@@ -1635,7 +1635,7 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
 }
 
 function HomePage() {
-  const { products, freeShippingEnabled, freeShippingThreshold } = useApp();
+  const { products, freeShippingEnabled } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
   const [nlSaved, setNlSaved] = useState(false);
@@ -1678,6 +1678,8 @@ function HomePage() {
     || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
     || catVisual
     || heroProduct;
+  const shipCopy = freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout';
+
   // GA4: fire view_item_list once for the homepage featured order on load.
   useEffect(() => {
     if (topPicks.length === 0 && trendingProducts.length === 0) return;
@@ -1689,8 +1691,6 @@ function HomePage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
-
-  const shipCopy = freeShippingEnabled ? `Free shipping over $${freeShippingThreshold}` : 'Shipping calculated at checkout';
 
   return (
     <div className="bg-white">
@@ -2036,8 +2036,8 @@ function HomePage() {
           <Reveal>
             <div className="trust-pill-row">
               {[
-                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: freeShippingEnabled ? `Free Shipping $${freeShippingThreshold}+` : 'Fast Shipping' },
-                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-Day Easy Returns' },
+                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout' },
+                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-Day Return Requests' },
                 { icon: <ShieldTick strokeWidth={1.5} size={13} />, text: 'Thoughtfully Curated' },
                 { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Customer Support' },
                 { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Encrypted Connection' },
@@ -2721,7 +2721,7 @@ function CheckoutPage() {
                 {!paymentsConfigured ? (
                   'Payments Coming Soon'
                 ) : submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
-                {!paymentsConfigured ? null : submitting ? 'Starting secure checkout…' : 'Continue to Secure Checkout'}
+                {!paymentsConfigured ? null : submitting ? 'Starting checkout…' : 'Continue to Payment'}
               </button>
               {!paymentsConfigured && (
                 <div className="mt-4 rounded-xl bg-luxe-gold-soft border border-luxe-gold/20 p-4 text-center">
@@ -2729,12 +2729,12 @@ function CheckoutPage() {
                   <p className="text-xs text-luxe-gray mt-1">Your cart is saved — nothing has been charged. Check back shortly, or email <a className="underline text-luxe-gold-dark" href="mailto:hello@luxedge.us?subject=Checkout+question">hello@luxedge.us</a>.</p>
                 </div>
               )}
-              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment securely on Stripe's checkout page — Luxedge never sees your card details." : 'Luxedge never stores card details — payment is handled by a trusted provider.'}</p>
+              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment on Stripe's checkout page — Luxedge never sees your card details." : 'No payment is taken until checkout is enabled.'}</p>
               <div className="mt-4 pt-4 border-t space-y-2.5">
                 {[
-                  { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Standard shipping 7–14 days' },
-                  { i: RefreshCcw01, t: '30-day hassle-free returns' },
-                  { i: ShieldTick, t: 'Encrypted connection' },
+                  { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Delivery estimate shown at checkout' },
+                  { i: RefreshCcw01, t: '30-day return requests' },
+                  { i: ShieldTick, t: 'HTTPS connection' },
                 ].map((b, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
                     <b.i strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />{b.t}
@@ -2976,9 +2976,9 @@ function LoginPage() {
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Clear checkout terms</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Shipping shown at checkout</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day return requests</span>
         </div>
 
         {/* Admin link */}
@@ -3077,9 +3077,9 @@ function SignupPage() {
 
         {/* Trust line */}
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Secure checkout</span>
-          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Free shipping $50+</span>
-          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day returns</span>
+          <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Clear checkout terms</span>
+          <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Shipping shown at checkout</span>
+          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day return requests</span>
         </div>
       </div>
     </div>
@@ -3181,10 +3181,10 @@ function AboutPage() {
       <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
       <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We stand behind everything we sell. That means free shipping on orders over $50, a 30-day hassle-free return policy, and a support team that actually responds. If something isn't right with your order, we make it right — no runaround, no fine print.</p>
+      <p className="text-gray-600 leading-relaxed">We aim to provide clear product information, delivery estimates, and responsive support. Returns, replacements, and any refunds are handled under our published policies and applicable law. Please review those policies before ordering.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
-        {[{v:'$50+',l:'Free Shipping'},{v:'30-Day',l:'Returns & Replacements'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
+        {[{v:'Eligible',l:'Shipping Options'},{v:'30-Day',l:'Return Requests'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
         )}
       </div>
@@ -3194,17 +3194,20 @@ function AboutPage() {
 
 function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="August 14, 2026">
+    <LegalPage title="Privacy Policy" updated="August 26, 2026">
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.</p></LS>
-      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment information (processed securely through our payment providers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
-      <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Save billing and shipping information for faster future purchases.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
+      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
+      <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
       <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
-      <LS t="Payment Security"><p>Payments are processed securely through trusted third-party payment processors. Luxedge does not store your complete credit or debit card information on our servers.</p></LS>
-      <LS t="Cookies"><p>Our website uses cookies to remember your preferences, improve website performance, analyze website traffic, and enhance your shopping experience. When you first visit our site, we ask for your consent to use advertising and analytics cookies. You may change your choice or disable cookies through your browser settings at any time, although some website features may not function properly.</p></LS>
+      <LS t="Payments"><p>Online payment processing is provided by a third-party payment processor when checkout is enabled. Luxedge does not store complete credit or debit card numbers on its servers. If payment is not enabled, checkout does not create a paid order and no payment is taken.</p></LS>
+      <LS t="Cookies and Analytics"><p>Our website uses essential browser storage and similar technologies to keep the cart and remember preferences. With your consent, we may load analytics and advertising technologies to understand traffic and show relevant ads. You may decline non-essential analytics and advertising cookies through the consent prompt or your browser settings, although some features may work differently.</p></LS>
       <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
       <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, and analytics services. These providers receive only the information necessary to perform their services.</li></ul></LS>
       <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
-      <LS t="Your Rights"><p>Depending on your location, you may request access to, correction of, or deletion of your personal information where permitted by law, and you may opt out of marketing communications.</p></LS>
+      <LS t="Your Privacy Choices"><p>Depending on your location, you may request access to, correction of, or deletion of personal information, ask us to correct inaccurate information, or opt out of promotional communications. We do not sell personal information. To make a privacy request, email hello@luxedge.us with enough information for us to verify and respond to your request.</p><p className="mt-2">Where required by applicable law, you may also have rights to opt out of targeted advertising or certain sharing of information. We will not discriminate against you for exercising rights provided by law.</p></LS>
+      <LS t="Data Retention"><p>We retain information only for as long as reasonably necessary for the purposes described here, including order support, accounting, fraud prevention, dispute resolution, and legal compliance. Retention periods vary by the type of information and applicable requirements.</p></LS>
+      <LS t="Children's Privacy"><p>Luxedge is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided information to us, contact hello@luxedge.us so we can review and delete it where appropriate.</p></LS>
+      <LS t="Email Marketing"><p>If you opt in to newsletters or promotional messages, you can unsubscribe using the link in the message or by contacting us. Transactional messages about an order or support request may still be sent when necessary.</p></LS>
       <LS t="Third-Party Links"><p>Our website may contain links to third-party websites. We are not responsible for the privacy practices or content of those websites.</p></LS>
       <LS t="Changes to This Privacy Policy"><p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date.</p></LS>
       <LS t="Contact Us"><p>If you have any questions about this Privacy Policy or how we handle your information, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
@@ -3214,22 +3217,29 @@ function PrivacyPage() {
 
 function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="August 14, 2026">
-      <LS t="Orders and Product Information"><p>Product availability, pricing, and descriptions may change as inventory and supplier information are updated. We work to keep product details accurate and current.</p></LS>
-      <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate account, shipping, and payment details when placing orders or contacting support.</p></LS>
-      <LS t="Returns & Replacements"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Contact us within 30 days of your order date to request a return authorization. We do not offer refunds.</p></LS>
-      <LS t="Support"><p>For questions about an order, product, or account, contact Luxedge support using the contact details provided on the site.</p></LS>
+    <LegalPage title="Terms of Service" updated="August 26, 2026">
+      <LS t="Using Luxedge"><p>By using this website, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use the website.</p></LS>
+      <LS t="Products, Pricing, and Availability"><p>Product availability, pricing, images, specifications, and descriptions may change as inventory and supplier information are updated. We work to keep details accurate, but occasional errors may occur. We may correct an error or cancel an affected order before shipment, and will notify you if that happens.</p></LS>
+      <LS t="Orders and Payment"><p>Submitting checkout information is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends an order confirmation. If payment is unavailable, the checkout action remains disabled and no paid order is created.</p></LS>
+      <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
+      <LS t="Shipping and Delivery"><p>Shipping availability, cost, and estimated delivery windows are shown at checkout or on the relevant product page. Estimates are not guarantees and may change because of supplier processing, carrier delays, weather, or events outside our control. Please review our Shipping Policy.</p></LS>
+      <LS t="Returns, Replacements, and Refunds"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Unless applicable law requires otherwise, Luxedge does not offer change-of-mind refunds as a standard remedy. Nothing in these Terms limits a consumer right that cannot legally be waived.</p></LS>
+      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p></LS>
+      <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
+      <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
+      <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
+      <LS t="Changes and Contact"><p>We may update these Terms from time to time by posting a revised version with a new effective date. Questions may be sent to hello@luxedge.us or (440) 941-8002.</p></LS>
     </LegalPage>
   );
 }
 
 function ReturnsPage() {
   return (
-    <LegalPage title="Returns & Replacement Policy" updated="August 14, 2026">
+    <LegalPage title="Returns & Replacement Policy" updated="August 26, 2026">
       <LS t="Our Promise"><p>At Luxedge, we take pride in the quality of our pet essentials. If you receive a product that is damaged, defective, or incorrect, please contact us within 30 days of your order date. We will work with you to resolve the issue as quickly as possible.</p></LS>
       <LS t="Return Eligibility"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Return requests must be made within 30 days of the original order date.</li><li>Products must be unused, unopened, and returned in their original packaging.</li><li>Returns require prior approval from Luxedge before being shipped.</li></ul></LS>
       <LS t="Replacement Policy"><p>Once we receive and inspect your returned product, we will process a replacement if the return meets our policy requirements.</p><p className="mt-2">Replacement items will be shipped after the returned product has been received and approved.</p></LS>
-      <LS t="No Refund Policy"><p>We do not offer refunds.</p><p className="mt-2">Eligible returned products will be replaced with the same product. Refunds, exchanges for different products, or store credits are not available.</p></LS>
+      <LS t="Refunds and Legal Rights"><p>Luxedge does not offer change-of-mind refunds, exchanges for different products, or store credit as a standard policy. Eligible damaged, defective, or incorrect products are normally handled by replacement. Where applicable law or a payment-provider rule requires a refund or another remedy, that right is not limited by this policy.</p></LS>
       <LS t="Return Shipping"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers are responsible for purchasing their own return shipping label.</li><li>Customers are responsible for properly packaging the product to prevent damage during transit.</li><li>Customers are responsible for all return shipping costs.</li><li>We recommend using a trackable shipping service, as Luxedge is not responsible for returns that are lost or damaged during shipping.</li></ul></LS>
       <LS t="Damaged or Incorrect Orders"><p>If your order arrives damaged or you received the wrong product, please contact us within 30 days of delivery. Include your order number and photos of the product and packaging so we can review your request promptly.</p></LS>
       <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
@@ -3239,11 +3249,11 @@ function ReturnsPage() {
 
 function ShippingPolicyPage() {
   return (
-    <LegalPage title="Shipping Policy" updated="March 15, 2025">
-      <LS t="Where We Ship"><p>Luxedge currently ships to all 50 US states and territories. We are working on expanding to international destinations soon.</p></LS>
-      <LS t="Processing Time"><p>Orders are typically processed within <strong>1-3 business days</strong> after payment confirmation. You'll receive an email confirmation when your order has been shipped with tracking information.</p></LS>
-      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Standard Shipping</td><td className="px-4 py-2 border">5–14 business days (varies by product)</td><td className="px-4 py-2 border">$4.99 (FREE on orders $50+)</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Each product page shows its specific estimated delivery window. Express shipping is not currently offered.</p></div></LS>
-      <LS t="Free Shipping"><p>Enjoy <strong>free standard shipping</strong> on all orders of $50 or more. This offer applies automatically at checkout — no coupon code needed.</p></LS>
+    <LegalPage title="Shipping Policy" updated="August 26, 2026">
+      <LS t="Where We Ship"><p>Luxedge currently offers shipping within the United States where the destination is supported by the product, supplier, and carrier. Available destinations and any exclusions are shown during checkout. International shipping is not currently offered.</p></LS>
+      <LS t="Processing Time"><p>Orders are generally prepared within <strong>1–3 business days</strong> after successful payment confirmation, unless a different estimate is shown on the product page or at checkout. You will receive shipment and tracking information when available.</p></LS>
+      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Delivery estimates are estimates, not guarantees. Processing and carrier times can vary by product and destination. Express shipping is not currently offered unless specifically shown at checkout.</p></div></LS>
+      <LS t="Shipping Promotions"><p>Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout. The final shipping charge shown before payment is the controlling amount. Promotions may have exclusions and can change or end without notice.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
       <LS t="Delivery Delays"><p>While we strive to meet all estimated delivery windows, delays may occasionally occur due to high order volume, carrier issues, weather events, or other circumstances beyond our control. If your order is significantly delayed, please contact us and we'll investigate immediately.</p></LS>
       <LS t="Missing or Lost Packages"><p>If your tracking shows "delivered" but you haven't received your package, please check with neighbors, building management, or your local post office. If you still can't locate your package after 48 hours, contact us at hello@luxedge.us and we'll work with the carrier to resolve the issue.</p></LS>
@@ -3258,20 +3268,20 @@ function FAQPage() {
   const faqs = [
     { c: 'Orders & Shipping', qs: [
       { q: 'How long does shipping take?', a: 'Standard delivery is estimated at 5–14 business days depending on the product (each product page shows its specific window). Processing takes an additional 1–3 business days before shipment. Express shipping is not currently offered.' },
-      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders of $50 or more. The discount is applied automatically at checkout.' },
+      { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility, exclusions, and the final shipping charge are shown in the cart or at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
-      { q: 'Do you ship internationally?', a: 'Currently, we ship only within the United States (all 50 states and territories). International shipping is coming soon.' },
+      { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States where the product and carrier support the destination. International shipping is not currently offered.' },
       { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
     ]},
     { c: 'Returns & Refunds', qs: [
       { q: 'What is your return policy?', a: 'We offer a 30-day return & replacement policy. Products must be unused, unopened, and in their original packaging. Email hello@luxedge.us within 30 days for a return authorization.' },
-      { q: 'How does the replacement process work?', a: 'Once we receive and inspect your approved return, we ship a replacement of the same product. We do not offer refunds or exchanges for different products.' },
+      { q: 'How does the replacement process work?', a: 'Once we receive and inspect your approved return, we normally ship a replacement of the same product. Change-of-mind refunds and exchanges for different products are not standard; legal rights that cannot be waived still apply.' },
       { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping costs and for packaging the product safely. We recommend using a trackable shipping service.' },
       { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
     ]},
     { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'We are connecting a trusted payment provider (Stripe) and will accept all major cards as soon as it is live. Nothing is charged until then — your cart stays saved and secure.' },
-      { q: 'Is my payment information secure?', a: 'Yes. Luxedge never sees or stores card details — payment is handled entirely by our PCI-compliant provider (Stripe) once checkout goes live.' },
+      { q: 'What payment methods do you accept?', a: 'Online payment is not currently enabled. No payment is taken and no paid order is created until a payment provider is connected and checkout confirms a successful transaction.' },
+      { q: 'Is my payment information secure?', a: 'When checkout is enabled, payment is handled by the configured third-party provider and Luxedge does not store complete card details. Payment is not currently available and no charge is made until a successful transaction is confirmed.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},
     { c: 'Products & Quality', qs: [
@@ -3280,7 +3290,7 @@ function FAQPage() {
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
     ]},
     { c: 'Account & Support', qs: [
-      { q: 'Do I need an account to shop?', a: 'You need an account to place orders, track shipments, and submit reviews. Creating an account is free and takes less than a minute.' },
+      { q: 'Do I need an account to shop?', a: 'You can browse the store as a guest. Account availability and whether an account is required to place an order may depend on the checkout configuration; the checkout screen will show the current requirement.' },
       { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002. Our support team is available Monday-Friday, 9 AM - 6 PM CT. We typically respond to emails within 24 hours.' },
       { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
     ]},

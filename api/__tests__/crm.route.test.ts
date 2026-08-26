@@ -118,15 +118,49 @@ describe('/api/crm/welcome', () => {
     expect(JSON.stringify(captured.body)).toMatch(/email/i);
   });
 
-  it('returns a preview coupon honestly when the server DB is not configured', async () => {
+  it('turns JSON null into a normal validation error instead of throwing', async () => {
+    const { captured, server } = makeRes();
+    await welcomeHandler(makeReq('POST', null), server);
+    expect(captured.status).toBe(400);
+    expect(JSON.stringify(captured.body)).toMatch(/email/i);
+  });
+
+  it('treats a JSON array as empty input rather than reading request fields from it', async () => {
+    const { captured, server } = makeRes();
+    await welcomeHandler(makeReq('POST', []), server);
+    expect(captured.status).toBe(400);
+    expect(JSON.stringify(captured.body)).toMatch(/email/i);
+  });
+
+  it('fails closed when the server DB is not configured instead of displaying an unusable coupon', async () => {
     const { captured, server } = makeRes();
     await welcomeHandler(makeReq('POST', { email: 'visitor@example.com' }), server);
-    expect(captured.status).toBe(200);
-    expect(captured.body).toMatchObject({ ok: true, leadSaved: false });
-    expect(String((captured.body as { couponCode?: string }).couponCode || '')).toMatch(/^LUX10-/);
+    expect(captured.status).toBe(503);
+    expect(captured.body).toMatchObject({ ok: false });
+    expect((captured.body as { couponCode?: string }).couponCode).toBeUndefined();
     // env var NAMES are fine (setup instructions); actual secret VALUES must never appear.
     const s = JSON.stringify(captured.body);
     expect(s).not.toMatch(/sb_secret|eyJ|sk-[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9._-]{20,}/i);
+  });
+
+  it('does not treat a coupon claim as marketing consent when optedIn is omitted', async () => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    const savedLead: { value?: Record<string, unknown> } = {};
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/crm_leads?')) return new Response('[]', { status: 200 });
+      if (url.endsWith('/rest/v1/coupons')) return new Response('[]', { status: 201 });
+      if (url.endsWith('/rest/v1/crm_leads')) {
+        savedLead.value = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response('{}', { status: 201 });
+      }
+      return new Response('{}', { status: 200 });
+    }));
+    const { captured, server } = makeRes();
+    await welcomeHandler(makeReq('POST', { email: 'visitor@example.com' }), server);
+    expect(captured.status).toBe(200);
+    expect(savedLead.value?.opted_in).toBe(false);
   });
 });
 
