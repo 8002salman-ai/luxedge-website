@@ -47,6 +47,9 @@ export interface Product {
   supplierSource?: string;
   supplierProductRef?: string;
   supplierUrl?: string | null;
+  safetyClass?: import('./features/catalog/productSafety').ProductSafetyClass | null;
+  safetyReviewStatus?: import('./features/catalog/productSafety').ProductSafetyReviewStatus | null;
+  intendedSpecies?: string | null;
   commerceReadiness?: string; sourceType?: string; inventorySource?: string;
   deliveryMinDays?: number | null; deliveryMaxDays?: number | null;
 }
@@ -196,6 +199,9 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     supplierSource: p.supplierSource,
     supplierProductRef: p.supplierProductRef,
     supplierUrl: p.supplierUrl,
+    safetyClass: p.safetyClass,
+    safetyReviewStatus: p.safetyReviewStatus,
+    intendedSpecies: p.intendedSpecies,
     variants: (p.variants || []).map((v) => ({
       id: v.id,
       color: v.attributes?.color || '',
@@ -1107,8 +1113,10 @@ function SLayout({ children }: { children: ReactNode }) {
 // ============================================================================
 // PRODUCT DETAIL PAGE
 // ============================================================================
-function isFoodOrFeedProduct(product: Pick<Product, 'name' | 'category' | 'tags'>): boolean {
-  return /\b(food|feed|seed|treats?|chews?|supplement|salt lick|bird seed)\b/i.test(`${product.name} ${product.category} ${product.tags.join(' ')}`);
+import { classifyProductSafety } from './features/catalog/productSafety';
+
+function isFoodOrFeedProduct(product: Pick<Product, 'name' | 'category' | 'tags' | 'safetyClass'>): boolean {
+  return classifyProductSafety({ classification: product.safetyClass, name: product.name, category: product.category, tags: product.tags }) !== 'NON_INGESTIBLE';
 }
 
 function ProductDetailPage() {

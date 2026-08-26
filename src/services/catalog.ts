@@ -70,6 +70,9 @@ export interface CatalogProduct {
   supplierSource?: string;
   supplierProductRef?: string;
   supplierUrl?: string | null;
+  safetyClass?: import('../features/catalog/productSafety').ProductSafetyClass | null;
+  safetyReviewStatus?: import('../features/catalog/productSafety').ProductSafetyReviewStatus | null;
+  intendedSpecies?: string | null;
 }
 
 export interface CatalogVariant {
@@ -149,6 +152,9 @@ interface DbProductRow {
   supplier_source?: string | null;
   supplier_product_ref?: string | null;
   supplier_url?: string | null;
+  safety_class?: string | null;
+  safety_review_status?: string | null;
+  intended_species?: string | null;
   cost_price?: number | null;
   landed_cost?: number | null;
   shipping_cost?: number | null;
@@ -400,6 +406,9 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
         supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
         supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
+        safetyClass: typeof p.safety_class === 'string' ? p.safety_class as import('../features/catalog/productSafety').ProductSafetyClass : null,
+        safetyReviewStatus: typeof p.safety_review_status === 'string' ? p.safety_review_status as import('../features/catalog/productSafety').ProductSafetyReviewStatus : null,
+        intendedSpecies: typeof p.intended_species === 'string' ? p.intended_species : null,
       };
     });
 

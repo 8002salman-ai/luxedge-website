@@ -12,7 +12,7 @@
 //     ratings or customer demand.
 // ============================================================================
 
-export type CatalogStatus = 'draft' | 'ready' | 'active' | 'inactive' | 'archived';
+export type CatalogStatus = 'draft' | 'ready' | 'active' | 'inactive' | 'archived' | 'safety_hold';
 export type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'on_backorder' | 'unknown';
 export type DiscountType = 'percent' | 'fixed';
 export type ImageKind = 'product' | 'lifestyle' | 'creative' | 'video' | 'ugc';
@@ -98,6 +98,9 @@ export interface CatalogProduct {
   usInventory: boolean;
   supplierSource?: string;
   supplierProductRef?: string;
+  safetyClass?: import('./productSafety').ProductSafetyClass | null;
+  safetyReviewStatus?: import('./productSafety').ProductSafetyReviewStatus | null;
+  intendedSpecies?: string | null;
   /** Commerce-readiness model (migration 0016). null/unknown = not yet classified. */
   commerceReadiness?: CommerceReadiness | null;
   sourceType?: SourceType | null;
