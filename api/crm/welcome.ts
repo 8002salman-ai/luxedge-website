@@ -39,7 +39,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   let body: { email?: string; name?: string; phone?: string; pageUrl?: string; optedIn?: boolean };
   try {
-    body = await readJsonBody(req);
+    const parsed = await readJsonBody(req);
+    // JSON null/arrays/primitives are not valid request objects. Treat them
+    // as empty input so the route returns its normal 400 validation response.
+    body = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as typeof body
+      : {};
   } catch (e) {
     sendJson(res, 400, { error: (e as Error).message });
     return;
@@ -49,7 +54,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const name = String(body.name || '').trim().slice(0, 120) || undefined;
   const phone = String(body.phone || '').trim().slice(0, 40) || undefined;
   const pageUrl = String(body.pageUrl || '').trim().slice(0, 500) || undefined;
-  const optedIn = body.optedIn !== false;
+  // Marketing consent must be explicit; claiming a coupon is not consent.
+  const optedIn = body.optedIn === true;
 
   if (!email || !EMAIL_RE.test(email)) {
     sendJson(res, 400, { error: 'Enter a valid email address to claim your 10% welcome coupon.' });
@@ -58,13 +64,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const cfg = supabaseConfig();
   if (!cfg) {
-    // Fail soft for the visitor: still hand out the coupon text even without
-    // server DB config (e.g. local dev), but be honest that it is not live.
-    sendJson(res, 200, {
-      ok: true,
-      leadSaved: false,
-      couponCode: `LUX10-${uid(8).toUpperCase()}`,
-      message: 'Server database not configured — coupon shown for preview only, not active at checkout.',
+    // Never display a coupon that was not persisted and therefore cannot be
+    // redeemed. Fail closed until the server database is configured.
+    sendJson(res, 503, {
+      ok: false,
+      error: 'Welcome offers are temporarily unavailable. Please try again shortly.',
       note: 'Set VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on the server.',
     });
     return;
@@ -106,7 +110,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     };
     const couponRes = await supabaseFetch(cfg, '/rest/v1/coupons', { method: 'POST', body: couponBody });
     if (!couponRes.ok) {
-      // uuid cast failure or policy issue — fall back to a code-only offer note.
+      // A coupon that was not persisted must never be presented as redeemable.
       sendJson(res, 502, {
         ok: false,
         error: 'Could not create the welcome coupon in the catalog. Try again in a moment.',

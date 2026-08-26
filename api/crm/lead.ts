@@ -18,7 +18,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   let body: { email?: string; name?: string; phone?: string; source?: string; pageUrl?: string; message?: string; optedIn?: boolean };
   try {
-    body = await readJsonBody(req);
+    const parsed = await readJsonBody(req);
+    body = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as typeof body
+      : {};
   } catch (e) {
     sendJson(res, 400, { error: (e as Error).message });
     return;
@@ -30,7 +33,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const source = SOURCES.includes(String(body.source || '')) ? String(body.source) : 'manual';
   const pageUrl = String(body.pageUrl || '').trim().slice(0, 500) || undefined;
   const message = String(body.message || '').trim().slice(0, 1000) || undefined;
-  const optedIn = body.optedIn !== false;
+  // Contact capture is not marketing consent; callers must opt in explicitly.
+  const optedIn = body.optedIn === true;
 
   if (!email && !phone) {
     sendJson(res, 400, { error: 'Provide at least an email or phone number.' });

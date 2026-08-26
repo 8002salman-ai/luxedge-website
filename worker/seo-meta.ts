@@ -306,7 +306,7 @@ export async function maybeInjectSeo(
     return inject(html, {
       title: 'Luxedge — Premium Pet Essentials | Better Products for Happier Pets',
       description:
-        "Luxedge curates the world's best pet essentials — from orthopedic dog beds to interactive cat toys, smart feeders, grooming, and travel gear. Free shipping, 30-day returns, and handpicked quality you can trust.",
+        "Luxedge curates the world's best pet essentials — from orthopedic dog beds to interactive cat toys, smart feeders, grooming, and travel gear. Clear delivery options, return policies, and handpicked quality you can trust.",
       canonical: root,
       jsonLd: {
         '@context': 'https://schema.org',

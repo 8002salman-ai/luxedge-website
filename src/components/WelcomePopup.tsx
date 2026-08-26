@@ -2,17 +2,16 @@ import { useEffect, useState } from 'react';
 import { X, Gift, ShieldCheck, ArrowCounterClockwise } from '@phosphor-icons/react';
 
 const STORE_KEY = 'luxedge-welcome-shown-v1';
-const CLAIMED_KEY = 'luxedge-welcome-coupon';
-
-// Welcome popup: appears once per visitor, makes the 100% safe/returnable
-// promise, and trades an email for a real 10% welcome coupon created
-// server-side (api/crm/welcome). Never auto-opens again after dismissal.
+// Welcome popup: appears once per visitor and trades an email for a real
+// 10% welcome coupon created server-side (api/crm/welcome). Never auto-opens
+// again after dismissal.
 export default function WelcomePopup() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState('');
   const [coupon, setCoupon] = useState('');
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem(STORE_KEY) === '1') return;
@@ -37,12 +36,14 @@ export default function WelcomePopup() {
       const r = await fetch('/api/crm/welcome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), pageUrl: window.location.pathname, optedIn: true }),
+        body: JSON.stringify({ email: email.trim(), pageUrl: window.location.pathname, optedIn: marketingOptIn }),
       });
       const j = await r.json().catch(() => null);
       if (j?.ok && j?.couponCode) {
         setCoupon(j.couponCode);
-        localStorage.setItem(CLAIMED_KEY, j.couponCode);
+        // A successful claim is a completed first-visit interaction.
+        // Prevent the popup from reopening after a refresh.
+        localStorage.setItem(STORE_KEY, '1');
         setState('done');
       } else {
         setState('error');
@@ -78,7 +79,7 @@ export default function WelcomePopup() {
           <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3.5 py-2.5 mb-4">
             <ShieldCheck size={16} weight="fill" className="text-emerald-600 shrink-0" />
             <p className="text-[12px] text-emerald-800 leading-snug">
-              <b>100% safe &amp; trusted.</b> Secure checkout, easy returns, real USA shipping.
+              <b>Shop with confidence.</b> Clear policies, helpful support, and shipping details shown before payment.
             </p>
           </div>
 
@@ -88,7 +89,15 @@ export default function WelcomePopup() {
               <div className="flex items-center justify-between gap-2 bg-slate-900 rounded-xl px-4 py-3.5">
                 <span className="font-mono font-bold text-lg tracking-wider text-amber-300 select-all">{coupon}</span>
                 <button
-                  onClick={() => { navigator.clipboard?.writeText(coupon).catch(() => undefined); setMsg('Copied!'); }}
+                  onClick={async () => {
+                    try {
+                      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+                      await navigator.clipboard.writeText(coupon);
+                      setMsg('Copied!');
+                    } catch {
+                      setMsg('Copy was blocked — select the code and copy it manually.');
+                    }
+                  }}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors">
                   Copy
                 </button>
@@ -115,8 +124,12 @@ export default function WelcomePopup() {
                   <><Gift size={16} /> Claim My 10% Coupon</>
                 )}
               </button>
-              <p className="text-[11px] text-gray-400 mt-3 text-center flex items-center justify-center gap-1">
-                <ShieldCheck size={12} className="text-emerald-500" /> No spam — just the coupon &amp; pet-care updates. Unsubscribe anytime.
+              <label className="mt-3 flex items-start gap-2 text-[11px] leading-snug text-gray-500 cursor-pointer">
+                <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} className="mt-0.5 accent-blue-600" />
+                <span>I would like to receive Luxedge product updates and offers. You can unsubscribe anytime.</span>
+              </label>
+              <p className="text-[11px] text-gray-400 mt-2 text-center flex items-center justify-center gap-1">
+                <ShieldCheck size={12} className="text-emerald-500" /> Your coupon is available whether or not you subscribe.
               </p>
             </>
           )}
