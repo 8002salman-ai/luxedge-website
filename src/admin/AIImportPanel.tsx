@@ -159,39 +159,52 @@ export function AIImportPanel() {
         addLog(`DESCRIPTION SOURCE: ${parsedDesc ? (parsed.jsonLdProduct ? 'og:description + json-ld' : 'og:description') : (parsed.jsonLdProduct ? 'json-ld' : 'MISSING')}`);
       } else if (source === 'html') {
         if (!htmlInput.trim()) throw new Error('Please paste some HTML');
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlInput, 'text/html');
-        doc.querySelectorAll('script,style').forEach(el => el.remove());
-        pageImages = [];
-        // Anti-bot / CSR shells (e.g. AliExpress) have an empty <body> — the
-        // real evidence (og:title/og:image, DCData.imagePathList, JSON-LD) is
-        // in <head> and script data that DOMParser-based extraction can't see.
-        const shellParsed = parseHtmlPage(htmlInput);
-        parsed = shellParsed;
-        pageImages = [...new Set([...(shellParsed.images || []), ...pageImages])];
-        // AliExpress lazy-loads images: real URLs live in srcset (highest
-        // width variant), data-src, data-hd-src, and data-ks-lazyload. Plain
-        // `src` is often a 1px placeholder — never take it as the only source.
-        const pushUrl = (u: string) => {
-          const t = (u || '').trim();
-          if (/^https?:\/\//i.test(t) && !pageImages.includes(t)) pageImages.push(t);
-        };
-        doc.querySelectorAll('img').forEach(img => {
-          const srcset = img.getAttribute('srcset') || '';
-          // srcset: "url 100w, url2 800w" — take the last (largest) entry.
-          const parts = srcset.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
-          if (parts.length) pushUrl(parts[parts.length - 1]);
-          ['data-hd-src', 'data-src', 'data-ks-lazyload', 'data-lazy-src', 'src'].forEach(attr => {
-            const v = img.getAttribute(attr) || '';
-            // AliExpress stores large previews as ".webp_" suffix URLs in
-            // data attributes (e.g. "....webp_640x640.webp").
-            pushUrl(v.replace(/\.webp_\d+x\d+\.webp$/i, '.webp'));
+        // A URL pasted into the HTML box means "fetch this page" — route it
+        // through the same server/proxy fetch the URL tab uses (anti-bot
+        // aware, retries + fallbacks), instead of parsing the URL as HTML.
+        const looksLikeUrl = /^https?:\/\//i.test(htmlInput.trim());
+        if (looksLikeUrl) {
+          const pageData = await fetchPageContent(htmlInput.trim());
+          parsed = JSON.parse(pageData);
+          rawContent = parsed.text;
+          pageImages = parsed.images || [];
+          addLog(`URL detected in HTML import — fetched ${rawContent.length} chars, ${pageImages.length} images`, true);
+          addLog(`SCRAPED TITLE: ${(parsed.title || '').trim().slice(0, 80) || 'MISSING'}`);
+        } else {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlInput, 'text/html');
+          doc.querySelectorAll('script,style').forEach(el => el.remove());
+          pageImages = [];
+          // Anti-bot / CSR shells (e.g. AliExpress) have an empty <body> — the
+          // real evidence (og:title/og:image, DCData.imagePathList, JSON-LD) is
+          // in <head> and script data that DOMParser-based extraction can't see.
+          const shellParsed = parseHtmlPage(htmlInput);
+          parsed = shellParsed;
+          pageImages = [...new Set([...(shellParsed.images || []), ...pageImages])];
+          // AliExpress lazy-loads images: real URLs live in srcset (highest
+          // width variant), data-src, data-hd-src, and data-ks-lazyload. Plain
+          // `src` is often a 1px placeholder — never take it as the only source.
+          const pushUrl = (u: string) => {
+            const t = (u || '').trim();
+            if (/^https?:\/\//i.test(t) && !pageImages.includes(t)) pageImages.push(t);
+          };
+          doc.querySelectorAll('img').forEach(img => {
+            const srcset = img.getAttribute('srcset') || '';
+            // srcset: "url 100w, url2 800w" — take the last (largest) entry.
+            const parts = srcset.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
+            if (parts.length) pushUrl(parts[parts.length - 1]);
+            ['data-hd-src', 'data-src', 'data-ks-lazyload', 'data-lazy-src', 'src'].forEach(attr => {
+              const v = img.getAttribute(attr) || '';
+              // AliExpress stores large previews as ".webp_" suffix URLs in
+              // data attributes (e.g. "....webp_640x640.webp").
+              pushUrl(v.replace(/\.webp_\d+x\d+\.webp$/i, '.webp'));
+            });
           });
-        });
-        // Feed the AI the og:title/description/JSON-LD + body text, not just
-        // body innerText — otherwise a shell page gives the model no title.
-        rawContent = shellParsed.text || doc.body?.innerText || htmlInput;
-        addLog(`HTML processed — ${rawContent.length} chars, ${pageImages.length} images, title=${shellParsed.title ? 'FOUND' : 'MISSING'}`, true);
+          // Feed the AI the og:title/description/JSON-LD + body text, not just
+          // body innerText — otherwise a shell page gives the model no title.
+          rawContent = shellParsed.text || doc.body?.innerText || htmlInput;
+          addLog(`HTML processed — ${rawContent.length} chars, ${pageImages.length} images, title=${shellParsed.title ? 'FOUND' : 'MISSING'}`, true);
+        }
       } else if (source === 'text' || source === 'clipboard') {
         if (!textInput.trim()) throw new Error('Please paste some content');
         rawContent = textInput;
@@ -214,8 +227,11 @@ export function AIImportPanel() {
       } else if (source === 'html' && parsed?.title) {
         // Same guarantee as the URL path: deterministic evidence (og:title,
         // og:image, DCData gallery, og:url supplier trace) becomes the base
-        // product, so an AI failure never blanks the Review form.
-        base = buildScrapedEvidenceProduct(parsed, parsed.sourceUrl || '');
+        // product, so an AI failure never blanks the Review form. When the
+        // HTML box actually held a URL (already fetched above), that URL is
+        // the supplier evidence; otherwise the page's own og:url is used.
+        const evUrl = parsed.sourceUrl || (/^https?:\/\//i.test(htmlInput.trim()) ? htmlInput.trim() : '');
+        base = buildScrapedEvidenceProduct(parsed, evUrl);
         addLog(`BASE EVIDENCE (HTML): title=${base.title ? 'FOUND' : 'MISSING'} images=${base.images.length} desc=${base.shortDescription ? 'FOUND' : 'MISSING'} itemId=${base.supplierItemId || 'UNKNOWN'}`);
       }
 
