@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-25T21:38:05.415Z",
+  "generatedAt": "2026-08-28T21:02:04.861Z",
   "posts": [
     {
       "id": "b1",
@@ -87,7 +87,7 @@
       "id": "b10",
       "slug": "choosing-the-right-dog-bed",
       "title": "Choosing the Right Dog Bed: A Complete Guide",
-      "excerpt": "Size, support, and washability — here’s everything you need to pick the perfect bed for your dog.",
+      "excerpt": "Size, support, and washability â€” here’s everything you need to pick the perfect bed for your dog.",
       "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2025-01-20",
       "authorName": "Admin"
@@ -114,7 +114,7 @@
       "id": "b13",
       "slug": "how-to-stop-puppy-biting",
       "title": "How to Stop a Puppy from Biting: A Step-by-Step Guide",
-      "excerpt": "Puppy nipping is normal — but it should not become a habit. Here is exactly how to teach gentle mouthing in a few weeks.",
+      "excerpt": "Puppy nipping is normal â€” but it should not become a habit. Here is exactly how to teach gentle mouthing in a few weeks.",
       "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-07-18",
       "authorName": "Admin"
@@ -131,7 +131,7 @@
     {
       "id": "b15",
       "slug": "cat-hydration-water-fountains",
-      "title": "Why Cats Drink So Little — and How a Water Fountain Helps",
+      "title": "Why Cats Drink So Little â€” and How a Water Fountain Helps",
       "excerpt": "Cats evolved to get moisture from prey, not bowls. Here is why they ignore still water and how to get them drinking more.",
       "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-06-28",
@@ -141,7 +141,7 @@
       "id": "b16",
       "slug": "flying-with-pet-checklist",
       "title": "Flying with a Dog or Cat: The Complete Checklist",
-      "excerpt": "From carrier rules to vet certificates, here is everything to prepare before flying with your pet — and what to pack in-cabin.",
+      "excerpt": "From carrier rules to vet certificates, here is everything to prepare before flying with your pet â€” and what to pack in-cabin.",
       "image": "https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-06-15",
       "authorName": "Admin"
@@ -159,7 +159,7 @@
       "id": "b18",
       "slug": "cattle-care-basics-small-farms",
       "title": "Cattle Care Basics for Small Farms: Feed, Health & Handling",
-      "excerpt": "Raising cattle on a small farm is rewarding — and a real responsibility. Here are the fundamentals of keeping a healthy herd.",
+      "excerpt": "Raising cattle on a small farm is rewarding â€” and a real responsibility. Here are the fundamentals of keeping a healthy herd.",
       "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-05-20",
       "authorName": "Admin"
@@ -177,10 +177,32 @@
       "id": "b20",
       "slug": "horse-grooming-kit-buyers-guide",
       "title": "The Horse Grooming Kit Buyer’s Guide: What to Buy, What to Skip",
-      "excerpt": "Curry comb, brushes, hoof pick — what does a horse actually need? This guide breaks down the essentials and what to skip to save money.",
+      "excerpt": "Curry comb, brushes, hoof pick â€” what does a horse actually need? This guide breaks down the essentials and what to skip to save money.",
       "image": "https://images.pexels.com/photos/1466205/pexels-photo-1466205.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-11",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "What do I need in a basic horse grooming kit?",
+          "a": "A complete basic kit has five pieces: a curry comb to loosen dirt, a stiff body brush, a soft brush for the face and sensitive areas, a hoof pick, and a mane-and-tail brush."
+        },
+        {
+          "q": "Do I need a full set when I am just starting out?",
+          "a": "A coordinated 12-piece kit covers the core five plus extras such as a shedding blade and finishing brushes. Starting with a set usually costs less than buying pieces separately."
+        },
+        {
+          "q": "How often should I groom my horse?",
+          "a": "Daily grooming removes dirt, sweat, and loose hair, spreads natural oils, and lets you check for cuts, swelling, heat, or skin issues from minor problems. Even ten minutes a day is worthwhile."
+        },
+        {
+          "q": "How do I care for my grooming brushes?",
+          "a": "Hang brushes to dry after use, pick out the curry comb each time, and replace anything with broken bristles."
+        },
+        {
+          "q": "Should I bathe my horse often?",
+          "a": "Horses generally do not need frequent baths, since over-bathing strips natural oils. Spot-clean and save full baths for shows or very dirty days."
+        }
+      ]
     },
     {
       "id": "b21",
@@ -195,19 +217,63 @@
       "id": "b22",
       "slug": "dog-cooling-mat-buyers-guide",
       "title": "How to Choose the Best Dog Cooling Mat: A 2026 Buyer’s Guide",
-      "excerpt": "Not all cooling mats work the same. Here is how to pick one your dog will actually use — and use it safely through the hottest months.",
+      "excerpt": "Not all cooling mats work the same. Here is how to pick one your dog will actually use â€” and use it safely through the hottest months.",
       "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-25",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "How does a dog cooling mat work?",
+          "a": "The best cooling mats use a gel or water-based core that absorbs and draws heat away from your dog’s body without needing to be refrigerated or plugged in."
+        },
+        {
+          "q": "Do cooling mats need to be frozen or powered?",
+          "a": "No. A well-designed cooling mat is self-cooling and does not require electricity or refrigeration. Look for a non-toxic, chew-resistant cover that is easy to wipe clean."
+        },
+        {
+          "q": "Can a cooling mat replace air conditioning?",
+          "a": "A cooling mat is a comfort tool, not a substitute for proper heat safety. Never leave a dog in a parked car, skip midday walks, and always offer fresh water during hot weather."
+        },
+        {
+          "q": "When should I choose a cooling mat instead of an orthopedic bed?",
+          "a": "Cooling mats are for hot weather. If your dog needs joint support year-round, an orthopedic memory foam bed helps at night while you keep the cooling mat for daytime use."
+        },
+        {
+          "q": "How do I pick the right size?",
+          "a": "Choose a mat big enough for your dog to stretch out on, place it in the coolest room away from direct sun, and keep one on hand for the car or bedroom."
+        }
+      ]
     },
     {
       "id": "b23",
       "slug": "automatic-pet-feeder-buyers-guide",
       "title": "Automatic Pet Feeders Explained: How to Pick the Right One for Your Cat or Dog",
-      "excerpt": "Portion control, scheduling, and power backup — here is what actually matters when you buy an automatic pet feeder.",
+      "excerpt": "Portion control, scheduling, and power backup â€” here is what actually matters when you buy an automatic pet feeder.",
       "image": "https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-21",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "How many meals a day can an automatic feeder dispense?",
+          "a": "Programmable feeders vary, but models like the Automatic Pet Feeder with Programmable Timer can schedule up to four meals a day with set portion sizes."
+        },
+        {
+          "q": "What happens to an automatic feeder during a power outage?",
+          "a": "A feeder that relies on mains power alone stops working during an outage. Look for dual power options, such as battery backup alongside the mains."
+        },
+        {
+          "q": "Are automatic feeders good for portion control?",
+          "a": "Yes. A feeder that dispenses a measured portion per meal keeps portions honest and helps prevent the overeating that free-feeding can cause."
+        },
+        {
+          "q": "How often should I clean an automatic pet feeder?",
+          "a": "Choose a feeder with a removable, washable hopper and bowl, and clean it weekly so kibble oils and crumbs do not cause jams or stale food."
+        },
+        {
+          "q": "How do I switch my pet from their usual bowl to an automatic feeder?",
+          "a": "Transition gradually over about a week by starting with the feeder alongside the usual bowl, then shifting meals over slowly."
+        }
+      ]
     },
     {
       "id": "b24",
@@ -216,7 +282,60 @@
       "excerpt": "Cats love high perches and window views. Here is how to choose a window perch that is safe, sturdy, and actually holds your cat.",
       "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-14",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "Will a suction-cup window perch hold my cat?",
+          "a": "It depends on the perch and the cup quality. Look for strong suction cups, a weight limit that comfortably exceeds your cat’s weight, and a wide, padded platform. The Cat Window Perch Suction Cup Hammock Seat holds up to 33 lbs."
+        },
+        {
+          "q": "How do I stop a window perch from falling?",
+          "a": "Clean the glass and the suction cups before mounting, then press firmly so the cups seal properly. Re-seat the cups every couple of weeks for a lasting grip."
+        },
+        {
+          "q": "Where is the best place to mount a window perch?",
+          "a": "Pick a window with direct sun for part of the day, and avoid placing a perch above a radiator or in a spot where your cat could injure itself falling."
+        },
+        {
+          "q": "Are window perches good for indoor cats?",
+          "a": "Yes. Cats feel most secure observing from above, and a perch satisfies that instinct, reduces stress, and keeps indoor cats entertained."
+        },
+        {
+          "q": "How often should I check a window perch?",
+          "a": "Check the perch periodically for loose suction cups and replace any worn pads so the platform stays stable and safe."
+        }
+      ]
+    },
+    {
+      "id": "b25",
+      "slug": "horse-salt-lick-buyers-guide",
+      "title": "Himalayan Salt Lick for Horses: How Long It Lasts & How to Pick One",
+      "excerpt": "A Himalayan salt lick gives most horses a simple, reliable source of plain salt. Here is how long one lasts, what to look for, and how to choose the right size.",
+      "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-28",
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "How long does a Himalayan salt lick for horses last?",
+          "a": "Usage varies by horse and season, but a single horse with regular access typically works through a typical lick or block within a few weeks to a couple of months. Replace it when it becomes too small to use comfortably or is worn, dirty, or contaminated."
+        },
+        {
+          "q": "How should I hang or place a salt lick for a horse?",
+          "a": "Hang rope licks at about nose height where the horse naturally stands (near water, feed, or a favorite spot). Keep the lick sheltered from direct sun and off the ground, and always provide clean water."
+        },
+        {
+          "q": "What size Himalayan salt lick should I choose?",
+          "a": "Match the size to your setup. Smaller rope licks (2 lb) suit individual stalls; larger pieces (6 lb) last longer and suit a single horse or small group; big blocks (30 lb) or loose bags (45 lb) work well for cattle and larger livestock."
+        },
+        {
+          "q": "Do horses really need a salt lick?",
+          "a": "Horses lose salt through sweat, and many benefit from free-choice salt available at all times. A salt lick is a simple, self-served way to offer it. For diet or health questions specific to your horse, check with your vet or a nutrition professional."
+        },
+        {
+          "q": "Can cattle use the same Himalayan blocks as horses?",
+          "a": "Yes. Dense Himalayan rock works for cattle too, and a large block or bag can serve several head for a long time, such as the Himalayan Salt Block (30 lb) or the 45 lb bag."
+        }
+      ]
     }
   ]
 }

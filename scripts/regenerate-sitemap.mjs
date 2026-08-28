@@ -60,6 +60,7 @@ const blogSlugs = [
   'pet-travel-essentials-guide', 'bird-care-beginners-guide', 'equestrian-essentials-horse-care',
   'best-bird-feeder-buyers-guide', 'horse-grooming-kit-buyers-guide', 'dog-car-safety-seat-belt-guide',
   'dog-cooling-mat-buyers-guide', 'automatic-pet-feeder-buyers-guide', 'cat-window-perch-buyers-guide',
+  'horse-salt-lick-buyers-guide',
 ];
 
 const urls = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];

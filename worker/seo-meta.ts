@@ -138,6 +138,8 @@ interface BlogEntry {
   image?: string;
   date?: string;
   authorName?: string;
+  /** Visible FAQ section, mirrored as FAQPage JSON-LD — never schema-only. */
+  faq?: { q: string; a: string }[];
 }
 
 async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[] | null> {
@@ -232,7 +234,7 @@ function breadcrumbJsonLd(name: string, canonical: string): Record<string, unkno
   };
 }
 
-function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown> {
+function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown>[] {
   const post: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
@@ -243,7 +245,19 @@ function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown> {
   if (b.date) post.datePublished = b.date;
   if (b.authorName) post.author = { '@type': 'Person', name: b.authorName };
   if (b.image) post.image = b.image;
-  return post;
+  const blocks: Record<string, unknown>[] = [post];
+  if (b.faq && b.faq.length) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: b.faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    });
+  }
+  return blocks;
 }
 
 // ---------------------------------------------------------------------------
