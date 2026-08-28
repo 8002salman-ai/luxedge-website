@@ -44,7 +44,13 @@ async function liveTableColumns(table: string): Promise<Set<string> | null> {
     const url = (d as unknown as { url?: string }).url || '';
     const h = (d as unknown as { headers?: (m: string) => Record<string, string> }).headers;
     if (!url || !h) { cachedTableCols.set(table, null); return null; }
-    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, { headers: { ...h.call(d, 'GET'), Accept: 'application/openapi+json' } });
+    // The OpenAPI schema request must NOT carry Prefer: return=representation
+    // — PostgREST rejects that combination (406) and the probe then fails,
+    // which forces "assume full schema" and later PGRST204 write errors on
+    // columns that only exist in newer migrations. Strip it before fetching.
+    const probeHeaders = h.call(d, 'GET');
+    delete probeHeaders['Prefer'];
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, { headers: { ...probeHeaders, Accept: 'application/openapi+json' } });
     if (!res.ok) { cachedTableCols.set(table, null); return null; }
     const openApi = await res.json();
     const props = (openApi?.components?.schemas?.[table] || openApi?.definitions?.[table] || {}).properties || {};
