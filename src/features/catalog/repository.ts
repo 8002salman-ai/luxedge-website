@@ -36,35 +36,74 @@ import {
 // ---------------------------------------------------------------------------
 const cachedTableCols = new Map<string, Set<string> | null>();
 
-async function liveTableColumns(table: string): Promise<Set<string> | null> {
-  if (cachedTableCols.has(table)) return cachedTableCols.get(table) ?? null;
-  try {
-    const d = getDb() as DbAdapter & { mode?: string };
-    if (d.mode !== 'supabase') { cachedTableCols.set(table, null); return null; }
-    const url = (d as unknown as { url?: string }).url || '';
-    const h = (d as unknown as { headers?: (m: string) => Record<string, string> }).headers;
-    if (!url || !h) { cachedTableCols.set(table, null); return null; }
-    // The OpenAPI schema request must NOT carry Prefer: return=representation
-    // — PostgREST rejects that combination (406) and the probe then fails,
-    // which forces "assume full schema" and later PGRST204 write errors on
-    // columns that only exist in newer migrations. Strip it before fetching.
-    const probeHeaders = h.call(d, 'GET');
-    delete probeHeaders['Prefer'];
-    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, { headers: { ...probeHeaders, Accept: 'application/openapi+json' } });
-    if (!res.ok) { cachedTableCols.set(table, null); return null; }
-    const openApi = await res.json();
-    const props = (openApi?.components?.schemas?.[table] || openApi?.definitions?.[table] || {}).properties || {};
-    const cols = new Set(Object.keys(props));
-    cachedTableCols.set(table, cols);
-    return cols;
-  } catch {
-    cachedTableCols.set(table, null);
-    return null;
+/**
+ * Probe whether specific columns exist using PostgREST's select= validation,
+ * which works with the browser anon key + signed-in JWT — unlike the OpenAPI
+ * endpoint, which 401s for non-secret keys. Returns the subset of candidates
+ * that exist, or null when the table itself is unreachable.
+ */
+async function probeColumnsBySelect(table: string, candidates: string[]): Promise<Set<string> | null> {
+  const d = getDb() as DbAdapter & { mode?: string };
+  if (d.mode !== 'supabase') return null;
+  const url = (d as unknown as { url?: string }).url || '';
+  const h = (d as unknown as { headers?: (m: string) => Record<string, string> }).headers;
+  if (!url || !h) return null;
+  const u = new URL(`${url.replace(/\/$/, '')}/rest/v1/${table}`);
+  u.searchParams.set('limit', '1');
+  const existing = new Set<string>();
+  let remaining = [...candidates];
+  // On 400, PostgREST names the FIRST missing column; drop it and retry until
+  // the select succeeds (all remaining exist) or no candidates are left.
+  // Two error shapes occur across PostgREST versions: PGRST204
+  // ("Could not find the 'X' column") and 42703 ("column table.X does not exist").
+  for (let i = 0; i <= candidates.length && remaining.length; i++) {
+    u.searchParams.set('select', remaining.join(','));
+    let res: Response | null = null;
+    try {
+      res = await fetch(u.toString(), { headers: h.call(d, 'GET') });
+    } catch {
+      return existing.size ? existing : null;
+    }
+    if (res.ok) {
+      remaining.forEach((c) => existing.add(c));
+      break;
+    }
+    const text = await res.text().catch(() => '');
+    const m = text.match(/Could not find the '([^']+)' column/) || text.match(new RegExp(`column ${table}\.([^ ]+) does not exist`));
+    if (!m) return existing.size ? existing : null;
+    remaining = remaining.filter((c) => c !== m[1]);
   }
+  return existing.size ? existing : null;
+}
+
+// Candidate columns per table: the exact columns this module may write,
+// probed together in one select= request (see probeColumnsBySelect).
+const PRODUCT_PROBE_COLUMNS: readonly string[] = [
+  'name', 'title', 'short_title', 'subtitle', 'short_description', 'description',
+  'features', 'specifications', 'category_id', 'brand', 'status', 'price',
+  'compare_at_price', 'cost_price', 'landed_cost', 'currency', 'sku',
+  'inventory_qty', 'stock_status', 'low_stock_threshold', 'shipping_cost',
+  'free_shipping', 'delivery_min_days', 'delivery_max_days', 'shipping_note',
+  'us_inventory', 'supplier_source', 'supplier_product_ref', 'safety_class',
+  'safety_review_status', 'intended_species', 'commerce_readiness', 'source_type',
+  'inventory_source', 'fulfillment_method', 'supplier_url', 'supplier_stock_status',
+  'risk_flags', 'tags', 'featured', 'new_arrival', 'trending', 'best_rated',
+  'best_seller', 'promoted', 'sale_enabled', 'discount_type', 'discount_value',
+  'seo_title', 'seo_description', 'seo_keywords', 'canonical_slug', 'og_image',
+  'owner_notes', 'evidence_notes', 'sort_order',
+];
+const IMAGE_PROBE_COLUMNS: readonly string[] = ['storage_path', 'public_url', 'created_at'];
+const VARIANT_PROBE_COLUMNS: readonly string[] = ['title', 'price_amount', 'option_values', 'created_at', 'updated_at'];
+
+async function liveTableColumns(table: string, candidates: readonly string[]): Promise<Set<string> | null> {
+  if (cachedTableCols.has(table)) return cachedTableCols.get(table) ?? null;
+  const cols = await probeColumnsBySelect(table, [...candidates]);
+  cachedTableCols.set(table, cols);
+  return cols;
 }
 
 async function liveProductColumns(): Promise<Set<string> | null> {
-  return liveTableColumns('products');
+  return liveTableColumns('products', PRODUCT_PROBE_COLUMNS);
 }
 
 /** Columns this environment can actually write; null = assume full schema. */
@@ -819,7 +858,7 @@ export interface CatalogImageInput {
  * constraint. Only applied when those columns exist in the live schema.
  */
 async function legacyImageColumns(): Promise<{ storagePath?: boolean; publicUrl?: boolean; createdAt?: boolean }> {
-  const cols = await liveTableColumns('product_images');
+  const cols = await liveTableColumns('product_images', IMAGE_PROBE_COLUMNS);
   if (!cols) return {};
   return {
     storagePath: cols.has('storage_path'),
@@ -889,7 +928,7 @@ export interface CatalogVariantInput {
  * is never invented — null price maps to price_amount 0 (legacy only).
  */
 async function legacyVariantColumns(): Promise<{ title?: boolean; priceAmount?: boolean; optionValues?: boolean; timestamps?: boolean }> {
-  const cols = await liveTableColumns('product_variants');
+  const cols = await liveTableColumns('product_variants', VARIANT_PROBE_COLUMNS);
   if (!cols) return {};
   return {
     title: cols.has('title'),

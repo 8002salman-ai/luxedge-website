@@ -317,24 +317,31 @@ describe('catalog repository (pre-0010 live schema degradation)', () => {
     vi.unstubAllGlobals();
   });
 
-  // Mock a Supabase REST endpoint whose OpenAPI reports ONLY legacy product
-  // columns (no featured/tags/coupons) — exactly the live pre-0010 state.
+  // Mock a Supabase REST endpoint whose schema has ONLY legacy product
+  // columns (no featured/tags/coupons/safety) — exactly the live pre-0010
+  // state. select= probes are validated the way PostgREST validates them:
+  // a select naming a missing column returns 400 PGRST204 with the FIRST
+  // missing column in the message.
   function mockLegacySupabase() {
     const db: Record<string, unknown[]> = {};
     // Live pre-0010 products has BOTH name + title (title NOT NULL — the
     // legacy column the repository must mirror on write) plus the core V2 set.
     const legacyCols = ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'description', 'short_description', 'compare_at_price', 'stock_status', 'low_stock_threshold', 'supplier_source', 'supplier_product_ref', 'delivery_min_days', 'delivery_max_days', 'shipping_note', 'us_inventory'];
-    const openApi = {
-      components: { schemas: {
-        products: { properties: Object.fromEntries(legacyCols.map((c) => [c, { type: 'string' }])) },
-      } },
-    };
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push(`${init?.method || 'GET'} ${url.split('?')[0]}`);
-      if (url.includes('/rest/v1/') && !url.includes('/rest/v1/products') && !url.includes('/rest/v1/categories')) {
-        return new Response(JSON.stringify(openApi), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      // select= schema probe: name the first requested column missing from
+      // the live schema (exactly PostgREST's PGRST204 behavior).
+      if (url.includes('select=')) {
+        const qs = new URL(url, 'https://x').searchParams;
+        const requested = (qs.get('select') || '').split(',');
+        const missing = requested.find((c) => !legacyCols.includes(c));
+        if (missing) {
+          // Real PostgREST 42703 shape (verified against the live Supabase).
+          return new Response(JSON.stringify({ code: '42703', message: `column products.${missing} does not exist` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (url.includes('/rest/v1/categories')) {
         const rows = db['categories'] || [];
@@ -415,34 +422,85 @@ describe('catalog repository (pre-0010 live schema degradation)', () => {
     expect(stored.price).toBe(base.price);
   });
 
-  it('OpenAPI schema probe strips Prefer: return=representation (PostgREST 406 guard)', async () => {
-    // The probe fetch must not carry the mutation Prefer header — PostgREST
-    // rejects OpenAPI requests that do (406), the probe then fails and the
-    // repository falls back to "assume full schema", which re-introduces the
-    // PGRST204 write errors this module exists to prevent.
-    const probeHeaders: Array<Record<string, string>> = [];
-    const openApi = {
-      components: { schemas: {
-        products: { properties: Object.fromEntries(
-          ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'short_description', 'description'].map((c) => [c, { type: 'string' }]),
-        ) },
-      } },
-    };
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it('schema probe uses the anon-key-safe select= endpoint (no OpenAPI 401)', async () => {
+    // Regression for the LIVE failure: the OpenAPI probe endpoint 401s for
+    // the browser anon key, so the probe "failed" and the repository assumed
+    // the FULL schema — then wrote columns that do not exist (PGRST204) or
+    // skipped NOT NULL legacy mirrors (storage_path). The probe must hit the
+    // table endpoint with select= (PostgREST validates it for anon keys) and
+    // filter missing columns out of the write.
+    const probeCalls: string[] = [];
+    const legacyCols = ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'description', 'short_description'];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.split('?')[0].endsWith('/rest/v1/')) {
-        probeHeaders.push((init?.headers as Record<string, string>) || {});
-        return new Response(JSON.stringify(openApi), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('select=')) {
+        probeCalls.push(url.split('?')[0]);
+        const qs = new URL(url, 'https://x').searchParams;
+        const requested = (qs.get('select') || '').split(',');
+        const missing = requested.find((c) => !legacyCols.includes(c));
+        if (missing) {
+          // Legacy PGRST204 shape — the probe must handle this format too.
+          return new Response(JSON.stringify({ code: 'PGRST204', message: `Could not find the '${missing}' column of 'products' in the schema cache` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-      return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
     }));
     __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
     resetDbForTests();
     __resetCatalogSchemaCacheForTests();
-    await createProduct({ ...base });
-    expect(probeHeaders.length).toBeGreaterThan(0);
-    const joined = JSON.stringify(probeHeaders[0]).toLowerCase();
-    expect(joined).not.toContain('return=representation');
+    await createProduct({ ...base, featured: true, safetyClass: 'NON_INGESTIBLE' });
+    // Probe hit the table endpoint (not the OpenAPI root), and the missing
+    // 0010/0021 columns were filtered out of the write.
+    expect(probeCalls.some((c) => c.endsWith('/rest/v1/products'))).toBe(true);
+    expect(probeCalls.some((c) => c.endsWith('/rest/v1/'))).toBe(false);
+  });
+
+  it('live 42703 probe: storage_path detected so the NOT NULL image row saves (PGRST204/42703 regression)', async () => {
+    // The user's live failure: "null value in column \"storage_path\" ...
+    // violates not-null constraint". The image probe must succeed with the
+    // anon key (select= endpoint, not OpenAPI) and detect storage_path so the
+    // write includes it. Uses the REAL 42703 error shape verified against the
+    // live Supabase server.
+    const db: Record<string, unknown[]> = { products: [], product_images: [] };
+    const legacyCols = ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'description', 'short_description'];
+    const imgCols = ['id', 'product_id', 'url', 'storage_path', 'public_url', 'alt_text', 'kind', 'is_primary', 'sort_order', 'variant_id', 'created_at'];
+    const tableCols: Record<string, string[]> = { products: legacyCols, product_images: imgCols };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('select=')) {
+        const qs = new URL(url, 'https://x').searchParams;
+        const path = url.split('?')[0];
+        const table = path.split('/rest/v1/')[1]?.split('/')[0] || '';
+        const requested = (qs.get('select') || '').split(',');
+        const missing = requested.find((c) => !(tableCols[table] || []).includes(c));
+        if (missing) {
+          return new Response(JSON.stringify({ code: '42703', message: `column ${table}.${missing} does not exist` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      const path = url.split('?')[0];
+      const table = path.split('/rest/v1/')[1]?.split('/')[0] || '';
+      const rows = (db[table] ||= []) as Record<string, unknown>[];
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        rows.push(body);
+        return new Response(JSON.stringify([body]), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('id=eq.')) {
+        const id = decodeURIComponent(url.match(/id=eq\.([^&]+)/)?.[1] || '');
+        return new Response(JSON.stringify(rows.filter((r) => r.id === id)), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    const p = await createProduct({ ...base });
+    await saveProductImages(p.id, [{ url: 'https://img/a.jpg', altText: 'A', isPrimary: true, sortOrder: 0 }]);
+    const img = db['product_images'][0] as Record<string, unknown>;
+    expect(img.storage_path).toContain('catalog/'); // NOT NULL column satisfied
+    expect(img.public_url).toBe('https://img/a.jpg');
   });
 
   it('pre-0010: coupons and offers degrade to empty lists', async () => {
@@ -497,20 +555,28 @@ describe('catalog repository (post-0010 live schema: legacy NOT NULL mirrors)', 
   // title/price_amount/option_values/created_at/updated_at; store_settings PK = key.
   function mockFullSchema() {
     const db: Record<string, unknown[]> = { products: [], product_images: [], product_variants: [], coupons: [], store_offers: [], store_settings: [], categories: [{ id: 'cat-toys', name: 'Pet Toys', slug: 'pet-toys' }] };
-    const schemas: Record<string, Record<string, unknown>> = {
-      products: { properties: Object.fromEntries(['id', 'slug', 'name', 'title', 'status', 'price', 'compare_at_price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'short_description', 'description', 'tags', 'featured', 'new_arrival', 'free_shipping', 'stock_status', 'low_stock_threshold', 'us_inventory', 'supplier_source', 'supplier_product_ref', 'delivery_min_days', 'delivery_max_days', 'shipping_note', 'seo_title', 'seo_description', 'seo_keywords', 'published_at', 'owner_notes', 'evidence_notes', 'sort_order'].map((c) => [c, {}])) },
-      product_images: { properties: Object.fromEntries(['id', 'product_id', 'url', 'storage_path', 'public_url', 'alt_text', 'kind', 'is_primary', 'sort_order', 'variant_id', 'created_at'].map((c) => [c, {}])) },
-      product_variants: { properties: Object.fromEntries(['id', 'product_id', 'attributes', 'sku', 'price', 'compare_at_price', 'cost_price', 'inventory_qty', 'status', 'low_stock_threshold', 'title', 'price_amount', 'option_values', 'created_at', 'updated_at'].map((c) => [c, {}])) },
-      coupons: { properties: {} },
-      store_offers: { properties: {} },
-      store_settings: { properties: { key: {}, value: {}, updated_at: {} } },
-      categories: { properties: {} },
+    const tableCols: Record<string, string[]> = {
+      products: ['id', 'slug', 'name', 'title', 'status', 'price', 'compare_at_price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'short_description', 'description', 'tags', 'featured', 'new_arrival', 'free_shipping', 'stock_status', 'low_stock_threshold', 'us_inventory', 'supplier_source', 'supplier_product_ref', 'delivery_min_days', 'delivery_max_days', 'shipping_note', 'seo_title', 'seo_description', 'seo_keywords', 'published_at', 'owner_notes', 'evidence_notes', 'sort_order'],
+      product_images: ['id', 'product_id', 'url', 'storage_path', 'public_url', 'alt_text', 'kind', 'is_primary', 'sort_order', 'variant_id', 'created_at'],
+      product_variants: ['id', 'product_id', 'attributes', 'sku', 'price', 'compare_at_price', 'cost_price', 'inventory_qty', 'status', 'low_stock_threshold', 'title', 'price_amount', 'option_values', 'created_at', 'updated_at'],
+      coupons: [],
+      store_offers: [],
+      store_settings: ['key', 'value', 'updated_at'],
+      categories: ['id', 'name', 'slug'],
     };
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.split('?')[0].endsWith('/rest/v1/')) {
-        // OpenAPI schema probe (no table suffix)
-        return new Response(JSON.stringify({ components: { schemas } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.includes('select=')) {
+        const qs = new URL(url, 'https://x').searchParams;
+        const path = url.split('?')[0];
+        const table = path.split('/rest/v1/')[1]?.split('/')[0] || '';
+        const requested = (qs.get('select') || '').split(',');
+        const missing = requested.find((c) => !(tableCols[table] || []).includes(c));
+        if (missing) {
+          // Real PostgREST 42703 shape (verified against the live Supabase).
+          return new Response(JSON.stringify({ code: '42703', message: `column ${table}.${missing} does not exist` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       const path = url.split('?')[0];
       const table = path.split('/rest/v1/')[1]?.split('/')[0] || '';
