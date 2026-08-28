@@ -1424,7 +1424,17 @@ function ProductDetailPage() {
             {product.usInventory && activeStock > 0 && activeStock <= 10 && <span className="text-luxe-gold font-medium"><AlertTriangle strokeWidth={1.5} size={13} className="inline mr-1" />Only {activeStock} left in stock</span>}
             {product.usInventory && activeStock === 0 && <span className="text-red-500 font-medium"><X strokeWidth={1.5} size={13} className="inline mr-1" />Out of Stock</span>}
             {!product.usInventory && activeStock > 0 && <span className="text-gray-500"><CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />Availability confirmed at checkout</span>}
-            {product.freeShipping && <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>}
+            {product.stockStatus && !product.usInventory && (
+              <span className={product.stockStatus === 'in_stock' ? 'text-green-600 font-medium' : product.stockStatus === 'out_of_stock' ? 'text-red-500 font-medium' : 'text-luxe-gold font-medium'}>
+                <CheckCircle strokeWidth={1.5} size={13} className="inline mr-1" />
+                {{ in_stock: 'In Stock', low_stock: 'Low Stock', out_of_stock: 'Out of Stock', on_backorder: 'On Backorder' }[product.stockStatus] || 'In Stock'}
+              </span>
+            )}
+            {product.freeShipping
+              ? <span className="text-green-700 font-medium"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>
+              : product.shippingCost && parseFloat(product.shippingCost) > 0
+                ? <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Shipping ${parseFloat(product.shippingCost).toFixed(2)}</span>
+                : null}
             <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
           </div>
 

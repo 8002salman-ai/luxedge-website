@@ -161,7 +161,7 @@ export function CatalogProductsPage() {
     try {
       const next = p.status === 'active' ? 'inactive' : 'active';
       await setProductStatus(p.id, next);
-      notify(next === 'active' ? 'Product activated' : 'Product deactivated');
+      notify(next === 'active' ? 'Product is now LIVE on the storefront' : 'Product set to Draft');
       await load();
     } catch (e) {
       notify(`Could not update: ${(e as Error).message}`, 'error');
@@ -427,7 +427,24 @@ export function CatalogProductsPage() {
                     <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''}>{p.inventoryQty}</span>
                     <span className="text-[10px] text-gray-400 ml-1">({INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']})</span>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap"><ReadinessBadge readiness={p.commerceReadiness} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-gray-100 text-gray-600" title="Internal commerce readiness — only COMMERCE_READY listings appear on the storefront">{COMMERCE_READINESS_LABELS[p.commerceReadiness || 'DRAFT'] || 'Draft'}</span>
+                      <select
+                        value={p.status === 'active' ? 'live' : 'draft'}
+                        onChange={(e) => void setProductStatus(p.id, e.target.value === 'live' ? 'active' : 'draft').then(() => {
+                          notify(e.target.value === 'live' ? 'Product is now LIVE on the storefront' : 'Product set to Draft');
+                          return load();
+                        }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'))}
+                        title={p.status === 'active' ? 'Currently Live — choose Draft to unpublish' : 'Currently Draft — choose Live to publish'}
+                        className="text-[11px] font-semibold border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white"
+                        aria-label={`Set ${p.name} status`}
+                      >
+                        <option value="live">Live</option>
+                        <option value="draft">Draft</option>
+                      </select>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 max-w-[140px]">
                     <div className="flex flex-col min-w-0">
                       <span className="text-[11px] font-medium text-gray-600 truncate">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : '—'}</span>
@@ -852,7 +869,7 @@ export function CatalogProductEditor() {
       } else {
         setP({
           id: '', slug: '', name: '', shortDescription: '', description: '', features: [], specifications: {},
-          categoryId: cs[0]?.id ?? null, categoryName: cs[0]?.name ?? '', brand: '', status: 'draft',
+          categoryId: cs[0]?.id ?? null, categoryName: cs[0]?.name ?? '', brand: '', status: 'active',
           price: 0, compareAtPrice: 0, costPrice: 0, landedCost: 0, marginPercent: null, currency: 'USD',
           sku: '', inventoryQty: 0, stockStatus: 'in_stock', lowStockThreshold: 0, shippingCost: 0,
           freeShipping: false, deliveryMinDays: null, deliveryMaxDays: null, usInventory: false,
@@ -1013,9 +1030,9 @@ export function CatalogProductEditor() {
           <>
             <div className="relative shrink-0">
               <select value={p.status} onChange={(e) => set('status', e.target.value as CatalogProduct['status'])} className="appearance-none pl-2 pr-7 py-1.5 border border-gray-200 rounded-lg text-xs font-medium bg-white cursor-pointer" aria-label="Product status">
+                <option value="active">Live</option>
                 <option value="draft">Draft</option>
                 <option value="ready">Ready</option>
-                <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="archived">Archived</option>
               </select>
@@ -1458,7 +1475,31 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
           <label className={L}>Retail price (USD) <span className="text-red-500">*</span></label>
           <input type="number" min="0" step="0.01" value={product.price || ''} onChange={(e) => set('price', +e.target.value)} className={I} placeholder="0.00" />
         </div>
+        <div>
+          <label className={L}>Compare-at price (USD) <span className="normal-case font-normal text-gray-400">(optional — shows a sale)</span></label>
+          <input type="number" min="0" step="0.01" value={product.compareAtPrice || ''} onChange={(e) => set('compareAtPrice', +e.target.value)} className={I} placeholder="0.00" />
+        </div>
         <div><label className={L}>Supplier cost (USD) — optional</label><input type="number" min="0" step="0.01" value={product.costPrice || ''} onChange={(e) => set('costPrice', +e.target.value)} className={I} placeholder="Optional" /></div>
+        <div>
+          <label className={L}>Stock quantity</label>
+          <input type="number" min="0" value={product.inventoryQty} onChange={(e) => set('inventoryQty', +e.target.value)} className={I} placeholder="0" />
+        </div>
+        <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+          <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-700 pb-2"><input type="checkbox" checked={product.freeShipping} onChange={(e) => set('freeShipping', e.target.checked)} className="w-4 h-4" />Free shipping on this product</label></div>
+          <div>
+            <label className={L}>Shipping cost (USD) <span className="normal-case font-normal text-gray-400">— if not free</span></label>
+            <input type="number" min="0" step="0.01" value={product.shippingCost || ''} onChange={(e) => set('shippingCost', +e.target.value)} className={I} placeholder="0.00" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={L}>Estimated delivery <span className="normal-case font-normal text-gray-400">(optional, business days)</span></label>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" value={product.deliveryMinDays ?? ''} onChange={(e) => set('deliveryMinDays', e.target.value ? +e.target.value : null)} className={I} placeholder="min" aria-label="Delivery min days" />
+              <span className="text-xs text-gray-400">–</span>
+              <input type="number" min="0" value={product.deliveryMaxDays ?? ''} onChange={(e) => set('deliveryMaxDays', e.target.value ? +e.target.value : null)} className={I} placeholder="max" aria-label="Delivery max days" />
+              <span className="text-xs text-gray-500 whitespace-nowrap">days</span>
+            </div>
+          </div>
+        </div>
         <div className="sm:col-span-2">
           <label className={L}>Short description <span className="normal-case font-normal text-gray-400">(optional)</span></label>
           <textarea value={product.shortDescription || ''} onChange={(e) => set('shortDescription', e.target.value)} rows={2} className={I} placeholder="One-line customer-facing summary (also used for SEO meta)." />
