@@ -96,6 +96,16 @@ describe('parseHtmlPage', () => {
     expect(images).toHaveLength(2);
   });
 
+  it('extracts AliExpress lazy-load attributes (data-hd-src, data-ks-lazyload)', () => {
+    const html = [
+      '<img data-hd-src="https://ae01.alicdn.com/kf/Slazy1.jpg_640x640q75.jpg_.webp" />',
+      '<img data-ks-lazyload="https://ae01.alicdn.com/kf/Slazy2.webp" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />',
+    ].join('');
+    const { images } = parseHtmlPage(html);
+    expect(images).toContain('https://ae01.alicdn.com/kf/Slazy1.jpg');
+    expect(images).toContain('https://ae01.alicdn.com/kf/Slazy2.webp');
+  });
+
   it('normalizes AliExpress size-suffixed/avif thumbnails back to base images', () => {
     const html = [
       '<img src="https://ae01.alicdn.com/kf/Sabc123.jpg_220x220q75.jpg_.avif" />',

@@ -339,7 +339,7 @@ export function parseHtmlPage(raw: string): FetchedPage {
       src
         .replace(/\.avif$/i, '')
         .replace(/(\.(?:jpe?g|png|webp))_.+$/i, '$1');
-    const images = Array.from(raw.matchAll(/<img[^>]+(?:src|data-src)=["']([^"']+)["']/gi))
+    const images = Array.from(raw.matchAll(/<img[^>]+(?:src|data-src|data-hd-src|data-ks-lazyload)=["'](https?:[^"']+)["']/gi))
       .map((m) => normalize(m[1]))
       .filter((src) => src.startsWith('http') && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(src));
     if (ogImage && ogImage.startsWith('http')) images.unshift(normalize(ogImage));

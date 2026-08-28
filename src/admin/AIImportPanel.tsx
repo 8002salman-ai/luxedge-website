@@ -162,9 +162,24 @@ export function AIImportPanel() {
         const doc = parser.parseFromString(htmlInput, 'text/html');
         doc.querySelectorAll('script,style').forEach(el => el.remove());
         pageImages = [];
+        // AliExpress lazy-loads images: real URLs live in srcset (highest
+        // width variant), data-src, data-hd-src, and data-ks-lazyload. Plain
+        // `src` is often a 1px placeholder — never take it as the only source.
+        const pushUrl = (u: string) => {
+          const t = (u || '').trim();
+          if (/^https?:\/\//i.test(t) && !pageImages.includes(t)) pageImages.push(t);
+        };
         doc.querySelectorAll('img').forEach(img => {
-          const src = img.getAttribute('src')||img.getAttribute('data-src')||'';
-          if (src.startsWith('http')) pageImages.push(src);
+          const srcset = img.getAttribute('srcset') || '';
+          // srcset: "url 100w, url2 800w" — take the last (largest) entry.
+          const parts = srcset.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean);
+          if (parts.length) pushUrl(parts[parts.length - 1]);
+          ['data-hd-src', 'data-src', 'data-ks-lazyload', 'data-lazy-src', 'src'].forEach(attr => {
+            const v = img.getAttribute(attr) || '';
+            // AliExpress stores large previews as ".webp_" suffix URLs in
+            // data attributes (e.g. "....webp_640x640.webp").
+            pushUrl(v.replace(/\.webp_\d+x\d+\.webp$/i, '.webp'));
+          });
         });
         rawContent = doc.body?.innerText || htmlInput;
         addLog(`HTML processed — ${rawContent.length} chars, ${pageImages.length} images`, true);
