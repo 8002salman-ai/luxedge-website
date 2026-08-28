@@ -15,7 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
-import { getAccessToken } from '../services/supabase';
+import { getAccessToken, getFreshAccessToken } from '../services/supabase';
 import {
   setDbToken, listProducts, getProduct, createProduct, updateProduct, setProductStatus,
   archiveProduct, hardDeleteProduct, duplicateProduct, saveProductImages, saveProductVariants,
@@ -75,7 +75,9 @@ function ReadinessBadge({ readiness }: { readiness?: CommerceReadiness | null })
 
 function useDbToken() {
   useEffect(() => {
-    setDbToken(getAccessToken());
+    // Refresh first so a long-open admin session never writes with a stale
+    // (expired) JWT — getFreshAccessToken refreshes when near/at expiry.
+    void getFreshAccessToken().then((t) => setDbToken(t));
   }, []);
 }
 
@@ -881,6 +883,9 @@ export function CatalogProductEditor() {
     if (p.images.length === 0) { notify('At least one image is required before activating a premium listing', 'error'); setTab('images'); return; }
     setSaving(true);
     try {
+      // Refresh the session token before writing — a form left open past the
+      // 1h JWT expiry must not fail the save with Supabase 401 "JWT expired".
+      setDbToken(await getFreshAccessToken());
       const input = {
         name: p.name.trim(),
         shortTitle: p.shortTitle,

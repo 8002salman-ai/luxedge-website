@@ -15,7 +15,7 @@
 // ============================================================================
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useApp, Modal } from '../App';
-import { getAccessToken } from '../services/supabase';
+import { getFreshAccessToken } from '../services/supabase';
 import {
   setDbToken, listRecommendations, listSeoSuggestions, listMarketingIntel, listAdsReadiness,
   updateRecommendation, updateSeoSuggestion, updateMarketingIntel,
@@ -45,7 +45,8 @@ const BADGE: Record<string, string> = {
 
 function useDbToken() {
   useEffect(() => {
-    setDbToken(getAccessToken());
+    // Refresh first so a long-open admin session never writes with a stale JWT.
+    void getFreshAccessToken().then((t) => setDbToken(t));
   }, []);
 }
 

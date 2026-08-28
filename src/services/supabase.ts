@@ -116,6 +116,18 @@ export function getAccessToken(): string | null {
   return readStoredSession()?.accessToken || null;
 }
 
+/**
+ * Fresh access token for writes: refreshes the session first when the stored
+ * token is expired or near expiry (getSession already handles that), then
+ * returns the current token. Admin save paths call this before touching the
+ * DB so a long-open form never writes with a stale JWT (Supabase 401
+ * "JWT expired"). Returns null only when there is no session at all.
+ */
+export async function getFreshAccessToken(): Promise<string | null> {
+  const session = await getSession();
+  return session ? session.accessToken : null;
+}
+
 /** The currently known user (from a stored session), without any token. */
 export function getSessionUser(): SbUser | null {
   return readStoredSession()?.user || null;

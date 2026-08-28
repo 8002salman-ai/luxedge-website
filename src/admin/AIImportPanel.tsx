@@ -14,7 +14,7 @@ import {
 import type { AIProvider, AIExtractedProduct, ImportHistoryEntry } from '../App';
 import { loadProviderSettings } from '../features/ai/providers';
 import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
-import { getAccessToken } from '../services/supabase';
+import { getFreshAccessToken } from '../services/supabase';
 import {
   ArrowClockwise, ArrowLeft, CheckCircle, Clipboard, ClockCounterClockwise,
   CurrencyDollar, FileText, Globe, Image as ImageIcon, LinkSimple, MagicWand,
@@ -291,7 +291,8 @@ export function AIImportPanel() {
     setSaving(true);
     try {
       // Admin writes flow through the signed-in JWT (RLS governs every mutation).
-      setDbToken(getAccessToken());
+      // Refresh first — a long-open import form must not write with a stale JWT.
+      setDbToken(await getFreshAccessToken());
 
       // DB-level duplicate check — supplier URL / item ID first, then title.
       const allProducts = await listProducts();
