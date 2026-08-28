@@ -102,6 +102,59 @@ export function providerKey(providerId: string): string {
   return '';
 }
 
+/**
+ * All configured keys for a provider, in priority order. Supports the legacy
+ * single key (PROVIDER_ENV[providerId]) plus numbered extras (e.g.
+ * DEEPSEEK_API_KEY_1..N or comma-separated values in the primary var).
+ * Deduplicated, whitespace-trimmed, empties dropped.
+ */
+export function providerKeys(providerId: string): string[] {
+  const envName = PROVIDER_ENV[providerId];
+  if (!envName) return [];
+  const keys: string[] = [];
+  const push = (raw: string | undefined) => {
+    for (const k of String(raw || '').split(',')) {
+      const t = k.trim();
+      if (t && !keys.includes(t)) keys.push(t);
+    }
+  };
+  push(process.env[envName]);
+  // Numbered extras: DEEPSEEK_API_KEY_1, _2, … until the first gap.
+  for (let i = 1; i <= 20; i++) {
+    const next = process.env[`${envName}_${i}`];
+    if (!next) break;
+    push(next);
+  }
+  if (providerId === 'codex' && keys.length === 0) push(process.env['CHATGPT_OAUTH_TOKEN']);
+  return keys;
+}
+
+/** Round-robin cursor for multi-key providers (module-level, per warm instance). */
+let keyCursor = 0;
+
+/** Test-only hook: reset the rotation cursor so tests are deterministic. */
+export function __resetKeyRotationForTests(): void {
+  keyCursor = 0;
+}
+
+/** Call a provider, rotating through every configured key on failure. */
+async function generateWithKeyRotation(providerId: string, _opts: GenerateOptions, call: (key: string) => Promise<string>): Promise<string> {
+  const keys = providerKeys(providerId);
+  if (!keys.length) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var)`);
+  // Rotate the STARTING key so repeated calls spread across all keys.
+  const start = keyCursor++ % keys.length;
+  let lastErr: Error | null = null;
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[(start + i) % keys.length];
+    try {
+      return await call(key);
+    } catch (e) {
+      lastErr = e as Error;
+    }
+  }
+  throw lastErr || new Error(`${PROVIDER_NAMES[providerId]} generation failed`);
+}
+
 function sanitizeError(providerId: string, status: number): string {
   // Never include raw provider error bodies — they may echo request headers/keys.
   return `${PROVIDER_NAMES[providerId] || providerId} error (HTTP ${status}). Check server logs for details.`;
@@ -121,10 +174,8 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
   if (!isValidModel(model)) throw new Error('Invalid model identifier');
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   switch (providerId) {
-    case 'openai':
-    case 'deepseek': {
-      const base = providerId === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.deepseek.com/chat/completions';
-      const r = await fetch(base, {
+    case 'openai': {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({ model, messages: [
@@ -138,6 +189,26 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error(`${PROVIDER_NAMES[providerId]} returned no text`);
       return text;
+    }
+    case 'deepseek': {
+      // Multi-key rotation: tries every configured DEEPSEEK_API_KEY(_N) in
+      // round-robin order, moving to the next key when one fails.
+      return generateWithKeyRotation('deepseek', opts, async (rotKey) => {
+        const r = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${rotKey}` },
+          body: JSON.stringify({ model, messages: [
+            ...(system ? [{ role: 'system', content: system }] : []),
+            { role: 'user', content: prompt },
+          ], temperature: 0.2, max_tokens: 4096 }),
+          signal,
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(sanitizeError('deepseek', r.status));
+        const text = d?.choices?.[0]?.message?.content;
+        if (typeof text !== 'string') throw new Error('DeepSeek returned no text');
+        return text;
+      });
     }
     case 'gemini': {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
