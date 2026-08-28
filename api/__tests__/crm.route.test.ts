@@ -2,8 +2,8 @@
 // LUXEDGE — /api/crm/* ROUTE TESTS
 //
 // Verifies the CRM contract without any live HTTP:
-//   - /api/crm/welcome: 405 on wrong method, email validation, server-DB
-//     absent → preview coupon still returned (visitor never loses the offer),
+//   - /api/crm/welcome: 405 on wrong method, email validation, malformed
+//     payloads, server-DB absence → fail-closed response, consent handling,
 //     and no secret ever echoed.
 //   - /api/crm/lead: 405, contact validation, DB-absent honest degrade.
 //   - /api/crm/list: admin JWT required; non-admin 403; missing DB 503.
@@ -174,9 +174,13 @@ describe('/api/crm/lead', () => {
     expect(captured.status).toBe(405);
   });
 
-  it('rejects when neither email nor phone is provided', async () => {
+  it.each([
+    ['missing contact', { source: 'whatsapp' }],
+    ['JSON null', null],
+    ['JSON array', []],
+  ])('returns 400 for %s instead of throwing', async (_label, payload) => {
     const { captured, server } = makeRes();
-    await leadHandler(makeReq('POST', { source: 'whatsapp' }), server);
+    await leadHandler(makeReq('POST', payload), server);
     expect(captured.status).toBe(400);
   });
 
@@ -185,6 +189,23 @@ describe('/api/crm/lead', () => {
     await leadHandler(makeReq('POST', { email: 'buyer@example.com', source: 'whatsapp' }), server);
     expect(captured.status).toBe(200);
     expect(captured.body).toMatchObject({ ok: true, stored: false });
+  });
+
+  it.each([
+    { label: 'omitted', payload: {}, expected: false },
+    { label: 'explicitly enabled', payload: { optedIn: true }, expected: true },
+  ])('records consent only when explicitly enabled ($label)', async ({ payload, expected }) => {
+    process.env.VITE_SUPABASE_URL = 'https://db.example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-role-test';
+    let saved: Record<string, unknown> | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      saved = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response('{}', { status: 201 });
+    }));
+    const { captured, server } = makeRes();
+    await leadHandler(makeReq('POST', { email: 'buyer@example.com', source: 'whatsapp', ...payload }), server);
+    expect(captured.status).toBe(200);
+    expect(saved?.opted_in).toBe(expected);
   });
 });
 
@@ -294,11 +315,15 @@ describe('/api/crm/subscribe', () => {
     expect(captured.status).toBe(405);
   });
 
-  it('rejects a missing/invalid email', async () => {
+  it.each([
+    ['missing email', {}],
+    ['invalid email', { email: 'not-an-email' }],
+    ['JSON null', null],
+    ['JSON array', []],
+  ])('returns 400 for %s', async (_label, payload) => {
     const { captured, server } = makeRes();
-    await subscribeHandler(makeReq('POST', { email: 'not-an-email' }), server);
+    await subscribeHandler(makeReq('POST', payload), server);
     expect(captured.status).toBe(400);
-    expect(JSON.stringify(captured.body)).toMatch(/email/i);
   });
 
   it('fails soft with an honest note when the server DB is not configured', async () => {

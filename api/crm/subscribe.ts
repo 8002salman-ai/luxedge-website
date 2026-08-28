@@ -23,7 +23,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   let body: { email?: string; name?: string; pageUrl?: string };
   try {
-    body = await readJsonBody(req);
+    const parsed = await readJsonBody(req);
+    body = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as typeof body
+      : {};
   } catch (e) {
     sendJson(res, 400, { error: (e as Error).message });
     return;

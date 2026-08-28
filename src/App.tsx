@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
+﻿import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -39,12 +39,17 @@ export interface Product {
   weight: string; dimensions: string; origin: string;
   freeShipping: boolean; shippingCost: string;
   variants: ProductVariant[];
-  // Catalog Launch Phase — real merchandising data from the DB (never fake).
+  // Catalog Launch Phase â€” real merchandising data from the DB (never fake).
   featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
   stockStatus?: string; usInventory?: boolean;
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   slug?: string;
   supplierSource?: string;
+  supplierProductRef?: string;
+  supplierUrl?: string | null;
+  safetyClass?: import('./features/catalog/productSafety').ProductSafetyClass | null;
+  safetyReviewStatus?: import('./features/catalog/productSafety').ProductSafetyReviewStatus | null;
+  intendedSpecies?: string | null;
   commerceReadiness?: string; sourceType?: string; inventorySource?: string;
   deliveryMinDays?: number | null; deliveryMaxDays?: number | null;
 }
@@ -69,7 +74,7 @@ export interface BlogPost {
 }
 
 // Branded image fallback (cream + Luxedge wordmark) so a failed image never
-// shows a broken-image icon. Inline SVG — no external asset dependency.
+// shows a broken-image icon. Inline SVG â€” no external asset dependency.
 const LUXEDGE_IMAGE_FALLBACK = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   "<svg xmlns='http://www.w3.org/2000/svg' width='800' height='800'><rect width='100%' height='100%' fill='#F6F3EE'/><text x='50%' y='50%' font-family='Georgia, serif' font-size='64' letter-spacing='6' fill='#1A2440' text-anchor='middle' dominant-baseline='middle'>LUXEDGE</text></svg>"
 );
@@ -96,9 +101,11 @@ function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
 
 
 // ============================================================================
-// AI IMPORT ENGINE — extracted to src/features/ai/* (SECURITY: provider keys
+// AI IMPORT ENGINE â€” extracted to src/features/ai/* (SECURITY: provider keys
 // are server-side only; the browser proxies through /api/ai/*)
 // ============================================================================
+import { classifyProductSafety } from './features/catalog/productSafety';
+
 import type {
   AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
   VariantAttribute, SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
@@ -144,10 +151,10 @@ export {
 
 // ============================================================================
 // DATA
-// (demo catalog constants removed — the storefront is DB-driven only; no fake
+// (demo catalog constants removed â€” the storefront is DB-driven only; no fake
 // products, fake ratings, or fake orders anywhere in the customer path)
 
-// (demo admin credentials removed in Phase 3A — admin auth is Supabase-only)
+// (demo admin credentials removed in Phase 3A â€” admin auth is Supabase-only)
 
 // Map a Supabase catalog row to the storefront Product shape WITHOUT
 // fabricating anything: ratings stay 0 (the UI shows stars only for verified
@@ -192,6 +199,8 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     seoKeywords: p.seoKeywords,
     slug: p.slug,
     supplierSource: p.supplierSource,
+    supplierProductRef: p.supplierProductRef,
+    supplierUrl: p.supplierUrl,
     variants: (p.variants || []).map((v) => ({
       id: v.id,
       color: v.attributes?.color || '',
@@ -208,14 +217,14 @@ function mapCatalogProduct(p: CatalogProduct): Product {
 function mapCatalogCategory(c: CatalogCategory): AdminCategory {
   return { id: c.id, name: c.name, slug: c.slug, isActive: c.isActive, subs: [] };
 }
-// Demo buyer rows for the admin Users panel — no credentials (Phase 3A: real
+// Demo buyer rows for the admin Users panel â€” no credentials (Phase 3A: real
 // users come from Supabase Auth and are never represented with passwords).
-// No fake customers — real users come from Supabase auth. Admin lists show
+// No fake customers â€” real users come from Supabase auth. Admin lists show
 // real profiles only (empty until they exist).
 const INIT_USERS: AppUser[] = [];
 
 // No fake order history or reviews: real orders come from the Stripe webhook
-// (luxedge_orders, shown in Admin → Orders) and real reviews do not exist
+// (luxedge_orders, shown in Admin â†’ Orders) and real reviews do not exist
 // yet. The storefront must never display invented customers or ratings.
 const INIT_REVIEWS: Review[] = [];
 
@@ -230,30 +239,30 @@ const INIT_CATEGORIES: AdminCategory[] = [
 ];
 
 const INIT_BLOGS: BlogPost[] = [
-  { id:'b1', slug:'essential-supplies-new-puppy', title:'10 Essential Supplies Every New Puppy Needs', excerpt:'From comfy beds to chew-proof toys, here are the must-have products for welcoming a puppy into your home.', content:'Bringing home a puppy is exciting — and a little overwhelming. Here are the essentials every new pet parent needs.\n\n## 1. A Comfortable Bed\nThe Orthopedic Memory Foam Dog Bed supports growing joints and gives your puppy a cozy place to recharge after all that play.\n\n## 2. A No-Pull Harness\nPuppies pull! An Adjustable No-Pull Dog Harness makes walks comfortable and teaches good leash manners from day one.\n\n## 3. Durable Chew Toys\nPuppies teethe — a lot. A set of rope toys gives them something safe to chew instead of your furniture.\n\n## 4. Slow Feeder Bowl\nPuppies eat fast. A slow feeder bowl slows them down and prevents bloating.\n\n## 5. Grooming Basics\nA self-cleaning slicker brush keeps their coat shiny and makes grooming a bonding moment.\n\n## 6. Training Treats & More\nStock up on quality food, treats, and a sturdy collar. Preparation makes the first few weeks smooth and fun for everyone.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','dog supplies','new pet','essentials'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-10' },
+  { id:'b1', slug:'essential-supplies-new-puppy', title:'10 Essential Supplies Every New Puppy Needs', excerpt:'From comfy beds to chew-proof toys, here are the must-have products for welcoming a puppy into your home.', content:'Bringing home a puppy is exciting â€” and a little overwhelming. Here are the essentials every new pet parent needs.\n\n## 1. A Comfortable Bed\nThe Orthopedic Memory Foam Dog Bed supports growing joints and gives your puppy a cozy place to recharge after all that play.\n\n## 2. A No-Pull Harness\nPuppies pull! An Adjustable No-Pull Dog Harness makes walks comfortable and teaches good leash manners from day one.\n\n## 3. Durable Chew Toys\nPuppies teethe â€” a lot. A set of rope toys gives them something safe to chew instead of your furniture.\n\n## 4. Slow Feeder Bowl\nPuppies eat fast. A slow feeder bowl slows them down and prevents bloating.\n\n## 5. Grooming Basics\nA self-cleaning slicker brush keeps their coat shiny and makes grooming a bonding moment.\n\n## 6. Training Treats & More\nStock up on quality food, treats, and a sturdy collar. Preparation makes the first few weeks smooth and fun for everyone.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','dog supplies','new pet','essentials'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-10' },
   { id:'b2', slug:'cozy-corner-for-your-cat', title:'How to Create the Perfect Cozy Corner for Your Cat', excerpt:'Cats love having a place to call their own. Here\u2019s how to build a calming space your feline will adore.', content:'Every cat deserves a sanctuary. Here\u2019s how to design a cozy corner your kitty will love.\n\n## Choose the Right Bed\nCats feel safest when they can curl up with their back protected. A donut-style Cozy Calming Cat Bed with raised edges is perfect.\n\n## Add a Scratching Post\nScratching is instinct. A sturdy Premium Cat Scratching Post keeps claws happy and your sofa safe.\n\n## Include a View\nCats love watching the world go by. Place their bed near a window for hours of gentle entertainment.\n\n## Keep It Quiet\nChoose a corner away from high-traffic areas. Calm, quiet, and warm is the winning formula.\n\n## Fresh Water Close By\nA Stainless Steel Pet Water Fountain encourages hydration and fits beautifully in their new space.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','cat bed','cozy','home'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-05' },
-  { id:'b3', slug:'grooming-routine-long-haired-pets', title:'A Simple Grooming Routine for Long-Haired Pets', excerpt:'Keep mats, tangles, and shedding under control with this easy weekly grooming routine.', content:'Long-haired pets are gorgeous — and high-maintenance. A simple routine keeps them healthy and comfortable.\n\n## Brush Daily, If You Can\nDaily brushing with a self-cleaning slicker brush removes loose fur before it becomes mats. It also spreads natural oils for a shinier coat.\n\n## Detangle Gently\nWork from the tips toward the skin. Never yank — patience prevents pain and keeps grooming a positive experience.\n\n## Watch the Pads\nLong fur grows between paw pads too. Regular trims prevent slipping and keep paws clean.\n\n## Make It a Ritual\nEnd each session with a treat. Your pet will start looking forward to grooming time instead of dreading it.\n\n## Seasonal Shedding\nExpect heavier shedding in spring and fall. Extra brushing during these months keeps your home much cleaner.', image:'https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['grooming','long hair','brushing','coat care'], authorId:'u1', authorName:'John Smith', status:'published', date:'2025-02-28' },
-  { id:'b4', slug:'best-gifts-under-50-for-pets', title:'Best Gift Ideas Under $50 for Dogs and Cats', excerpt:'Surprise your furry best friend with these thoughtful, premium pet gifts that cost less than fifty dollars.', content:'Your pet deserves the best — without breaking the bank. Here are gift ideas under $50.\n\n## 1. Orthopedic Dog Bed ($49.99)\nThe gift of great sleep. Joint-supporting memory foam keeps senior dogs and puppies comfortable.\n\n## 2. Interactive Cat Toy ($24.99)\nA motion-activated feather toy that mimics prey keeps indoor cats active and entertained for hours.\n\n## 3. Self-Cleaning Grooming Brush ($19.99)\nPractical and appreciated — less shedding around the house is a gift for you too.\n\n## 4. Slow Feeder Bowl ($17.99)\nHealthier mealtimes for fast eaters. A thoughtful upgrade to the everyday bowl.\n\n## 5. Travel Water Bottle ($15.99)\nPerfect for pet parents on the go. Fresh water during walks, hikes, and road trips.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['gifts','budget','under 50','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-20' },
-  { id:'b5', slug:'interactive-toys-pet-enrichment', title:'Interactive Toys: A Beginner\u2019s Guide to Pet Enrichment', excerpt:'Mental stimulation is just as important as exercise. Learn how interactive toys keep pets happy and sharp.', content:'Enrichment isn\u2019t a luxury — it\u2019s essential for a happy, well-behaved pet.\n\n## Why Enrichment Matters\nBored pets develop destructive habits. Interactive toys channel natural instincts like hunting and foraging into healthy play.\n\n## Start with Feather Toys\nMotion-activated teasers like the Interactive Cat Feather Toy simulate prey and trigger your cat\u2019s hunting instinct.\n\n## Add Tug & Chew Toys\nRope toys are perfect for tug-of-war and chewing. They clean teeth and satisfy your dog\u2019s urge to chew.\n\n## Rotate the Fun\nPets get bored of the same toys. Rotate a small selection weekly to keep playtime fresh and exciting.\n\n## Play Together\nInteractive play strengthens your bond. Ten minutes of focused play a day makes a world of difference.', image:'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['enrichment','toys','play','cats and dogs'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-15' },
+  { id:'b3', slug:'grooming-routine-long-haired-pets', title:'A Simple Grooming Routine for Long-Haired Pets', excerpt:'Keep mats, tangles, and shedding under control with this easy weekly grooming routine.', content:'Long-haired pets are gorgeous â€” and high-maintenance. A simple routine keeps them healthy and comfortable.\n\n## Brush Daily, If You Can\nDaily brushing with a self-cleaning slicker brush removes loose fur before it becomes mats. It also spreads natural oils for a shinier coat.\n\n## Detangle Gently\nWork from the tips toward the skin. Never yank â€” patience prevents pain and keeps grooming a positive experience.\n\n## Watch the Pads\nLong fur grows between paw pads too. Regular trims prevent slipping and keep paws clean.\n\n## Make It a Ritual\nEnd each session with a treat. Your pet will start looking forward to grooming time instead of dreading it.\n\n## Seasonal Shedding\nExpect heavier shedding in spring and fall. Extra brushing during these months keeps your home much cleaner.', image:'https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['grooming','long hair','brushing','coat care'], authorId:'u1', authorName:'John Smith', status:'published', date:'2025-02-28' },
+  { id:'b4', slug:'best-gifts-under-50-for-pets', title:'Best Gift Ideas Under $50 for Dogs and Cats', excerpt:'Surprise your furry best friend with these thoughtful, premium pet gifts that cost less than fifty dollars.', content:'Your pet deserves the best â€” without breaking the bank. Here are gift ideas under $50.\n\n## 1. Orthopedic Dog Bed ($49.99)\nThe gift of great sleep. Joint-supporting memory foam keeps senior dogs and puppies comfortable.\n\n## 2. Interactive Cat Toy ($24.99)\nA motion-activated feather toy that mimics prey keeps indoor cats active and entertained for hours.\n\n## 3. Self-Cleaning Grooming Brush ($19.99)\nPractical and appreciated â€” less shedding around the house is a gift for you too.\n\n## 4. Slow Feeder Bowl ($17.99)\nHealthier mealtimes for fast eaters. A thoughtful upgrade to the everyday bowl.\n\n## 5. Travel Water Bottle ($15.99)\nPerfect for pet parents on the go. Fresh water during walks, hikes, and road trips.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['gifts','budget','under 50','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-20' },
+  { id:'b5', slug:'interactive-toys-pet-enrichment', title:'Interactive Toys: A Beginner\u2019s Guide to Pet Enrichment', excerpt:'Mental stimulation is just as important as exercise. Learn how interactive toys keep pets happy and sharp.', content:'Enrichment isn\u2019t a luxury â€” it\u2019s essential for a happy, well-behaved pet.\n\n## Why Enrichment Matters\nBored pets develop destructive habits. Interactive toys channel natural instincts like hunting and foraging into healthy play.\n\n## Start with Feather Toys\nMotion-activated teasers like the Interactive Cat Feather Toy simulate prey and trigger your cat\u2019s hunting instinct.\n\n## Add Tug & Chew Toys\nRope toys are perfect for tug-of-war and chewing. They clean teeth and satisfy your dog\u2019s urge to chew.\n\n## Rotate the Fun\nPets get bored of the same toys. Rotate a small selection weekly to keep playtime fresh and exciting.\n\n## Play Together\nInteractive play strengthens your bond. Ten minutes of focused play a day makes a world of difference.', image:'https://images.pexels.com/photos/1170986/pexels-photo-1170986.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['enrichment','toys','play','cats and dogs'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-15' },
   { id:'b6', slug:'get-pet-to-drink-more-water', title:'How to Get Your Pet to Drink More Water', excerpt:'Dehydration is a common pet health issue. These proven tricks encourage healthier hydration.', content:'Pets often don\u2019t drink enough water. Here\u2019s how to keep them properly hydrated.\n\n## Upgrade to a Fountain\nMany pets prefer running water. A Stainless Steel Pet Water Fountain with triple filtration is irresistible to most cats and dogs.\n\n## Keep Bowls Clean\nPets refuse stale water. Wash bowls daily and refresh water at least twice a day.\n\n## Add Water to Food\nMix a little warm water into dry kibble or add broth to increase daily intake.\n\n## Multiple Stations\nPlace water bowls in several rooms so water is always nearby.\n\n## Watch the Signs\nCheck for dry gums, lethargy, or loss of appetite. If you\u2019re worried about dehydration, contact your vet.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['hydration','water fountain','health','cat and dog'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-02-10' },
-  { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding — and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
-  { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle — great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
+  { id:'b7', slug:'traveling-with-pets-tips', title:'Traveling with Pets: 7 Essential Tips', excerpt:'Plan a smooth, stress-free trip with your furry copilot using these expert travel tips.', content:'Traveling with pets is rewarding â€” and requires planning. Here are 7 tips for a smooth journey.\n\n## 1. Hydrate on the Go\nCarry a Portable Pet Travel Water Bottle so fresh water is always one hand away.\n\n## 2. Protect Your Car\nA waterproof Pet Car Seat Protector keeps your car clean from fur, dirt, and spills.\n\n## 3. Pack a Routine\nFamiliar food, bowls, and a favorite toy reduce travel anxiety.\n\n## 4. Take Breaks\nStop every 2-3 hours for bathroom breaks, water, and leg stretching.\n\n## 5. Never Leave Alone in a Car\nEven with windows cracked, cars heat up dangerously fast. Never leave your pet unattended.\n\n## 6. Update ID Tags\nEnsure your pet\u2019s tags and microchip info are current before you leave.\n\n## 7. Book Pet-Friendly Stays\nConfirm pet policies in advance so there are no surprises at check-in.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','road trip','pet accessories','tips'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-02-05' },
+  { id:'b8', slug:'slow-feeding-explained', title:'Slow Feeding Explained: Why Your Dog Gobbles Food', excerpt:'Fast eating can cause bloating and digestive issues. Here\u2019s how slow feeder bowls help.', content:'Does your dog inhale dinner in seconds? Slow feeding might be the answer.\n\n## The Danger of Fast Eating\nGobbling causes air swallowing, bloating, and vomiting. In deep-chested breeds, it can even lead to a dangerous condition called gastric dilatation-volvulus.\n\n## How Slow Feeders Work\nRaised ridges and maze-like patterns force your dog to work for each mouthful, slowing them down naturally.\n\n## Benefits Beyond Speed\nSlow feeders turn mealtime into a mini puzzle â€” great mental enrichment for energetic dogs.\n\n## Making the Switch\nTransition gradually by mixing old and new bowls. Most dogs adapt within a few days.\n\n## When to Consult a Vet\nIf your dog refuses food entirely or shows signs of distress, consult your veterinarian.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['slow feeder','feeding','digestion','dog'], authorId:'u3', authorName:'Mike Williams', status:'published', date:'2025-01-30' },
   { id:'b9', slug:'online-pet-shopping-safety-tips', title:'10 Online Pet Shopping Safety Tips to Protect Your Money', excerpt:'Stay safe while buying pet supplies online. Expert tips to avoid scams and protect your personal information.', content:'Online shopping for pet supplies is convenient but requires awareness. Protect yourself with these tips.\n\n## 1. Shop on Secure Sites\nLook for HTTPS and the lock icon. Luxedge uses HTTPS and publishes its policies clearly before you order.\n\n## 2. Use Strong Passwords\nNever reuse passwords across shopping sites. Use a password manager.\n\n## 3. Check Return Policies\nBefore buying, read the Luxedge return and replacement policy so you understand the available remedies.\n\n## 4. Read Real Reviews\nLook for verified purchase reviews with photos. Be wary of generic 5-star ratings.\n\n## 5. Use Credit Cards, Not Debit\nCredit cards offer better fraud protection than debit cards.\n\n## 6. Avoid Public WiFi\nNever enter payment info on public networks.\n\n## 7. Monitor Your Statements\nCheck bank statements regularly for unauthorized charges.\n\n## 8. Be Wary of Too-Good Deals\nIf a price seems impossibly low, it probably is.\n\n## 9. Use Trusted Payment Methods\nUse only payment methods presented by the checkout provider.\n\n## 10. Keep Software Updated\nUpdated browsers and devices have the latest security patches.', image:'https://images.pexels.com/photos/164186/pexels-photo-164186.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['online shopping','safety','security','tips'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-25' },
-  { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability — here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
-  { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions — even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase — not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
-  { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day — or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly — give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
-  { id:'b13', slug:'how-to-stop-puppy-biting', title:'How to Stop a Puppy from Biting: A Step-by-Step Guide', excerpt:'Puppy nipping is normal — but it should not become a habit. Here is exactly how to teach gentle mouthing in a few weeks.', content:'Puppy biting is one of the most common (and most complained-about) behaviors new owners face. The good news: it is completely normal and very fixable.\n\n## Why Puppies Bite\nPuppies explore the world with their mouths the way babies do with their hands. Teething, play, and curiosity all drive nipping. None of it means your puppy is aggressive.\n\n## Step 1: Redirect, Don\u2019t Punish\nThe instant teeth touch skin, say a firm \u201cno\u201d or a high-pitched yelp, then offer a chew toy instead. Redirecting teaches what is acceptable to bite.\n\n## Step 2: End the Game\nIf nipping continues, stand up and turn away for 10-15 seconds. Puppies learn fast that biting ends the fun.\n\n## Step 3: Give Them Something to Chew\nTeething puppies need relief. Rope toys, silicone chews, and frozen treats give sore gums something appropriate to sink into.\n\n## Step 4: Crate and Nap Time\nAn overtired puppy bites more. Enforce naps — most puppies need 16-18 hours of sleep a day. A comfortable, quiet dog bed makes rest easier.\n\n## Step 5: Be Consistent\nEveryone in the house must use the same rules. Mixed signals confuse puppies and slow progress.\n\n## When to Ask a Professional\nIf biting is hard, draws blood, or continues past six months, a certified trainer or your vet can help rule out pain or anxiety. Most puppies, though, grow out of it with exactly this routine.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','biting','training','behavior'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-07-18' },
-  { id:'b14', slug:'keep-dog-cool-in-summer', title:'How to Keep Your Dog Cool in Summer: 10 Real Tips', excerpt:'Heatstroke is a real summer danger for dogs. Learn the signs, the no-go rules, and the cooling products that actually help.', content:'Summer heat is harder on dogs than most people realize. Dogs cool down mainly by panting, which stops working when the air is hot and humid. Here is how to keep your dog safe.\n\n## 1. Never Leave a Dog in a Parked Car\nEven with windows cracked, a car can reach 100+°F in minutes. This is the single most dangerous summer mistake.\n\n## 2. Walk Early or Late\nPavement can burn paw pads. Test it with the back of your hand — if it is too hot for you, it is too hot for paws.\n\n## 3. Always Carry Water\nA portable travel water bottle means fresh water is available on every walk.\n\n## 4. Provide a Cooling Mat\nGel cooling mats give dogs a cool surface to lie on indoors and outdoors. They are a simple, low-cost comfort upgrade.\n\n## 5. Watch the Signs of Heatstroke\nExcessive panting, drooling, weakness, bright red gums, and vomiting are red flags. Move the dog to shade, offer water, and call your vet immediately.\n\n## 6. Keep Indoor Air Moving\nFans and air conditioning help. Make sure your dog always has access to the coolest room in the house.\n\n## 7. Avoid Midday Exercise\nSave fetch and running for the cooler hours of the morning and evening.\n\n## 8. Shorten the Coat Carefully\nSome double-coated breeds need their undercoat for insulation — check with a groomer before shaving.\n\n## 9. Frozen Treats\nFrozen dog-safe treats or ice cubes in the water bowl are a fun way to cool down from the inside.\n\n## 10. Know the Flat-Faced Risk\nBrachycephalic breeds (pugs, bulldogs, Frenchies) overheat much faster. Be extra careful with them in heat.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['summer','heat','cooling mat','safety'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-07-10' },
-  { id:'b15', slug:'cat-hydration-water-fountains', title:'Why Cats Drink So Little — and How a Water Fountain Helps', excerpt:'Cats evolved to get moisture from prey, not bowls. Here is why they ignore still water and how to get them drinking more.', content:'Dehydration is a silent, common problem in cats. Unlike dogs, most cats simply do not drink enough from a still bowl. Understanding why is the first step to fixing it.\n\n## The Instinct Behind It\nIn the wild, cats prefer moving water because standing water is more likely to harbor bacteria. That instinct never went away.\n\n## Why It Matters\nLow water intake strains the kidneys and urinary tract. Chronic dehydration is linked to kidney disease — the leading health issue in older cats.\n\n## How a Fountain Helps\nA stainless steel pet water fountain circulates and filters water continuously. The movement attracts cats and keeps water fresher and cooler, encouraging more drinking.\n\n## Placement Matters\nCats like their water away from their food bowl — it mimics avoiding contamination. Place fountains in quiet, low-traffic spots.\n\n## Keep It Clean\nA fountain only helps if it is clean. Rinse and refill daily, and change the filter on schedule. Stale filters can make water taste worse.\n\n## Try Wet Food\nWet food can be up to 80% water. Adding it to the diet is one of the simplest ways to boost hydration alongside a fountain.\n\n## Watch for Warning Signs\nSunken eyes, lethargy, dry gums, and reduced litter box output can all signal dehydration. If you notice any, contact your vet.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','hydration','water fountain','health'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-06-28' },
-  { id:'b16', slug:'flying-with-pet-checklist', title:'Flying with a Dog or Cat: The Complete Checklist', excerpt:'From carrier rules to vet certificates, here is everything to prepare before flying with your pet — and what to pack in-cabin.', content:'Flying with a pet takes planning, but it is very doable. Whether it is a short hop or a cross-country move, this checklist covers the essentials.\n\n## 1. Book Pet-Friendly Flights Early\nAirlines cap the number of pets per flight. Book as far in advance as you can and confirm the in-cabin rules.\n\n## 2. Choose the Right Carrier\nIn-cabin carriers must fit under the seat in front of you and let your pet stand, turn, and lie down. A padded pet carrier backpack or soft carrier makes gate travel far easier.\n\n## 3. Get a Health Certificate\nMost airlines require a certificate from your vet issued within 10 days of travel. Book the appointment before you book the ticket.\n\n## 4. Check the Destination Rules\nHawaii and many international destinations have strict quarantine and microchip rules. Research them months ahead.\n\n## 5. Pack the Essentials\nWater, a travel bowl, a leash, waste bags, and a familiar toy or blanket all belong in your carry-on.\n\n## 6. Don\u2019t Sedate Without Asking\nSome sedatives can be dangerous at altitude. Ask your vet about safe options instead of assuming.\n\n## 7. Exercise Before You Fly\nA tired pet is a calmer pet. A long walk before the airport helps them settle once on board.\n\n## 8. Attach ID\nFresh ID tags and a current microchip are your pet\u2019s safety net if anything goes wrong en route.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','flying','carrier','checklist'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-06-15' },
-  { id:'b17', slug:'horse-grooming-essentials-beginners', title:'Horse Grooming Essentials: A Beginner\u2019s Starter Kit', excerpt:'Good grooming keeps a horse healthy, comfortable, and easy to handle. Here is the starter kit every new owner needs.', content:'Grooming is one of the most important daily habits in horse care. It keeps the coat healthy, catches injuries early, and builds trust between horse and handler.\n\n## Why Groom Every Day\nDaily grooming removes dirt, sweat, and loose hair, distributes natural oils, and gives you a chance to check for cuts, swelling, or skin issues before they become problems.\n\n## The Core Kit\nA basic kit starts with a curry comb for loosening dirt, a stiff brush for the body, a soft brush for sensitive areas, a hoof pick for cleaning feet, and a mane and tail brush. That covers the essentials.\n\n## Hoof Care Is Non-Negotiable\nPicking hooves daily prevents stones, thrush, and bruising. If you are new to it, ask your farrier to show you the correct technique.\n\n## Bathe Sparingly\nHorses do not need frequent baths — over-bathing strips natural oils. Spot-clean and save full baths for shows or very dirty days.\n\n## Watch the Tack Areas\nGroom the areas where tack sits — the back, girth, and head — carefully. Dirt under tack causes rubbing and sores.\n\n## Build It Into Your Routine\nEven ten minutes a day keeps coats and feet in good shape. Horses quickly learn to enjoy the routine, and it makes every other part of ownership easier.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['horse','grooming','equestrian','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-30' },
-  { id:'b18', slug:'cattle-care-basics-small-farms', title:'Cattle Care Basics for Small Farms: Feed, Health & Handling', excerpt:'Raising cattle on a small farm is rewarding — and a real responsibility. Here are the fundamentals of keeping a healthy herd.', content:'Whether you keep a few beef cattle or a small dairy herd, the basics of cattle care are the same. Get these right and most problems never start.\n\n## Water Comes First\nCattle drink a lot — up to 20 gallons a day in hot weather. Clean, accessible water is the single most important thing you can provide.\n\n## Feed According to Stage\nNutrition needs change with age, weight, pregnancy, and season. Pasture alone rarely covers winter needs; hay and mineral supplements fill the gap. Work with a vet or nutritionist on a ration.\n\n## Minerals Are Not Optional\nLoose mineral supplements prevent a long list of deficiency problems, from weak calves to poor coats. Provide free-choice minerals year-round.\n\n## Health Basics\nLearn the normal signs — appetite, rumination, manure, and demeanor. Any sudden change deserves attention. Keep a working relationship with a large-animal vet before you need one.\n\n## Handling with Confidence\nCattle read body language. Move slowly, work from their shoulder, and use low-stress handling. A calm herd is safer and easier to manage.\n\n## Hoof and Parasite Care\nSchedule hoof trimming as needed and follow a parasite control program recommended for your region.\n\n## Records Keep You Honest\nTrack weights, vaccinations, and treatments. Simple records turn guesswork into decisions and make vet visits far more useful.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cattle','livestock','farm','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-20' },
-  { id:'b19', slug:'best-bird-feeder-buyers-guide', title:'How to Choose the Best Bird Feeder for Your Backyard: 2026 Buyer\u2019s Guide', excerpt:'Tube, hopper, or tray? Seed or no-seed? Here is exactly how to pick a bird feeder that fits your yard and attracts the birds you want.', content:'A well-chosen bird feeder turns any yard into a daily wildlife show. With a little planning you can attract cardinals, finches, chickadees, and jays — and keep them coming back all year.\n\n## Decide What You Want to Attract\nDifferent feeders suit different birds. Tube feeders favor finches and chickadees, hopper feeders attract cardinals and jays, and tray feeders draw ground feeders like doves. If you are new to bird feeding, start with one versatile feeder and see who shows up.\n\n## Pick a Weather-Resistant Design\nSeed that gets wet molds quickly and can make birds sick. Look for a feeder with a covered roof, drainage holes, and sealed seed chambers. An [Outdoor Hanging Bird Feeder](/product/outdoor-hanging-bird-feeder) that keeps seed dry through rain and snow is the single most important choice you can make.\n\n## Match the Seed to the Birds\nBlack-oil sunflower brings the widest variety of birds, while millet and safflower appeal to specific species and deter squirrels. A [Premium Wild Bird Seed Mix (10 lb)](/product/premium-wild-bird-seed-mix-10lb) is an easy way to get a balanced blend without guessing, and the smaller [5 lb mix](/product/bird-wild-bird-seed-mix-5lb) is perfect for trying it out.\n\n## Add Water, and Birds Will Stay\nBirds need fresh water for drinking and bathing year-round. A [Solar Bird Bath Fountain](/product/solar-bird-bath-fountain) keeps water moving — moving water is far more attractive to birds and stays cleaner longer.\n\n## Placement Makes the Difference\nHang feeders 5–10 feet from cover so birds have a quick escape route from predators, but close enough to a window to enjoy. Keep cats indoors and clean feeders every couple of weeks with a mild bleach solution.\n\n## Be Consistent\nBirds learn reliable food sources. Once you start feeding, keep the feeder stocked through the seasons — especially in winter when natural food is scarce. Consistency builds a loyal backyard flock.\n\n## The Bottom Line\nStart simple: one weatherproof feeder, a quality seed mix, and a clean water source. That combination reliably attracts birds and makes your yard the most visited spot on the block.', image:'https://images.pexels.com/photos/7517035/pexels-photo-7517035.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['bird feeder','wild birds','backyard','bird care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-18' },
-  { id:'b20', slug:'horse-grooming-kit-buyers-guide', title:'The Horse Grooming Kit Buyer\u2019s Guide: What to Buy, What to Skip', excerpt:'Curry comb, brushes, hoof pick — what does a horse actually need? This guide breaks down the essentials and what to skip to save money.', content:'Grooming is part of daily horse care, but you do not need a wall of brushes to do it right. A focused kit covers the essentials and lasts for years if you choose well.\n\n## Start with the Core Five\nA complete basic kit has five pieces: a curry comb to loosen dirt and mud, a stiff body brush, a soft brush for the face and sensitive areas, a hoof pick, and a mane-and-tail brush. That is genuinely all you need for most horses.\n\n## Buy a Set, Not a Grab Bag\nBuying pieces separately usually costs more and leaves gaps. A coordinated [12-Piece Horse Grooming Kit](/product/horse-grooming-kit-12-piece) with a storage bag covers the core tools plus extras like a shedding blade and finishing brushes — and the bag keeps everything organized at the barn.\n\n## Grooming Is About More Than Looks\nDaily grooming removes sweat and dirt, spreads natural oils, and — most importantly — gives you a chance to check for cuts, swelling, heat, or skin issues before they become problems. It is also the best bonding time you will have with your horse.\n\n## Don\u2019t Forget the Head\nFlies and sun bother horses constantly. A [Horse Fly Mask with Ears](/product/horse-fly-mask-with-ears-uv-protection) protects the face and eyes during turnout, and a well-fitted [Adjustable Nylon Horse Halter with Lead Rope](/product/adjustable-nylon-horse-halter-lead-rope) makes handling and grooming safer and easier.\n\n## What to Skip\nSkip fancy scented shampoos, expensive detanglers, and oversized kits with tools you will never use. Horses rarely need frequent baths — spot-cleaning plus daily brushing does the job.\n\n## Care for the Kit\nHang brushes to dry, pick out the curry comb after each use, and replace anything with broken bristles. A well-maintained kit lasts years and costs far less per grooming session than cheap replacements.\n\n## The Bottom Line\nA complete 12-piece kit, a fly mask, and a solid halter give you everything a happy, healthy horse needs. Start there and add specialty tools only when your routine genuinely calls for them.', image:'https://images.pexels.com/photos/1466205/pexels-photo-1466205.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['horse','grooming','equestrian','buyers guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-11' },
-  { id:'b21', slug:'dog-car-safety-seat-belt-guide', title:'Dog Car Safety: The Best Seat Belt & Travel Setup for Road Trips', excerpt:'A loose dog in a moving car is a danger to everyone. Here is the right gear to keep your dog secure, comfortable, and safe on every drive.', content:'Most people love driving with their dog — but an unrestrained dog in a car is a serious hazard for both of you. A sudden stop can turn a 25-pound dog into a projectile. Here is how to set up safe, comfortable car travel.\n\n## Why Restraint Matters\nIn a 30 mph crash, an unrestrained dog can be thrown with hundreds of pounds of force — into you, the windshield, or out of the car. Restraint protects your dog, your passengers, and you.\n\n## The Right Restraint for the Job\nA seat-belt-style safety leash clips to the car\u2019s existing seat belt and attaches to your dog\u2019s harness. Our [Adjustable Car Seat Safety Leash for Pets](/product/durable-pet-cat-dog-vehicle-leash-nylon-adjustable-car-seat-dog-safety-belt-pet-leashes) gives your dog enough room to sit or lie down while stopping them from roaming the cabin.\n\n## Pair It with a Proper Harness\nSafety leashes connect to a harness, never a collar — a collar can choke your dog in a sudden stop. A [No-Pull Dog Harness with Reflective Strips](/product/no-pull-dog-harness-with-reflective-strips-front-back-clip) is comfortable for long rides and doubles as your everyday walking harness.\n\n## Set Up the Space\nSmaller dogs travel better in a secure carrier. A [Foldable Pet Carrier Backpack](/product/foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs) works on the back seat and doubles as an airline-approved carrier. For walks at rest stops, a [Retractable Dog Leash with one-button lock](/product/retractable-dog-leash-5m-one-button-lock-with-anti-slip-grip) keeps control simple.\n\n## Keep the Car Cool and Calm\nNever leave a dog in a parked car — even with windows cracked, temperatures rise dangerously fast. Take breaks every 2–3 hours for water, bathroom, and leg stretching. A tired, calm dog is a safer passenger.\n\n## Practice Before the Big Trip\nIntroduce the harness and restraint at home first, then take a few short drives so your dog learns to settle. Reward calm behavior with treats. Most dogs adjust within a week.\n\n## The Bottom Line\nA seat-belt safety leash, a good harness, and regular breaks are the foundation of safe car travel with your dog. Cheap insurance for the most important passenger you will ever carry.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog','car safety','travel','road trip'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-04' },
-  { id:'b22', slug:'dog-cooling-mat-buyers-guide', title:'How to Choose the Best Dog Cooling Mat: A 2026 Buyer\u2019s Guide', excerpt:'Not all cooling mats work the same. Here is how to pick one your dog will actually use — and use it safely through the hottest months.', content:'When summer heat hits, a cooling mat is one of the simplest comfort upgrades you can give your dog. But with so many types on the market, choosing wrong means a mat your dog ignores — or worse, one that underperforms when you need it most.\n\n## Why Dogs Overheat\nDogs cool themselves mainly by panting, which stops working in hot, humid air. A cool surface to lie on helps them shed body heat efficiently — that is why many dogs instinctively seek tile floors, shade, or cool ground.\n\n## What Makes a Good Cooling Mat\nThe best mats use a gel or water-based core that absorbs and draws heat away from your dog\u2019s body without needing to be refrigerated or plugged in. Look for a non-toxic, chew-resistant cover that is easy to wipe clean, and a mat that stays effective for hours. The [Cooling Pet Mat — Ice-Silk Cooling Pad for Cats & Dogs](/product/cooling-pet-mat-ice-silk-cooling-pad-for-cats-dogs) is a lightweight ice-silk option that works indoors and out, and at its price it is an easy first upgrade.\n\n## Size and Placement\nChoose a mat big enough for your dog to stretch out — a dog that cannot fit on the mat simply will not use it. Place it in the coolest room of the house, away from direct sun, and keep a second one on hand for the bedroom or car.\n\n## Use It With, Not Instead Of, Common Sense\nA cooling mat helps, but it is not air conditioning. Never leave a dog in a parked car, skip midday walks, and always offer fresh water. Pairing the mat with a [Stainless Steel Pet Water Fountain](/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs) encourages the constant hydration dogs need in the heat.\n\n## When Your Dog Needs a Bed Instead\nCooling mats are for hot weather. If your dog sleeps hot year-round but needs joint support, an [Orthopedic Memory Foam Dog Bed](/product/orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs) supports senior and large dogs at night while you keep the cooling mat for daytime use.\n\n## Watch the Warning Signs\nExcessive panting, drooling, weakness, or bright red gums are signs of heatstroke — that is a veterinary emergency, not a mat problem. A cooling mat is a comfort tool, never a substitute for proper heat safety.\n\n## The Bottom Line\nPick a chew-resistant, non-toxic cooling mat sized for your dog, place it in the coolest spot, and pair it with constant fresh water. That combination keeps your dog comfortable through the hottest days of the year.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog','cooling mat','summer','heat safety'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-25' },
-  { id:'b23', slug:'automatic-pet-feeder-buyers-guide', title:'Automatic Pet Feeders Explained: How to Pick the Right One for Your Cat or Dog', excerpt:'Portion control, scheduling, and power backup — here is what actually matters when you buy an automatic pet feeder.', content:'An automatic pet feeder is a lifesaver for busy schedules, consistent portioning, and pets on a fixed feeding routine. But the market is full of cheap dispensers that jam, overfeed, or stop working on day three. Here is how to buy one that lasts.\n\n## Know What You Need It To Do\nAre you fixing mealtimes for a cat who wakes you at 5am, controlling portions for a dog who overeats, or covering a long workday? Feeder needs differ. A programmable model with set portions solves all three — the [Automatic Pet Feeder with Programmable Timer](/product/automatic-pet-feeder-with-programmable-timer-up-to-4-meals-daily) schedules up to 4 meals a day with custom portion sizes and a 6-liter hopper, enough for days of food.\n\n## Portion Control Matters Most\nFree-feeding leads to weight gain in many pets. A feeder that dispenses a measured portion per meal keeps portions honest and makes it easy to feed the same amount every day. This matters even more for cats, who benefit from several small meals rather than one big bowl.\n\n## Check the Power Backup\nA feeder that stops working during a power outage defeats the purpose. Look for dual power options — battery or backup alongside the mains — so meals are never missed.\n\n## Keep Water in the System\nFood is only half the routine. Cats especially drink too little, and a feeder does nothing for hydration. Pair your feeder with a [Stainless Steel Pet Water Fountain](/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs) so fresh, filtered water is always available.\n\n## Clean It, and It Will Last\nHoppers collect dust, kibble oils, and crumbs. Choose a feeder with a removable, washable hopper and bowl. Weekly cleaning prevents jams and keeps food fresh — and it is the single biggest factor in whether a feeder survives more than a year.\n\n## Transition Slowly\nPets notice when their feeding routine changes. Start with the feeder alongside the usual bowl, then shift meals over gradually over a week. Most pets adjust quickly once they learn the feeder reliably produces food.\n\n## The Bottom Line\nBuy a programmable feeder with portion control, dual power, and a washable hopper; pair it with a water fountain; and transition gradually. That combination delivers consistent, healthy mealtimes — whether you are home or not.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['automatic feeder','feeding','cat','dog','routine'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-21' },
-  { id:'b24', slug:'cat-window-perch-buyers-guide', title:'Cat Window Perch Buyer\u2019s Guide: Give Your Cat the Best View in the House', excerpt:'Cats love high perches and window views. Here is how to choose a window perch that is safe, sturdy, and actually holds your cat.', content:'Watch a cat for ten minutes and you will see it: they love height, and they love windows. A window perch combines both, giving your cat a safe place to sunbathe and watch the world — birds, squirrels, and neighbors alike.\n\n## Why Cats Need Vertical Space\nCats are natural climbers who feel most secure when they can observe from above. A perch satisfies that instinct, reduces stress, and keeps cats entertained — which means fewer behavioral problems and a calmer household.\n\n## The Suction Cup Question\nMost window perches attach with suction cups, and the number one buyer complaint is a perch that falls. Look for strong suction cups, a weight limit that comfortably exceeds your cat\u2019s weight, and a perch with a wide, padded platform. The [Cat Window Perch — Suction Cup Hammock Seat](/product/cat-window-perch-suction-cup-hammock-seat-for-sunbathing) holds up to 33 lbs, so even larger cats get a stable, sun-warmed spot.\n\n## Placement and Sun Exposure\nPick a window with direct sun for part of the day — cats will nap there for hours. Clean the glass and the suction cups before mounting, and press firmly so the cups seal properly. Re-seat the cups every couple of weeks for a lasting grip.\n\n## Make It Part of a Cat Corner\nA perch works even better as part of a dedicated cat space. Add a [Collapsible Cat Tunnel with Crinkle & Peek Hole](/product/collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube) nearby for play, and keep a [Ceramic Cat Face Food Bowl](/product/ceramic-cat-face-food-bowl-easy-clean-pet-dish) at ground level for easy meals and cleanup.\n\n## Safety First\nNever place a perch above a radiator or in a spot where your cat could injure itself falling. Check the perch periodically for loose suction cups, and replace any worn pads. Cats who use high perches still need safe places to land.\n\n## The Bottom Line\nChoose a high-weight-limit suction perch, mount it on clean glass in a sunny window, and re-seat the cups regularly. Paired with nearby toys and food, it becomes your cat\u2019s favorite spot in the house.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','window perch','enrichment','hammock'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-14' },
+  { id:'b10', slug:'choosing-the-right-dog-bed', title:'Choosing the Right Dog Bed: A Complete Guide', excerpt:'Size, support, and washability â€” here\u2019s everything you need to pick the perfect bed for your dog.', content:'The right bed can transform your dog\u2019s sleep. Here\u2019s how to choose.\n\n## Consider Age & Health\nSenior dogs and large breeds benefit from orthopedic memory foam that supports joints and relieves pressure points.\n\n## Size Matters\nYour dog should stretch out fully with room to spare. Measure your dog from nose to tail and add a few inches.\n\n## Think About Cleanup\nDogs bring dirt and shedding inside. Choose a bed with a removable, washable cover.\n\n## Match the Personality\nCurlers love donut-style cuddler beds. Stretchers prefer flat, open beds. Watch how your dog sleeps to pick the right shape.\n\n## Location, Location\nPlace the bed somewhere quiet and draft-free. Your dog should feel safe and secure in their spot.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog bed','sleep','orthopedic','guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-20' },
+  { id:'b11', slug:'sustainable-pet-care', title:'Sustainable Pet Care: How to Buy Better, Not More', excerpt:'Make environmentally conscious choices for your pets without sacrificing quality or comfort.', content:'Sustainability starts with intentional purchasing decisions â€” even for your pets.\n\n## Buy Quality Over Quantity\nOne well-made pet bed that lasts years beats five cheap ones that fall apart in months. Luxedge curates for durability.\n\n## Choose Durable Materials\nStainless steel fountains and bowls outlast plastic and are easier to keep hygienic.\n\n## Support Transparent Brands\nBrands that share their sourcing and manufacturing processes are worth your support.\n\n## Reduce Packaging Waste\nChoose retailers that use minimal, recyclable packaging.\n\n## Care for What You Own\nWash beds and toys properly to extend their life. Replace only what\u2019s truly worn out.\n\n## The 30-Day Rule\nBefore impulse buying, wait 30 days. If your pet still needs it, it\u2019s a genuine purchase â€” not a passing urge.', image:'https://images.pexels.com/photos/2607544/pexels-photo-2607544.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['sustainable','eco friendly','conscious shopping','pets'], authorId:'u2', authorName:'Sarah Johnson', status:'published', date:'2025-01-15' },
+  { id:'b12', slug:'habits-happier-healthier-pet', title:'15 Everyday Habits for a Happier, Healthier Pet', excerpt:'Small daily routines make a huge difference. Here are 15 habits your pet will thank you for.', content:'Consistency is the secret to a happy pet. Here are 15 habits that genuinely work.\n\n## 1. Fixed Feeding Times\nRegular meal schedules support digestion and potty training.\n\n## 2. Fresh Water Daily\nRefill bowls twice a day â€” or invest in a pet water fountain for constant freshness.\n\n## 3. Daily Playtime\nTen minutes of active play burns energy and strengthens your bond.\n\n## 4. Weekly Grooming\nRegular brushing prevents mats and spreads healthy oils.\n\n## 5. Regular Walks\nDogs need daily walks for exercise, mental stimulation, and socialization.\n\n## 6. Weight Checks\nKeep your pet at a healthy weight with regular check-ins.\n\n## 7. Dental Care\nDental treats and regular brushing protect long-term health.\n\n## 8-15: Advanced Habits\nSchedule vet checkups. Rotate toys. Reward calm behavior. Keep a consistent bedtime. Trim nails monthly. Clean bedding weekly. Watch for changes in appetite. And most importantly â€” give plenty of love every single day.', image:'https://images.pexels.com/photos/2194261/pexels-photo-2194261.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['habits','health','routine','pets'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-01-10' },
+  { id:'b13', slug:'how-to-stop-puppy-biting', title:'How to Stop a Puppy from Biting: A Step-by-Step Guide', excerpt:'Puppy nipping is normal â€” but it should not become a habit. Here is exactly how to teach gentle mouthing in a few weeks.', content:'Puppy biting is one of the most common (and most complained-about) behaviors new owners face. The good news: it is completely normal and very fixable.\n\n## Why Puppies Bite\nPuppies explore the world with their mouths the way babies do with their hands. Teething, play, and curiosity all drive nipping. None of it means your puppy is aggressive.\n\n## Step 1: Redirect, Don\u2019t Punish\nThe instant teeth touch skin, say a firm \u201cno\u201d or a high-pitched yelp, then offer a chew toy instead. Redirecting teaches what is acceptable to bite.\n\n## Step 2: End the Game\nIf nipping continues, stand up and turn away for 10-15 seconds. Puppies learn fast that biting ends the fun.\n\n## Step 3: Give Them Something to Chew\nTeething puppies need relief. Rope toys, silicone chews, and frozen treats give sore gums something appropriate to sink into.\n\n## Step 4: Crate and Nap Time\nAn overtired puppy bites more. Enforce naps â€” most puppies need 16-18 hours of sleep a day. A comfortable, quiet dog bed makes rest easier.\n\n## Step 5: Be Consistent\nEveryone in the house must use the same rules. Mixed signals confuse puppies and slow progress.\n\n## When to Ask a Professional\nIf biting is hard, draws blood, or continues past six months, a certified trainer or your vet can help rule out pain or anxiety. Most puppies, though, grow out of it with exactly this routine.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','biting','training','behavior'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-07-18' },
+  { id:'b14', slug:'keep-dog-cool-in-summer', title:'How to Keep Your Dog Cool in Summer: 10 Real Tips', excerpt:'Heatstroke is a real summer danger for dogs. Learn the signs, the no-go rules, and the cooling products that actually help.', content:'Summer heat is harder on dogs than most people realize. Dogs cool down mainly by panting, which stops working when the air is hot and humid. Here is how to keep your dog safe.\n\n## 1. Never Leave a Dog in a Parked Car\nEven with windows cracked, a car can reach 100+Â°F in minutes. This is the single most dangerous summer mistake.\n\n## 2. Walk Early or Late\nPavement can burn paw pads. Test it with the back of your hand â€” if it is too hot for you, it is too hot for paws.\n\n## 3. Always Carry Water\nA portable travel water bottle means fresh water is available on every walk.\n\n## 4. Provide a Cooling Mat\nGel cooling mats give dogs a cool surface to lie on indoors and outdoors. They are a simple, low-cost comfort upgrade.\n\n## 5. Watch the Signs of Heatstroke\nExcessive panting, drooling, weakness, bright red gums, and vomiting are red flags. Move the dog to shade, offer water, and call your vet immediately.\n\n## 6. Keep Indoor Air Moving\nFans and air conditioning help. Make sure your dog always has access to the coolest room in the house.\n\n## 7. Avoid Midday Exercise\nSave fetch and running for the cooler hours of the morning and evening.\n\n## 8. Shorten the Coat Carefully\nSome double-coated breeds need their undercoat for insulation â€” check with a groomer before shaving.\n\n## 9. Frozen Treats\nFrozen dog-safe treats or ice cubes in the water bowl are a fun way to cool down from the inside.\n\n## 10. Know the Flat-Faced Risk\nBrachycephalic breeds (pugs, bulldogs, Frenchies) overheat much faster. Be extra careful with them in heat.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['summer','heat','cooling mat','safety'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-07-10' },
+  { id:'b15', slug:'cat-hydration-water-fountains', title:'Why Cats Drink So Little â€” and How a Water Fountain Helps', excerpt:'Cats evolved to get moisture from prey, not bowls. Here is why they ignore still water and how to get them drinking more.', content:'Dehydration is a silent, common problem in cats. Unlike dogs, most cats simply do not drink enough from a still bowl. Understanding why is the first step to fixing it.\n\n## The Instinct Behind It\nIn the wild, cats prefer moving water because standing water is more likely to harbor bacteria. That instinct never went away.\n\n## Why It Matters\nLow water intake strains the kidneys and urinary tract. Chronic dehydration is linked to kidney disease â€” the leading health issue in older cats.\n\n## How a Fountain Helps\nA stainless steel pet water fountain circulates and filters water continuously. The movement attracts cats and keeps water fresher and cooler, encouraging more drinking.\n\n## Placement Matters\nCats like their water away from their food bowl â€” it mimics avoiding contamination. Place fountains in quiet, low-traffic spots.\n\n## Keep It Clean\nA fountain only helps if it is clean. Rinse and refill daily, and change the filter on schedule. Stale filters can make water taste worse.\n\n## Try Wet Food\nWet food can be up to 80% water. Adding it to the diet is one of the simplest ways to boost hydration alongside a fountain.\n\n## Watch for Warning Signs\nSunken eyes, lethargy, dry gums, and reduced litter box output can all signal dehydration. If you notice any, contact your vet.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','hydration','water fountain','health'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-06-28' },
+  { id:'b16', slug:'flying-with-pet-checklist', title:'Flying with a Dog or Cat: The Complete Checklist', excerpt:'From carrier rules to vet certificates, here is everything to prepare before flying with your pet â€” and what to pack in-cabin.', content:'Flying with a pet takes planning, but it is very doable. Whether it is a short hop or a cross-country move, this checklist covers the essentials.\n\n## 1. Book Pet-Friendly Flights Early\nAirlines cap the number of pets per flight. Book as far in advance as you can and confirm the in-cabin rules.\n\n## 2. Choose the Right Carrier\nIn-cabin carriers must fit under the seat in front of you and let your pet stand, turn, and lie down. A padded pet carrier backpack or soft carrier makes gate travel far easier.\n\n## 3. Get a Health Certificate\nMost airlines require a certificate from your vet issued within 10 days of travel. Book the appointment before you book the ticket.\n\n## 4. Check the Destination Rules\nHawaii and many international destinations have strict quarantine and microchip rules. Research them months ahead.\n\n## 5. Pack the Essentials\nWater, a travel bowl, a leash, waste bags, and a familiar toy or blanket all belong in your carry-on.\n\n## 6. Don\u2019t Sedate Without Asking\nSome sedatives can be dangerous at altitude. Ask your vet about safe options instead of assuming.\n\n## 7. Exercise Before You Fly\nA tired pet is a calmer pet. A long walk before the airport helps them settle once on board.\n\n## 8. Attach ID\nFresh ID tags and a current microchip are your pet\u2019s safety net if anything goes wrong en route.', image:'https://images.pexels.com/photos/127028/pexels-photo-127028.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['travel','flying','carrier','checklist'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-06-15' },
+  { id:'b17', slug:'horse-grooming-essentials-beginners', title:'Horse Grooming Essentials: A Beginner\u2019s Starter Kit', excerpt:'Good grooming keeps a horse healthy, comfortable, and easy to handle. Here is the starter kit every new owner needs.', content:'Grooming is one of the most important daily habits in horse care. It keeps the coat healthy, catches injuries early, and builds trust between horse and handler.\n\n## Why Groom Every Day\nDaily grooming removes dirt, sweat, and loose hair, distributes natural oils, and gives you a chance to check for cuts, swelling, or skin issues before they become problems.\n\n## The Core Kit\nA basic kit starts with a curry comb for loosening dirt, a stiff brush for sensitive areas, a hoof pick, and a mane-and-tail brush. A [12-Piece Horse Grooming Kit](/product/horse-grooming-kit-12-piece) keeps these tools together for barn use.\n\n## Hoof Care Is Non-Negotiable\nPicking hooves daily prevents stones, thrush, and bruising. If you are new to it, ask your farrier to show you the correct technique.\n\n## Bathe Sparingly\nHorses do not need frequent baths â€” over-bathing strips natural oils. Spot-clean and save full baths for shows or very dirty days.\n\n## Watch the Tack Areas\nGroom the areas where tack sits â€” the back, girth, and head â€” carefully. Dirt under tack causes rubbing and sores.\n\n## Build It Into Your Routine\nEven ten minutes a day keeps coats and feet in good shape. Horses quickly learn to enjoy the routine, and it makes every other part of ownership easier.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['horse','grooming','equestrian','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-30' },
+  { id:'b18', slug:'cattle-care-basics-small-farms', title:'Cattle Care Basics for Small Farms: Feed, Health & Handling', excerpt:'Raising cattle on a small farm is rewarding â€” and a real responsibility. Here are the fundamentals of keeping a healthy herd.', content:'Whether you keep a few beef cattle or a small dairy herd, the basics of cattle care are the same. Get these right and most problems never start.\n\n## Water Comes First\nCattle drink a lot â€” up to 20 gallons a day in hot weather. Clean, accessible water is the single most important thing you can provide.\n\n## Feed According to Stage\nNutrition needs change with age, weight, pregnancy, and season. Pasture alone rarely covers winter needs; hay and mineral supplements fill the gap. Work with a vet or nutritionist on a ration.\n\n## Minerals Are Not Optional\nLoose mineral supplements prevent a long list of deficiency problems, from weak calves to poor coats. Provide free-choice minerals year-round.\n\n## Health Basics\nLearn the normal signs â€” appetite, rumination, manure, and demeanor. Any sudden change deserves attention. Keep a working relationship with a large-animal vet before you need one.\n\n## Handling with Confidence\nCattle read body language. Move slowly, work from their shoulder, and use low-stress handling. A calm herd is safer and easier to manage.\n\n## Hoof and Parasite Care\nSchedule hoof trimming as needed and follow a parasite control program recommended for your region.\n\n## Records Keep You Honest\nTrack weights, vaccinations, and treatments. Simple records turn guesswork into decisions and make vet visits far more useful.', image:'https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cattle','livestock','farm','care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-05-20' },
+  { id:'b19', slug:'best-bird-feeder-buyers-guide', title:'How to Choose the Best Bird Feeder for Your Backyard: 2026 Buyer\u2019s Guide', excerpt:'Tube, hopper, or tray? Seed or no-seed? Here is exactly how to pick a bird feeder that fits your yard and attracts the birds you want.', content:'A well-chosen bird feeder turns any yard into a daily wildlife show. With a little planning you can attract cardinals, finches, chickadees, and jays â€” and keep them coming back all year.\n\n## Decide What You Want to Attract\nDifferent feeders suit different birds. Tube feeders favor finches and chickadees, hopper feeders attract cardinals and jays, and tray feeders draw ground feeders like doves. If you are new to bird feeding, start with one versatile feeder and see who shows up.\n\n## Pick a Weather-Resistant Design\nSeed that gets wet molds quickly and can make birds sick. Look for a feeder with a covered roof, drainage holes, and sealed seed chambers. An [Outdoor Hanging Bird Feeder](/product/outdoor-hanging-bird-feeder) that keeps seed dry through rain and snow is the single most important choice you can make.\n\n## Match the Seed to the Birds\nBlack-oil sunflower brings the widest variety of birds, while millet and safflower appeal to specific species and deter squirrels. A [Premium Wild Bird Seed Mix (10 lb)](/product/premium-wild-bird-seed-mix-10lb) is an easy way to get a balanced blend without guessing, and the smaller [5 lb mix](/product/bird-wild-bird-seed-mix-5lb) is perfect for trying it out.\n\n## Add Water, and Birds Will Stay\nBirds need fresh water for drinking and bathing year-round. A [Solar Bird Bath Fountain](/product/solar-bird-bath-fountain) keeps water moving â€” moving water is far more attractive to birds and stays cleaner longer.\n\n## Placement Makes the Difference\nHang feeders 5â€“10 feet from cover so birds have a quick escape route from predators, but close enough to a window to enjoy. Keep cats indoors and clean feeders every couple of weeks with a mild bleach solution.\n\n## Be Consistent\nBirds learn reliable food sources. Once you start feeding, keep the feeder stocked through the seasons â€” especially in winter when natural food is scarce. Consistency builds a loyal backyard flock.\n\n## The Bottom Line\nStart simple: one weatherproof feeder, a quality seed mix, and a clean water source. That combination reliably attracts birds and makes your yard the most visited spot on the block.', image:'https://images.pexels.com/photos/7517035/pexels-photo-7517035.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['bird feeder','wild birds','backyard','bird care'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-18' },
+  { id:'b20', slug:'horse-grooming-kit-buyers-guide', title:'The Horse Grooming Kit Buyer\u2019s Guide: What to Buy, What to Skip', excerpt:'Curry comb, brushes, hoof pick â€” what does a horse actually need? This guide breaks down the essentials and what to skip to save money.', content:'Grooming is part of daily horse care, but you do not need a wall of brushes to do it right. A focused kit covers the essentials and lasts for years if you choose well.\n\n## Start with the Core Five\nA complete basic kit has five pieces: a curry comb to loosen dirt and mud, a stiff body brush, a soft brush for the face and sensitive areas, a hoof pick, and a mane-and-tail brush. That is genuinely all you need for most horses.\n\n## Buy a Set, Not a Grab Bag\nBuying pieces separately usually costs more and leaves gaps. A coordinated [12-Piece Horse Grooming Kit](/product/horse-grooming-kit-12-piece) with a storage bag covers the core tools plus extras like a shedding blade and finishing brushes â€” and the bag keeps everything organized at the barn.\n\n## Grooming Is About More Than Looks\nDaily grooming removes sweat and dirt, spreads natural oils, and â€” most importantly â€” gives you a chance to check for cuts, swelling, heat, or skin issues before they become problems. It is also the best bonding time you will have with your horse.\n\n## Don\u2019t Forget the Head\nFlies and sun bother horses constantly. A [Horse Fly Mask with Ears](/product/horse-fly-mask-with-ears-uv-protection) protects the face and eyes during turnout, and a well-fitted [Adjustable Nylon Horse Halter with Lead Rope](/product/adjustable-nylon-horse-halter-lead-rope) makes handling and grooming safer and easier.\n\n## What to Skip\nSkip fancy scented shampoos, expensive detanglers, and oversized kits with tools you will never use. Horses rarely need frequent baths â€” spot-cleaning plus daily brushing does the job.\n\n## Care for the Kit\nHang brushes to dry, pick out the curry comb after each use, and replace anything with broken bristles. A well-maintained kit lasts years and costs far less per grooming session than cheap replacements.\n\n## The Bottom Line\nA complete 12-piece kit, a fly mask, and a solid halter give you everything a happy, healthy horse needs. Start there and add specialty tools only when your routine genuinely calls for them.', image:'https://images.pexels.com/photos/1466205/pexels-photo-1466205.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['horse','grooming','equestrian','buyers guide'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-11' },
+  { id:'b21', slug:'dog-car-safety-seat-belt-guide', title:'Dog Car Safety: The Best Seat Belt & Travel Setup for Road Trips', excerpt:'A loose dog in a moving car is a danger to everyone. Here is the right gear to keep your dog secure, comfortable, and safe on every drive.', content:'Most people love driving with their dog â€” but an unrestrained dog in a car is a serious hazard for both of you. A sudden stop can turn a 25-pound dog into a projectile. Here is how to set up safe, comfortable car travel.\n\n## Why Restraint Matters\nIn a 30 mph crash, an unrestrained dog can be thrown with hundreds of pounds of force â€” into you, the windshield, or out of the car. Restraint protects your dog, your passengers, and you.\n\n## The Right Restraint for the Job\nA seat-belt-style safety leash clips to the car\u2019s existing seat belt and attaches to your dog\u2019s harness. Our [Adjustable Car Seat Safety Leash for Pets](/product/durable-pet-cat-dog-vehicle-leash-nylon-adjustable-car-seat-dog-safety-belt-pet-leashes) gives your dog enough room to sit or lie down while stopping them from roaming the cabin.\n\n## Pair It with a Proper Harness\nSafety leashes connect to a harness, never a collar â€” a collar can choke your dog in a sudden stop. A [No-Pull Dog Harness with Reflective Strips](/product/no-pull-dog-harness-with-reflective-strips-front-back-clip) is comfortable for long rides and doubles as your everyday walking harness.\n\n## Set Up the Space\nSmaller dogs travel better in a secure carrier. A [Foldable Pet Carrier Backpack](/product/foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs) works on the back seat and doubles as an airline-approved carrier. For walks at rest stops, a [Retractable Dog Leash with one-button lock](/product/retractable-dog-leash-5m-one-button-lock-with-anti-slip-grip) keeps control simple.\n\n## Keep the Car Cool and Calm\nNever leave a dog in a parked car â€” even with windows cracked, temperatures rise dangerously fast. Take breaks every 2â€“3 hours for water, bathroom, and leg stretching. A tired, calm dog is a safer passenger.\n\n## Practice Before the Big Trip\nIntroduce the harness and restraint at home first, then take a few short drives so your dog learns to settle. Reward calm behavior with treats. Most dogs adjust within a week.\n\n## The Bottom Line\nA seat-belt safety leash, a good harness, and regular breaks are the foundation of safe car travel with your dog. Cheap insurance for the most important passenger you will ever carry.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog','car safety','travel','road trip'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-04' },
+  { id:'b22', slug:'dog-cooling-mat-buyers-guide', title:'How to Choose the Best Dog Cooling Mat: A 2026 Buyer\u2019s Guide', excerpt:'Not all cooling mats work the same. Here is how to pick one your dog will actually use â€” and use it safely through the hottest months.', content:'When summer heat hits, a cooling mat is one of the simplest comfort upgrades you can give your dog. But with so many types on the market, choosing wrong means a mat your dog ignores â€” or worse, one that underperforms when you need it most.\n\n## Why Dogs Overheat\nDogs cool themselves mainly by panting, which stops working in hot, humid air. A cool surface to lie on helps them shed body heat efficiently â€” that is why many dogs instinctively seek tile floors, shade, or cool ground.\n\n## What Makes a Good Cooling Mat\nThe best mats use a gel or water-based core that absorbs and draws heat away from your dog\u2019s body without needing to be refrigerated or plugged in. Look for a non-toxic, chew-resistant cover that is easy to wipe clean, and a mat that stays effective for hours. The [Cooling Pet Mat â€” Ice-Silk Cooling Pad for Cats & Dogs](/product/cooling-pet-mat-ice-silk-cooling-pad-for-cats-dogs) is a lightweight ice-silk option that works indoors and out, and at its price it is an easy first upgrade.\n\n## Size and Placement\nChoose a mat big enough for your dog to stretch out â€” a dog that cannot fit on the mat simply will not use it. Place it in the coolest room of the house, away from direct sun, and keep a second one on hand for the bedroom or car.\n\n## Use It With, Not Instead Of, Common Sense\nA cooling mat helps, but it is not air conditioning. Never leave a dog in a parked car, skip midday walks, and always offer fresh water. Pairing the mat with a [Stainless Steel Pet Water Fountain](/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs) encourages the constant hydration dogs need in the heat.\n\n## When Your Dog Needs a Bed Instead\nCooling mats are for hot weather. If your dog sleeps hot year-round but needs joint support, an [Orthopedic Memory Foam Dog Bed](/product/orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs) supports senior and large dogs at night while you keep the cooling mat for daytime use.\n\n## Watch the Warning Signs\nExcessive panting, drooling, weakness, or bright red gums are signs of heatstroke â€” that is a veterinary emergency, not a mat problem. A cooling mat is a comfort tool, never a substitute for proper heat safety.\n\n## The Bottom Line\nPick a chew-resistant, non-toxic cooling mat sized for your dog, place it in the coolest spot, and pair it with constant fresh water. That combination keeps your dog comfortable through the hottest days of the year.', image:'https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['dog','cooling mat','summer','heat safety'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-25' },
+  { id:'b23', slug:'automatic-pet-feeder-buyers-guide', title:'Automatic Pet Feeders Explained: How to Pick the Right One for Your Cat or Dog', excerpt:'Portion control, scheduling, and power backup â€” here is what actually matters when you buy an automatic pet feeder.', content:'An automatic pet feeder is a lifesaver for busy schedules, consistent portioning, and pets on a fixed feeding routine. But the market is full of cheap dispensers that jam, overfeed, or stop working on day three. Here is how to buy one that lasts.\n\n## Know What You Need It To Do\nAre you fixing mealtimes for a cat who wakes you at 5am, controlling portions for a dog who overeats, or covering a long workday? Feeder needs differ. A programmable model with set portions solves all three â€” the [Automatic Pet Feeder with Programmable Timer](/product/automatic-pet-feeder-with-programmable-timer-up-to-4-meals-daily) schedules up to 4 meals a day with custom portion sizes and a 6-liter hopper, enough for days of food.\n\n## Portion Control Matters Most\nFree-feeding leads to weight gain in many pets. A feeder that dispenses a measured portion per meal keeps portions honest and makes it easy to feed the same amount every day. This matters even more for cats, who benefit from several small meals rather than one big bowl.\n\n## Check the Power Backup\nA feeder that stops working during a power outage defeats the purpose. Look for dual power options â€” battery or backup alongside the mains â€” so meals are never missed.\n\n## Keep Water in the System\nFood is only half the routine. Cats especially drink too little, and a feeder does nothing for hydration. Pair your feeder with a [Stainless Steel Pet Water Fountain](/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs) so fresh, filtered water is always available.\n\n## Clean It, and It Will Last\nHoppers collect dust, kibble oils, and crumbs. Choose a feeder with a removable, washable hopper and bowl. Weekly cleaning prevents jams and keeps food fresh â€” and it is the single biggest factor in whether a feeder survives more than a year.\n\n## Transition Slowly\nPets notice when their feeding routine changes. Start with the feeder alongside the usual bowl, then shift meals over gradually over a week. Most pets adjust quickly once they learn the feeder reliably produces food.\n\n## The Bottom Line\nBuy a programmable feeder with portion control, dual power, and a washable hopper; pair it with a water fountain; and transition gradually. That combination delivers consistent, healthy mealtimes â€” whether you are home or not.', image:'https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['automatic feeder','feeding','cat','dog','routine'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-21' },
+  { id:'b24', slug:'cat-window-perch-buyers-guide', title:'Cat Window Perch Buyer\u2019s Guide: Give Your Cat the Best View in the House', excerpt:'Cats love high perches and window views. Here is how to choose a window perch that is safe, sturdy, and actually holds your cat.', content:'Watch a cat for ten minutes and you will see it: they love height, and they love windows. A window perch combines both, giving your cat a safe place to sunbathe and watch the world â€” birds, squirrels, and neighbors alike.\n\n## Why Cats Need Vertical Space\nCats are natural climbers who feel most secure when they can observe from above. A perch satisfies that instinct, reduces stress, and keeps cats entertained â€” which means fewer behavioral problems and a calmer household.\n\n## The Suction Cup Question\nMost window perches attach with suction cups, and the number one buyer complaint is a perch that falls. Look for strong suction cups, a weight limit that comfortably exceeds your cat\u2019s weight, and a perch with a wide, padded platform. The [Cat Window Perch â€” Suction Cup Hammock Seat](/product/cat-window-perch-suction-cup-hammock-seat-for-sunbathing) holds up to 33 lbs, so even larger cats get a stable, sun-warmed spot.\n\n## Placement and Sun Exposure\nPick a window with direct sun for part of the day â€” cats will nap there for hours. Clean the glass and the suction cups before mounting, and press firmly so the cups seal properly. Re-seat the cups every couple of weeks for a lasting grip.\n\n## Make It Part of a Cat Corner\nA perch works even better as part of a dedicated cat space. Add a [Collapsible Cat Tunnel with Crinkle & Peek Hole](/product/collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube) nearby for play, and keep a [Ceramic Cat Face Food Bowl](/product/ceramic-cat-face-food-bowl-easy-clean-pet-dish) at ground level for easy meals and cleanup.\n\n## Safety First\nNever place a perch above a radiator or in a spot where your cat could injure itself falling. Check the perch periodically for loose suction cups, and replace any worn pads. Cats who use high perches still need safe places to land.\n\n## The Bottom Line\nChoose a high-weight-limit suction perch, mount it on clean glass in a sunny window, and re-seat the cups regularly. Paired with nearby toys and food, it becomes your cat\u2019s favorite spot in the house.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','window perch','enrichment','hammock'], authorId:'adm', authorName:'Admin', status:'published', date:'2026-08-14' },
 ];
 
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies', 'Horse', 'Cattle'];
@@ -297,7 +306,7 @@ interface Ctx {
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
   cartOpen: boolean; openCart: () => void; closeCart: () => void;
   notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
-  // Catalog Launch Phase — coupons + free-shipping strategy from the store.
+  // Catalog Launch Phase â€” coupons + free-shipping strategy from the store.
   coupon: StoreCoupon | null;
   applyCoupon: (code: string) => string | null;
   removeCoupon: () => void;
@@ -308,7 +317,7 @@ const AC = createContext<Ctx | null>(null);
 export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
 
 // Cart persistence uses the catalog-safe v2 key (legacy demo-era payload is
-// purged on load — Phase 4E.2A hotfix behavior, kept on luxedge-v2).
+// purged on load â€” Phase 4E.2A hotfix behavior, kept on luxedge-v2).
 function loadCart(): CartItem[] {
   return parseStoredCart<Product>();
 }
@@ -339,7 +348,7 @@ function loadSession(): AppUser | null {
 function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
-  // Phase 4E.1 — the storefront catalog starts EMPTY. Demo/fallback products
+  // Phase 4E.1 â€” the storefront catalog starts EMPTY. Demo/fallback products
   // must NEVER appear when the database has no published products; only the
   // qualified/approved pipeline may populate the customer-facing catalog.
   const [products, setProducts] = useState<Product[]>([]);
@@ -351,7 +360,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   // Stable identity: components (e.g. CatalogProductEditor) depend on `notify`
   // inside useCallback/useEffect deps. An unmemoized notify was recreated on
   // every AppProvider render, which itself re-renders every time notify()
-  // fires (setNotif) — so calling notify() during editing (e.g. "Image
+  // fires (setNotif) â€” so calling notify() during editing (e.g. "Image
   // added") retriggered any effect that listed notify as a dependency,
   // silently reloading/resetting in-progress form state right after the
   // update it was supposed to confirm.
@@ -367,13 +376,13 @@ function AppProvider({ children }: { children: ReactNode }) {
 
   // Phase 3B: load the real storefront catalog from Supabase when it is
   // configured and populated. On any failure (unconfigured, unreachable,
-  // empty DB) the catalog stays EMPTY — never demo/fallback products.
+  // empty DB) the catalog stays EMPTY â€” never demo/fallback products.
   useEffect(() => {
     let cancelled = false;
     void loadStorefrontCatalog().then((cat) => {
       if (cancelled) return;
       if (cat) {
-        // Catalog load completed (even with zero products) — the cart can
+        // Catalog load completed (even with zero products) â€” the cart can
         // now be safely reconciled against the real customer-visible set.
         setCatalogLoaded(true);
         if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
@@ -383,7 +392,7 @@ function AppProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Catalog Launch Phase — load store promotions (coupons + free-shipping
+  // Catalog Launch Phase â€” load store promotions (coupons + free-shipping
   // strategy). Safe defaults when unavailable (no coupons, free shipping off).
   const [promotions, setPromotions] = useState<{ coupons: StoreCoupon[]; freeShippingEnabled: boolean; freeShippingThreshold: number }>({
     coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50,
@@ -413,7 +422,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   // Catalog Launch Phase defense in depth: the cart may only contain
   // products that exist in the current customer-visible catalog. Once the
   // catalog has actually loaded, any stored item not in it is stale and is
-  // reconciled away — a manually-restored malformed payload never survives.
+  // reconciled away â€” a manually-restored malformed payload never survives.
   // (Only runs after a successful catalog load, so a DB outage never wipes
   // a valid cart.)
   const [catalogLoaded, setCatalogLoaded] = useState(false);
@@ -423,7 +432,7 @@ function AppProvider({ children }: { children: ReactNode }) {
       const valid = reconcileCart(prev, products);
       // Refresh each surviving line's product snapshot from the current
       // catalog so repriced/updated listings always show live prices
-      // (quantity is kept — only the product data is re-synced).
+      // (quantity is kept â€” only the product data is re-synced).
       const refreshed = valid.map(i => {
         const cur = products.find(p => p.id === i.product.id);
         return cur ? { ...i, product: cur } : i;
@@ -462,7 +471,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const guestLogin = () => {
     const guest: AppUser = { id: `guest-${Date.now()}`, email: 'guest@luxedge.us', name: 'Guest', role: 'buyer', joined: new Date().toISOString().slice(0, 10) };
     setUser(guest);
-    notify('Shopping as guest — no account needed!');
+    notify('Shopping as guest â€” no account needed!');
   };
 
   const logout = async () => {
@@ -515,7 +524,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const updateQty = (id: string, q: number) => { if (q <= 0) removeFromCart(id); else setCart(p => p.map(i => i.product.id === id ? { ...i, quantity: q } : i)); };
   const clearCart = () => setCart([]);
   // NOTE: real orders are created server-side by the Stripe webhook into
-  // luxedge_orders (Admin → Orders). No client-side fake order path exists.
+  // luxedge_orders (Admin â†’ Orders). No client-side fake order path exists.
   const freeShippingEnabled = promotions.freeShippingEnabled;
   const freeShippingThreshold = promotions.freeShippingThreshold;
 
@@ -546,7 +555,7 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
 // ============================================================================
 // HEADER + FOOTER (STORE)
 // ============================================================================
-// ── Header mega menu data (maps to real category routes) ──
+// â”€â”€ Header mega menu data (maps to real category routes) â”€â”€
 const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
   {
     label: 'Dog', to: '/category/dog-supplies',
@@ -627,13 +636,13 @@ function Header() {
   const isActive = (p: string) => (p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p));
 
   return (<>
-    {/* ── Rotating promo bar ── */}
+    {/* â”€â”€ Rotating promo bar â”€â”€ */}
     <div className="site-utility-bar relative" style={{ minHeight: 30 }}>
       {[
         { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Shipping options shown at checkout' },
         { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Return Requests' },
-        { icon: <Headphones01 strokeWidth={1.5} size={12} />, text: 'Customer Support Mon–Fri 9AM–6PM CT' },
-        { icon: <ShieldTick strokeWidth={1.5} size={12} />, text: 'Thoughtfully Curated — Quality You Can Trust' },
+        { icon: <Headphones01 strokeWidth={1.5} size={12} />, text: 'Customer Support Monâ€“Fri 9AMâ€“6PM CT' },
+        { icon: <ShieldTick strokeWidth={1.5} size={12} />, text: 'Thoughtfully Curated â€” Quality You Can Trust' },
       ].map((promo, i) => (
         <span key={i} className={`promo-slide ${promoIdx === i ? 'promo-active' : ''}`} aria-hidden={promoIdx !== i}>
           {promo.icon} {promo.text}
@@ -641,7 +650,7 @@ function Header() {
       ))}
     </div>
 
-    {/* ── Main header ── */}
+    {/* â”€â”€ Main header â”€â”€ */}
     <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3 lg:gap-6">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
@@ -653,7 +662,7 @@ function Header() {
           </span>
         </Link>
 
-        {/* Search — refined pill */}
+        {/* Search â€” refined pill */}
         <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-5">
           <div className="site-search">
             <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
@@ -691,7 +700,7 @@ function Header() {
         </div>
       </div>
 
-      {/* ── Pet navigation bar ── */}
+      {/* â”€â”€ Pet navigation bar â”€â”€ */}
       <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
         <div className="max-w-7xl mx-auto px-4 flex items-center h-11">
           {MEGA_MENU.map(m => (
@@ -704,7 +713,7 @@ function Header() {
                   <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
                       <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">Shop {m.label}</p>
-                      <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
+                      <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All â†’</Link>
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                       {m.groups.map(g => (
@@ -726,7 +735,7 @@ function Header() {
         </div>
       </nav>
 
-      {/* ── Mobile menu ── */}
+      {/* â”€â”€ Mobile menu â”€â”€ */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
         <form onSubmit={submitSearch} role="search" className="site-search mobile-site-search mb-2">
           <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
@@ -762,11 +771,11 @@ function Footer() {
       {/* Gold hairline divider */}
       <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
 
-      {/* ── Main Footer Grid ── */}
+      {/* â”€â”€ Main Footer Grid â”€â”€ */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10">
 
-          {/* Col 1 — Brand (lg:col-span-4) */}
+          {/* Col 1 â€” Brand (lg:col-span-4) */}
           <div className="sm:col-span-2 lg:col-span-4">
             <Link to="/" className="flex items-center gap-3 mb-3 group w-fit" aria-label="Luxedge home">
               <img src="/luxedge-mark.png" alt="Luxedge" className="w-12 h-12 transition-transform duration-300 group-hover:scale-105" />
@@ -776,14 +785,14 @@ function Footer() {
               </span>
             </Link>
             <p className="text-sm leading-relaxed text-luxe-white/65 max-w-sm mb-5">
-              We source the best pet essentials from trusted suppliers around the world —
+              We source the best pet essentials from trusted suppliers around the world â€”
               then choose the pieces worth bringing home. Quality you can count on,
               honest prices, delivered to your door.
             </p>
                 <Link to="/contact" className="inline-flex items-center gap-2 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
               Talk to the Luxedge team <ArrowRight strokeWidth={2} size={14} />
             </Link>
-            {/* HQ card — clean address treatment (replaces awkward iframe) */}
+            {/* HQ card â€” clean address treatment (replaces awkward iframe) */}
             <div className="mt-6 max-w-sm rounded-2xl bg-luxe-white/[0.04] border border-luxe-white/10 p-4">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-luxe-gold-light mb-3">Visit Luxedge HQ</p>
               <div className="flex items-start gap-2.5">
@@ -795,7 +804,7 @@ function Footer() {
               </div>
               <div className="mt-2.5 flex items-center gap-2.5">
                 <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                <span className="text-[13px] text-luxe-white/70">Mon – Fri · 9:00 AM – 6:00 PM CT</span>
+                <span className="text-[13px] text-luxe-white/70">Mon â€“ Fri Â· 9:00 AM â€“ 6:00 PM CT</span>
               </div>
               <a href="https://maps.google.com/?q=5041+Courtside+Dr,+Irving,+TX+75038" target="_blank" rel="noopener noreferrer"
                 className="mt-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
@@ -804,7 +813,7 @@ function Footer() {
             </div>
           </div>
 
-          {/* Col 2 — Shop */}
+          {/* Col 2 â€” Shop */}
           <div className="lg:col-span-2">
             <ColTitle>Shop</ColTitle>
             <nav className="space-y-0" aria-label="Shop">
@@ -818,7 +827,7 @@ function Footer() {
             </nav>
           </div>
 
-          {/* Col 3 — Help */}
+          {/* Col 3 â€” Help */}
           <div className="lg:col-span-2">
             <ColTitle>Help</ColTitle>
             <nav className="space-y-0" aria-label="Help">
@@ -830,7 +839,7 @@ function Footer() {
             </nav>
           </div>
 
-          {/* Col 4 — Company */}
+          {/* Col 4 â€” Company */}
           <div className="lg:col-span-2">
             <ColTitle>Company</ColTitle>
             <nav className="space-y-0" aria-label="Company">
@@ -842,7 +851,7 @@ function Footer() {
             </nav>
           </div>
 
-          {/* Col 5 — Contact */}
+          {/* Col 5 â€” Contact */}
           <div className="lg:col-span-2">
             <ColTitle>Contact</ColTitle>
             <div className="space-y-2.5">
@@ -860,17 +869,17 @@ function Footer() {
               </a>
               <div className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75">
                 <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                Mon – Fri · 9AM – 6PM CT
+                Mon â€“ Fri Â· 9AM â€“ 6PM CT
               </div>
             </div>
             <p className="mt-5 text-xs leading-relaxed text-luxe-white/50 max-w-[230px]">
-              Real people answer — reach out any time and we'll point you in the right direction.
+              Real people answer â€” reach out any time and we'll point you in the right direction.
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Categories Bar ── */}
+      {/* â”€â”€ Categories Bar â”€â”€ */}
       <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
@@ -882,7 +891,7 @@ function Footer() {
         </div>
       </div>
 
-      {/* ── Trust & Payment Bar ── */}
+      {/* â”€â”€ Trust & Payment Bar â”€â”€ */}
       <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -901,18 +910,18 @@ function Footer() {
             </div>
             <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/55">
               <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
-              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments powered by Stripe.' : 'Payments launching soon — keep exploring the collection.'}</span>
+              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments powered by Stripe.' : 'Payments launching soon â€” keep exploring the collection.'}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Bottom Bar ── */}
+      {/* â”€â”€ Bottom Bar â”€â”€ */}
       <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">
             <p className="text-[13px] text-luxe-white/55 text-center md:text-left">
-              © {new Date().getFullYear()} Luxedge. All rights reserved.
+              Â© {new Date().getFullYear()} Luxedge. All rights reserved.
             </p>
             <div className="flex items-center gap-4 flex-wrap justify-center text-[13px]">
               <Link to="/privacy" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Privacy</Link>
@@ -921,7 +930,7 @@ function Footer() {
               <a href="/sitemap.xml" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</a>
             </div>
             <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/55">
-              <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) · English
+              <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) Â· English
             </div>
           </div>
         </div>
@@ -932,7 +941,7 @@ function Footer() {
 
 /**
  * Homepage product grids are curated (small, admin-flagged sets), so a fixed
- * 5-column grid leaves huge empty tracks when a section only has 1-3 items —
+ * 5-column grid leaves huge empty tracks when a section only has 1-3 items â€”
  * it reads as a broken/incomplete page rather than a real storefront. Cap the
  * grid to the actual item count (up to 5) so cards sit close together instead
  * of stretching across mostly-empty rows.
@@ -953,7 +962,7 @@ function PCard({ product }: { product: Product }) {
   const secondImage = product.images.find((candidate) => candidate && candidate !== image);
   const hasCompareAt = product.originalPrice > product.price;
   const discount = hasCompareAt ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
-  // Ratings come ONLY from verified user reviews — never the catalog stub.
+  // Ratings come ONLY from verified user reviews â€” never the catalog stub.
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
@@ -999,7 +1008,7 @@ function PCard({ product }: { product: Product }) {
   );
 }
 
-// Premium alias — one card component across the whole storefront
+// Premium alias â€” one card component across the whole storefront
 function PCardPremium({ product }: { product: Product }) {
   return <PCard product={product} />;
 }
@@ -1013,7 +1022,7 @@ function RouteTitle() {
     const brand = "Luxedge";
     const segs = pathname.split("/").filter(Boolean);
     // Normalize seo_title values that already carry the brand suffix so the
-    // brand is never duplicated ("… | Luxedge | Luxedge").
+    // brand is never duplicated ("â€¦ | Luxedge | Luxedge").
     const set = (t: string) => { document.title = t.replace(/\s*\|\s*Luxedge\s*$/i, '') + " | " + brand; };
     const full = (t: string) => { document.title = t; };
     const setMeta = (name: string, content: string) => {
@@ -1027,7 +1036,7 @@ function RouteTitle() {
       el.setAttribute('content', content);
     };
     const setCanonical = () => {
-      // BrowserRouter clean URLs — never hash (#/) canonicals.
+      // BrowserRouter clean URLs â€” never hash (#/) canonicals.
       const href = `https://luxedge.us${pathname}`;
       let el = document.head.querySelector('link[rel="canonical"]');
       if (!el) { el = document.createElement('link'); el.setAttribute('rel', 'canonical'); document.head.appendChild(el); }
@@ -1036,7 +1045,7 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
-    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming."); }
+    if (segs.length === 0) { full("Luxedge â€” Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials â€” feeding, comfort, play and grooming."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
@@ -1048,15 +1057,15 @@ function RouteTitle() {
       set(p ? (p.seoTitle || p.name) : "Product");
       if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
-    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — shipping options and any applicable promotions are shown before payment."); }
+    else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart â€” shipping options and any applicable promotions are shown before payment."); }
     else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
-    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
-    else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
-    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
+    else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats â€” quality you can trust."); }
+    else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team â€” Monâ€“Fri, 9AMâ€“6PM CT."); }
+    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy â€” how we handle your data, cookies and advertising."); }
     else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
     else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
-    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — delivery estimates, shipping costs, and applicable promotions."); }
+    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy â€” delivery estimates, shipping costs, and applicable promotions."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
     else if (segs[0] === "blog") {
@@ -1103,6 +1112,11 @@ function SLayout({ children }: { children: ReactNode }) {
 // ============================================================================
 // PRODUCT DETAIL PAGE
 // ============================================================================
+
+function isFoodOrFeedProduct(product: Pick<Product, 'name' | 'category' | 'tags' | 'safetyClass'>): boolean {
+  return classifyProductSafety({ classification: product.safetyClass, name: product.name, category: product.category, tags: product.tags }) !== 'NON_INGESTIBLE';
+}
+
 function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { products, addToCart, user, reviews: allReviews, setReviews, notify } = useApp();
@@ -1192,7 +1206,7 @@ function ProductDetailPage() {
       offers,
     };
     if (product.category) prodSchema.category = product.category;
-    // Only verified, user-submitted reviews go into schema — never the catalog stub.
+    // Only verified, user-submitted reviews go into schema â€” never the catalog stub.
     if (verified.length > 0) {
       const avg = verified.reduce((s, r) => s + r.rating, 0) / verified.length;
       prodSchema.aggregateRating = {
@@ -1259,7 +1273,7 @@ function ProductDetailPage() {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <p className="text-5xl mb-4">😕</p>
+          <p className="text-5xl mb-4">ðŸ˜•</p>
           <h2 className="text-2xl font-bold mb-2">Product Not Found</h2>
           <p className="text-gray-500 mb-6">This product may have been removed.</p>
           <Link to="/shop" className="px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full transition-colors">Back to Shop</Link>
@@ -1280,7 +1294,7 @@ function ProductDetailPage() {
   const handleAddToCart = () => {
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
-    notify(`${qty}× ${product.name} added to cart!`);
+    notify(`${qty}Ã— ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
@@ -1321,13 +1335,13 @@ function ProductDetailPage() {
           <div
             ref={galleryRef}
             onScroll={onGalleryScroll}
-            aria-label={`${product.name} — image gallery`}
+            aria-label={`${product.name} â€” image gallery`}
             className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl border border-luxe-silver/70 bg-luxe-cream shadow-md"
           >
             {product.images.map((img, i) => (
               <div key={i} className="w-full shrink-0 snap-center">
                 <div className="aspect-[4/3]">
-                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
+                  <img src={img} alt={`${product.name} â€” image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
                 </div>
               </div>
             ))}
@@ -1372,7 +1386,7 @@ function ProductDetailPage() {
           </div>
         </div>
 
-        {/* RIGHT: Product Info — AliExpress-style premium */}
+        {/* RIGHT: Product Info â€” AliExpress-style premium */}
         <div className="pdp-info min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
             {product.brand && <span className="text-[11px] font-bold text-luxe-gold uppercase tracking-wider">{product.brand}</span>}
@@ -1382,7 +1396,7 @@ function ProductDetailPage() {
 
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black tracking-tight mb-3">{product.name}</h1>
 
-          {/* Rating — shown ONLY when verified user reviews exist */}
+          {/* Rating â€” shown ONLY when verified user reviews exist */}
           {reviews.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <div className="flex gap-0.5" aria-hidden="true">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={14} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
@@ -1399,10 +1413,10 @@ function ProductDetailPage() {
               {discount > 0 && <span className="text-sm text-luxe-gray line-through">${activeOriginal.toFixed(2)}</span>}
               {discount > 0 && <span className="px-2 py-0.5 bg-sale text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
             </div>
-            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
+            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off â€” limited time deal</p>}
           </div>
 
-          {/* Stock + Shipping — honest: only real supplier-verified stock is
+          {/* Stock + Shipping â€” honest: only real supplier-verified stock is
               presented as In Stock / Low Stock; otherwise availability is
               confirmed at checkout. No invented scarcity. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 text-xs">
@@ -1476,7 +1490,23 @@ function ProductDetailPage() {
           </div>
 
           {product.deliveryMinDays != null && product.deliveryMaxDays != null && (
-            <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Estimated delivery: {product.deliveryMinDays}–{product.deliveryMaxDays} business days</p>
+            <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Estimated delivery: {product.deliveryMinDays}â€“{product.deliveryMaxDays} business days</p>
+          )}
+
+          {isFoodOrFeedProduct(product) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+              <p className="font-semibold">Pet food and feed safety notice</p>
+              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
+              {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
+            </div>
+          )}
+
+          {isFoodOrFeedProduct(product) && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
+              <p className="font-semibold">Pet food and feed safety notice</p>
+              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
+              {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
+            </div>
           )}
 
           {/* Ad: Below Product Information */}
@@ -1576,7 +1606,7 @@ function ProductDetailPage() {
         </div>
       </div>
 
-      {/* ── Sticky mobile Add to Cart (hidden on desktop) ── */}
+      {/* â”€â”€ Sticky mobile Add to Cart (hidden on desktop) â”€â”€ */}
       <div className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-luxe-silver/70 shadow-[0_-8px_30px_-12px_rgba(16,26,46,0.2)] transition-transform duration-300 luxe-safe-bottom ${ctaVisible ? 'translate-y-full' : 'translate-y-0'}`} aria-hidden={ctaVisible} inert={ctaVisible}>
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="min-w-0">
@@ -1597,7 +1627,7 @@ function ProductDetailPage() {
 // ============================================================================
 // STORE PAGES
 // ============================================================================
-// Scroll-reveal wrapper — fades content in as it enters the viewport
+// Scroll-reveal wrapper â€” fades content in as it enters the viewport
 function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
@@ -1639,7 +1669,7 @@ function HomePage() {
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
   const [nlSaved, setNlSaved] = useState(false);
-  // Catalog Launch Phase — every section remains REAL catalog data. The
+  // Catalog Launch Phase â€” every section remains REAL catalog data. The
   // homepage is intentionally art-directed: weak/collage-heavy supplier
   // images stay available in Shop but are not promoted into editorial slots.
   const featured = products.filter(p => p.isActive);
@@ -1694,7 +1724,7 @@ function HomePage() {
 
   return (
     <div className="bg-white">
-      {/* ════════ EDITORIAL HERO ════════ */}
+      {/* â•â•â•â•â•â•â•â• EDITORIAL HERO â•â•â•â•â•â•â•â• */}
       <section className="home-hero">
         <div className="home-hero-wash" aria-hidden="true" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-9 sm:py-10 lg:py-12 grid lg:grid-cols-[0.44fr_0.56fr] items-center gap-6 lg:gap-10">
@@ -1745,10 +1775,10 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ Ad: After Hero ════════ */}
+      {/* â•â•â•â•â•â•â•â• Ad: After Hero â•â•â•â•â•â•â•â• */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
-      {/* ════════ SHOP BY PET — Circular Avatars ════════ */}
+      {/* â•â•â•â•â•â•â•â• SHOP BY PET â€” Circular Avatars â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="mb-5">
@@ -1782,7 +1812,7 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ POPULAR CATEGORIES — Horizontal Scroll ════════ */}
+      {/* â•â•â•â•â•â•â•â• POPULAR CATEGORIES â€” Horizontal Scroll â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-luxe-cream">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal>
@@ -1817,7 +1847,7 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ DEAL BANNER ════════ */}
+      {/* â•â•â•â•â•â•â•â• DEAL BANNER â•â•â•â•â•â•â•â• */}
       {deals.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal>
@@ -1844,7 +1874,7 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ SHOP BY CATEGORY ════════ */}
+      {/* â•â•â•â•â•â•â•â• SHOP BY CATEGORY â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-luxe-cream">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="mb-5">
@@ -1869,12 +1899,12 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ Ad: After Categories ════════ */}
+      {/* â•â•â•â•â•â•â•â• Ad: After Categories â•â•â•â•â•â•â•â• */}
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
 
 
-      {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
-      {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
+      {/* â•â•â•â•â•â•â•â• PRODUCT SECTIONS (or premium empty-catalog state) â•â•â•â•â•â•â•â• */}
+      {/* Phase 4E.1 â€” when the catalog has zero products (no published DB rows),
           show ONE premium curation notice instead of empty product grids. No
           fake product cards, no fake counts, no fake launch dates. */}
       {featured.length === 0 ? (
@@ -1882,7 +1912,7 @@ function HomePage() {
           <div className="max-w-2xl mx-auto px-4 text-center">
             <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
-            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
+            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon â€” every product is verified before it reaches your door.</p>
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
               <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
@@ -1892,7 +1922,7 @@ function HomePage() {
         </section>
       ) : (
         <>
-          {/* New Arrivals — real newArrival flag, admin-set */}
+          {/* New Arrivals â€” real newArrival flag, admin-set */}
           {newArrivals.length > 0 && (
             <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
@@ -1906,7 +1936,7 @@ function HomePage() {
             </section>
           )}
 
-          {/* Trending — real catalog merchandising flags only; no fake sales/rankings */}
+          {/* Trending â€” real catalog merchandising flags only; no fake sales/rankings */}
           {trendingProducts.length > 0 && (
             <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
@@ -1920,7 +1950,7 @@ function HomePage() {
             </section>
           )}
 
-          {/* CJ listings — only active catalog products with explicit CJ source evidence */}
+          {/* CJ listings â€” only active catalog products with explicit CJ source evidence */}
           {cjProducts.length > 0 && (
             <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
@@ -1934,7 +1964,7 @@ function HomePage() {
             </section>
           )}
 
-          {/* Top Picks — real featured flag (admin merchandising decision) */}
+          {/* Top Picks â€” real featured flag (admin merchandising decision) */}
           {topPicks.length > 0 && (
             <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
@@ -1948,10 +1978,10 @@ function HomePage() {
             </section>
           )}
 
-          {/* ════════ Ad: Between Product Sections ════════ */}
+          {/* â•â•â•â•â•â•â•â• Ad: Between Product Sections â•â•â•â•â•â•â•â• */}
           <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
 
-          {/* Dog Essentials — real category data */}
+          {/* Dog Essentials â€” real category data */}
           {dogEssentials.length > 0 && (
             <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
@@ -1965,7 +1995,7 @@ function HomePage() {
             </section>
           )}
 
-          {/* Cat Essentials — real category data */}
+          {/* Cat Essentials â€” real category data */}
           {catEssentials.length > 0 && (
             <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
@@ -1979,7 +2009,7 @@ function HomePage() {
             </section>
           )}
 
-          {/* All Products — full catalog browsing */}
+          {/* All Products â€” full catalog browsing */}
           {featured.length > 0 && (
             <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
@@ -1995,7 +2025,7 @@ function HomePage() {
         </>
       )}
 
-      {/* ════════ EDITORIAL COLLECTION ════════ */}
+      {/* â•â•â•â•â•â•â•â• EDITORIAL COLLECTION â•â•â•â•â•â•â•â• */}
       {editorialProduct && (
         <section className="section-compact bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -2007,7 +2037,7 @@ function HomePage() {
                 <div className="editorial-story-copy">
                   <p className="eyebrow mb-3">Designed for everyday life</p>
                   <h2 className="section-title">Pet essentials that belong in your home.</h2>
-                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space.</p>
+                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share â€” selected to feel considered in your space.</p>
                   <Link to="/shop" className="editorial-link mt-5 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
                 </div>
               </div>
@@ -2016,7 +2046,7 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ ON SALE (only when real compare-at pricing exists) ════════ */}
+      {/* â•â•â•â•â•â•â•â• ON SALE (only when real compare-at pricing exists) â•â•â•â•â•â•â•â• */}
       {deals.length > 0 && (
         <section className="section-compact bg-luxe-cream">
           <div className="max-w-7xl mx-auto px-4">
@@ -2030,7 +2060,7 @@ function HomePage() {
         </section>
       )}
 
-      {/* ════════ TRUST PILLS — truthful store information ════════ */}
+      {/* â•â•â•â•â•â•â•â• TRUST PILLS â€” truthful store information â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-white" aria-label="Why shop at Luxedge">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal>
@@ -2052,7 +2082,7 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ════════ NEWSLETTER — dark bookend ════════ */}
+      {/* â•â•â•â•â•â•â•â• NEWSLETTER â€” dark bookend â•â•â•â•â•â•â•â• */}
       <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
         <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
         <div className="relative max-w-3xl mx-auto px-4 py-10 sm:py-14 text-center">
@@ -2061,13 +2091,13 @@ function HomePage() {
           <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
           {nlDone ? (
             <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
-              <p className="text-sm font-semibold text-luxe-white mb-1">You're on the list! 🐾</p>
+              <p className="text-sm font-semibold text-luxe-white mb-1">{nlSaved ? "You're on the list! ðŸ¾" : "We couldn't save your subscription"}</p>
               <p className="text-xs text-luxe-white/65">{nlSaved
-                ? <>We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> to your Luxedge account team — you'll hear from us soon.</>
-                : <>We recorded <span className="text-luxe-gold-light font-medium">{nlEmail}</span> and will let you know when email updates go live.</>}</p>
+                ? <>We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> to your Luxedge account team â€” you'll hear from us soon.</>
+                : <>Please try again later. Your email was not saved.</>}</p>
             </div>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); if (!nlEmail.trim()) return; const em = nlEmail.trim(); try { const list = JSON.parse(localStorage.getItem('luxedge_newsletter') || '[]'); list.push({ email: em, at: new Date().toISOString() }); localStorage.setItem('luxedge_newsletter', JSON.stringify(list)); } catch { /* storage unavailable */ } fetch('/api/crm/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, pageUrl: window.location.href }) }).then(r => r.json()).then((d: { ok?: boolean; leadSaved?: boolean }) => { setNlSaved(!!(d && d.ok && d.leadSaved)); }).catch(() => setNlSaved(false)).finally(() => setNlDone(true)); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <form onSubmit={e => { e.preventDefault(); if (!nlEmail.trim()) return; const em = nlEmail.trim(); fetch('/api/crm/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, pageUrl: window.location.href }) }).then(r => r.json()).then((d: { ok?: boolean; leadSaved?: boolean }) => { setNlSaved(!!(d && d.ok && d.leadSaved)); }).catch(() => setNlSaved(false)).finally(() => setNlDone(true)); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
                 className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
               <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
@@ -2111,7 +2141,7 @@ function ShopPage() {
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
   useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
-  // Rating filter uses verified review averages only — catalog rating is stub data.
+  // Rating filter uses verified review averages only â€” catalog rating is stub data.
   const verifiedAvgFor = (pid: string): number => {
     const v = reviews.filter(r => r.productId === pid && r.status === 'approved');
     return v.length ? v.reduce((s, r) => s + r.rating, 0) / v.length : 0;
@@ -2231,7 +2261,7 @@ function ShopPage() {
         </div>
       </section>
 
-      {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
+      {/* Toolbar: mobile Filter button + search + sort â€” sticks below the header */}
       <div className="bg-white/90 backdrop-blur-md border-b border-luxe-silver/70 sticky top-16 lg:top-[7.1rem] z-30 shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
         <div className="max-w-[1440px] mx-auto px-3 py-2.5 flex items-center gap-2">
           <button onClick={() => setDrawerOpen(true)}
@@ -2247,8 +2277,8 @@ function ShopPage() {
             className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
             <option value="featured">Featured</option>
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Low→High</option>
-            <option value="price-high">Price: High→Low</option>
+            <option value="price-low">Price: Lowâ†’High</option>
+            <option value="price-high">Price: Highâ†’Low</option>
           </select>
         </div>
       </div>
@@ -2290,7 +2320,7 @@ function ShopPage() {
                 {f.map(p => <PCard key={p.id} product={p} />)}
               </div>
             ) : products.length === 0 ? (
-              /* Phase 4E.1 — genuinely empty catalog (no published DB products):
+              /* Phase 4E.1 â€” genuinely empty catalog (no published DB products):
                  premium curation notice, never fake cards or fake counts. */
               <div className="text-center py-20">
                 <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
@@ -2399,7 +2429,7 @@ function CartDrawer() {
                 <div className="rounded-lg border border-luxe-silver px-3 py-2.5">
                   {coupon ? (
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-green-700"><CheckCircle strokeWidth={1.5} size={12} className="inline mr-1" />{coupon.code} applied (−${discount.toFixed(2)})</span>
+                      <span className="text-[11px] font-semibold text-green-700"><CheckCircle strokeWidth={1.5} size={12} className="inline mr-1" />{coupon.code} applied (âˆ’${discount.toFixed(2)})</span>
                       <button onClick={removeCoupon} className="text-[11px] text-gray-400 hover:text-red-500">Remove</button>
                     </div>
                   ) : (
@@ -2446,7 +2476,7 @@ function CartDrawer() {
               <div className="border-t border-gray-100 px-5 py-4 space-y-3">
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
-                  {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">−${discount.toFixed(2)}</span></div>}
+                  {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">âˆ’${discount.toFixed(2)}</span></div>}
                   <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-semibold ${sh === 0 ? 'text-green-600' : 'text-luxe-black'}`}>{sh === 0 ? 'FREE' : `$${sh.toFixed(2)}`}</span></div>
                   <div className="flex justify-between pt-2 border-t border-gray-100 text-base"><span className="font-semibold text-luxe-black">Total</span><span className="font-bold text-luxe-black">${tot.toFixed(2)}</span></div>
                 </div>
@@ -2585,13 +2615,13 @@ function CheckoutPage() {
     setCouponInput('');
   };
 
-  // Payment provider state — a single isolated integration point. Nothing is
+  // Payment provider state â€” a single isolated integration point. Nothing is
   // charged until the owner configures a real provider (Stripe keys). Until
   // then checkout uses a polished disabled state that never fakes an order.
   const paymentsConfigured = !!(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY;
 
   const handleCheckout = async () => {
-    if (!paymentsConfigured) return; // disabled state — never submit a fake order
+    if (!paymentsConfigured) return; // disabled state â€” never submit a fake order
     if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     setSubmitting(true);
     setPayError('');
@@ -2602,7 +2632,7 @@ function CheckoutPage() {
         couponCode: coupon?.code || undefined,
         customer: { email: f.email, name: `${f.firstName} ${f.lastName}`.trim(), phone: f.phone, address: f.address, city: f.city, state: f.state, zip: f.zip },
       });
-      // Stripe-hosted checkout — the browser is redirected to Stripe. Luxedge
+      // Stripe-hosted checkout â€” the browser is redirected to Stripe. Luxedge
       // never sees or stores card details.
       window.location.assign(res.url);
     } catch (e) {
@@ -2624,7 +2654,7 @@ function CheckoutPage() {
             <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-semibold text-amber-800">Payment cancelled</p>
-              <p className="text-xs text-amber-700">Your cart is still saved. No payment was taken — you can try again whenever you're ready.</p>
+              <p className="text-xs text-amber-700">Your cart is still saved. No payment was taken â€” you can try again whenever you're ready.</p>
             </div>
           </div>
         </div>
@@ -2633,7 +2663,7 @@ function CheckoutPage() {
         <p className="eyebrow mb-2">Checkout</p>
         <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Complete Your Order</h1>
         <div className="grid lg:grid-cols-5 gap-8">
-          {/* ──── LEFT: Contact + Shipping ──── */}
+          {/* â”€â”€â”€â”€ LEFT: Contact + Shipping â”€â”€â”€â”€ */}
           <div className="lg:col-span-3 space-y-6">
             {payError && (
               <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
@@ -2666,7 +2696,7 @@ function CheckoutPage() {
             </div>
           </div>
 
-          {/* ──── RIGHT: Order Summary ──── */}
+          {/* â”€â”€â”€â”€ RIGHT: Order Summary â”€â”€â”€â”€ */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm sticky top-20">
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
@@ -2685,7 +2715,7 @@ function CheckoutPage() {
                   </div>
                 ))}
               </div>
-              {/* Coupon — real active store coupons only (e.g. WELCOME10) */}
+              {/* Coupon â€” real active store coupons only (e.g. WELCOME10) */}
               <div className="mb-4">
                 {coupon ? (
                   <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
@@ -2704,15 +2734,15 @@ function CheckoutPage() {
               </div>
               <div className="border-t pt-4 space-y-2.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
-                {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">−${couponDisc.toFixed(2)}</span></div>}
+                {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">âˆ’${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Tax</span><span className="font-medium text-gray-400">calculated at checkout</span></div>
-                {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">💡 Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
+                {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">ðŸ’¡ Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
                   <span className="font-bold text-lg">Total before tax</span>
                   <div className="text-right">
                     <span className="font-bold text-xl text-gray-900">${totalBeforeTax.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-400">USD · tax added by Stripe at checkout</p>
+                    <p className="text-[10px] text-gray-400">USD Â· tax added by Stripe at checkout</p>
                   </div>
                 </div>
               </div>
@@ -2721,15 +2751,15 @@ function CheckoutPage() {
                 {!paymentsConfigured ? (
                   'Payments Coming Soon'
                 ) : submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
-                {!paymentsConfigured ? null : submitting ? 'Starting checkout…' : 'Continue to Payment'}
+                {!paymentsConfigured ? null : submitting ? 'Starting checkoutâ€¦' : 'Continue to Payment'}
               </button>
               {!paymentsConfigured && (
                 <div className="mt-4 rounded-xl bg-luxe-gold-soft border border-luxe-gold/20 p-4 text-center">
                   <p className="text-[13px] font-semibold text-luxe-black">We're wiring up payments right now.</p>
-                  <p className="text-xs text-luxe-gray mt-1">Your cart is saved — nothing has been charged. Check back shortly, or email <a className="underline text-luxe-gold-dark" href="mailto:hello@luxedge.us?subject=Checkout+question">hello@luxedge.us</a>.</p>
+                  <p className="text-xs text-luxe-gray mt-1">Your cart is saved â€” nothing has been charged. Check back shortly, or email <a className="underline text-luxe-gold-dark" href="mailto:hello@luxedge.us?subject=Checkout+question">hello@luxedge.us</a>.</p>
                 </div>
               )}
-              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment on Stripe's checkout page — Luxedge never sees your card details." : 'No payment is taken until checkout is enabled.'}</p>
+              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment on Stripe's checkout page â€” Luxedge never sees your card details." : 'No payment is taken until checkout is enabled.'}</p>
               <div className="mt-4 pt-4 border-t space-y-2.5">
                 {[
                   { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Delivery estimate shown at checkout' },
@@ -2750,7 +2780,7 @@ function CheckoutPage() {
 }
 
 // ============================================================================
-// PAYMENT RESULT (real status from Stripe — never a fake success)
+// PAYMENT RESULT (real status from Stripe â€” never a fake success)
 // ============================================================================
 function CheckoutSuccessPage() {
   const { clearCart, removeCoupon } = useApp();
@@ -2780,7 +2810,7 @@ function CheckoutSuccessPage() {
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center">
         <Loading01 strokeWidth={1.5} size={36} className="text-luxe-gold animate-spin mx-auto mb-4" />
-        <p className="text-sm text-luxe-gray">Verifying your payment with Stripe…</p>
+        <p className="text-sm text-luxe-gray">Verifying your payment with Stripeâ€¦</p>
       </div>
     </div>
   );
@@ -2829,7 +2859,7 @@ function OrdersPage() {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => { if (!user) nav('/login'); }, [user, nav]);
   // Real orders only: created server-side by the Stripe webhook. Buyers have
-  // no customer-orders endpoint yet — the honest state is "No Orders Yet".
+  // no customer-orders endpoint yet â€” the honest state is "No Orders Yet".
   useEffect(() => {
     if (!user) return;
     if (user.role !== 'admin') { setLoaded(true); return; }
@@ -2845,7 +2875,7 @@ function OrdersPage() {
   const empty = <div className="min-h-[60vh] flex items-center justify-center px-4"><div className="text-center"><div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Package strokeWidth={1.5} size={28} className="text-luxe-gold" /></div><h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">No Orders Yet</h2><p className="text-sm text-luxe-gray mb-6">When you place an order, it will appear here.</p><Link to="/shop" className="inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link></div></div>;
   if (!user) return null;
   if (user.role !== 'admin') return empty;
-  if (!loaded) return <div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading orders…</div>;
+  if (!loaded) return <div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading ordersâ€¦</div>;
   if (realOrders.length === 0) return empty;
   return (
     <div className="py-12 bg-gray-50 min-h-screen">
@@ -2859,7 +2889,7 @@ function OrdersPage() {
               <span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm capitalize">{o.status.replace('_', ' ')}</span>
             </div>
             <div className="pt-4 mt-4 border-t flex justify-between">
-              <span className="font-semibold text-sm text-gray-500">{o.customer_email || '—'}</span>
+              <span className="font-semibold text-sm text-gray-500">{o.customer_email || 'â€”'}</span>
               <span className="font-semibold">Total <span className="text-lg font-bold text-luxe-gold">${Number(o.total || 0).toFixed(2)}</span></span>
             </div>
           </div>
@@ -2892,20 +2922,20 @@ function LoginPage() {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
-      {/* Ambient glows — soft blue, light theme */}
+      {/* Ambient glows â€” soft blue, light theme */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
       <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
       <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
-        {/* Logo — perfectly centered above card */}
+        {/* Logo â€” perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
             <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
-        {/* Card — light glass */}
+        {/* Card â€” light glass */}
         <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
           <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Welcome Back</h1>
           <p className="text-sm text-gray-500 mb-8">Sign in to your account to continue</p>
@@ -2913,7 +2943,7 @@ function LoginPage() {
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
           {!isSupabaseConfigured() && (
             <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
-              Account sign-in is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+              Account sign-in is not configured yet (Supabase env vars missing). You can still shop as a guest â€” no account needed.
             </div>
           )}
 
@@ -2966,7 +2996,7 @@ function LoginPage() {
             <Link to="/signup" className="text-luxe-gold font-semibold hover:text-luxe-gold-dark transition-colors">Create one</Link>
           </p>
 
-          {/* Go to store — browse without an account */}
+          {/* Go to store â€” browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
             <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
@@ -3011,20 +3041,20 @@ function SignupPage() {
 
   return (
     <div className="min-h-screen relative flex items-center justify-center px-4 py-12 overflow-hidden bg-gradient-to-br from-luxe-light via-white to-white">
-      {/* Ambient glows — soft blue, light theme */}
+      {/* Ambient glows â€” soft blue, light theme */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
       <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
       <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
-        {/* Logo — perfectly centered above card */}
+        {/* Logo â€” perfectly centered above card */}
         <div className="flex justify-center mb-7">
           <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
             <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
 
-        {/* Card — light glass */}
+        {/* Card â€” light glass */}
         <div className="bg-white rounded-3xl border border-luxe-silver p-8 shadow-[0_20px_60px_-20px_rgba(23,32,51,0.15)]">
           <h1 className="text-2xl font-bold text-luxe-black mb-1.5">Join Luxedge</h1>
           <p className="text-sm text-gray-500 mb-8">Create your account to start shopping</p>
@@ -3032,7 +3062,7 @@ function SignupPage() {
           {err && <div className="mb-5 p-3 bg-sale-bg border border-sale/30 rounded-xl text-sale text-sm text-center animate-scale-in">{err}</div>}
           {!isSupabaseConfigured() && (
             <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
-              Account creation is not configured yet (Supabase env vars missing). You can still shop as a guest — no account needed.
+              Account creation is not configured yet (Supabase env vars missing). You can still shop as a guest â€” no account needed.
             </div>
           )}
 
@@ -3067,7 +3097,7 @@ function SignupPage() {
             <Link to="/login" className="text-luxe-gold font-semibold hover:text-luxe-gold-dark transition-colors">Sign In</Link>
           </p>
 
-          {/* Go to store — browse without an account */}
+          {/* Go to store â€” browse without an account */}
           <Link to="/shop"
             className="mt-4 w-full py-2.5 rounded-xl border border-luxe-silver bg-white hover:bg-luxe-cream hover:border-luxe-gold/50 text-gray-600 hover:text-luxe-gold text-sm font-medium transition-all flex items-center justify-center gap-2">
             <ShoppingBag01 strokeWidth={1.5} size={15} className="text-luxe-gold" />
@@ -3116,7 +3146,7 @@ function AdminLoginPage() {
 
         {!isSupabaseConfigured() && (
           <div className="p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
-            Admin authentication is not configured yet — add <code className="font-mono">VITE_SUPABASE_URL</code> + <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> and promote your admin user (<code className="font-mono">app_metadata.role = 'admin'</code>). No demo credentials exist.
+            Admin authentication is not configured yet â€” add <code className="font-mono">VITE_SUPABASE_URL</code> + <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> and promote your admin user (<code className="font-mono">app_metadata.role = 'admin'</code>). No demo credentials exist.
           </div>
         )}
 
@@ -3136,7 +3166,7 @@ function AdminLoginPage() {
             <input type="password" placeholder="Enter password" value={p} onChange={ev => setP(ev.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20" required />
           </div>
           <button type="submit" disabled={loading} className="w-full py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold disabled:opacity-70">
-            {loading ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />} {loading ? 'Signing in…' : 'Access Dashboard'}
+            {loading ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />} {loading ? 'Signing inâ€¦' : 'Access Dashboard'}
           </button>
         </form>
 
@@ -3144,7 +3174,7 @@ function AdminLoginPage() {
           <ShieldTick strokeWidth={1.5} size={12} /> Protected admin area
         </div>
 
-        <Link to="/" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-700">← Back to Store</Link>
+        <Link to="/" className="block text-center text-sm text-gray-500 mt-4 hover:text-gray-700">â† Back to Store</Link>
       </div>
     </div>
   );
@@ -3173,18 +3203,18 @@ function AboutPage() {
     <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
       <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
       <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
-      <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
+      <p className="text-gray-500 max-w-xl mx-auto">More than a store â€” a commitment to quality you can feel.</p>
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
       <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
       <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
-      <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
+      <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone â€” without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
       <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
       <p className="text-gray-600 leading-relaxed">We aim to provide clear product information, delivery estimates, and responsive support. Returns, replacements, and any refunds are handled under our published policies and applicable law. Please review those policies before ordering.</p>
       <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
-        {[{v:'Eligible',l:'Shipping Options'},{v:'30-Day',l:'Return Requests'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
+        {[{v:'Eligible',l:'Shipping Options'},{v:'30-Day',l:'Return Requests'},{v:'1-3 days',l:'Order Processing'},{v:'Monâ€“Fri',l:'Support 9AMâ€“6PM CT'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
         )}
       </div>
@@ -3196,13 +3226,13 @@ function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" updated="August 26, 2026">
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.</p></LS>
-      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
+      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through support forms, WhatsApp inquiries, or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
-      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
+      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Respond to inquiries and operate support tools, including the Luxie AI assistant.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payments"><p>Online payment processing is provided by a third-party payment processor when checkout is enabled. Luxedge does not store complete credit or debit card numbers on its servers. If payment is not enabled, checkout does not create a paid order and no payment is taken.</p></LS>
-      <LS t="Cookies and Analytics"><p>Our website uses essential browser storage and similar technologies to keep the cart and remember preferences. With your consent, we may load analytics and advertising technologies to understand traffic and show relevant ads. You may decline non-essential analytics and advertising cookies through the consent prompt or your browser settings, although some features may work differently.</p></LS>
-      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
-      <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, and analytics services. These providers receive only the information necessary to perform their services.</li></ul></LS>
+      <LS t="Cookies and Analytics"><p>Our website uses essential browser storage and similar technologies to keep the cart, maintain an account session, and remember preferences. With your consent, we may load analytics and advertising technologies to understand traffic and show relevant ads. You may decline non-essential analytics and advertising cookies through the consent prompt or your browser settings, although some features may work differently.</p></LS>
+      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies â€” such as the DoubleClick cookie â€” to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
+      <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, analytics services, and AI service providers that help operate the Luxie assistant.</li><li>AI assistant messages may be sent to the configured AI provider and may be stored in our CRM for support and quality purposes. Please do not include passwords, payment details, health records, or other sensitive information in chat messages.</li><li>These providers receive only the information necessary to perform their services and may process it under their own privacy policies.</li></ul></LS>
       <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
       <LS t="Your Privacy Choices"><p>Depending on your location, you may request access to, correction of, or deletion of personal information, ask us to correct inaccurate information, or opt out of promotional communications. We do not sell personal information. To make a privacy request, email hello@luxedge.us with enough information for us to verify and respond to your request.</p><p className="mt-2">Where required by applicable law, you may also have rights to opt out of targeted advertising or certain sharing of information. We will not discriminate against you for exercising rights provided by law.</p></LS>
       <LS t="Data Retention"><p>We retain information only for as long as reasonably necessary for the purposes described here, including order support, accounting, fraud prevention, dispute resolution, and legal compliance. Retention periods vary by the type of information and applicable requirements.</p></LS>
@@ -3224,7 +3254,7 @@ function TermsPage() {
       <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
       <LS t="Shipping and Delivery"><p>Shipping availability, cost, and estimated delivery windows are shown at checkout or on the relevant product page. Estimates are not guarantees and may change because of supplier processing, carrier delays, weather, or events outside our control. Please review our Shipping Policy.</p></LS>
       <LS t="Returns, Replacements, and Refunds"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Unless applicable law requires otherwise, Luxedge does not offer change-of-mind refunds as a standard remedy. Nothing in these Terms limits a consumer right that cannot legally be waived.</p></LS>
-      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p></LS>
+      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p><p className="mt-2"><strong>Animal food and feed:</strong> Luxedge does not manufacture or independently certify animal food, feed, treats, supplements, or salt/mineral products. Check the label, ingredients, intended species, warnings, lot/expiry information, and applicable requirements before use. Do not use animal products as human food, and do not rely on a listing as an FDA approval, nutritional, disease-treatment, or veterinary claim. If a product lacks a verifiable supplier reference, label information, or destination support, we may remove or pause the listing. Stop use and contact a veterinarian if an animal has an adverse reaction.</p></LS>
       <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
       <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
       <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
@@ -3251,7 +3281,7 @@ function ShippingPolicyPage() {
   return (
     <LegalPage title="Shipping Policy" updated="August 26, 2026">
       <LS t="Where We Ship"><p>Luxedge currently offers shipping within the United States where the destination is supported by the product, supplier, and carrier. Available destinations and any exclusions are shown during checkout. International shipping is not currently offered.</p></LS>
-      <LS t="Processing Time"><p>Orders are generally prepared within <strong>1–3 business days</strong> after successful payment confirmation, unless a different estimate is shown on the product page or at checkout. You will receive shipment and tracking information when available.</p></LS>
+      <LS t="Processing Time"><p>Orders are generally prepared within <strong>1â€“3 business days</strong> after successful payment confirmation, unless a different estimate is shown on the product page or at checkout. You will receive shipment and tracking information when available.</p></LS>
       <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Delivery estimates are estimates, not guarantees. Processing and carrier times can vary by product and destination. Express shipping is not currently offered unless specifically shown at checkout.</p></div></LS>
       <LS t="Shipping Promotions"><p>Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout. The final shipping charge shown before payment is the controlling amount. Promotions may have exclusions and can change or end without notice.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
@@ -3267,7 +3297,7 @@ function FAQPage() {
   const [open, setOpen] = useState<string | null>(null);
   const faqs = [
     { c: 'Orders & Shipping', qs: [
-      { q: 'How long does shipping take?', a: 'Standard delivery is estimated at 5–14 business days depending on the product (each product page shows its specific window). Processing takes an additional 1–3 business days before shipment. Express shipping is not currently offered.' },
+      { q: 'How long does shipping take?', a: 'Standard delivery is estimated at 5â€“14 business days depending on the product (each product page shows its specific window). Processing takes an additional 1â€“3 business days before shipment. Express shipping is not currently offered.' },
       { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility, exclusions, and the final shipping charge are shown in the cart or at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
       { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States where the product and carrier support the destination. International shipping is not currently offered.' },
@@ -3283,8 +3313,8 @@ function FAQPage() {
       { q: 'What payment methods do you accept?', a: 'Online payment is not currently enabled. No payment is taken and no paid order is created until a payment provider is connected and checkout confirms a successful transaction.' },
       { q: 'Is my payment information secure?', a: 'When checkout is enabled, payment is handled by the configured third-party provider and Luxedge does not store complete card details. Payment is not currently available and no charge is made until a successful transaction is confirmed.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
-    ]},
-    { c: 'Products & Quality', qs: [
+    ]},      { c: 'Products & Quality', qs: [
+      { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and shipping eligibility before use. Luxedge does not claim that a product is FDA-approved or provide veterinary or nutritional advice. Do not use animal products as human food; ask a veterinarian about dietary or safety questions.' },
       { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
       { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
@@ -3394,7 +3424,7 @@ function CareersPage() {
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         <div className="bg-white rounded-2xl border p-6 sm:p-10">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Why Work at Luxedge?</h2>
-          <p className="text-gray-600 leading-relaxed mb-4">At Luxedge, we're building more than an online store — we're creating a trusted destination for people who value quality. Based in Irving, Texas, our small but passionate team is obsessed with finding the best products in the world and delivering an exceptional shopping experience.</p>
+          <p className="text-gray-600 leading-relaxed mb-4">At Luxedge, we're building more than an online store â€” we're creating a trusted destination for people who value quality. Based in Irving, Texas, our small but passionate team is obsessed with finding the best products in the world and delivering an exceptional shopping experience.</p>
           <p className="text-gray-600 leading-relaxed mb-6">We value curiosity, ownership, and a genuine desire to make customers happy. If you thrive in a fast-paced environment and want to grow alongside a brand that's just getting started, we'd love to hear from you.</p>
 
           <h2 className="text-xl font-bold text-gray-900 mb-4">Our Culture</h2>
@@ -3414,13 +3444,13 @@ function CareersPage() {
           </div>
 
           <h2 className="text-xl font-bold text-gray-900 mb-4">Open Positions</h2>
-          <p className="text-gray-600 leading-relaxed mb-4">We're always looking for talented individuals to join us. Even if you don't see a specific role listed, we encourage you to reach out — great people always have a place at Luxedge.</p>
+          <p className="text-gray-600 leading-relaxed mb-4">We're always looking for talented individuals to join us. Even if you don't see a specific role listed, we encourage you to reach out â€” great people always have a place at Luxedge.</p>
 
           <div className="space-y-3 mb-8">
             {[
-              { title: 'Product Curator', type: 'Remote · Full-Time', desc: 'Research, test, and select products that meet our quality standards.' },
-              { title: 'Content Writer', type: 'Remote · Part-Time', desc: 'Create engaging blog posts, product descriptions, and marketing copy.' },
-              { title: 'Customer Support Specialist', type: 'Remote · Full-Time', desc: 'Help customers via email and chat with a focus on resolution and delight.' },
+              { title: 'Product Curator', type: 'Remote Â· Full-Time', desc: 'Research, test, and select products that meet our quality standards.' },
+              { title: 'Content Writer', type: 'Remote Â· Part-Time', desc: 'Create engaging blog posts, product descriptions, and marketing copy.' },
+              { title: 'Customer Support Specialist', type: 'Remote Â· Full-Time', desc: 'Help customers via email and chat with a focus on resolution and delight.' },
             ].map((job, i) => (
               <div key={i} className="p-5 border border-gray-200 rounded-xl hover:border-luxe-gold/50 transition-colors">
                 <div className="flex items-start justify-between">
@@ -3483,7 +3513,7 @@ function BlogListPage() {
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="flex items-center gap-1.5 text-xs text-gray-400"><Calendar strokeWidth={1.5} size={12} />{new Date(post.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                      <span className="text-gray-200">·</span>
+                      <span className="text-gray-200">Â·</span>
                       <span className="text-xs text-gray-400">{post.authorName}</span>
                     </div>
                     <h2 className="font-bold text-gray-900 mb-2 group-hover:text-luxe-gold transition-colors leading-tight">{post.title}</h2>
@@ -3567,7 +3597,7 @@ function BlogDetailPage() {
 
   if (!post) return (
     <div className="min-h-[60vh] flex items-center justify-center">
-      <div className="text-center"><p className="text-5xl mb-4">📝</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-luxe-gold text-white font-semibold rounded-lg">Back to Blog</Link></div>
+      <div className="text-center"><p className="text-5xl mb-4">ðŸ“</p><h2 className="text-2xl font-bold mb-2">Post Not Found</h2><Link to="/blog" className="px-6 py-3 bg-luxe-gold text-white font-semibold rounded-lg">Back to Blog</Link></div>
     </div>
   );
 
@@ -3733,13 +3763,13 @@ function BlogWritePage() {
             {cover ? (
               <div className="relative rounded-xl overflow-hidden mb-3 aspect-[16/9]">
                 <img src={cover} alt="" className="w-full h-full object-cover" />
-                <button type="button" onClick={() => setCover('')} className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600">✕</button>
+                <button type="button" onClick={() => setCover('')} className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-sm hover:bg-red-600">âœ•</button>
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold hover:bg-luxe-gold-soft/30 transition-all">
                 <Upload01 strokeWidth={1.5} size={28} className="text-gray-400 mb-2" />
                 <span className="text-sm font-medium text-gray-600">Upload cover image</span>
-                <span className="text-xs text-gray-400">JPG, PNG · Max 5MB</span>
+                <span className="text-xs text-gray-400">JPG, PNG Â· Max 5MB</span>
                 <input type="file" accept="image/*" onChange={handleCover} className="hidden" />
               </label>
             )}
@@ -3760,14 +3790,14 @@ function BlogWritePage() {
           {/* Inline Images */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Article Images ({images.length}/5)</label>
-            {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">✕</button></div>)}</div>}
+            {images.length > 0 && <div className="flex gap-3 mb-3 overflow-x-auto">{images.map((img, i) => <div key={i} className="relative shrink-0"><img src={img} alt="" className="w-20 h-20 rounded-lg object-cover" /><button type="button" onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">âœ•</button></div>)}</div>}
             {images.length < 5 && <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-luxe-gold text-sm text-gray-500 hover:text-luxe-gold w-fit"><Upload01 strokeWidth={1.5} size={16} />Add images<input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" /></label>}
           </div>
 
           {/* Tags */}
           <div className="bg-white rounded-2xl border p-6">
             <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Tags</label>
-            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag01 strokeWidth={1.5} size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">×</button></span>)}</div>
+            <div className="flex flex-wrap gap-2 mb-3">{tags.map(t => <span key={t} className="flex items-center gap-1 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm"><Tag01 strokeWidth={1.5} size={12} />{t}<button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="text-luxe-gold hover:text-red-500 ml-1">Ã—</button></span>)}</div>
             <div className="flex gap-2"><input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())} className={I} placeholder="Add tag & press Enter" /><button type="button" onClick={addTag} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium shrink-0">Add</button></div>
           </div>
 
@@ -3784,7 +3814,7 @@ function BlogWritePage() {
 }
 
 // Admin section lives in its own file so it can be code-split into a lazy
-// chunk — it is only downloaded when an /admin/* route is actually visited.
+// chunk â€” it is only downloaded when an /admin/* route is actually visited.
 const AdminSection = lazy(() => import('./admin/AdminSection'));
 
 function AdminFallback() {
@@ -3792,7 +3822,7 @@ function AdminFallback() {
     <div className="min-h-screen flex items-center justify-center bg-luxe-cream">
       <div className="flex flex-col items-center gap-3 text-gray-400">
         <Loading01 strokeWidth={1.5} size={28} className="animate-spin text-luxe-gold" />
-        <span className="text-sm font-medium">Loading admin…</span>
+        <span className="text-sm font-medium">Loading adminâ€¦</span>
       </div>
     </div>
   );
@@ -3832,7 +3862,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
-          {/* Admin — lazy-loaded chunk (only fetched when an /admin/* route is visited) */}
+          {/* Admin â€” lazy-loaded chunk (only fetched when an /admin/* route is visited) */}
           <Route path="/admin/*" element={<ProtectedRoute requireAdmin={true}><Suspense fallback={<AdminFallback />}><AdminSection /></Suspense></ProtectedRoute>} />
           {/* Fallback */}
           <Route path="*" element={<SLayout><HomePage /></SLayout>} />

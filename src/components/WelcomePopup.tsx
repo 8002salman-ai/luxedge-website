@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { X, Gift, ShieldCheck, ArrowCounterClockwise } from '@phosphor-icons/react';
 
 const STORE_KEY = 'luxedge-welcome-shown-v1';
-const CLAIMED_KEY = 'luxedge-welcome-coupon';
-
 // Welcome popup: appears once per visitor and trades an email for a real
 // 10% welcome coupon created server-side (api/crm/welcome). Never auto-opens
 // again after dismissal.
@@ -43,7 +41,6 @@ export default function WelcomePopup() {
       const j = await r.json().catch(() => null);
       if (j?.ok && j?.couponCode) {
         setCoupon(j.couponCode);
-        localStorage.setItem(CLAIMED_KEY, j.couponCode);
         // A successful claim is a completed first-visit interaction.
         // Prevent the popup from reopening after a refresh.
         localStorage.setItem(STORE_KEY, '1');

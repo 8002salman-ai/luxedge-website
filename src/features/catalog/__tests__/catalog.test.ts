@@ -391,6 +391,60 @@ describe('catalog repository (pre-0010 live schema degradation)', () => {
     expect(calls.some((c) => c.startsWith('GET https://db.example.com/rest/v1/'))).toBe(true);
   });
 
+  it('pre-0021: safety columns are filtered when missing from live schema (PGRST204 guard)', async () => {
+    // Regression for the live 400 "Could not find the 'intended_species' column"
+    // that occurs when migration 0021 is not yet applied: the schema probe must
+    // drop safety_class / safety_review_status / intended_species from the write
+    // instead of sending them and letting PostgREST reject the whole row.
+    const { db } = mockLegacySupabase(); // legacyCols has NO safety columns
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    await createProduct({
+      ...base,
+      safetyClass: 'NON_INGESTIBLE',
+      safetyReviewStatus: 'APPROVED_FOR_SALE',
+      intendedSpecies: 'dog',
+    });
+    const stored = db['products'][0] as Record<string, unknown>;
+    expect(stored.safety_class).toBeUndefined();
+    expect(stored.safety_review_status).toBeUndefined();
+    expect(stored.intended_species).toBeUndefined();
+    // Core columns still land — the row must not be dropped wholesale.
+    expect(stored.name).toBe(base.name);
+    expect(stored.price).toBe(base.price);
+  });
+
+  it('OpenAPI schema probe strips Prefer: return=representation (PostgREST 406 guard)', async () => {
+    // The probe fetch must not carry the mutation Prefer header — PostgREST
+    // rejects OpenAPI requests that do (406), the probe then fails and the
+    // repository falls back to "assume full schema", which re-introduces the
+    // PGRST204 write errors this module exists to prevent.
+    const probeHeaders: Array<Record<string, string>> = [];
+    const openApi = {
+      components: { schemas: {
+        products: { properties: Object.fromEntries(
+          ['id', 'slug', 'name', 'title', 'status', 'price', 'cost_price', 'sku', 'inventory_qty', 'category_id', 'brand', 'currency', 'created_at', 'updated_at', 'short_description', 'description'].map((c) => [c, { type: 'string' }]),
+        ) },
+      } },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.split('?')[0].endsWith('/rest/v1/')) {
+        probeHeaders.push((init?.headers as Record<string, string>) || {});
+        return new Response(JSON.stringify(openApi), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }));
+    __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
+    resetDbForTests();
+    __resetCatalogSchemaCacheForTests();
+    await createProduct({ ...base });
+    expect(probeHeaders.length).toBeGreaterThan(0);
+    const joined = JSON.stringify(probeHeaders[0]).toLowerCase();
+    expect(joined).not.toContain('return=representation');
+  });
+
   it('pre-0010: coupons and offers degrade to empty lists', async () => {
     mockLegacySupabase();
     __setDbConfigForTests({ url: 'https://db.example.com', anonKey: 'anon' });
