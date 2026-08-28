@@ -1511,14 +1511,6 @@ function ProductDetailPage() {
             </div>
           )}
 
-          {isFoodOrFeedProduct(product) && (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
-              <p className="font-semibold">Pet food and feed safety notice</p>
-              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
-              {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
-            </div>
-          )}
-
           {/* Ad: Below Product Information */}
           <AdSenseAd placement="product_below_info" />
         </div>
