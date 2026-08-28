@@ -96,6 +96,28 @@ describe('parseHtmlPage', () => {
     expect(images).toHaveLength(2);
   });
 
+  it('extracts evidence from an AliExpress CSR shell (empty body, DCData gallery, og meta)', () => {
+    // Mirrors a real anti-bot / JS-skeleton page: no <img> tags, empty
+    // <body>, site noise in og:title, protocol-relative og:url, and the real
+    // gallery only inside window._d_c_.DCData.imagePathList.
+    const html = [
+      '<html><head>',
+      '<meta property="og:url" content="//www.aliexpress.com/item/3256810322568422.html?src=ibdm" />',
+      '<meta property="og:title" content="Ergonomic Handle Self Cleaning Pet Brush - AliExpress 15" />',
+      '<meta property="og:description" content="Smarter Shopping, Better Living! Aliexpress.com" />',
+      '<meta property="og:image" content="https://ae-pic-a1.aliexpress-media.com/kf/Sd3596480856c4620840992d48651254au.jpg"/>',
+      '<script>window._d_c_ = window._d_c_ || {};',
+      'window._d_c_.DCData = {"imageOptimize":true,"imagePathList":["https://ae-pic-a1.aliexpress-media.com/kf/Sd3596480856c4620840992d48651254au.jpg","https://ae-pic-a1.aliexpress-media.com/kf/S61bcfa640ed6453bb1632cfa136680918.jpg"],"name":"ItemDetailResp"};',
+      '</script></head><body><div id="root"></div></body></html>',
+    ].join('');
+    const p = parseHtmlPage(html);
+    expect(p.title).toBe('Ergonomic Handle Self Cleaning Pet Brush');
+    expect(p.description).toBe(''); // generic marketplace slogan filtered
+    expect(p.sourceUrl).toBe('https://www.aliexpress.com/item/3256810322568422.html?src=ibdm');
+    expect(p.images).toContain('https://ae-pic-a1.aliexpress-media.com/kf/Sd3596480856c4620840992d48651254au.jpg');
+    expect(p.images).toContain('https://ae-pic-a1.aliexpress-media.com/kf/S61bcfa640ed6453bb1632cfa136680918.jpg');
+  });
+
   it('extracts AliExpress lazy-load attributes (data-hd-src, data-ks-lazyload)', () => {
     const html = [
       '<img data-hd-src="https://ae01.alicdn.com/kf/Slazy1.jpg_640x640q75.jpg_.webp" />',
@@ -414,6 +436,23 @@ describe('buildScrapedEvidenceProduct', () => {
     const p = buildScrapedEvidenceProduct(noPrice, ALI_URL);
     expect(p.sellingPrice).toBe(4.11);
     expect(p.evidence?.sellingPrice).toBe('INFERRED');
+  });
+
+  it('builds a base product from a CSR-shell page (title + DCData gallery only)', () => {
+    const shell = parseHtmlPage([
+      '<html><head>',
+      '<meta property="og:url" content="//www.aliexpress.com/item/3256810322568422.html" />',
+      '<meta property="og:title" content="Ergonomic Handle Self Cleaning Pet Brush - AliExpress 15" />',
+      '<script>window._d_c_.DCData = {"imagePathList":["https://ae-pic-a1.aliexpress-media.com/kf/Sabc.jpg"]};</script>',
+      '</head><body></body></html>',
+    ].join(''));
+    const p = buildScrapedEvidenceProduct(shell, shell.sourceUrl || '');
+    expect(p.title).toBe('Ergonomic Handle Self Cleaning Pet Brush');
+    expect(p.images).toContain('https://ae-pic-a1.aliexpress-media.com/kf/Sabc.jpg');
+    expect(p.supplierItemId).toBe('3256810322568422');
+    expect(p.supplierPlatform).toBe('AliExpress');
+    expect(p.category).toBeTruthy(); // title-derived, not AI-invented
+    expect(requireReviewEvidence(p, 'html').ok).toBe(true);
   });
 });
 

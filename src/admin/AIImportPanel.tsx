@@ -10,6 +10,7 @@ import {
   buildImportImages, buildImportVariants, buildImportProductInput,
   buildStorageImageInputs, importProductImagesToStorage,
   buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence, isEmptyExtraction,
+  parseHtmlPage,
 } from '../App';
 import type { AIProvider, AIExtractedProduct, ImportHistoryEntry } from '../App';
 import { loadProviderSettings } from '../features/ai/providers';
@@ -162,6 +163,12 @@ export function AIImportPanel() {
         const doc = parser.parseFromString(htmlInput, 'text/html');
         doc.querySelectorAll('script,style').forEach(el => el.remove());
         pageImages = [];
+        // Anti-bot / CSR shells (e.g. AliExpress) have an empty <body> — the
+        // real evidence (og:title/og:image, DCData.imagePathList, JSON-LD) is
+        // in <head> and script data that DOMParser-based extraction can't see.
+        const shellParsed = parseHtmlPage(htmlInput);
+        parsed = shellParsed;
+        pageImages = [...new Set([...(shellParsed.images || []), ...pageImages])];
         // AliExpress lazy-loads images: real URLs live in srcset (highest
         // width variant), data-src, data-hd-src, and data-ks-lazyload. Plain
         // `src` is often a 1px placeholder — never take it as the only source.
@@ -181,8 +188,10 @@ export function AIImportPanel() {
             pushUrl(v.replace(/\.webp_\d+x\d+\.webp$/i, '.webp'));
           });
         });
-        rawContent = doc.body?.innerText || htmlInput;
-        addLog(`HTML processed — ${rawContent.length} chars, ${pageImages.length} images`, true);
+        // Feed the AI the og:title/description/JSON-LD + body text, not just
+        // body innerText — otherwise a shell page gives the model no title.
+        rawContent = shellParsed.text || doc.body?.innerText || htmlInput;
+        addLog(`HTML processed — ${rawContent.length} chars, ${pageImages.length} images, title=${shellParsed.title ? 'FOUND' : 'MISSING'}`, true);
       } else if (source === 'text' || source === 'clipboard') {
         if (!textInput.trim()) throw new Error('Please paste some content');
         rawContent = textInput;
@@ -202,6 +211,12 @@ export function AIImportPanel() {
       if (source === 'url') {
         base = buildScrapedEvidenceProduct(parsed, urlInput.trim());
         addLog(`BASE EVIDENCE: title=${base.title ? 'FOUND' : 'MISSING'} images=${base.images.length} desc=${base.shortDescription ? 'FOUND' : 'MISSING'} price=${base.sellingPrice > 0 ? '$' + base.sellingPrice.toFixed(2) : 'UNKNOWN'}`);
+      } else if (source === 'html' && parsed?.title) {
+        // Same guarantee as the URL path: deterministic evidence (og:title,
+        // og:image, DCData gallery, og:url supplier trace) becomes the base
+        // product, so an AI failure never blanks the Review form.
+        base = buildScrapedEvidenceProduct(parsed, parsed.sourceUrl || '');
+        addLog(`BASE EVIDENCE (HTML): title=${base.title ? 'FOUND' : 'MISSING'} images=${base.images.length} desc=${base.shortDescription ? 'FOUND' : 'MISSING'} itemId=${base.supplierItemId || 'UNKNOWN'}`);
       }
 
       addLog('AI REQUEST: REACHED — sending to provider');
