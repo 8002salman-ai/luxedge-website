@@ -34,11 +34,17 @@ function commerceReady(p) {
   if (typeof p.commerce_readiness === 'string' && p.commerce_readiness) {
     return p.commerce_readiness === 'COMMERCE_READY';
   }
-  const src = String(p.supplier_source || '');
-  const cj = /cj/i.test(src) || /^cj/i.test(String(p.supplier_product_ref || ''));
+  // Fallback mirrors the app's authoritative deriveCommerceReadiness
+  // (src/features/catalog/commerceReadiness.ts): any verified supplier source
+  // (OTHER_VERIFIED, e.g. AliExpress) with a real cost basis and USA
+  // fulfillment evidence qualifies — NOT only CJ. This keeps the sitemap in
+  // sync with the products actually purchasable on the storefront.
+  const src = String(p.supplier_source || '').toLowerCase();
+  const isUnverified = !src || /kong|official manufacturer|manufacturer page/i.test(src);
+  if (isUnverified) return false;
   const hasCost = num(p.cost_price) > 0;
-  const hasStock = p.us_inventory === true || (p.stock_status === 'in_stock' && num(p.inventory_qty) > 0);
-  return cj && hasCost && hasStock;
+  const hasFulfillment = p.us_inventory === true || (p.stock_status === 'in_stock' && num(p.inventory_qty) > 0);
+  return hasCost && hasFulfillment;
 }
 
 const visible = (Array.isArray(prods) ? prods : []).filter((p) => (p.status === 'active' || p.status === 'published') && commerceReady(p));

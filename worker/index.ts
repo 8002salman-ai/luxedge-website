@@ -196,6 +196,11 @@ export interface Env {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // Consolidate the duplicate /home homepage (Google has indexed both /
+    // and /home/) into a single canonical URL with a permanent redirect.
+    if (url.pathname === '/home' || url.pathname === '/home/') {
+      return Response.redirect(new URL('/', url.origin).toString(), 301);
+    }
     const route = ROUTES.find((r) => r.path === url.pathname);
     if (route) {
       const req = makeReq(request, url) as IncomingMessage & { env?: Env };
