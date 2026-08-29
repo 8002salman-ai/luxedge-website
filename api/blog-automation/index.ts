@@ -202,7 +202,6 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
   const urlOnly = String(req.url || '').split('?')[0];
   const segs = urlOnly.split('/').filter(Boolean); // ['blog-automation', ...]
   const resource = segs[1] || '';
-  const idParam = segs[2] || '';
 
   try {
     // GET /blog-automation/posts
@@ -358,8 +357,9 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
     }
 
     // PATCH /blog-automation/{id}
-    if (req.method === 'PATCH' && resource && idParam) {
-      const got = await pgFetch(sb.url, sb.key, `blog_posts?id=eq.${encodeURIComponent(idParam)}&select=id,automation_locked&limit=1`);
+    if (req.method === 'PATCH' && resource) {
+      const patchId = resource;
+      const got = await pgFetch(sb.url, sb.key, `blog_posts?id=eq.${encodeURIComponent(patchId)}&select=id,automation_locked&limit=1`);
       const row = got.ok && Array.isArray(got.data) ? (got.data as Record<string, unknown>[])[0] : null;
       if (!row) return sendJson(res, 404, { error: 'Post not found.' });
       if (row.automation_locked === true) {
@@ -369,10 +369,10 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
       const keys: (keyof BlogAutomationPayload)[] = Object.keys(body) as (keyof BlogAutomationPayload)[];
       for (const k of keys) allowed[k] = body[k];
       delete allowed.automation_locked;
-      const upd = await pgFetch(sb.url, sb.key, `blog_posts?id=eq.${encodeURIComponent(idParam)}`, { method: 'PATCH', body: JSON.stringify(allowed) });
+      const upd = await pgFetch(sb.url, sb.key, `blog_posts?id=eq.${encodeURIComponent(patchId)}`, { method: 'PATCH', body: JSON.stringify(allowed) });
       const updated = Array.isArray(upd.data) ? (upd.data as Record<string, unknown>[])[0] : null;
-      await recordRevision(sb.url, sb.key, idParam, 'automation_update', row, updated);
-      return sendJson(res, 200, updated || { id: idParam });
+      await recordRevision(sb.url, sb.key, patchId, 'automation_update', row, updated);
+      return sendJson(res, 200, updated || { id: patchId });
     }
 
     return sendJson(res, 400, { error: 'Unknown blog-automation route.' });
