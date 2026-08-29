@@ -41,18 +41,40 @@ if (!Array.isArray(postsSource)) {
   process.exit(1);
 }
 
+// Extract the article's REAL, visible internal links ([label](/path) markdown in
+// the body) so the worker can expose them in crawler-delivered HTML. These are
+// the same links the client renders — never schema-only or hidden.
+function extractInternalLinks(content = '') {
+  const seen = new Set();
+  const links = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    const href = m[2];
+    if (!/^\/(blog|category|product)\//.test(href)) continue; // same-domain content links only
+    if (seen.has(href)) continue;
+    seen.add(href);
+    links.push({ label: m[1].replace(/\s+/g, ' ').trim(), href });
+  }
+  return links;
+}
+
 const posts = postsSource
   .filter((p) => p && p.status === 'published' && p.slug)
-  .map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title || p.slug,
-    excerpt: p.excerpt || p.title || '',
-    image: p.image || undefined,
-    date: p.date || undefined,
-    authorName: p.authorName || undefined,
-    ...(Array.isArray(p.faq) && p.faq.length ? { faq: p.faq } : {}),
-  }));
+  .map((p) => {
+    const links = extractInternalLinks(p.content || '');
+    return {
+      id: p.id,
+      slug: p.slug,
+      title: p.title || p.slug,
+      excerpt: p.excerpt || p.title || '',
+      image: p.image || undefined,
+      date: p.date || undefined,
+      authorName: p.authorName || undefined,
+      ...(links.length ? { links } : {}),
+      ...(Array.isArray(p.faq) && p.faq.length ? { faq: p.faq } : {}),
+    };
+  });
 
 // Guard: we must have a sane number of published posts, otherwise fail loudly
 // instead of silently writing an empty registry.

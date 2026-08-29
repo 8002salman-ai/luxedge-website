@@ -49,6 +49,33 @@ const cleanText = (d: string | null | undefined, max = 400): string => {
   return plain.length > max ? `${plain.slice(0, max - 1)}…` : plain;
 };
 
+/**
+ * Path-derived canonical for every indexable route, independent of user agent.
+ * Returns null for dynamic/unindexable routes (admin, account, checkout, …) so
+ * those keep the app's default shell handling instead of a wrong canonical.
+ */
+function routeCanonical(segs: string[]): string | null {
+  const root = 'https://luxedge.us';
+  if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) return root;
+  if (segs.length === 1 && segs[0] === 'blog') return `${root}/blog`;
+  if (segs.length === 2 && (segs[0] === 'product' || segs[0] === 'blog' || segs[0] === 'category')) {
+    return `${root}/${segs[0]}/${segs[1]}`;
+  }
+  const staticKey = `/${segs.join('/')}`;
+  if (STATIC_PAGES[staticKey]) return `${root}${staticKey}`;
+  return null;
+}
+
+/** Lightweight canonical + og:url rewrite used for non-bot HTML responses so no
+ * content route is ever served with the homepage canonical. Reads only the
+ * pathname — no data fetch, no extra latency for real users. */
+function injectCanonical(html: string, canonical: string): string {
+  let out = html;
+  out = out.replace(/<link rel="canonical" href="[^"]*" \/>/, `<link rel="canonical" href="${esc(canonical)}" />`);
+  out = out.replace(/<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${esc(canonical)}" />`);
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Data access (Supabase anon REST — same pattern as api/google-feed.ts)
 // ---------------------------------------------------------------------------
@@ -131,6 +158,11 @@ async function getCategories(): Promise<CategoryRow[] | null> {
   );
 }
 
+interface BlogLink {
+  label: string;
+  href: string;
+}
+
 interface BlogEntry {
   slug: string;
   title: string;
@@ -138,6 +170,8 @@ interface BlogEntry {
   image?: string;
   date?: string;
   authorName?: string;
+  /** The article's real, visible internal links — exposed in crawler HTML only. */
+  links?: BlogLink[];
   /** Visible FAQ section, mirrored as FAQPage JSON-LD — never schema-only. */
   faq?: { q: string; a: string }[];
 }
@@ -310,10 +344,16 @@ export async function maybeInjectSeo(
   userAgent: string,
   env: SeoEnv,
 ): Promise<string | null> {
-  if (!userAgent || !BOT_RE.test(userAgent)) return null;
-
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
+
+  // Real users (non-bot) never get full title/schema injection, but they MUST
+  // not be served a homepage canonical on a content route either. Rewrite the
+  // shell's canonical + og:url from the pathname only — no data, no latency.
+  if (!userAgent || !BOT_RE.test(userAgent)) {
+    const canonical = routeCanonical(segs);
+    return canonical ? injectCanonical(html, canonical) : null;
+  }
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
@@ -391,12 +431,23 @@ export async function maybeInjectSeo(
       });
     }
     const canonical = `${root}/blog/${slug}`;
-    return inject(html, {
+    let out = inject(html, {
       title: `${post.title} | Luxedge`,
       description: cleanText(post.excerpt, 200),
       canonical,
       jsonLd: blogJsonLd(post, canonical),
     });
+    // Expose the article's REAL visible internal links in crawler-delivered HTML.
+    // Same links the client renders — never hidden/schema-only. Anchors go in a
+    // plain, visible (screen-reader/crawler accessible) list before </body>.
+    if (post.links && post.links.length) {
+      const items = post.links
+        .map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`)
+        .join('\n');
+      const block = `\n<nav aria-label="Related on Luxedge"><p>Related guides and products on Luxedge:</p><ul>${items}</ul></nav>`;
+      out = out.replace(/<\/body>/, `${block}\n</body>`);
+    }
+    return out;
   }
 
   // /category/:slug

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-29T18:48:44.302Z",
+  "generatedAt": "2026-08-29T19:22:04.900Z",
   "posts": [
     {
       "id": "b1",
@@ -153,7 +153,13 @@
       "excerpt": "Good grooming keeps a horse healthy, comfortable, and easy to handle. Here is the starter kit every new owner needs.",
       "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-05-30",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "links": [
+        {
+          "label": "12-Piece Horse Grooming Kit",
+          "href": "/product/horse-grooming-kit-12-piece"
+        }
+      ]
     },
     {
       "id": "b18",
@@ -171,7 +177,17 @@
       "excerpt": "Tube, hopper, or tray? Seed or no-seed? Here is exactly how to pick a bird feeder that fits your yard and attracts the birds you want.",
       "image": "https://images.pexels.com/photos/7517035/pexels-photo-7517035.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-18",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "links": [
+        {
+          "label": "Outdoor Hanging Bird Feeder",
+          "href": "/product/outdoor-hanging-bird-feeder"
+        },
+        {
+          "label": "Solar Bird Bath Fountain",
+          "href": "/product/solar-bird-bath-fountain"
+        }
+      ]
     },
     {
       "id": "b20",
@@ -181,6 +197,20 @@
       "image": "https://images.pexels.com/photos/1466205/pexels-photo-1466205.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-11",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "12-Piece Horse Grooming Kit",
+          "href": "/product/horse-grooming-kit-12-piece"
+        },
+        {
+          "label": "Horse Fly Mask with Ears",
+          "href": "/product/horse-fly-mask-with-ears-uv-protection"
+        },
+        {
+          "label": "Adjustable Nylon Horse Halter with Lead Rope",
+          "href": "/product/adjustable-nylon-horse-halter-lead-rope"
+        }
+      ],
       "faq": [
         {
           "q": "What do I need in a basic horse grooming kit?",
@@ -211,7 +241,25 @@
       "excerpt": "A loose dog in a moving car is a danger to everyone. Here is the right gear to keep your dog secure, comfortable, and safe on every drive.",
       "image": "https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-04",
-      "authorName": "Admin"
+      "authorName": "Admin",
+      "links": [
+        {
+          "label": "Adjustable Car Seat Safety Leash for Pets",
+          "href": "/product/durable-pet-cat-dog-vehicle-leash-nylon-adjustable-car-seat-dog-safety-belt-pet-leashes"
+        },
+        {
+          "label": "No-Pull Dog Harness with Reflective Strips",
+          "href": "/product/no-pull-dog-harness-with-reflective-strips-front-back-clip"
+        },
+        {
+          "label": "Foldable Pet Carrier Backpack",
+          "href": "/product/foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs"
+        },
+        {
+          "label": "Retractable Dog Leash with one-button lock",
+          "href": "/product/retractable-dog-leash-5m-one-button-lock-with-anti-slip-grip"
+        }
+      ]
     },
     {
       "id": "b22",
@@ -221,6 +269,20 @@
       "image": "https://images.pexels.com/photos/5732487/pexels-photo-5732487.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-25",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "Cooling Pet Mat — Ice-Silk Cooling Pad for Cats & Dogs",
+          "href": "/product/cooling-pet-mat-ice-silk-cooling-pad-for-cats-dogs"
+        },
+        {
+          "label": "Stainless Steel Pet Water Fountain",
+          "href": "/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs"
+        },
+        {
+          "label": "Orthopedic Memory Foam Dog Bed",
+          "href": "/product/orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs"
+        }
+      ],
       "faq": [
         {
           "q": "How does a dog cooling mat work?",
@@ -252,6 +314,16 @@
       "image": "https://images.pexels.com/photos/3777622/pexels-photo-3777622.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-21",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "Automatic Pet Feeder with Programmable Timer",
+          "href": "/product/automatic-pet-feeder-with-programmable-timer-up-to-4-meals-daily"
+        },
+        {
+          "label": "Stainless Steel Pet Water Fountain",
+          "href": "/product/stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs"
+        }
+      ],
       "faq": [
         {
           "q": "How many meals a day can an automatic feeder dispense?",
@@ -283,6 +355,20 @@
       "image": "https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-14",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "Cat Window Perch — Suction Cup Hammock Seat",
+          "href": "/product/cat-window-perch-suction-cup-hammock-seat-for-sunbathing"
+        },
+        {
+          "label": "Collapsible Cat Tunnel with Crinkle & Peek Hole",
+          "href": "/product/collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube"
+        },
+        {
+          "label": "Ceramic Cat Face Food Bowl",
+          "href": "/product/ceramic-cat-face-food-bowl-easy-clean-pet-dish"
+        }
+      ],
       "faq": [
         {
           "q": "Will a suction-cup window perch hold my cat?",
@@ -314,6 +400,32 @@
       "image": "https://images.pexels.com/photos/593655/pexels-photo-593655.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-28",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "Himalayan Round Rope Salt Lick — 2 lb (Pack of 6)",
+          "href": "/product/himalayan-round-rope-salt-lick-2-lb-pack-of-6"
+        },
+        {
+          "label": "Himalayan Round Rope Salt Lick — 6 lb (Pack of 4)",
+          "href": "/product/himalayan-round-rope-salt-lick-6-lb-pack-of-4"
+        },
+        {
+          "label": "horse accessories",
+          "href": "/category/horse"
+        },
+        {
+          "label": "Himalayan Rock Salt for Livestock — 45 lb Bag",
+          "href": "/product/himalayan-pink-salt-for-livestock-45-lb-bag"
+        },
+        {
+          "label": "Himalayan Salt Block — 30 lb",
+          "href": "/product/himalayan-30-lb-trace-mineral-salt-block"
+        },
+        {
+          "label": "cattle & livestock",
+          "href": "/category/cattle"
+        }
+      ],
       "faq": [
         {
           "q": "How long does a Himalayan salt lick for horses last?",
@@ -345,6 +457,24 @@
       "image": "https://images.pexels.com/photos/1055436/pexels-photo-1055436.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-29",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "Horse Grooming Kit Buyer’s Guide",
+          "href": "/blog/horse-grooming-kit-buyers-guide"
+        },
+        {
+          "label": "Himalayan salt lick",
+          "href": "/blog/horse-salt-lick-buyers-guide"
+        },
+        {
+          "label": "Horse Supplies",
+          "href": "/category/horse"
+        },
+        {
+          "label": "Adjustable Nylon Horse Halter with Lead Rope",
+          "href": "/product/adjustable-nylon-horse-halter-lead-rope"
+        }
+      ],
       "faq": [
         {
           "q": "How tight should a horse halter fit?",
@@ -372,6 +502,28 @@
       "image": "https://images.pexels.com/photos/258083/pexels-photo-258083.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-29",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "halter and lead rope",
+          "href": "/blog/horse-halter-lead-rope-buyers-guide"
+        },
+        {
+          "label": "Horse Grooming Kit Buyer’s Guide",
+          "href": "/blog/horse-grooming-kit-buyers-guide"
+        },
+        {
+          "label": "salt lick at nose height",
+          "href": "/blog/horse-salt-lick-placement-guide"
+        },
+        {
+          "label": "Horse Supplies",
+          "href": "/category/horse"
+        },
+        {
+          "label": "Horse Fly Mask with Ears — UV Protection",
+          "href": "/product/horse-fly-mask-with-ears-uv-protection"
+        }
+      ],
       "faq": [
         {
           "q": "How tight should a horse fly mask fit?",
@@ -399,6 +551,36 @@
       "image": "https://images.pexels.com/photos/1268855/pexels-photo-1268855.jpeg?auto=compress&cs=tinysrgb&w=800",
       "date": "2026-08-29",
       "authorName": "Admin",
+      "links": [
+        {
+          "label": "halter and lead rope",
+          "href": "/blog/horse-halter-lead-rope-buyers-guide"
+        },
+        {
+          "label": "Horse Grooming Kit Buyer’s Guide",
+          "href": "/blog/horse-grooming-kit-buyers-guide"
+        },
+        {
+          "label": "Himalayan Salt Lick for Horses",
+          "href": "/blog/horse-salt-lick-buyers-guide"
+        },
+        {
+          "label": "Horse Supplies",
+          "href": "/category/horse"
+        },
+        {
+          "label": "Himalayan Round Rope Salt Lick — 6 lb (Pack of 4)",
+          "href": "/product/himalayan-round-rope-salt-lick-6-lb-pack-of-4"
+        },
+        {
+          "label": "Himalayan Round Rope Salt Lick — 2 lb (Pack of 6)",
+          "href": "/product/himalayan-round-rope-salt-lick-2-lb-pack-of-6"
+        },
+        {
+          "label": "Himalayan 30 lb Trace Mineral Salt Block",
+          "href": "/product/himalayan-30-lb-trace-mineral-salt-block"
+        }
+      ],
       "faq": [
         {
           "q": "At what height should a horse salt lick be hung?",
