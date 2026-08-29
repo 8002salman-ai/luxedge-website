@@ -11,7 +11,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, ArrowSquareOut,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -398,10 +398,15 @@ export function CatalogProductsPage() {
                       {p.images[0]
                         ? <img src={p.images[0].url} alt="" className="w-10 h-10 rounded object-cover bg-gray-100 shrink-0" />
                         : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0"><Package size={18} /></div>}
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate" title={p.name}>{p.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => nav(`/admin/products/edit/${p.id}`)}
+                        title={`Edit ${p.name}`}
+                        className="min-w-0 text-left cursor-pointer group"
+                      >
+                        <p className="font-medium text-sm truncate group-hover:text-blue-600 group-hover:underline" title={p.name}>{p.name}</p>
                         <p className="text-xs text-gray-400 truncate">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
-                      </div>
+                      </button>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs whitespace-nowrap">
@@ -410,7 +415,7 @@ export function CatalogProductsPage() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY'
-                      ? <a href={`/#/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
+                      ? <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
                       : <span className="text-[10px] text-gray-400" title={p.status !== 'active' ? 'Not active' : p.commerceReadiness === 'COMMERCE_READY' ? '' : 'Active but not commerce-ready'}>{p.status !== 'active' ? `not active` : `active · ${p.commerceReadiness || 'unclassified'}`}</span>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -471,7 +476,8 @@ export function CatalogProductsPage() {
                       )}
                       <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600 shrink-0"><PencilSimple size={16} /></button>
                       <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600 shrink-0"><Copy size={16} /></button>
-                      <button onClick={() => nav(`/#/product/${p.id}`)} title="Preview" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
+                      <button onClick={() => nav(`/product/${p.id}`)} title="Preview product page" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
+                      <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" title="View live on storefront" className="p-2 hover:bg-sky-50 rounded text-sky-600 shrink-0"><ArrowSquareOut size={16} /></a>
                       <button onClick={() => setDelId(p.id)} title="Archive/Delete" className="p-2 hover:bg-red-50 rounded text-red-500 shrink-0"><Trash size={16} /></button>
                     </div>
                   </td>
