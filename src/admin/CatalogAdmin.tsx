@@ -1778,8 +1778,11 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {product.images.map((img, idx) => (
             <div key={img.id || idx} className={`relative group rounded-xl overflow-hidden border-2 transition-all ${img.isPrimary ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'}`}>
-              <button type="button" onClick={() => setPrimary(idx)} className="block w-full" title="Click to make this the main thumbnail">
-                <img src={img.url} alt={img.altText || ''} className="w-full aspect-square object-cover bg-gray-100" onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.25'; }} />
+              <button type="button" onClick={() => setPrimary(idx)} className="block w-full relative aspect-square bg-gray-100" title="Click to make this the main thumbnail">
+                <span className="absolute inset-0 flex items-center justify-center text-gray-300"><ImageIcon size={24} className="shrink-0" /></span>
+                {img.url?.trim() ? (
+                  <img src={img.url} alt={img.altText || ''} className="absolute inset-0 w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                ) : null}
               </button>
               {img.isPrimary && <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-blue-500 text-white text-[10px] font-bold rounded">MAIN</span>}
               <button type="button" onClick={() => remove(idx)} className="absolute top-1.5 right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 hover:bg-red-600 shadow" title="Remove image">✕</button>
