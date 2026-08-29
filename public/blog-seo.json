@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-29T02:43:29.907Z",
+  "generatedAt": "2026-08-29T18:48:44.302Z",
   "posts": [
     {
       "id": "b1",
@@ -334,6 +334,87 @@
         {
           "q": "Can cattle use the same Himalayan blocks as horses?",
           "a": "Yes. Dense Himalayan rock works for cattle too, and a large block or bag can serve several head for a long time, such as the Himalayan Salt Block (30 lb) or the 45 lb bag."
+        }
+      ]
+    },
+    {
+      "id": "b26",
+      "slug": "horse-halter-lead-rope-buyers-guide",
+      "title": "How to Choose a Horse Halter & Lead Rope (Sizing + Fit)",
+      "excerpt": "Halters come in many sizes, but fit is what keeps a horse safe. Learn how to size a halter, pick a material, and pair it with the right lead rope.",
+      "image": "https://images.pexels.com/photos/1055436/pexels-photo-1055436.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-29",
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "How tight should a horse halter fit?",
+          "a": "Snug but not pinching — about two fingers’ width under the noseband and crown, with no pressure on the eyes or windpipe."
+        },
+        {
+          "q": "What size halter does my horse need?",
+          "a": "Measure around the nose and over the crown, then compare those numbers to the maker’s chart. Size by measurement, not by age or breed name."
+        },
+        {
+          "q": "Is a nylon or leather halter better?",
+          "a": "For daily turn-out and most buyers, an adjustable nylon halter is durable, affordable, and easy to clean. Leather suits shows but needs more care."
+        },
+        {
+          "q": "How long should a lead rope be?",
+          "a": "About 8–10 feet is the practical all-round length for leading, tying, and groundwork."
+        }
+      ]
+    },
+    {
+      "id": "b27",
+      "slug": "horse-fly-mask-buyers-guide",
+      "title": "How to Choose a Horse Fly Mask (Fit, Material + UV)",
+      "excerpt": "The right fly mask shades a horse’s eyes and ears from flies and sun. Learn how to size one, what a mask with ears covers, and how tight it should sit.",
+      "image": "https://images.pexels.com/photos/258083/pexels-photo-258083.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-29",
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "How tight should a horse fly mask fit?",
+          "a": "Snug but not pinching — about one or two fingers’ width under the side strap, with the eye mesh sitting in front of the eyes without touching them."
+        },
+        {
+          "q": "What does a fly mask with ears protect?",
+          "a": "It covers the ears, forehead, and face at the eyes and nose in addition to the usual eye area, protecting more skin from biting flies and sun."
+        },
+        {
+          "q": "Does a horse fly mask block UV?",
+          "a": "Many mesh masks block a portion of UV. If your horse has sensitive pale skin, choose a mask that states UV protection."
+        },
+        {
+          "q": "Should I buy a fly mask with or without ears?",
+          "a": "If biting flies target your horse’s ears, a mask with ears is the better choice. For mild fly days, a standard open-crown mask is cooler."
+        }
+      ]
+    },
+    {
+      "id": "b28",
+      "slug": "horse-salt-lick-placement-guide",
+      "title": "Where to Place a Horse Salt Lick (Stall, Pasture & Height)",
+      "excerpt": "Placement decides whether a horse actually uses a salt lick. Learn the right height, where to hang it in the stall, and how to keep it clean and reachable outdoors.",
+      "image": "https://images.pexels.com/photos/1268855/pexels-photo-1268855.jpeg?auto=compress&cs=tinysrgb&w=800",
+      "date": "2026-08-29",
+      "authorName": "Admin",
+      "faq": [
+        {
+          "q": "At what height should a horse salt lick be hung?",
+          "a": "Around the horse’s nose to a little below chest level — high enough that the horse does not stoop, low enough that it does not strain its neck."
+        },
+        {
+          "q": "Where should a horse salt lick go in the stall?",
+          "a": "Near the waterer or feed area, in a dry spot away from urine and wet bedding, so it stays clean and within easy reach."
+        },
+        {
+          "q": "Can a salt lick be placed outside in the pasture?",
+          "a": "Yes — in a sheltered spot out of direct rain and sun, off the moist ground, near shade, and away from puddles."
+        },
+        {
+          "q": "Should I place more than one lick for multiple horses?",
+          "a": "For a larger herd, place more than one lick in separate spots to avoid one point of crowding or fighting."
         }
       ]
     }
