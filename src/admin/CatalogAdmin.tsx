@@ -395,9 +395,14 @@ export function CatalogProductsPage() {
                   </td>
                   <td className="px-4 py-3 max-w-[280px]">
                     <div className="flex items-center gap-3">
-                      {p.images[0]
-                        ? <img src={p.images[0].url} alt="" className="w-10 h-10 rounded object-cover bg-gray-100 shrink-0" />
-                        : <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0"><Package size={18} /></div>}
+                      <div className="relative w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
+                        <Package size={18} className="shrink-0" />
+                        {p.images[0]?.url?.trim() ? (
+                          <img src={p.images[0].url} alt="" loading="lazy"
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         onClick={() => nav(`/admin/products/edit/${p.id}`)}
