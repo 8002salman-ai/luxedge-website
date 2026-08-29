@@ -1032,6 +1032,12 @@ export function CatalogProductEditor() {
           </div>
         )}
         <div className="flex-1" />
+        {!isNew && mode !== 'ai' && (
+          <>
+            <button onClick={() => nav(`/product/${p.id}`)} title="Preview product page" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-green-600 hover:bg-green-50 flex items-center gap-1.5 shrink-0"><Eye size={14} /> Preview</button>
+            <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" title="View live on storefront" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-sky-600 hover:bg-sky-50 flex items-center gap-1.5 shrink-0"><ArrowSquareOut size={14} /> View</a>
+          </>
+        )}
         {mode !== 'ai' && (
           <>
             <div className="relative shrink-0">
