@@ -1,18 +1,18 @@
 // ============================================================================
-// LUXEDGE — worker-side SEO meta injection for crawlers
+// LUXEDGE — worker-side SEO meta + content injection (one path for every UA)
 //
 // The storefront is a client-rendered SPA, so every route serves the same
-// generic index.html shell. Google renders JS, but for a 60+ page catalog the
-// shell-only meta (one title, one canonical → /) means product/blog/category
-// pages rarely get indexed with correct titles.
-//
-// This module detects crawler/social-bot user agents and rewrites the shell's
-// <head> for the requested route BEFORE it is returned:
+// generic index.html shell. This module rewrites the shell for the requested
+// route BEFORE it is returned, for ALL user agents (no bot detection):
 //   /product/:slug   → product seo_title/seo_description + Product + Breadcrumb JSON-LD
-//   /blog/:slug      → post title/excerpt + BlogPosting JSON-LD (static registry)
+//   /blog/:slug      → post title/excerpt + BlogPosting/FAQPage JSON-LD + the
+//                      article body pre-rendered into #root (same content the
+//                      client renders, with its real internal links)
 //   /category/:slug  → category name + CollectionPage JSON-LD
 //   static pages     → unique title/description
-// Real users are never affected (no extra latency, no data fetched).
+// Every indexable route also gets an exact route-specific canonical + og:url.
+// React's createRoot().render() replaces #root on mount, so JS users see the
+// identical client-rendered article — no duplicated or hidden content.
 // No secrets — reads Supabase with the anon key exactly like api/google-feed.ts.
 // ============================================================================
 
@@ -21,9 +21,6 @@ export interface SeoEnv {
     fetch(input: Request): Promise<Response>;
   };
 }
-
-const BOT_RE =
-  /bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|linkedinbot|pinterest|whatsapp|telegram|slack|discord|embedly|quora|tumblr|viber|line|skype|snapchat|outbrain|pocket|flipboard|instapaper|evernote|baiduspider|yandex|duckduckbot|gptbot|ccbot|applebot|semrush|ahrefs|mj12|dotbot|petalbot|serpstat|archive\.org|ia_archiver/i;
 
 interface RouteMeta {
   title: string;
@@ -49,26 +46,8 @@ const cleanText = (d: string | null | undefined, max = 400): string => {
   return plain.length > max ? `${plain.slice(0, max - 1)}…` : plain;
 };
 
-/**
- * Path-derived canonical for every indexable route, independent of user agent.
- * Returns null for dynamic/unindexable routes (admin, account, checkout, …) so
- * those keep the app's default shell handling instead of a wrong canonical.
- */
-function routeCanonical(segs: string[]): string | null {
-  const root = 'https://luxedge.us';
-  if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) return root;
-  if (segs.length === 1 && segs[0] === 'blog') return `${root}/blog`;
-  if (segs.length === 2 && (segs[0] === 'product' || segs[0] === 'blog' || segs[0] === 'category')) {
-    return `${root}/${segs[0]}/${segs[1]}`;
-  }
-  const staticKey = `/${segs.join('/')}`;
-  if (STATIC_PAGES[staticKey]) return `${root}${staticKey}`;
-  return null;
-}
-
-/** Lightweight canonical + og:url rewrite used for non-bot HTML responses so no
- * content route is ever served with the homepage canonical. Reads only the
- * pathname — no data fetch, no extra latency for real users. */
+/** Lightweight canonical + og:url rewrite used when route data is unavailable
+ * so no content route is ever served with the homepage canonical. */
 function injectCanonical(html: string, canonical: string): string {
   let out = html;
   out = out.replace(/<link rel="canonical" href="[^"]*" \/>/, `<link rel="canonical" href="${esc(canonical)}" />`);
@@ -158,11 +137,6 @@ async function getCategories(): Promise<CategoryRow[] | null> {
   );
 }
 
-interface BlogLink {
-  label: string;
-  href: string;
-}
-
 interface BlogEntry {
   slug: string;
   title: string;
@@ -170,8 +144,8 @@ interface BlogEntry {
   image?: string;
   date?: string;
   authorName?: string;
-  /** The article's real, visible internal links — exposed in crawler HTML only. */
-  links?: BlogLink[];
+  /** Full markdown-ish body (same source the client renders from). */
+  content?: string;
   /** Visible FAQ section, mirrored as FAQPage JSON-LD — never schema-only. */
   faq?: { q: string; a: string }[];
 }
@@ -329,31 +303,62 @@ function inject(html: string, meta: RouteMeta): string {
 }
 
 // ---------------------------------------------------------------------------
-// Route resolution
+// Article body pre-render + route resolution (one semantic path for every UA)
 // ---------------------------------------------------------------------------
 
-/**
- * Returns injected HTML for crawler requests, or null when no injection applies
- * (non-bot UA, asset route, or data unavailable). Callers serve the original
- * response when null.
- */
+/** Escape for text and attribute contexts (same rules as esc()). */
+function inlineMarkup(text: string): string {
+  // Mirrors the client renderer (src/App.tsx renderInline): [label](/path)
+  // becomes a real <a>; everything else is plain escaped text.
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+  return parts
+    .map((part) => {
+      const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (m) return `<a href="${esc(m[2])}">${esc(m[1])}</a>`;
+      return esc(part);
+    })
+    .join('');
+}
+
+/** Renders the article body exactly like the client (## → h2, # → h1, else <p>;
+ * the client shows `### ` FAQ lines as plain paragraphs, so we mirror that too). */
+function renderArticleBody(content: string): string {
+  return content
+    .split('\n')
+    .map((line) => {
+      const t = line.trim();
+      if (!t) return '<br />';
+      if (t.startsWith('## ')) return `<h2>${esc(t.slice(3))}</h2>`;
+      if (t.startsWith('# ')) return `<h1>${esc(t.slice(2))}</h1>`;
+      return `<p>${inlineMarkup(t)}</p>`;
+    })
+    .join('\n');
+}
+
+/** Injects the pre-rendered article (title, image, body with real internal
+ * links) into the SPA shell's #root. React's createRoot().render() replaces
+ * #root on mount, so JS users see the identical client-rendered article — no
+ * duplication, no hidden/SEO-only markup. */
+function injectArticleBody(html: string, post: BlogEntry): string {
+  const image = post.image ? `<img src="${esc(post.image)}" alt="${esc(post.title)}" />` : '';
+  const body = renderArticleBody(post.content || post.excerpt || '');
+  const article = `<article><h1>${esc(post.title)}</h1>${image}${body}</article>`;
+  return html.replace('<div id="root"></div>', `<div id="root">${article}</div>`);
+}
+
 export async function maybeInjectSeo(
   html: string,
   pathname: string,
   origin: string,
-  userAgent: string,
   env: SeoEnv,
 ): Promise<string | null> {
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
-  // Real users (non-bot) never get full title/schema injection, but they MUST
-  // not be served a homepage canonical on a content route either. Rewrite the
-  // shell's canonical + og:url from the pathname only — no data, no latency.
-  if (!userAgent || !BOT_RE.test(userAgent)) {
-    const canonical = routeCanonical(segs);
-    return canonical ? injectCanonical(html, canonical) : null;
-  }
+  // Metadata and content are UA-independent: every indexable route receives the
+  // same head (title/desc/canonical/og/robots/JSON-LD), and blog articles also
+  // receive their pre-rendered body with real internal links. React replaces
+  // #root on mount, so bots and humans see the same semantic content.
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
@@ -396,7 +401,7 @@ export async function maybeInjectSeo(
   if (segs.length === 2 && segs[0] === 'product') {
     const slug = decodeURIComponent(segs[1]);
     const products = await getProducts();
-    if (products === null) return null; // DB unavailable — serve shell as-is
+    if (products === null) return injectCanonical(html, `${root}/product/${slug}`); // DB unavailable — keep canonical correct
     const p = products.find((x) => x.slug === slug);
     if (!p) {
       return inject(html, {
@@ -420,7 +425,7 @@ export async function maybeInjectSeo(
   if (segs.length === 2 && segs[0] === 'blog') {
     const slug = decodeURIComponent(segs[1]);
     const posts = await getBlogRegistry(origin, env);
-    if (posts === null) return null; // registry unavailable — serve shell as-is
+    if (posts === null) return injectCanonical(html, `${root}/blog/${slug}`); // registry unavailable — keep canonical correct
     const post = posts.find((x) => x.slug === slug);
     if (!post) {
       return inject(html, {
@@ -431,22 +436,16 @@ export async function maybeInjectSeo(
       });
     }
     const canonical = `${root}/blog/${slug}`;
+    // One semantic path: full head metadata AND the pre-rendered article body
+    // (with its real internal links) are served to every UA. React replaces
+    // #root on mount, so there is no duplicated visible content.
     let out = inject(html, {
       title: `${post.title} | Luxedge`,
       description: cleanText(post.excerpt, 200),
       canonical,
       jsonLd: blogJsonLd(post, canonical),
     });
-    // Expose the article's REAL visible internal links in crawler-delivered HTML.
-    // Same links the client renders — never hidden/schema-only. Anchors go in a
-    // plain, visible (screen-reader/crawler accessible) list before </body>.
-    if (post.links && post.links.length) {
-      const items = post.links
-        .map((l) => `<li><a href="${esc(l.href)}">${esc(l.label)}</a></li>`)
-        .join('\n');
-      const block = `\n<nav aria-label="Related on Luxedge"><p>Related guides and products on Luxedge:</p><ul>${items}</ul></nav>`;
-      out = out.replace(/<\/body>/, `${block}\n</body>`);
-    }
+    out = injectArticleBody(out, post);
     return out;
   }
 
@@ -454,7 +453,7 @@ export async function maybeInjectSeo(
   if (segs.length === 2 && segs[0] === 'category') {
     const slug = decodeURIComponent(segs[1]);
     const categories = await getCategories();
-    if (categories === null) return null;
+    if (categories === null) return injectCanonical(html, `${root}/category/${slug}`);
     const cat = categories.find((x) => x.slug === slug);
     if (!cat) {
       return inject(html, {

@@ -258,7 +258,6 @@ export default {
         html,
         url.pathname,
         url.origin,
-        request.headers.get('user-agent') || '',
         env,
       );
       if (injected) {
