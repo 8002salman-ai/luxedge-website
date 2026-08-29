@@ -5226,7 +5226,7 @@ function AMarketingTraffic() {
           {errors.ga4Id ? <p className="text-red-500 text-xs mt-1">{errors.ga4Id}</p>
             : <p className="text-xs text-gray-400 mt-1">Paste the GA4 Measurement ID from your Google Analytics property. No API key needed for standard browser tracking.</p>}
         </div>
-        <p className="text-xs text-gray-400 leading-relaxed">Events wired to real user actions: <code className="bg-gray-100 px-1 rounded">page_view</code>, <code className="bg-gray-100 px-1 rounded">view_item</code>, <code className="bg-gray-100 px-1 rounded">add_to_cart</code>, <code className="bg-gray-100 px-1 rounded">begin_checkout</code>, <code className="bg-gray-100 px-1 rounded">purchase</code>, <code className="bg-gray-100 px-1 rounded">search</code>. UTM campaign parameters are captured per session.</p>
+        <p className="text-xs text-gray-400 leading-relaxed">Events wired to real user actions: <code className="bg-gray-100 px-1 rounded">page_view</code>, <code className="bg-gray-100 px-1 rounded">view_item</code>, <code className="bg-gray-100 px-1 rounded">add_to_cart</code>, <code className="bg-gray-100 px-1 rounded">begin_checkout</code>, <code className="bg-gray-100 px-1 rounded">purchase</code> (fires on the Stripe-hosted checkout success return), <code className="bg-gray-100 px-1 rounded">search</code>. UTM campaign parameters are captured per session.</p>
       </Card>
 
       {/* Actions */}

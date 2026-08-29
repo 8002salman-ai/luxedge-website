@@ -12,7 +12,7 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
-import { createCheckoutSession, fetchCheckoutSessionStatus } from './services/checkout';
+import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -2577,6 +2577,63 @@ function CartPage() {
   );
 }
 
+// ============================================================================
+// GA4 purchase — the cart is cleared when the Stripe-hosted checkout returns,
+// so we snapshot the order client-side at submit and fire a real `purchase`
+// event once on the verified paid success page. `transaction_id` (order number
+// or Stripe session id) lets GA4 de-duplicate if the page is ever revisited.
+// ============================================================================
+const PURCHASE_SNAPSHOT_KEY = 'luxedge_pending_purchase';
+const firedPurchases = new Set<string>();
+
+interface PurchaseSnapshot {
+  sessionId: string;
+  currency: string;
+  value: number; // pre-tax client total — fallback only; server/Stripe is authoritative
+  shipping: number;
+  coupon: string | null;
+  items: { item_id: string; item_name: string; price: number; quantity: number }[];
+}
+
+function writePurchaseSnapshot(s: PurchaseSnapshot): void {
+  try { sessionStorage.setItem(PURCHASE_SNAPSHOT_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
+}
+
+function readPurchaseSnapshot(sessionId: string): PurchaseSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(PURCHASE_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as PurchaseSnapshot;
+    return s && s.sessionId === sessionId ? s : null;
+  } catch { return null; }
+}
+
+function clearPurchaseSnapshot(): void {
+  try { sessionStorage.removeItem(PURCHASE_SNAPSHOT_KEY); } catch { /* ignore */ }
+}
+
+/**
+ * Fire the GA4 purchase for a verified paid checkout return. `order.total` is
+ * stored in dollars while Stripe's `session.amountTotal` is in cents — both
+ * are normalized to dollars for the event `value` (charged total incl. tax).
+ */
+function firePurchaseEvent(r: CheckoutSessionStatus): void {
+  const snapshot = readPurchaseSnapshot(r.session?.id || '');
+  const orderDollars = typeof r.order?.total === 'number' ? r.order.total : null;
+  const sessionDollars = r.session?.amountTotal != null ? r.session.amountTotal / 100 : null;
+  const items = snapshot?.items?.length ? snapshot.items : [];
+  trackEvent('purchase', {
+    transaction_id: r.order?.orderNumber || r.session?.id || '',
+    value: orderDollars ?? sessionDollars ?? snapshot?.value ?? 0,
+    currency: r.order?.currency || r.session?.currency || snapshot?.currency || 'USD',
+    shipping: snapshot?.shipping ?? undefined,
+    coupon: snapshot?.coupon ?? undefined,
+    ...(items.length ? { items } : {}),
+    ...utmParams(),
+  });
+  clearPurchaseSnapshot();
+}
+
 function CheckoutPage() {
   const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify } = useApp();
   const nav = useNavigate();
@@ -2636,6 +2693,16 @@ function CheckoutPage() {
         items: cart.map(i => ({ id: i.product.id, quantity: i.quantity })),
         couponCode: coupon?.code || undefined,
         customer: { email: f.email, name: `${f.firstName} ${f.lastName}`.trim(), phone: f.phone, address: f.address, city: f.city, state: f.state, zip: f.zip },
+      });
+      // Snapshot the order so the success page can report a GA4 purchase with
+      // real item detail (the cart is cleared on return to the success URL).
+      writePurchaseSnapshot({
+        sessionId: res.sessionId,
+        currency: res.totals?.currency || 'USD',
+        value: res.totals?.total ?? totalBeforeTax,
+        shipping: shipCost,
+        coupon: coupon?.code || null,
+        items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })),
       });
       // Stripe-hosted checkout — the browser is redirected to Stripe. Luxedge
       // never sees or stores card details.
@@ -2801,9 +2868,19 @@ function CheckoutSuccessPage() {
       try {
         const r = await fetchCheckoutSessionStatus(sessionId);
         if (!active) return;
-        setInfo({ orderNumber: r.order?.orderNumber ?? null, total: r.order?.total ?? r.session?.amountTotal ?? null, currency: r.order?.currency ?? r.session?.currency ?? null, email: r.session?.customerEmail ?? null });
+        // `order.total` is stored in dollars while Stripe's `amountTotal` is in
+        // cents — normalize both to dollars for a consistent display/total.
+        const orderDollars = typeof r.order?.total === 'number' ? r.order.total : null;
+        const sessionDollars = r.session?.amountTotal != null ? r.session.amountTotal / 100 : null;
+        setInfo({ orderNumber: r.order?.orderNumber ?? null, total: orderDollars ?? sessionDollars, currency: r.order?.currency ?? r.session?.currency ?? null, email: r.session?.customerEmail ?? null });
         setStatus(r.session?.paymentStatus === 'paid' ? 'paid' : 'unpaid');
-        if (r.session?.paymentStatus === 'paid') { clearCart(); removeCoupon(); }
+        if (r.session?.paymentStatus === 'paid') {
+          clearCart(); removeCoupon();
+          if (!firedPurchases.has(sessionId)) {
+            firedPurchases.add(sessionId);
+            firePurchaseEvent(r);
+          }
+        }
       } catch {
         if (active) setStatus('error');
       }
