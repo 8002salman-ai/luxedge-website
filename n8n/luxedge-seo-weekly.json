@@ -1,5 +1,5 @@
 {
-  "name": "Luxedge — Weekly SEO Cycle",
+  "name": "Luxedge — Weekly SEO Research & Approval (SAFE)",
   "nodes": [
     {
       "parameters": {
@@ -18,7 +18,7 @@
       "name": "Weekly Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-980, 200]
+      "position": [-1040, 200]
     },
     {
       "parameters": {
@@ -42,17 +42,17 @@
       "name": "Salman OS — run seo_research",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-780, 200]
+      "position": [-840, 200]
     },
     {
       "parameters": {
-        "jsCode": "// Take the Hermes research result (keywords array) and expose it as a\n// JSON file for the executor + as JSON for the report.\nconst research = $input.first().json;\n// The research payload can be nested (results[].result.keywords) — flatten\n// defensively so a plain array or an envelope both work.\nlet keywords = research.keywords || research.data?.results?.[0]?.keywords || [];\nif (Array.isArray(research)) keywords = research;\nconst fileText = JSON.stringify(keywords, null, 2);\nreturn {\n  json: { count: keywords.length, keywords },\n  binary: {\n    data: {\n      data: Buffer.from(fileText).toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'weekly-keywords.json'\n    }\n  }\n};"
+        "jsCode": "// RESEARCH ONLY. No repository, database, or deployment is touched.\n// Flatten the Hermes research result (keywords array) defensively so a\n// plain array or a nested envelope both work, and expose it downstream\n// as a REVIEW artifact for a human to approve.\nconst research = $input.first().json;\nlet keywords = research.keywords || research.data?.results?.[0]?.keywords || [];\nif (Array.isArray(research)) keywords = research;\nconst fileText = JSON.stringify(keywords, null, 2);\nreturn {\n  json: { count: keywords.length, keywords },\n  binary: {\n    data: {\n      data: Buffer.from(fileText).toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'weekly-keywords.json'\n    }\n  }\n};"
       },
       "id": "11111111-1111-4111-8111-111111111103",
-      "name": "Prepare k.json",
+      "name": "Prepare research payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-580, 200]
+      "position": [-640, 200]
     },
     {
       "parameters": {
@@ -60,76 +60,31 @@
         "options": {}
       },
       "id": "11111111-1111-4111-8111-111111111104",
-      "name": "Write weekly-keywords.json",
+      "name": "Stage research (review-only, gitignored)",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [-380, 200]
+      "position": [-440, 200]
     },
     {
       "parameters": {
-        "command": "node",
-        "arguments": "=scripts/salman-seo.mjs keywords --file .freebuff/weekly-keywords.json",
-        "options": {
-          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
-        }
+        "jsCode": "// LOCAL STAGING ONLY. Generates a H U M A N approval queue from the\n// research payload. Nothing here is applied: every item is marked\n// NEEDS_REVIEW and the decision to write anything to the catalog or repo\n// is deliberately left to an approved executor (Freebuff / the owner).\nconst item = $input.first().json;\nconst keywords = Array.isArray(item.keywords) ? item.keywords : [];\nconst guard = ['seo_keywords','seo_title','seo_description','slug'];\nconst queue = keywords.map((k, i) => ({\n  ref: `wk-${new Date().toISOString().slice(0,10)}-${i+1}`,\n  primaryKeyword: k.primary || k.focus || (typeof k === 'string' ? k : undefined) || 'unspecified',\n  supporting: Array.isArray(k.supporting) ? k.supporting : [],\n  intent: k.intent || 'informational',\n  cluster: k.cluster || 'uncategorized',\n  targetPage: k.slug || '',\n  productCategory: k.category || '',\n  cannibalizationRisk: Boolean(k.duplicate_of) ? k.duplicate_of : 'review',\n  priority: k.priority || 3,\n  status: 'NEEDS_REVIEW',\n  reason: k.reason || 'queue for human review — no change applied',\n  writeActions: guard.map(f => f).filter(f => Object.prototype.hasOwnProperty.call(k, f))\n    .map(f => `would set ${f} on match`),\n  applied: false\n}));\nconst summary = {\n  generated_at: new Date().toISOString(),\n  mode: 'RESEARCH + APPROVAL ONLY',\n  applied: 0,\n  staged_artifacts: [ 'weekly-keywords.json', 'seo-approval-queue.json' ],\n  next_step: 'Human reviews queue; approved rows are applied by an approved executor, never by n8n.'\n};\nconst fileText = JSON.stringify({ summary, queue }, null, 2);\nreturn {\n  json: { summary, count: queue.length, queue },\n  binary: {\n    data: {\n      data: Buffer.from(fileText).toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'seo-approval-queue.json'\n    }\n  }\n};"
       },
-      "id": "11111111-1111-4111-8111-111111111105",
-      "name": "Apply keywords",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [-180, 120]
+      "id": "11111111-1111-4111-8111-111111111303",
+      "name": "Generate approval queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-240, 200]
     },
     {
       "parameters": {
-        "command": "node",
-        "arguments": "scripts/salman-seo.mjs sitemap",
-        "options": {
-          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
-        }
-      },
-      "id": "11111111-1111-4111-8111-111111111106",
-      "name": "Regenerate sitemap",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [-180, 280]
-    },
-    {
-      "parameters": {
-        "command": "cmd",
-        "arguments": "/c cd /d C:\\Users\\basco\\Downloads\\luxedge-website && git add -A && git commit -m \"SEO: weekly keyword cycle\" && git push origin main",
+        "fileName": "=C:\\Users\\basco\\Downloads\\luxedge-website\\.freebuff\\seo-approval-queue.json",
         "options": {}
       },
-      "id": "11111111-1111-4111-8111-111111111107",
-      "name": "Commit & push",
-      "type": "n8n-nodes-base.executeCommand",
+      "id": "11111111-1111-4111-8111-111111111304",
+      "name": "Stage approval queue",
+      "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [20, 120]
-    },
-    {
-      "parameters": {
-        "command": "cmd",
-        "arguments": "/c cd /d C:\\Users\\basco\\Downloads\\luxedge-website && set WRANGLER_SEND_METRICS=false&& npx wrangler deploy --name luxedge-production",
-        "options": {}
-      },
-      "id": "11111111-1111-4111-8111-111111111108",
-      "name": "Deploy to Cloudflare",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [220, 120]
-    },
-    {
-      "parameters": {
-        "command": "node",
-        "arguments": "scripts/salman-seo.mjs verify",
-        "options": {
-          "cwd": "C:\\Users\\basco\\Downloads\\luxedge-website"
-        }
-      },
-      "id": "11111111-1111-4111-8111-111111111109",
-      "name": "Verify live",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [420, 120]
+      "position": [-40, 200]
     },
     {
       "parameters": {
@@ -140,10 +95,20 @@
         }
       },
       "id": "11111111-1111-4111-8111-111111111110",
-      "name": "Audit report",
+      "name": "Audit report (read-only monitoring)",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [420, 280]
+      "position": [160, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Approval NOTIFICATION summary. Read-only: builds a short human-readable\n// digest of staged opportunities. Reports the staging paths and makes explicit\n// that NO catalog/repo change, git commit/push, or deploy was performed.\nconst item = $input.first().json;\nconst queue = Array.isArray(item.queue) ? item.queue : [];\nconst lines = queue.slice(0, 10).map((q) =>\n  `- [NEEDS_REVIEW] ${q.primaryKeyword} (cluster: ${q.cluster}, intent: ${q.intent}, priority: ${q.priority}) target: ${q.targetPage || 'n/a'}`\n);\nconst body =\n  `Luxedge SEO weekly research complete — NO changes applied.\\n` +\n  `${queue.length} opportunity(ies) staged for human review.\\n` +\n  lines.join('\\n') +\n  `\\nReview: .freebuff/weekly-keywords.json + .freebuff/seo-approval-queue.json` +\n  `\\nApply approved rows with an approved executor (Freebuff/owner). n8n does not commit or deploy.`;\nreturn { json: { summary: item.summary, count: item.count, approval_digest: body } };"
+      },
+      "id": "11111111-1111-4111-8111-111111111305",
+      "name": "Notify owner for approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [160, 280]
     }
   ],
   "connections": {
@@ -162,83 +127,56 @@
       "main": [
         [
           {
-            "node": "Prepare k.json",
+            "node": "Prepare research payload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare k.json": {
+    "Prepare research payload": {
       "main": [
         [
           {
-            "node": "Write weekly-keywords.json",
+            "node": "Stage research (review-only, gitignored)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Write weekly-keywords.json": {
+    "Stage research (review-only, gitignored)": {
       "main": [
         [
           {
-            "node": "Apply keywords",
+            "node": "Generate approval queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate approval queue": {
+      "main": [
+        [
+          {
+            "node": "Stage approval queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage approval queue": {
+      "main": [
+        [
+          {
+            "node": "Audit report (read-only monitoring)",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Regenerate sitemap",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Apply keywords": {
-      "main": [
-        [
-          {
-            "node": "Commit & push",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Regenerate sitemap": {
-      "main": [
-        [
-          {
-            "node": "Commit & push",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Commit & push": {
-      "main": [
-        [
-          {
-            "node": "Deploy to Cloudflare",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Deploy to Cloudflare": {
-      "main": [
-        [
-          {
-            "node": "Verify live",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Audit report",
+            "node": "Notify owner for approval",
             "type": "main",
             "index": 0
           }
