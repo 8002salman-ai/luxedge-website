@@ -40,6 +40,8 @@ import cjKeyHandler from '../api/admin/cj-key';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
+import { buildSitemap } from './sitemap';
+import blogAutomationHandler from '../api/blog-automation/index';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -200,6 +202,38 @@ export default {
     // and /home/) into a single canonical URL with a permanent redirect.
     if (url.pathname === '/home' || url.pathname === '/home/') {
       return Response.redirect(new URL('/', url.origin).toString(), 301);
+    }
+    // Dynamic sitemap from the LIVE database (CMS blogs + products + categories)
+    // so publishing a post updates sitemap.xml without a redeploy. Falls back to
+    // the static file when the DB is unreachable / not migrated / no blogs.
+    if (url.pathname === '/sitemap.xml') {
+      const sitemap = await buildSitemap();
+      if (sitemap) {
+        return new Response(sitemap, {
+          status: 200,
+          headers: {
+            'content-type': 'application/xml; charset=utf-8',
+            'cache-control': 'public, max-age=300',
+          },
+        });
+      }
+    }
+    // Blog automation API (server-side, blog-scoped). Routed by path prefix
+    // because it has multiple sub-routes (draft/publish/posts/check-slug/{id}).
+    if (url.pathname.startsWith('/blog-automation')) {
+      const req = makeReq(request, url) as IncomingMessage & { env?: Env };
+      req.env = env;
+      const res = makeRes() as ShimRes;
+      try {
+        await blogAutomationHandler(req, res);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const contentType = res._headers['content-type'] || 'text/plain; charset=utf-8';
+      return new Response(res._body || '', { status: res._status, headers: { ...res._headers, 'content-type': contentType } });
     }
     const route = ROUTES.find((r) => r.path === url.pathname);
     if (route) {

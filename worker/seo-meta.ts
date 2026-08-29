@@ -150,7 +150,58 @@ interface BlogEntry {
   faq?: { q: string; a: string }[];
 }
 
+interface BlogCmsRow {
+  slug: string;
+  title: string;
+  excerpt?: string | null;
+  hero_image_url?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  author_name?: string | null;
+  content?: string | null;
+  faq?: { q: string; a: string }[] | null;
+}
+
+function mapCmsToBlogEntry(r: BlogCmsRow): BlogEntry | null {
+  if (!r || !r.slug) return null;
+  const date = (r.published_at || r.created_at || '').slice(0, 10) || undefined;
+  return {
+    slug: r.slug,
+    title: r.title || r.slug,
+    excerpt: r.excerpt || r.title || '',
+    image: r.hero_image_url || undefined,
+    date,
+    authorName: r.author_name || undefined,
+    content: r.content || undefined,
+    faq: Array.isArray(r.faq) && r.faq.length ? r.faq : undefined,
+  };
+}
+
+/**
+ * Blog registry — source of truth is the Supabase CMS (published only; RLS
+ * enforces published + published_at <= now()). Short TTL so a freshly
+ * published CMS post gets SEO + indexability on the very next worker requests
+ * WITHOUT a redeploy. Falls back to the static blog-seo.json shell when the DB
+ * is unreachable / the table is not yet migrated (migration/rollback path).
+ */
 async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[] | null> {
+  const base = supabaseBase();
+  const key = supabaseAnon();
+  if (base && key) {
+    const cms = await cachedFetch<BlogEntry[]>('seo:blog-cms', 60_000, async () => {
+      const rows = await fetchJson<BlogCmsRow[]>(
+        base,
+        key,
+        'blog_posts?select=slug,title,excerpt,hero_image_url,published_at,created_at,author_name,content,faq&status=eq.published&order=published_at.desc',
+      );
+      if (!rows) throw new Error('blog_cms unavailable');
+      return rows
+        .map(mapCmsToBlogEntry)
+        .filter((x): x is BlogEntry => x !== null);
+    });
+    if (cms) return cms;
+  }
+  // Fallback: legacy static registry (used while the DB/migration is not ready).
   return cachedFetch('seo:blogs', TTL_BLOG, async () => {
     const res = await env.ASSETS.fetch(new Request(`${origin}/blog-seo.json`));
     if (!res.ok) return null;

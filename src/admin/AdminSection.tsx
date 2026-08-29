@@ -18,8 +18,9 @@ import CJSetup from './CJSetup';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
+import BlogManager from './BlogManager';
 import type {
-  Product, ProductVariant, BlogPost, AdminCategory,
+  Product, ProductVariant, AdminCategory,
   AIProvider, EnterpriseVariant, VariantAttribute,
   SEOData, SocialSEO, ContentData, SEOScore, StructuredSchemas,
   ProviderStatus, ProviderStatusMap,
@@ -39,52 +40,6 @@ import {
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
   Receipt, CloudArrowUp,
 } from '@phosphor-icons/react';
-
-// Admin Blog Management
-function ABlogs() {
-  const { blogs, setBlogs, notify } = useApp();
-  const [delId, setDelId] = useState<string | null>(null);
-  const statusColor: Record<string, string> = { published: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', draft: 'bg-gray-100 text-gray-600' };
-
-  const updateStatus = (id: string, status: BlogPost['status']) => { setBlogs(prev => prev.map(b => b.id === id ? { ...b, status } : b)); notify(`Post ${status}!`); };
-  const del = () => { if (delId) { setBlogs(prev => prev.filter(b => b.id !== delId)); notify('Post deleted!'); setDelId(null); } };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Blog Posts</h1>
-        <Link to="/blog/write" className="px-4 py-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm rounded-lg flex items-center gap-2"><Plus size={16} />New Post</Link>
-      </div>
-
-      {blogs.length > 0 ? (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto"><table className="w-full">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-4">Post</th><th className="px-6 py-4">Author</th><th className="px-6 py-4">Date</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Actions</th></tr></thead>
-            <tbody>{blogs.map(b => (
-              <tr key={b.id} className="border-t hover:bg-gray-50">
-                <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={b.image} alt="" className="w-12 h-8 rounded object-cover" /><div><p className="font-medium text-sm">{b.title}</p><p className="text-xs text-gray-400 truncate max-w-[200px]">{b.excerpt}</p></div></div></td>
-                <td className="px-6 py-4 text-sm text-gray-600">{b.authorName}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{new Date(b.date).toLocaleDateString()}</td>
-                <td className="px-6 py-4"><select value={b.status} onChange={e => updateStatus(b.id, e.target.value as BlogPost['status'])} className={`text-xs font-semibold px-3 py-1.5 rounded-full border-0 cursor-pointer ${statusColor[b.status]}`}><option value="published">Published</option><option value="pending">Pending</option><option value="draft">Draft</option></select></td>
-                <td className="px-6 py-4 flex gap-1">
-                  <Link to={`/blog/${b.slug}`} className="p-2 hover:bg-luxe-gold-soft rounded text-luxe-gold"><Eye size={16} /></Link>
-                  <button onClick={() => setDelId(b.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash size={16} /></button>
-                </td>
-              </tr>
-            ))}</tbody>
-          </table></div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border p-12 text-center text-gray-500"><FileText size={48} className="mx-auto text-gray-200 mb-4" />No blog posts yet</div>
-      )}
-
-      <Modal open={!!delId} onClose={() => setDelId(null)} title="Delete Post">
-        <p className="text-gray-600 mb-6">Delete this blog post permanently?</p>
-        <div className="flex gap-3"><button onClick={del} className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-medium">Delete</button><button onClick={() => setDelId(null)} className="flex-1 py-2.5 border rounded-lg">Cancel</button></div>
-      </Modal>
-    </div>
-  );
-}
 
 // ADMIN PANEL - FULL WORKING SYSTEM
 // ============================================================================
@@ -5314,7 +5269,7 @@ export default function AdminSection() {
       <Route path="users" element={<AdminLayout><AUsers /></AdminLayout>} />
       <Route path="categories" element={<AdminLayout><ACategories /></AdminLayout>} />
       <Route path="reviews" element={<AdminLayout><AReviews /></AdminLayout>} />
-      <Route path="blogs" element={<AdminLayout><ABlogs /></AdminLayout>} />
+      <Route path="blogs" element={<AdminLayout><BlogManager /></AdminLayout>} />
       <Route path="seo-engine" element={<AdminLayout><ASEOEngine /></AdminLayout>} />
       <Route path="marketing" element={<AdminLayout><AMarketingGen /></AdminLayout>} />
       <Route path="variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />

@@ -11,6 +11,7 @@ import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
+import { loadPublishedBlogs } from './services/blog';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
 import {
@@ -299,6 +300,7 @@ interface Ctx {
   user: AppUser | null; cart: CartItem[];
   products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
+  reloadBlogs: () => Promise<void>;
   login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
   guestLogin: () => void;
   logout: () => void; signup: (n: string, e: string, p: string) => Promise<string | null>;
@@ -363,6 +365,19 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
   const [notif, setNotif] = useState<string | null>(null);
+
+  // Phase B: blog content lives in the Supabase CMS. Until the CMS is seeded
+  // (or the DB is unreachable / table not migrated) we keep INIT_BLOGS as a
+  // migration/rollback fallback; once the CMS returns real posts they become
+  // the source of truth. Publishing from the Admin Blog Manager updates the
+  // DB, and reloadBlogs() refreshes this in-memory list WITHOUT any deploy.
+  const reloadBlogs = useCallback(async () => {
+    const posts = await loadPublishedBlogs();
+    // Only switch to CMS when it returned actual posts — null (failure) or an
+    // empty DB keeps the last-known set so a DB blip never blanks the blog.
+    if (posts && posts.length > 0) setBlogs(posts);
+  }, []);
+  useEffect(() => { void reloadBlogs(); }, [reloadBlogs]);
   // Stable identity: components (e.g. CatalogProductEditor) depend on `notify`
   // inside useCallback/useEffect deps. An unmemoized notify was recreated on
   // every AppProvider render, which itself re-renders every time notify()
@@ -534,7 +549,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const freeShippingEnabled = promotions.freeShippingEnabled;
   const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, reloadBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
