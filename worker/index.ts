@@ -42,6 +42,7 @@ import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
 import { buildSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
+import adsenseHandler from '../api/adsense/index';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -217,6 +218,23 @@ export default {
           },
         });
       }
+    }
+    // Google AdSense earnings API (server-side). Routed by path prefix
+    // because it has multiple sub-routes (status/auth/oauth/sync/earnings).
+    if (url.pathname.startsWith('/api/adsense')) {
+      const req = makeReq(request, url) as IncomingMessage & { env?: Env };
+      req.env = env;
+      const res = makeRes() as ShimRes;
+      try {
+        await adsenseHandler(req, res);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const contentType = res._headers['content-type'] || 'text/plain; charset=utf-8';
+      return new Response(res._body || '', { status: res._status, headers: { ...res._headers, 'content-type': contentType } });
     }
     // Blog automation API (server-side, blog-scoped). Routed by path prefix
     // because it has multiple sub-routes (draft/publish/posts/check-slug/{id}).
