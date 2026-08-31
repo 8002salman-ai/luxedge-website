@@ -164,7 +164,6 @@ export default function TrafficDashboard() {
       sourceData,
       deviceData,
       topProducts,
-      viewCount: views.length,
       purchaseCount: purchases.length,
       productClicks: productClicks.length,
       blogViews: blogViews.length,

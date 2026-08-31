@@ -31,6 +31,7 @@ import {
   savePreviewConfig, validateConfig, MarketingConfig, PlacementKey, DEFAULT_CONFIG,
 } from '../lib/marketing';
 import TrafficDashboard from './TrafficDashboard';
+import AdSenseEarnings from './AdSenseEarnings';
 import {
   Warning, ArrowLeft, ArrowRight, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
   Clipboard, Code, Cpu, CurrencyDollar, Download, PencilSimple, Eye, FileText, TreeStructure, Globe,
@@ -5010,6 +5011,9 @@ function AMarketingTraffic() {
       {/* Traffic Overview */}
       <Card title="Traffic Overview" icon={<TrendUp size={18} className="text-blue-600" />}>
         <TrafficDashboard />
+        <div className="border-t border-gray-100 pt-4">
+          <AdSenseEarnings />
+        </div>
         <div className="border-t border-gray-100 pt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Google AdSense</p>
