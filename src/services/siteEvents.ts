@@ -18,6 +18,23 @@ import { getSupabaseConfig, getFreshAccessToken } from './supabase';
 const VID_KEY = 'luxedge_vid';
 const SID_KEY = 'luxedge_sid';
 
+// Schema-probe cache: the recorder/reader include revenue fields (value,
+// currency) only when migration 0024 has been applied. null = unknown.
+let supportsRevenue: boolean | null = null;
+
+/** Test-only hook: reset the module-level schema-probe cache. */
+export function __resetSiteEventsForTests(): void {
+  supportsRevenue = null;
+}
+
+function isMissingColumnResponse(res: Response): Promise<boolean> {
+  return res
+    .clone()
+    .text()
+    .then((t) => /PGRST204/.test(t) || /42703/.test(t) || /schema cache/i.test(t) || /does not exist/i.test(t))
+    .catch(() => false);
+}
+
 function makeId(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -108,17 +125,45 @@ export function recordSiteEvent(name: string, params: TrackParams = {}): void {
       item_ids: item_ids || null,
     };
 
-    fetch(`${cfg.url}/rest/v1/site_events`, {
-      method: 'POST',
-      headers: {
-        apikey: cfg.anonKey,
-        Authorization: `Bearer ${cfg.anonKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(body),
-    }).catch(() => {
-      /* ignore — best-effort analytics */
+    // Revenue fields (migration 0024). Only sent once the columns exist;
+    // if the first probe 400s, fall back to the base insert so analytics
+    // recording NEVER stops just because a migration is pending.
+    const wantsRevenue = supportsRevenue !== false;
+    if (wantsRevenue) {
+      const v = typeof params.value === 'number' && Number.isFinite(params.value) ? params.value
+        : typeof params.value === 'string' && params.value.trim() !== '' ? Number(params.value) : NaN;
+      if (!Number.isNaN(v)) body.value = v;
+      if (typeof params.currency === 'string' && params.currency.trim()) body.currency = params.currency.trim();
+    }
+
+    const send = (b: Record<string, unknown>) =>
+      fetch(`${cfg.url}/rest/v1/site_events`, {
+        method: 'POST',
+        headers: {
+          apikey: cfg.anonKey,
+          Authorization: `Bearer ${cfg.anonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(b),
+      }).catch(() => {
+        /* ignore — best-effort analytics */
+      });
+
+    send(body).then((res) => {
+      if (res && res.status === 400 && wantsRevenue) {
+        isMissingColumnResponse(res).then((missing) => {
+          if (missing) {
+            supportsRevenue = false;
+            const base = { ...body };
+            delete base.value;
+            delete base.currency;
+            send(base); // retry without revenue fields — never lose the event
+          }
+        });
+      } else if (res && res.ok) {
+        supportsRevenue = true;
+      }
     });
   } catch {
     /* never throw, never break the storefront */
@@ -136,6 +181,8 @@ export interface SiteEventRow {
   utm_medium: string | null;
   utm_campaign: string | null;
   item_ids: unknown | null;
+  value: number | null;
+  currency: string | null;
   occurred_at: string;
 }
 
@@ -145,19 +192,37 @@ export interface SiteEventRow {
  */
 export async function fetchSiteEvents(days = 30): Promise<SiteEventRow[]> {
   const cfg = getSupabaseConfig();
+  if (!cfg) throw new Error('Traffic analytics is not configured (Supabase missing).');
   const token = await getFreshAccessToken();
-  if (!cfg) return [];
   if (!token) throw new Error('Sign in as admin to view traffic analytics.');
 
   const since = new Date(Date.now() - days * 86400000).toISOString();
+  // Newest-first so the 50k cap keeps the most recent events (asc would keep
+  // the OLDEST once a window exceeds 50k — stale dashboard).
+  const select = supportsRevenue === false
+    ? 'event,path,referrer,visitor_id,session_id,device,utm_source,utm_medium,utm_campaign,item_ids,occurred_at'
+    : 'event,path,referrer,visitor_id,session_id,device,utm_source,utm_medium,utm_campaign,item_ids,value,currency,occurred_at';
   const url =
-    `${cfg.url}/rest/v1/site_events?select=event,path,referrer,visitor_id,` +
-    `session_id,device,utm_source,utm_medium,utm_campaign,item_ids,occurred_at` +
-    `&occurred_at=gte.${encodeURIComponent(since)}&order=occurred_at.asc&limit=50000`;
+    `${cfg.url}/rest/v1/site_events?select=${encodeURIComponent(select)}` +
+    `&occurred_at=gte.${encodeURIComponent(since)}&order=occurred_at.desc&limit=50000`;
 
-  const res = await fetch(url, {
-    headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` },
-  });
+  const read = async (u: string): Promise<Response> =>
+    fetch(u, { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } });
+
+  let res = await read(url);
+  if (res.status === 400 && supportsRevenue !== false) {
+    const missing = await isMissingColumnResponse(res);
+    if (missing) {
+      // Migration 0024 not applied yet — fall back to the base select so the
+      // dashboard still works (revenue shows as unavailable).
+      supportsRevenue = false;
+      const baseSelect = 'event,path,referrer,visitor_id,session_id,device,utm_source,utm_medium,utm_campaign,item_ids,occurred_at';
+      res = await read(
+        `${cfg.url}/rest/v1/site_events?select=${encodeURIComponent(baseSelect)}` +
+        `&occurred_at=gte.${encodeURIComponent(since)}&order=occurred_at.desc&limit=50000`,
+      );
+    }
+  }
   if (res.status === 404) {
     throw new Error('Analytics table is not ready (run migration 0023).');
   }
@@ -165,5 +230,6 @@ export async function fetchSiteEvents(days = 30): Promise<SiteEventRow[]> {
     throw new Error('Sign in as admin to view traffic analytics.');
   }
   if (!res.ok) throw new Error(`Could not load analytics (HTTP ${res.status}).`);
-  return (await res.json()) as SiteEventRow[];
+  const rows = (await res.json()) as SiteEventRow[];
+  return rows.map((r) => ({ ...r, value: r.value ?? null, currency: r.currency ?? null }));
 }

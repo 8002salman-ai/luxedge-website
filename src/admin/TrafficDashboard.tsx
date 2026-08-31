@@ -15,6 +15,8 @@ import { fetchSiteEvents, type SiteEventRow } from '../services/siteEvents';
 
 const DAY_OPTIONS = [7, 14, 30, 90];
 const COLORS = ['#2563eb', '#0ea5e9', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#10b981', '#f43f5e'];
+const ECPM_KEY = 'luxedge_ecpm';
+const DEFAULT_ECPM = 8; // $ per 1000 ad impressions — admin-tunable estimate
 
 interface Metric {
   label: string;
@@ -24,6 +26,31 @@ interface Metric {
 
 function fmt(n: number): string {
   return n.toLocaleString('en-US');
+}
+
+function money(n: number, currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
+
+function readEcpm(): number {
+  try {
+    const v = Number(localStorage.getItem(ECPM_KEY));
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_ECPM;
+  } catch {
+    return DEFAULT_ECPM;
+  }
+}
+
+function writeEcpm(v: number): void {
+  try {
+    localStorage.setItem(ECPM_KEY, String(v));
+  } catch {
+    /* ignore */
+  }
 }
 
 function dayKey(iso: string): string {
@@ -36,6 +63,7 @@ export default function TrafficDashboard() {
   const [rows, setRows] = useState<SiteEventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ecpm, setEcpm] = useState<number>(readEcpm);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +93,13 @@ export default function TrafficDashboard() {
     const checkout = rows.filter((r) => r.event === 'begin_checkout');
     const purchases = rows.filter((r) => r.event === 'purchase');
     const searches = rows.filter((r) => r.event === 'search');
+    const productClicks = rows.filter((r) => r.event === 'view_item' || r.event === 'select_item');
+    const blogViews = views.filter((v) => v.path.startsWith('/blog'));
+
+    // Real sales revenue from purchase events (migration 0024).
+    const anyRevenue = purchases.some((p) => typeof p.value === 'number' && Number.isFinite(p.value));
+    const salesRevenue = purchases.reduce((s, p) => s + (typeof p.value === 'number' && Number.isFinite(p.value) ? p.value : 0), 0);
+    const revenueCurrency = purchases.find((p) => p.currency)?.currency || 'USD';
 
     const visitors = new Set(views.map((v) => v.visitor_id ?? '')).size;
     const sessions = new Set(views.map((v) => v.session_id ?? '')).size;
@@ -150,17 +185,27 @@ export default function TrafficDashboard() {
       sourceData,
       deviceData,
       topProducts,
-      funnel: [
-        { stage: 'Page views', value: views.length },
-        { stage: 'Add to cart', value: addToCart.length },
-        { stage: 'Checkout', value: checkout.length },
-        { stage: 'Purchase', value: purchases.length },
-      ],
+      viewCount: views.length,
+      purchaseCount: purchases.length,
+      productClicks: productClicks.length,
+      blogViews: blogViews.length,
+      blogShare: views.length ? Math.round((blogViews.length / views.length) * 100) : 0,
+      anyRevenue,
+      salesRevenue,
+      revenueCurrency,
     };
   }, [rows, days]);
 
   const metrics = stats.metrics.slice(0, 4);
   const commerce = stats.metrics.slice(4);
+  const adRevenue = stats.viewCount * (ecpm / 1000);
+  const setEcpmValue = (v: string) => {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) {
+      setEcpm(n);
+      writeEcpm(n);
+    }
+  };
 
   if (loading && rows.length === 0) {
     return (
@@ -210,6 +255,53 @@ export default function TrafficDashboard() {
         </div>
       ) : (
         <>
+          {/* Earnings — revenue from sales, ads (estimate), blog traffic & product clicks */}
+          <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4 shadow-sm">
+            <p className="text-xs font-semibold text-emerald-800 mb-3">💰 Earnings &amp; Traffic Value — last {days} days</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Sales Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.anyRevenue ? money(stats.salesRevenue, stats.revenueCurrency) : '—'}</p>
+                {stats.anyRevenue ? (
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Real {fmt(stats.purchaseCount)} purchases</p>
+                ) : (
+                  <p className="text-[10px] text-amber-600 mt-0.5">No purchase value yet (needs migration 0024)</p>
+                )}
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Est. Ad Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">{money(adRevenue)}</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] text-gray-400">eCPM $</span>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.5"
+                    value={ecpm}
+                    onChange={(e) => setEcpmValue(e.target.value)}
+                    className="w-16 rounded border border-gray-200 px-1 py-0.5 text-[10px] font-medium text-gray-700 focus:border-emerald-400 focus:outline-none"
+                    aria-label="eCPM per 1000 views"
+                  />
+                  <span className="text-[10px] text-gray-400">/1k</span>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">Estimate: {fmt(stats.viewCount)} views × eCPM</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Blog Traffic</p>
+                <p className="text-2xl font-bold text-gray-900">{fmt(stats.blogViews)}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{stats.blogShare}% of all views · content engine</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Product Clicks</p>
+                <p className="text-2xl font-bold text-gray-900">{fmt(stats.productClicks)}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">view_item + select_item</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[10px] text-gray-400">
+              Sales revenue is real (purchase events). Ad revenue is an <strong>estimate</strong> — page views × eCPM; adjust eCPM to your real AdSense RPM.
+            </p>
+          </div>
+
           {/* KPI cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {metrics.map((m) => (
