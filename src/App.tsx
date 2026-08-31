@@ -758,18 +758,18 @@ function Header() {
 
       {/* â”€â”€ Mobile menu â”€â”€ */}
       {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={submitSearch} role="search" className="site-search mobile-site-search mb-2">
+        <form onSubmit={(e) => { submitSearch(e); setMob(false); }} role="search" className="site-search mobile-site-search mb-2">
           <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
           <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
             className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
           <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
         </form>
         <div className="flex flex-wrap gap-1 pt-1 pb-1.5 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
+          {catNav.map(c => <Link key={c.l} to={c.to} onClick={() => setMob(false)} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
+          <Link to="/shop?q=deal" onClick={() => setMob(false)} className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
         </div>
-        {nav.map(i => <Link key={i.p} to={i.p} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
+        {nav.map(i => <Link key={i.p} to={i.p} onClick={() => setMob(false)} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
+        {!user && <Link to="/login" onClick={() => setMob(false)} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
       </div>}
     </header>
   </>);
@@ -1090,7 +1090,9 @@ function RouteTitle() {
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
     else if (segs[0] === "blog") {
-      const post = segs[1] && segs[1] !== "write" ? blogs.find(b => b.slug === segs[1]) : undefined;
+      // Only published posts are ever served to visitors (defense in depth:
+      // the CMS read already filters, but a draft must never render here).
+      const post = segs[1] && segs[1] !== "write" ? blogs.find(b => b.slug === segs[1] && b.status === 'published') : undefined;
       set(post ? post.title : (segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"));
       desc(post ? (post.excerpt || post.content.slice(0, 155)) : "Pet care tips and insights from the Luxedge team.");
     }
@@ -3579,6 +3581,26 @@ function CareersPage() {
 // ============================================================================
 const blogSlug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+/**
+ * Blog image with a graceful branded placeholder: when a post has no hero
+ * image (or its URL is dead) visitors see a soft Luxedge tile instead of a
+ * blank or broken-image box. `className` sizes the tile; `imgClassName` sizes
+ * the photo inside it.
+ */
+function BlogImage({ src, alt, className, imgClassName }: { src: string; alt: string; className?: string; imgClassName?: string }) {
+  const [failed, setFailed] = useState(false);
+  const show = !!src && !failed;
+  return (
+    <div className={`${className || ''} bg-gradient-to-br from-luxe-gold-soft to-luxe-cream flex items-center justify-center`}>
+      {show ? (
+        <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={imgClassName || 'w-full h-full object-cover'} />
+      ) : (
+        <BookOpen01 strokeWidth={1.5} size={32} className="text-luxe-gold/40" />
+      )}
+    </div>
+  );
+}
+
 function BlogListPage() {
   const { blogs, user } = useApp();
   const published = blogs.filter(b => b.status === 'published');
@@ -3608,7 +3630,7 @@ function BlogListPage() {
               {published.map(post => (
                 <Link key={post.id} to={`/blog/${post.slug}`} className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
                   <div className="aspect-[16/10] overflow-hidden">
-                    <img src={post.image} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                    <BlogImage src={post.image} alt={post.title} className="w-full h-full" imgClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
                   <div className="p-5">
                     <div className="flex items-center gap-3 mb-3">
@@ -3734,10 +3756,10 @@ function BlogDetailPage() {
 
   return (
     <div>
-      {/* Hero Image */}
+      {/* Hero Image (graceful placeholder when a post has no image) */}
       <div className="relative h-64 sm:h-80 lg:h-96 bg-luxe-light">
-        <img src={post.image} alt={post.title} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/70 via-transparent to-transparent" />
+        <BlogImage src={post.image} alt={post.title} className="w-full h-full" imgClassName="w-full h-full object-cover" />
+        {post.image && <div className="absolute inset-0 bg-gradient-to-t from-luxe-black/70 via-transparent to-transparent" />}
       </div>
 
       <div className="max-w-3xl mx-auto px-4 -mt-20 relative z-10">
@@ -3790,7 +3812,7 @@ function BlogDetailPage() {
               <div className="grid sm:grid-cols-3 gap-4">
                 {relatedPosts.map(r => (
                   <Link key={r.id} to={`/blog/${r.slug}`} className="group flex gap-3 p-3 bg-gray-50 rounded-xl hover:bg-luxe-gold-soft transition-colors">
-                    <img src={r.image} alt="" className="w-16 h-16 rounded-lg object-cover shrink-0" />
+                    <BlogImage src={r.image} alt={r.title} className="w-16 h-16 rounded-lg shrink-0 overflow-hidden" imgClassName="w-full h-full object-cover" />
                     <div>
                       <p className="text-sm font-semibold text-gray-900 group-hover:text-luxe-gold line-clamp-2 leading-tight">{r.title}</p>
                       <p className="text-[10px] text-gray-400 mt-1">{new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>

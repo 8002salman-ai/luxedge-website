@@ -1,8 +1,11 @@
 // Compact executable contract for the blog CMS mapping (Phase G/H):
 // a DB row maps to the storefront BlogPost shape exactly as documented, with
-// status/lifecycle/date/FAQ behavior the storefront + schema rely on.
-import { describe, it, expect } from 'vitest';
-import { mapRowToBlogPost, type CmsBlogRow } from '../blog';
+// status/lifecycle/date/FAQ behavior the storefront + schema rely on. Plus a
+// regression test that the PUBLIC read never leaks drafts — even when the
+// shared adapter still holds a signed-in admin JWT from a prior admin op.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mapRowToBlogPost, loadPublishedBlogs, type CmsBlogRow } from '../blog';
+import { getDb, resetDbForTests, __setDbConfigForTests } from '../db';
 
 const base: CmsBlogRow = {
   id: 'a1b2',
@@ -66,5 +69,59 @@ describe('mapRowToBlogPost', () => {
     expect(p.images).toEqual([]);
     expect(p.authorName).toBe('Luxedge');
     expect(p.faq).toBeUndefined();
+  });
+});
+
+describe('loadPublishedBlogs — draft leak regression', () => {
+  beforeEach(() => {
+    resetDbForTests();
+    __setDbConfigForTests({ url: 'https://x.supabase.co', anonKey: 'anon-key' });
+  });
+  afterEach(() => {
+    resetDbForTests();
+    __setDbConfigForTests(undefined);
+    vi.unstubAllGlobals();
+  });
+
+  it('runs as ANON (clears a sticky admin JWT) and requests status=published, so drafts cannot leak', async () => {
+    // Server-side RLS, given an anon request, returns published rows only —
+    // that is what the storefront receives.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([base]), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Simulate a prior admin operation: the shared adapter still holds the
+    // signed-in admin JWT (the exact condition that leaked drafts on mobile).
+    (getDb() as unknown as { setAccessToken: (t: string | null) => void }).setAccessToken('admin-jwt');
+
+    const posts = await loadPublishedBlogs();
+
+    // The request must carry NO admin Authorization header (RLS then applies
+    // the published-only policy), and must filter status=published explicitly
+    // so even a role regression cannot leak a draft.
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(url).toContain('status=eq.published');
+
+    expect(posts).not.toBeNull();
+    expect(posts!.map((p) => p.status)).toEqual(['published']);
+    expect(posts!.map((p) => p.slug)).toEqual(['horse-salt-lick-buyers-guide']);
+  });
+
+  it('clears the sticky token so a LATER public read is also anon', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify([base]), { status: 200 })));
+    (getDb() as unknown as { setAccessToken: (t: string | null) => void }).setAccessToken('admin-jwt');
+
+    await loadPublishedBlogs();
+
+    // After the public read the token must be gone — a second read sends no
+    // Authorization header either.
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([base]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await loadPublishedBlogs();
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 });

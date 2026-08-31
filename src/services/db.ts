@@ -23,7 +23,7 @@ export interface DbConnectionResult {
 
 export interface DbAdapter {
   mode: DbMode;
-  list<T>(table: string, opts?: { orderBy?: string; limit?: number }): Promise<T[]>;
+  list<T>(table: string, opts?: { orderBy?: string; limit?: number; filters?: Record<string, string> }): Promise<T[]>;
   get<T>(table: string, id: string): Promise<T | null>;
   /** First row matching `column = value`, or null. Used for identity lookups. */
   findFirst<T>(table: string, column: string, value: string): Promise<T | null>;
@@ -70,8 +70,14 @@ export class LocalStorageAdapter implements DbAdapter {
     this.storage.setItem(this.tableKey(table), JSON.stringify(rows));
   }
 
-  async list<T>(table: string): Promise<T[]> {
-    return this.readTable<T>(table);
+  async list<T>(table: string, opts?: { filters?: Record<string, string> }): Promise<T[]> {
+    let rows = this.readTable<T>(table);
+    if (opts?.filters) {
+      for (const [key, value] of Object.entries(opts.filters)) {
+        rows = rows.filter((r) => (r as Record<string, unknown>)[key] === value);
+      }
+    }
+    return rows;
   }
 
   async get<T>(table: string, id: string): Promise<T | null> {
@@ -181,10 +187,13 @@ export class SupabaseAdapter implements DbAdapter {
     return (await res.json()) as T;
   }
 
-  async list<T>(table: string, opts?: { orderBy?: string; limit?: number }): Promise<T[]> {
+  async list<T>(table: string, opts?: { orderBy?: string; limit?: number; filters?: Record<string, string> }): Promise<T[]> {
     const url = new URL(this.endpoint(table));
     if (opts?.orderBy) url.searchParams.set('order', opts.orderBy);
     if (opts?.limit) url.searchParams.set('limit', String(opts.limit));
+    if (opts?.filters) {
+      for (const [key, value] of Object.entries(opts.filters)) url.searchParams.append(key, `eq.${value}`);
+    }
     const res = await fetch(url.toString(), { headers: this.headers('GET') });
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) ? rows : [];

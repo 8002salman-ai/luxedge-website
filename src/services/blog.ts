@@ -81,11 +81,24 @@ export function mapRowToBlogPost(r: CmsBlogRow): BlogPost {
   };
 }
 
-/** READ published posts for the storefront (anon key; RLS = published only). */
+/**
+ * READ published posts for the storefront.
+ *
+ * SECURITY: this is a PUBLIC read and must always run as the anon role. The
+ * shared Supabase adapter's access token is sticky — any admin operation
+ * (blog save, catalog edit, product scout) leaves the signed-in admin JWT on
+ * it, and with that token RLS returns drafts/scheduled/archived posts too.
+ * We therefore clear the token for this read AND pass an explicit
+ * status=published filter, so a draft can never leak to visitors even if a
+ * future RLS or role change regresses.
+ */
 export async function loadPublishedBlogs(): Promise<BlogPost[] | null> {
   const db = getDb();
   try {
-    const rows = await db.list<CmsBlogRow>('blog_posts', { orderBy: 'published_at.desc' });
+    if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
+      (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
+    }
+    const rows = await db.list<CmsBlogRow>('blog_posts', { orderBy: 'published_at.desc', filters: { status: 'published' } });
     if (!Array.isArray(rows)) return null;
     return rows.map(mapRowToBlogPost);
   } catch {
@@ -104,7 +117,16 @@ async function withAdmin<T>(fn: (db: DbAdapter) => Promise<T>): Promise<T> {
   if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
     (db as { setAccessToken: (t: string | null) => void }).setAccessToken(token);
   }
-  return fn(db);
+  try {
+    return await fn(db);
+  } finally {
+    // Never leave the admin JWT on the shared adapter: after the op completes
+    // the next storefront read must run as anon again (RLS published-only),
+    // not as the admin who could see drafts/scheduled/archived posts.
+    if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
+      (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
+    }
+  }
 }
 
 function maxRevision(revs: CmsBlogRevision[]): number {
