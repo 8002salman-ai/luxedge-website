@@ -15,9 +15,6 @@ import { fetchSiteEvents, type SiteEventRow } from '../services/siteEvents';
 
 const DAY_OPTIONS = [7, 14, 30, 90];
 const COLORS = ['#2563eb', '#0ea5e9', '#16a34a', '#f59e0b', '#8b5cf6', '#ec4899', '#10b981', '#f43f5e'];
-const ECPM_KEY = 'luxedge_ecpm';
-const DEFAULT_ECPM = 8; // $ per 1000 ad impressions — admin-tunable estimate
-
 interface Metric {
   label: string;
   value: string | number;
@@ -36,23 +33,6 @@ function money(n: number, currency = 'USD'): string {
   }
 }
 
-function readEcpm(): number {
-  try {
-    const v = Number(localStorage.getItem(ECPM_KEY));
-    return Number.isFinite(v) && v > 0 ? v : DEFAULT_ECPM;
-  } catch {
-    return DEFAULT_ECPM;
-  }
-}
-
-function writeEcpm(v: number): void {
-  try {
-    localStorage.setItem(ECPM_KEY, String(v));
-  } catch {
-    /* ignore */
-  }
-}
-
 function dayKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -63,7 +43,6 @@ export default function TrafficDashboard() {
   const [rows, setRows] = useState<SiteEventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [ecpm, setEcpm] = useState<number>(readEcpm);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,15 +177,6 @@ export default function TrafficDashboard() {
 
   const metrics = stats.metrics.slice(0, 4);
   const commerce = stats.metrics.slice(4);
-  const adRevenue = stats.viewCount * (ecpm / 1000);
-  const setEcpmValue = (v: string) => {
-    const n = Number(v);
-    if (Number.isFinite(n) && n > 0) {
-      setEcpm(n);
-      writeEcpm(n);
-    }
-  };
-
   if (loading && rows.length === 0) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
@@ -255,10 +225,11 @@ export default function TrafficDashboard() {
         </div>
       ) : (
         <>
-          {/* Earnings — revenue from sales, ads (estimate), blog traffic & product clicks */}
+          {/* Sales revenue is backed by recorded purchases. AdSense reporting
+              remains in the AdSense console; this dashboard never estimates it. */}
           <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4 shadow-sm">
-            <p className="text-xs font-semibold text-emerald-800 mb-3">💰 Earnings &amp; Traffic Value — last {days} days</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <p className="text-xs font-semibold text-emerald-800 mb-3">💰 Sales &amp; Traffic — last {days} days</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Sales Revenue</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.anyRevenue ? money(stats.salesRevenue, stats.revenueCurrency) : '—'}</p>
@@ -267,24 +238,6 @@ export default function TrafficDashboard() {
                 ) : (
                   <p className="text-[10px] text-amber-600 mt-0.5">No purchase value yet (needs migration 0024)</p>
                 )}
-              </div>
-              <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Est. Ad Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">{money(adRevenue)}</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[10px] text-gray-400">eCPM $</span>
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.5"
-                    value={ecpm}
-                    onChange={(e) => setEcpmValue(e.target.value)}
-                    className="w-16 rounded border border-gray-200 px-1 py-0.5 text-[10px] font-medium text-gray-700 focus:border-emerald-400 focus:outline-none"
-                    aria-label="eCPM per 1000 views"
-                  />
-                  <span className="text-[10px] text-gray-400">/1k</span>
-                </div>
-                <p className="text-[10px] text-gray-400 mt-1">Estimate: {fmt(stats.viewCount)} views × eCPM</p>
               </div>
               <div className="rounded-xl border border-emerald-100 bg-white p-4 shadow-sm">
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Blog Traffic</p>
@@ -298,7 +251,7 @@ export default function TrafficDashboard() {
               </div>
             </div>
             <p className="mt-2 text-[10px] text-gray-400">
-              Sales revenue is real (purchase events). Ad revenue is an <strong>estimate</strong> — page views × eCPM; adjust eCPM to your real AdSense RPM.
+              Sales revenue is real when purchase events contain a recorded value. For real AdSense earnings, impressions, clicks, and RPM, use the Google AdSense console.
             </p>
           </div>
 
