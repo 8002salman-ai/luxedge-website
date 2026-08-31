@@ -1,3 +1,5 @@
+import { recordSiteEvent } from '../services/siteEvents';
+
 // ============================================================================
 // MARKETING & TRAFFIC — shared config, script loading, GA4 events
 //
@@ -274,6 +276,13 @@ export function isGAEnabled(): boolean {
 }
 
 export function trackEvent(name: string, params: Record<string, unknown> = {}): void {
+  // First-party analytics (Admin Traffic Overview) — always recorded, cheap,
+  // independent of whether GA4 is enabled. Never throws.
+  try {
+    recordSiteEvent(name, params);
+  } catch {
+    /* never break the storefront */
+  }
   if (!isGAEnabled()) return;
   const w = window as any;
   if (typeof w.gtag !== 'function') return;
