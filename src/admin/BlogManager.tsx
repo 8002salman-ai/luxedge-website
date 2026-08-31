@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, FileText, Eye, Trash, PencilLine, Copy, Archive,
-  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus,
+  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle,
 } from '@phosphor-icons/react';
 import { useApp } from '../App';
 import {
@@ -168,7 +168,15 @@ export default function BlogManager() {
     setBusy(true);
     try {
       await adminSetLifecycle(id, action);
-      notify(action === 'unpublish' ? 'Unpublished.' : `Post ${action}.`);
+      const target = (rows || []).find((r) => r.id === id);
+      const liveUrl = target?.slug ? `/blog/${target.slug}` : '';
+      const notice =
+        action === 'publish'
+          ? `Published live ✓ ${liveUrl}`
+          : action === 'unpublish'
+            ? 'Unpublished — moved to drafts.'
+            : `Post ${action}.`;
+      notify(notice);
       await reloadBlogs();
       await load();
     } catch (e) {
@@ -336,6 +344,13 @@ export default function BlogManager() {
             </div>
           </div>
 
+          {editing?.status === 'published' && (
+            <div className="flex items-center justify-between gap-3 mb-5 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              <span className="flex items-center gap-2"><CheckCircle size={17} weight="fill" /> This post is <strong className="font-semibold">LIVE</strong> — changes take effect instantly, no deploy needed.</span>
+              <Link to={`/blog/${editing.slug}`} className="inline-flex items-center gap-1 text-green-700 font-semibold underline whitespace-nowrap">View live page →</Link>
+            </div>
+          )}
+
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-4">
               <div>
@@ -417,7 +432,8 @@ export default function BlogManager() {
           {/* Actions for an existing post */}
           {editing && (
             <div className="mt-5 border-t pt-4 flex flex-wrap gap-2">
-              <Link to={`/blog/${editing.slug}`} target="_blank" className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg"><Eye size={14} /> View live</Link>
+              <Link to={`/blog/${editing.slug}`} className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg"><Eye size={14} /> View live</Link>
+              <Link to="/blog" className="flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg"><FileText size={14} /> Blog page</Link>
               {editing.status !== 'published' && (
                 <button onClick={() => lifecycle('publish', editing.id)} disabled={busy} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg disabled:opacity-50"><Eye size={14} /> Publish now</button>
               )}
@@ -481,7 +497,9 @@ export default function BlogManager() {
                             ? <img src={r.hero_image_url} alt="" className="w-12 h-8 rounded object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
                             : <div className="w-12 h-8 rounded bg-gray-100 flex items-center justify-center"><FileText size={14} className="text-gray-300" /></div>}
                           <div>
-                            <p className="font-medium text-sm">{r.title}</p>
+                            {r.status === 'published'
+                              ? <Link to={`/blog/${r.slug}`} className="font-medium text-sm text-luxe-gold hover:underline">{r.title}</Link>
+                              : <p className="font-medium text-sm">{r.title}</p>}
                             <p className="text-xs text-gray-400">/{r.slug}</p>
                           </div>
                         </div>
