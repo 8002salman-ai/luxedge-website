@@ -436,7 +436,7 @@ function injectArticleBody(html: string, post: BlogEntry): string {
     : '';
   const byline = `<p>Written by ${esc(author)}${date ? ' \u2014 ' + esc(date) : ''}</p>`;
   const editorialNote = author === 'Luxedge Editorial Team'
-    ? '<p><em>Buying guides are researched and reviewed by the Luxedge editorial team. They are informational and not veterinary, medical, or nutritional advice.</em></p>'
+    ? '<p><em>Buying guides are prepared by the Luxedge editorial team for general product information. Always follow the product label and instructions.</em></p>'
     : '';
   const body = renderArticleBody(post.content || post.excerpt || '');
   const article = `<article><h1>${esc(post.title)}</h1>${byline}${editorialNote}${image}${body}</article>`;
@@ -624,6 +624,35 @@ function injectShopBody(html: string): string {
 }
 
 /** Pre-renders the /blog index with recent post links from the CMS. */
+/** Pre-renders the /careers page (mirrors the client CareersPage copy). */
+function injectCareersBody(html: string): string {
+  const parts: string[] = [
+    `<h1>Careers at Luxedge</h1>`,
+    `<p>Join our growing team and help shape the future of curated ecommerce.</p>`,
+    `<h2>Why Work at Luxedge?</h2>`,
+    `<p>At Luxedge, we're building more than an online store — we're creating a trusted destination for people who value quality. Our small but passionate team is obsessed with finding the best products and delivering an exceptional shopping experience.</p>`,
+    `<p>We value curiosity, ownership, and a genuine desire to make customers happy.</p>`,
+    `<h2>Our Culture</h2>`,
+    `<ul>`,
+    `<li><strong>Growth-Focused</strong> — We invest in our people. Learn, grow, and level up with us.</li>`,
+    `<li><strong>Collaborative</strong> — Small team, big impact. Every voice matters here.</li>`,
+    `<li><strong>Remote-Friendly</strong> — Work from anywhere. We care about results, not locations.</li>`,
+    `<li><strong>Innovation-Driven</strong> — We encourage new ideas and creative problem-solving.</li>`,
+    `</ul>`,
+    `<h2>Open Positions</h2>`,
+    `<p>We're always looking for talented individuals to join us. Even if you don't see a specific role listed, we encourage you to reach out.</p>`,
+    `<ul>`,
+    `<li><strong>Product Curator</strong> (Remote · Full-Time) — Research, test, and select products that meet our quality standards.</li>`,
+    `<li><strong>Content Writer</strong> (Remote · Part-Time) — Create engaging blog posts, product descriptions, and marketing copy.</li>`,
+    `<li><strong>Customer Support Specialist</strong> (Remote · Full-Time) — Help customers via email and chat with a focus on resolution and delight.</li>`,
+    `</ul>`,
+    `<h2>How to Apply</h2>`,
+    `<p>Send your resume and a brief note about why you'd be a great fit to <a href="mailto:careers@luxedge.us">careers@luxedge.us</a>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>`,
+    `<p><a href="/contact">Get in Touch</a></p>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
 async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): Promise<string> {
   const posts = await getBlogRegistry(origin, env);
   const parts: string[] = [
@@ -642,7 +671,7 @@ export async function maybeInjectSeo(
   pathname: string,
   origin: string,
   env: SeoEnv,
-): Promise<string | null> {
+): Promise<{ html: string; status: number } | null> {
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
@@ -652,14 +681,18 @@ export async function maybeInjectSeo(
   // #root on mount, so bots and humans see the same semantic content.
 
   // Noindex utility/private routes so they never appear in search results.
-  const noIndexRoutes = ['admin', 'checkout', 'login', 'signup', 'account'];
-  if (segs.length === 1 && noIndexRoutes.includes(segs[0])) {
-    return inject(html, {
-      title: `${segs[0].charAt(0).toUpperCase() + segs[0].slice(1)} | Luxedge`,
-      description: '',
-      canonical: `${root}/${segs[0]}`,
-      noindex: true,
-    });
+  // Matches any depth: /admin, /admin/blogs, /checkout, /checkout/success, …
+  const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders'];
+  if (segs.length > 0 && noIndexFirst.includes(segs[0])) {
+    return {
+      html: inject(html, {
+        title: `${segs[0].charAt(0).toUpperCase() + segs[0].slice(1)} | Luxedge`,
+        description: '',
+        canonical: `${root}/${segs.slice(0, 2).join('/')}`,
+        noindex: true,
+      }),
+      status: 200,
+    };
   }
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
@@ -679,7 +712,7 @@ export async function maybeInjectSeo(
     // Pre-render the hero + category navigation so the initial HTML (and any
     // non-JS crawler) sees real substantive content, not an empty shell.
     out = injectHomeBody(out);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // /blog (index) — pre-render the index with recent post links from the CMS.
@@ -691,7 +724,7 @@ export async function maybeInjectSeo(
       canonical: `${root}/blog`,
     });
     out = await injectBlogIndexBody(out, origin, env);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // /shop — pre-render category navigation.
@@ -703,7 +736,7 @@ export async function maybeInjectSeo(
       canonical: `${root}/shop`,
     });
     out = injectShopBody(out);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // Static pages (about also receives the shared About copy pre-rendered).
@@ -724,22 +757,28 @@ export async function maybeInjectSeo(
     else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS);
     else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS);
     else if (staticKey === '/faq') out = injectFaqBody(out);
-    return out;
+    else if (staticKey === '/careers') out = injectCareersBody(out);
+    return { html: out, status: 200 };
   }
 
   // /product/:slug
   if (segs.length === 2 && segs[0] === 'product') {
     const slug = decodeURIComponent(segs[1]);
     const products = await getProducts();
-    if (products === null) return injectCanonical(html, `${root}/product/${slug}`); // DB unavailable — keep canonical correct
+    if (products === null) {
+      return { html: injectCanonical(html, `${root}/product/${slug}`), status: 200 }; // DB unavailable — keep canonical correct
+    }
     const p = products.find((x) => x.slug === slug);
     if (!p) {
-      return inject(html, {
-        title: 'Product Not Found | Luxedge',
-        description: 'This product is no longer available.',
-        canonical: `${root}/product/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Product Not Found | Luxedge',
+          description: 'This product is no longer available.',
+          canonical: `${root}/product/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/product/${slug}`;
     const title = (p.seo_title || `${p.name} | Luxedge`).replace(/\s*\|\s*Luxedge\s*$/, '') + ' | Luxedge';
@@ -752,22 +791,27 @@ export async function maybeInjectSeo(
     // Pre-render the real product facts into #root (same content the client
     // renders after hydration) so crawlers see page-specific substance.
     out = injectProductBody(out, p);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // /blog/:slug
   if (segs.length === 2 && segs[0] === 'blog') {
     const slug = decodeURIComponent(segs[1]);
     const posts = await getBlogRegistry(origin, env);
-    if (posts === null) return injectCanonical(html, `${root}/blog/${slug}`); // registry unavailable — keep canonical correct
+    if (posts === null) {
+      return { html: injectCanonical(html, `${root}/blog/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+    }
     const post = posts.find((x) => x.slug === slug);
     if (!post) {
-      return inject(html, {
-        title: 'Post Not Found | Luxedge',
-        description: 'This article is no longer available.',
-        canonical: `${root}/blog/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Post Not Found | Luxedge',
+          description: 'This article is no longer available.',
+          canonical: `${root}/blog/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/blog/${slug}`;
     // One semantic path: full head metadata AND the pre-rendered article body
@@ -780,22 +824,27 @@ export async function maybeInjectSeo(
       jsonLd: blogJsonLd(post, canonical),
     });
     out = injectArticleBody(out, post);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // /category/:slug
   if (segs.length === 2 && segs[0] === 'category') {
     const slug = decodeURIComponent(segs[1]);
     const categories = await getCategories();
-    if (categories === null) return injectCanonical(html, `${root}/category/${slug}`);
+    if (categories === null) {
+      return { html: injectCanonical(html, `${root}/category/${slug}`), status: 200 };
+    }
     const cat = categories.find((x) => x.slug === slug);
     if (!cat) {
-      return inject(html, {
-        title: 'Category Not Found | Luxedge',
-        description: 'This category is no longer available.',
-        canonical: `${root}/category/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Category Not Found | Luxedge',
+          description: 'This category is no longer available.',
+          canonical: `${root}/category/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/category/${slug}`;
     let out = inject(html, {
@@ -813,8 +862,32 @@ export async function maybeInjectSeo(
     // the same products as its category grid).
     const products = await getProducts();
     if (products !== null) out = injectCategoryBody(out, cat, products);
-    return out;
+    return { html: out, status: 200 };
   }
 
-  return null;
+  // /blog/write — client-side composition tool; nothing to index.
+  if (segs.length === 2 && segs[0] === 'blog' && segs[1] === 'write') {
+    return {
+      html: inject(html, {
+        title: 'Write | Luxedge',
+        description: '',
+        canonical: `${root}/blog/write`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
+  // Unknown route: the SPA fallback would otherwise serve an indexable copy of
+  // the homepage under a URL that does not exist (stale WordPress-era slugs,
+  // typos, probes). Serve a real 404 with noindex so the index self-cleans.
+  return {
+    html: inject(html, {
+      title: 'Page Not Found | Luxedge',
+      description: 'This page does not exist.',
+      canonical: `${root}/404`,
+      noindex: true,
+    }),
+    status: 404,
+  };
 }

@@ -36,7 +36,7 @@ export const TERMS_SECTIONS: PolicySection[] = [
   { title: 'Orders and Payment', body: 'Submitting checkout is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends a confirmation.' },
   { title: 'Shipping and Delivery', body: 'Shipping availability, cost, and estimated delivery windows are shown at checkout or on product pages. Estimates are not guarantees.' },
   { title: 'Returns, Replacements, and Refunds', body: 'Returns and replacements are governed by our Return & Replacement Policy. Luxedge does not offer change-of-mind refunds as a standard remedy.' },
-  { title: 'Product Safety and Information', body: 'Product information is for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Animal food and feed: check the label, ingredients, intended species, and warnings before use.' },
+  { title: 'Product Information', body: 'Product information is for general shopping purposes. Follow product labels, instructions, intended species, and warnings. Animal food and feed: check the label, ingredients, intended species, and warnings before use.' },
   { title: 'Disclaimers and Liability', body: 'The website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses except where liability cannot be limited.' },
   { title: 'Changes and Contact', body: 'We may update these Terms by posting a revised version. Questions: hello@luxedge.us or (440) 941-8002.' },
 ];
@@ -92,7 +92,7 @@ export const FAQ_DATA: FaqCategory[] = [
     { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, contact us at hello@luxedge.us.' },
   ]},
   { category: 'Products & Quality', items: [
-    { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Check the product label, ingredients, and intended species before use. Luxedge does not provide veterinary or nutritional advice.' },
+    { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Check the product label, ingredients, intended species, and warnings before use. Follow the label for product-specific guidance.' },
     { q: 'How do you select your products?', a: 'Every product goes through a curation process. We evaluate quality, design, value, and supplier information before listing.' },
     { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is reviewed before listing.' },
     { q: 'Do you offer warranties?', a: 'Warranty coverage varies by product and manufacturer. Check the product description for specific details. Our 30-day return policy covers general quality issues.' },

@@ -41,8 +41,7 @@ export const ABOUT_SECTIONS: AboutSection[] = [
     body:
       'The Luxedge blog contains practical buyer guides — how to choose a horse halter, how long a salt lick ' +
       'lasts, how to fit a no-pull harness, and more. Guides are researched and reviewed by the Luxedge editorial ' +
-      'team using factual product information, and they are informational only — not a substitute for veterinary, ' +
-      'medical, or nutritional advice.',
+      'team using factual product information. Always follow the relevant product label and instructions.',
   },
   {
     title: 'Customer support',
