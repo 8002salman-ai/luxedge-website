@@ -75,6 +75,34 @@ describe('loadStorefrontCatalog', () => {
     expect(cat!.categories.length).toBe(1);
   });
 
+  it('display parity: rows WITHOUT title/description/price_amount/image_url map cleanly (name||id, \'\' desc, price, images from product_images)', async () => {
+    // The egress select deliberately omits columns that never existed on
+    // public.products (they 400-d the query). The mapping must fall back the
+    // same way select=* did: name→display, price_amount absent → price used,
+    // image_url absent → product_images table still supplies the images.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'p1', name: 'Dog Bed', slug: 'dog-bed', status: 'active', price: 49.99, short_description: 'Comfy', category_id: null, inventory_qty: 5, supplier_source: 'CJ', cost_price: 12, us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY' },
+          // No name → falls back to id (title is not a column, so never present).
+          { id: 'p2', slug: 'nameless', status: 'active', price: 9.99, commerce_readiness: 'COMMERCE_READY' },
+        ]));
+      }
+      if (url.includes('/product_images')) {
+        return Promise.resolve(jsonResponse([{ product_id: 'p1', url: 'https://img/x.jpg', alt_text: 'bed', is_primary: true, sort_order: 0 }]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const cat = await loadStorefrontCatalog();
+    const byId = new Map(cat!.products.map((p) => [p.id, p]));
+    expect(byId.get('p1')?.name).toBe('Dog Bed'); // p.name || p.title → name
+    expect(byId.get('p1')?.description).toBe(''); // absent description column → ''
+    expect(byId.get('p1')?.price).toBe(49.99); // price (no price_amount present)
+    expect(byId.get('p1')?.images).toEqual(['https://img/x.jpg']);
+    expect(byId.get('p2')?.name).toBe('p2'); // name||title||id → id
+  });
+
   it('hides ACTIVE products without a verified purchasing path (commerce readiness gate)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
