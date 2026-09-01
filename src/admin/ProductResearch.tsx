@@ -8,7 +8,7 @@
 // dependency (no Jungle Scout / Helium10 / Keepa API subscriptions).
 // ============================================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useApp } from '../App';
 import {
   TrendUp, MagnifyingGlass, ShieldCheck, Flask,
@@ -17,6 +17,7 @@ import type { ProductOpportunityResult, TrendingPetProduct, SourceStatus } from 
 import { OPPORTUNITY_WEIGHTS } from '../features/marketIntel/score';
 import { mergeTrending } from '../features/marketIntel/trending';
 import { researchKeyword } from '../features/marketIntel/research';
+import { listTrendsJobs, type TrendsJobView } from '../features/marketIntel/trendsJobs';
 import { fetchPageContent } from '../features/ai/importer';
 import { queueHermesFallback } from '../features/scout/persist';
 import { getDb } from '../services/db';
@@ -52,6 +53,21 @@ export default function ProductResearch() {
   const [trending, setTrending] = useState<TrendingPetProduct[]>([]);
   const [queuedForHermes, setQueuedForHermes] = useState(false);
   const [cached, setCached] = useState(false);
+  const [trendsJobs, setTrendsJobs] = useState<TrendsJobView[]>([]);
+
+  /** Load the Hermes trends job queue (provider=hermes, intent=google_trends_browser). */
+  const refreshTrendsJobs = async () => {
+    try {
+      const d = getDb();
+      if ('setAccessToken' in d && typeof (d as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
+        (d as { setAccessToken: (t: string | null) => void }).setAccessToken(getAccessToken());
+      }
+      setTrendsJobs(await listTrendsJobs(d));
+    } catch {
+      /* status display is best-effort — never blocks the page */
+    }
+  };
+  useEffect(() => { void refreshTrendsJobs(); }, []);
 
   /**
    * Run one research pass via the injectable pipeline — every provider
@@ -81,6 +97,7 @@ export default function ProductResearch() {
       setQueuedForHermes(outcome.hermesQueued);
       setCached(outcome.cached);
       setResult(res);
+      void refreshTrendsJobs();
 
       // ---- Trending families (deterministic merge of researched keyword) ----
       setTrending(mergeTrending([
@@ -100,6 +117,29 @@ export default function ProductResearch() {
       setRunning(false);
     }
   };
+
+  // -- Hermes trends job visibility on the GOOGLE TREND card -----------------
+  // A completed provider=hermes job for the researched keyword feeds the card
+  // with verified data; otherwise it stays honest (NOT_CONFIGURED, no score).
+  const consumedTrend = result
+    ? trendsJobs.find((j) => j.status === 'completed' && j.keyword.trim().toLowerCase() === result.keyword.trim().toLowerCase())
+    : null;
+  const trendCardScore = consumedTrend?.output?.trend?.score ?? (result?.provenance.trend.score ?? null);
+  const trendCardStatus: SourceStatus = consumedTrend ? 'AVAILABLE' : (result?.provenance.trend.status ?? 'NOT_CONFIGURED');
+  const trendJobCounts = {
+    queued: trendsJobs.filter((j) => j.status === 'queued').length,
+    running: trendsJobs.filter((j) => j.status === 'running').length,
+    completed: trendsJobs.filter((j) => j.status === 'completed').length,
+  };
+  const trendsSummary =
+    trendsJobs.length > 0
+      ? [
+          `${trendJobCounts.queued} queued`,
+          `${trendJobCounts.running} in progress`,
+          `${trendJobCounts.completed} completed`,
+          ...(consumedTrend?.output?.trend?.score != null ? [`latest ${consumedTrend.output.trend.score}/100`] : []),
+        ].join(' · ')
+      : undefined;
 
   return (
     <div className="p-6 space-y-6">
@@ -140,7 +180,7 @@ export default function ProductResearch() {
       {result && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <ScoreCard label="GOOGLE TREND" value={result.provenance.trend.score !== null ? `${result.provenance.trend.score}/100` : '—'} status={result.provenance.trend.status} />
+            <ScoreCard label="GOOGLE TREND" value={trendCardScore !== null ? `${trendCardScore}/100` : '—'} status={trendCardStatus} />
             <ScoreCard label="AMAZON DEMAND" value={result.provenance.amazonPublic.status === 'AVAILABLE' ? 'PASS' : '—'} status={result.provenance.amazonPublic.status} />
             <ScoreCard label="EBAY DEMAND" value={result.provenance.ebay.activeListings !== null ? `${result.provenance.ebay.activeListings} listings` : '—'} status={result.provenance.ebay.status} />
             <ScoreCard label="SUPPLIER COST" value={result.economics.landedCost !== null ? `$${result.economics.landedCost.toFixed(2)}` : '—'} status={result.provenance.supplier.status} />
@@ -187,7 +227,7 @@ export default function ProductResearch() {
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><ShieldCheck size={16} className="text-green-600" /> Source Breakdown</h3>
             <div className="grid md:grid-cols-2 gap-2 text-sm">
-              <SourceRow label="GOOGLE TRENDS" status={result.provenance.trend.status} detail={queuedForHermes ? 'queued for Hermes browser' : undefined} />
+              <SourceRow label="GOOGLE TRENDS" status={trendCardStatus} detail={trendsSummary || (queuedForHermes ? 'queued for Hermes browser' : undefined)} />
               <SourceRow label="AMAZON OPPORTUNITY EXPLORER" status={result.provenance.amazonOpportunity.status} />
               <SourceRow label="AMAZON PUBLIC" status={result.provenance.amazonPublic.status} />
               <SourceRow label="EBAY" status={result.provenance.ebay.status} />
