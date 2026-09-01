@@ -261,10 +261,29 @@ function centsToDollars(cents: unknown): number {
   return Math.round(num(cents)) / 100;
 }
 
-/** Extract string tags from a jsonb column when present (V2 schema). */
+/** Extract string tags from a jsonb column (V2 schema), tolerating both live
+ * shapes: a jsonb array AND the CJ-import rows that store tags as plain text
+ * (`horse,grooming,brush,tack,equestrian`) or a JSON string array
+ * (`["a","b"]`). Never throws: null/undefined/empty/malformed/non-string
+ * values degrade to []. Array rows behave exactly as before. */
 function tagsOf(v: unknown): string[] {
   if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
-  return [];
+  if (typeof v !== 'string' || !v.trim()) return [];
+  const s = v.trim();
+  // JSON string array shape — parse only when the value clearly intends an
+  // array (starts or ends with a bracket). A failed parse degrades to []:
+  // broken array data must not surface as junk tag text.
+  if (s.startsWith('[') || s.endsWith(']')) {
+    try {
+      const parsed: unknown = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
+    } catch {
+      /* fall through */
+    }
+    return [];
+  }
+  // Plain comma-separated text (the CJ-sourced rows).
+  return s.split(',').map((t) => t.trim()).filter(Boolean);
 }
 
 /**
