@@ -4,17 +4,36 @@
 // The storefront is a client-rendered SPA, so every route serves the same
 // generic index.html shell. This module rewrites the shell for the requested
 // route BEFORE it is returned, for ALL user agents (no bot detection):
-//   /product/:slug   → product seo_title/seo_description + Product + Breadcrumb JSON-LD
-//   /blog/:slug      → post title/excerpt + BlogPosting/FAQPage JSON-LD + the
-//                      article body pre-rendered into #root (same content the
-//                      client renders, with its real internal links)
-//   /category/:slug  → category name + CollectionPage JSON-LD
-//   static pages     → unique title/description
+//   /product/:slug    → product seo_title/seo_description + Product + Breadcrumb
+//                       JSON-LD + a pre-rendered product summary in #root
+//                       (title, price, stock/shipping facts, description,
+//                       category link) — the same content the client renders
+//   /blog/:slug       → post title/excerpt + BlogPosting/FAQPage JSON-LD + the
+//                       article body pre-rendered into #root (same content the
+//                       client renders, with its real internal links)
+//   /category/:slug   → category name + CollectionPage JSON-LD + a pre-rendered
+//                       category intro with real product links (mirrors the
+//                       client category grid)
+//   / (homepage)      → WebSite JSON-LD + pre-rendered hero + category navigation
+//   /about            → unique title/description + About copy pre-rendered from
+//                       src/content/about.ts (same copy the client renders)
+//   static pages      → unique title/description
 // Every indexable route also gets an exact route-specific canonical + og:url.
 // React's createRoot().render() replaces #root on mount, so JS users see the
-// identical client-rendered article — no duplicated or hidden content.
+// identical client-rendered content — no duplicated or hidden content.
 // No secrets — reads Supabase with the anon key exactly like api/google-feed.ts.
 // ============================================================================
+
+import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
+import {
+  CONTACT_INFO,
+  CONTACT_INTRO,
+  PRIVACY_SECTIONS,
+  TERMS_SECTIONS,
+  RETURNS_SECTIONS,
+  SHIPPING_SECTIONS,
+  FAQ_DATA,
+} from '../src/content/policies';
 
 export interface SeoEnv {
   ASSETS: {
@@ -71,13 +90,23 @@ interface ProductRow {
   slug?: string | null;
   name: string;
   description?: string | null;
+  short_description?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
   seo_keywords?: string | null;
   price?: number | null;
+  compare_at_price?: number | null;
   brand?: string | null;
   stock_status?: string | null;
   us_inventory?: boolean | null;
+  free_shipping?: boolean | null;
+  shipping_cost?: number | null;
+  delivery_min_days?: number | null;
+  delivery_max_days?: number | null;
+  currency?: string | null;
+  /** Embedded category name via categories(name) — the REST key is the
+   * relation name `categories`. */
+  categories?: { name?: string } | null;
 }
 
 const cache = new Map<string, { ts: number; data: unknown }>();
@@ -114,11 +143,15 @@ async function getProducts(): Promise<ProductRow[] | null> {
   const base = supabaseBase();
   const key = supabaseAnon();
   if (!base || !key) return null;
+  // Page-specific fields the storefront shows: short/long description, price,
+  // stock, shipping and delivery estimates, plus the embedded category name for
+  // a contextual "More in {category}" link. features/specifications are mostly
+  // empty in the live catalog, so they are deliberately not pre-rendered.
   return cachedFetch('seo:products', TTL_DB, () =>
     fetchJson<ProductRow[]>(
       base,
       key,
-      'products?select=slug,name,description,seo_title,seo_description,seo_keywords,price,brand,stock_status,us_inventory&status=eq.active&limit=500',
+      'products?select=slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)&status=eq.active&limit=500',
     ),
   );
 }
@@ -171,7 +204,10 @@ function mapCmsToBlogEntry(r: BlogCmsRow): BlogEntry | null {
     excerpt: r.excerpt || r.title || '',
     image: r.hero_image_url || undefined,
     date,
-    authorName: r.author_name || undefined,
+    // Truthful default attribution: when the CMS row has no individual author,
+    // attribute the article to the editorial team instead of a bare brand name
+    // or an invented persona.
+    authorName: r.author_name || 'Luxedge Editorial Team',
     content: r.content || undefined,
     faq: Array.isArray(r.faq) && r.faq.length ? r.faq : undefined,
   };
@@ -302,7 +338,9 @@ function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown>[] 
     mainEntityOfPage: canonical,
   };
   if (b.date) post.datePublished = b.date;
-  if (b.authorName) post.author = { '@type': 'Person', name: b.authorName };
+  // Truthful organic attribution (BlogPosting is a Person schema): default to
+  // the editorial team when no individual author is recorded in the CMS.
+  post.author = { '@type': 'Person', name: b.authorName || 'Luxedge Editorial Team' };
   if (b.image) post.image = b.image;
   const blocks: Record<string, unknown>[] = [post];
   if (b.faq && b.faq.length) {
@@ -392,9 +430,240 @@ function renderArticleBody(content: string): string {
  * duplication, no hidden/SEO-only markup. */
 function injectArticleBody(html: string, post: BlogEntry): string {
   const image = post.image ? `<img src="${esc(post.image)}" alt="${esc(post.title)}" />` : '';
+  const author = post.authorName || 'Luxedge Editorial Team';
+  const date = post.date
+    ? new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const byline = `<p>Written by ${esc(author)}${date ? ' \u2014 ' + esc(date) : ''}</p>`;
+  const editorialNote = author === 'Luxedge Editorial Team'
+    ? '<p><em>Buying guides are prepared by the Luxedge editorial team for general product information. Always follow the product label and instructions.</em></p>'
+    : '';
   const body = renderArticleBody(post.content || post.excerpt || '');
-  const article = `<article><h1>${esc(post.title)}</h1>${image}${body}</article>`;
+  const article = `<article><h1>${esc(post.title)}</h1>${byline}${editorialNote}${image}${body}</article>`;
   return html.replace('<div id="root"></div>', `<div id="root">${article}</div>`);
+}
+
+// ---------------------------------------------------------------------------
+// Pre-rendered route bodies (product / category / homepage / about)
+// ---------------------------------------------------------------------------
+
+/** Static category intros — mirrors CAT_META in src/App.tsx (keep in sync).
+ * Used only when the live categories table has no description for the slug,
+ * so the pre-render and the client category header show the same line. */
+const CATEGORY_DESC: Record<string, string> = {
+  'dog-supplies': 'Walking, training & everyday dog essentials',
+  'cat-supplies': 'Play, comfort & everyday cat essentials',
+  'pet-beds': 'Comfort-led pieces for deeper rest',
+  'pet-toys': 'Interactive play and everyday enrichment',
+  'feeding-water': 'Considered pieces for daily mealtimes',
+  grooming: 'Simple tools for everyday care',
+  'pet-accessories': 'Useful pieces for life together',
+  'bird-supplies': 'Seed, feed & care essentials for feathered friends',
+  horse: 'Practical care and stable essentials for horses',
+  cattle: 'Useful feeding and care essentials for cattle and livestock',
+};
+
+function money(value: number | null | undefined): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return `$${n.toFixed(2)}`;
+}
+
+/** Pre-renders the product essentials into the SPA shell: the same title,
+ * price, stock/shipping facts, description and category link the Product
+ * detail page renders after hydration. Only real catalog columns are used —
+ * nothing is invented. */
+function injectProductBody(html: string, p: ProductRow): string {
+  const parts: string[] = [`<h1>${esc(p.name)}</h1>`];
+  const price = money(p.price);
+  const compare = money(p.compare_at_price);
+  if (price) {
+    parts.push(compare ? `<p>Price: <strong>${price}</strong> <s>${compare}</s></p>` : `<p>Price: <strong>${price}</strong></p>`);
+  }
+  const facts: string[] = [];
+  if (p.stock_status === 'in_stock' || p.us_inventory === true) facts.push('In stock');
+  else if (p.stock_status && p.stock_status !== 'in_stock') facts.push('Availability confirmed at checkout');
+  if (p.free_shipping === true) facts.push('Free shipping');
+  else if (p.shipping_cost && Number(p.shipping_cost) > 0) facts.push(`Shipping ${money(p.shipping_cost)}`);
+  if (p.delivery_min_days != null && p.delivery_max_days != null) {
+    facts.push(`Estimated delivery ${p.delivery_min_days}–${p.delivery_max_days} business days`);
+  }
+  if (facts.length) parts.push(`<p>${esc(facts.join(' · '))}</p>`);
+  const lead = (p.short_description || '').trim() || (p.description || '').trim();
+  if (lead) parts.push(`<h2>Details</h2>`, `<p>${esc(lead)}</p>`);
+  if (p.description && p.description.trim() && p.description.trim() !== lead) {
+    parts.push(`<h2>Description</h2>`);
+    parts.push(...p.description.split(/\n+/).filter((l) => l.trim()).map((l) => `<p>${esc(l)}</p>`));
+  }
+  const links: string[] = [];
+  if (p.categories && p.categories.name) {
+    const catSlug = (p.categories.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    links.push(`<a href="/category/${esc(catSlug)}">More in ${esc(p.categories.name)}</a>`);
+  }
+  links.push('<a href="/shop">Shop all pet essentials</a>');
+  parts.push(`<p>${links.join(' · ')}</p>`);
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the category intro into the SPA shell: the category name, the
+ * same descriptive line the client header shows, and links to the real
+ * products in the category (the client renders these same products as cards). */
+function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
+  const inCategory = products.filter(
+    (p) => p.slug && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
+  );
+  // Mirror the client category header exactly (CAT_META in src/App.tsx or the
+  // client's `Browse our {category} collection` fallback) so the pre-render and
+  // the hydrated page show the same line. The DB description column is ignored
+  // here because the client does not render it. Keep CATEGORY_DESC in sync.
+  const desc = CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
+  const parts: string[] = [`<h1>${esc(cat.name)}</h1>`, `<p>${esc(desc)}</p>`];
+  if (inCategory.length > 0) {
+    const items = inCategory
+      .slice(0, 12)
+      .map((p) => `<li><a href="/product/${esc(p.slug!)}">${esc(p.name)}</a></li>`)
+      .join('');
+    parts.push(`<ul>${items}</ul>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the homepage hero + category navigation into the SPA shell.
+ * Mirrors the HomePage section copy and every link the client renders. */
+function injectHomeBody(html: string): string {
+  const parts: string[] = [
+    `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
+    `<p>Sourced worldwide. Chosen with care.</p>`,
+    `<p>We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.</p>`,
+    `<p>Shop by pet</p>`,
+    `<h2>Who are you shopping for?</h2>`,
+    `<ul>` +
+      `<li><a href="/category/dog-supplies">Dog</a></li>` +
+      `<li><a href="/category/cat-supplies">Cat</a></li>` +
+      `<li><a href="/category/bird-supplies">Birds</a></li>` +
+      `<li><a href="/category/horse">Horse</a></li>` +
+      `<li><a href="/category/cattle">Livestock</a></li>` +
+      `</ul>`,
+    `<p>Browse</p>`,
+    `<h2>Popular Categories</h2>`,
+    `<ul>` +
+      `<li><a href="/shop">Shop all products</a></li>` +
+      `<li><a href="/category/dog-supplies">Dog walking &amp; training</a></li>` +
+      `<li><a href="/category/pet-beds">Beds &amp; mats</a></li>` +
+      `<li><a href="/category/grooming">Grooming</a></li>` +
+      `<li><a href="/category/feeding-water">Feeding &amp; water</a></li>` +
+      `<li><a href="/category/pet-toys">Toys</a></li>` +
+      `<li><a href="/category/pet-accessories">Travel &amp; accessories</a></li>` +
+      `<li><a href="/category/cat-supplies">Cat essentials</a></li>` +
+      `<li><a href="/category/bird-supplies">Bird supplies</a></li>` +
+      `</ul>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /about copy (shared with the client AboutPage) so the
+ * initial HTML carries the same truthful content the hydrated page shows. */
+function injectAboutBody(html: string): string {
+  const parts: string[] = [`<h1>About Luxedge</h1>`, `<p>${esc(ABOUT_QUOTE)}</p>`, `<p>${esc(ABOUT_LEAD)}</p>`];
+  for (const s of ABOUT_SECTIONS) {
+    parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /contact page with contact info and intro. */
+function injectContactBody(html: string): string {
+  const cards = CONTACT_INFO.map((c) => `<li><strong>${esc(c.label)}:</strong> ${esc(c.value)} (${esc(c.sub)})</li>`).join('');
+  const parts: string[] = [
+    `<h1>Contact Us</h1>`,
+    `<p>${esc(CONTACT_INTRO)}</p>`,
+    `<ul>${cards}</ul>`,
+    `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Phone: (440) 941-8002 | Hours: Mon-Fri, 9AM-6PM CT</p>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders a legal/policy page from shared section data. */
+function injectLegalBody(html: string, title: string, sections: { title: string; body: string }[]): string {
+  const parts: string[] = [`<h1>${esc(title)}</h1>`, `<p>Last updated: August 26, 2026</p>`];
+  for (const s of sections) {
+    parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /faq page with categories and questions. */
+function injectFaqBody(html: string): string {
+  const parts: string[] = [`<h1>Frequently Asked Questions</h1>`];
+  for (const cat of FAQ_DATA) {
+    parts.push(`<h2>${esc(cat.category)}</h2>`);
+    for (const item of cat.items) {
+      parts.push(`<h3>${esc(item.q)}</h3>`, `<p>${esc(item.a)}</p>`);
+    }
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /shop page with category navigation. */
+function injectShopBody(html: string): string {
+  const cats = [
+    ['Dog Supplies', '/category/dog-supplies'], ['Cat Supplies', '/category/cat-supplies'],
+    ['Pet Beds', '/category/pet-beds'], ['Pet Toys', '/category/pet-toys'],
+    ['Feeding & Water', '/category/feeding-water'], ['Grooming', '/category/grooming'],
+    ['Pet Accessories', '/category/pet-accessories'], ['Bird Supplies', '/category/bird-supplies'],
+    ['Horse', '/category/horse'], ['Cattle', '/category/cattle'],
+  ];
+  const links = cats.map(([label, to]) => `<li><a href="${esc(to)}">${esc(label)}</a></li>`).join('');
+  const parts: string[] = [
+    `<h1>Shop All Pet Essentials</h1>`,
+    `<p>Handpicked for quality, comfort, and value. Browse by category below.</p>`,
+    `<h2>Categories</h2>`,
+    `<ul>${links}</ul>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /blog index with recent post links from the CMS. */
+/** Pre-renders the /careers page (mirrors the client CareersPage copy). */
+function injectCareersBody(html: string): string {
+  const parts: string[] = [
+    `<h1>Careers at Luxedge</h1>`,
+    `<p>Join our growing team and help shape the future of curated ecommerce.</p>`,
+    `<h2>Why Work at Luxedge?</h2>`,
+    `<p>At Luxedge, we're building more than an online store — we're creating a trusted destination for people who value quality. Our small but passionate team is obsessed with finding the best products and delivering an exceptional shopping experience.</p>`,
+    `<p>We value curiosity, ownership, and a genuine desire to make customers happy.</p>`,
+    `<h2>Our Culture</h2>`,
+    `<ul>`,
+    `<li><strong>Growth-Focused</strong> — We invest in our people. Learn, grow, and level up with us.</li>`,
+    `<li><strong>Collaborative</strong> — Small team, big impact. Every voice matters here.</li>`,
+    `<li><strong>Remote-Friendly</strong> — Work from anywhere. We care about results, not locations.</li>`,
+    `<li><strong>Innovation-Driven</strong> — We encourage new ideas and creative problem-solving.</li>`,
+    `</ul>`,
+    `<h2>Open Positions</h2>`,
+    `<p>We're always looking for talented individuals to join us. Even if you don't see a specific role listed, we encourage you to reach out.</p>`,
+    `<ul>`,
+    `<li><strong>Product Curator</strong> (Remote · Full-Time) — Research, test, and select products that meet our quality standards.</li>`,
+    `<li><strong>Content Writer</strong> (Remote · Part-Time) — Create engaging blog posts, product descriptions, and marketing copy.</li>`,
+    `<li><strong>Customer Support Specialist</strong> (Remote · Full-Time) — Help customers via email and chat with a focus on resolution and delight.</li>`,
+    `</ul>`,
+    `<h2>How to Apply</h2>`,
+    `<p>Send your resume and a brief note about why you'd be a great fit to <a href="mailto:careers@luxedge.us">careers@luxedge.us</a>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>`,
+    `<p><a href="/contact">Get in Touch</a></p>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): Promise<string> {
+  const posts = await getBlogRegistry(origin, env);
+  const parts: string[] = [
+    `<h1>Blog</h1>`,
+    `<p>Practical pet care guides from Luxedge — puppy essentials, cat enrichment, bird care, horse grooming, cattle basics, and honest buying advice.</p>`,
+  ];
+  if (posts && posts.length > 0) {
+    const items = posts.slice(0, 15).map((p) => `<li><a href="/blog/${esc(p.slug)}">${esc(p.title)}</a> — ${esc(p.excerpt || '').slice(0, 100)}</li>`).join('');
+    parts.push(`<h2>Latest articles</h2>`, `<ul>${items}</ul>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
 export async function maybeInjectSeo(
@@ -402,7 +671,7 @@ export async function maybeInjectSeo(
   pathname: string,
   origin: string,
   env: SeoEnv,
-): Promise<string | null> {
+): Promise<{ html: string; status: number } | null> {
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
@@ -411,9 +680,24 @@ export async function maybeInjectSeo(
   // receive their pre-rendered body with real internal links. React replaces
   // #root on mount, so bots and humans see the same semantic content.
 
+  // Noindex utility/private routes so they never appear in search results.
+  // Matches any depth: /admin, /admin/blogs, /checkout, /checkout/success, …
+  const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders'];
+  if (segs.length > 0 && noIndexFirst.includes(segs[0])) {
+    return {
+      html: inject(html, {
+        title: `${segs[0].charAt(0).toUpperCase() + segs[0].slice(1)} | Luxedge`,
+        description: '',
+        canonical: `${root}/${segs.slice(0, 2).join('/')}`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
-    return inject(html, {
+    let out = inject(html, {
       title: 'Luxedge — Premium Pet Essentials | Better Products for Happier Pets',
       description:
         "Luxedge curates the world's best pet essentials — from orthopedic dog beds to interactive cat toys, smart feeders, grooming, and travel gear. Clear delivery options, return policies, and handpicked quality you can trust.",
@@ -425,66 +709,109 @@ export async function maybeInjectSeo(
         url: root,
       },
     });
+    // Pre-render the hero + category navigation so the initial HTML (and any
+    // non-JS crawler) sees real substantive content, not an empty shell.
+    out = injectHomeBody(out);
+    return { html: out, status: 200 };
   }
 
-  // /blog (index) and /blog/write are not indexed targets — keep /blog only.
+  // /blog (index) — pre-render the index with recent post links from the CMS.
   if (segs.length === 1 && segs[0] === 'blog') {
-    return inject(html, {
+    let out = inject(html, {
       title: 'Pet Care Blog — Guides, Tips & Buying Advice | Luxedge',
       description:
         'Practical pet care guides from Luxedge — puppy essentials, cat enrichment, bird care, horse grooming, cattle basics, and honest buying advice.',
       canonical: `${root}/blog`,
     });
+    out = await injectBlogIndexBody(out, origin, env);
+    return { html: out, status: 200 };
   }
 
-  // Static pages
+  // /shop — pre-render category navigation.
+  if (segs.length === 1 && segs[0] === 'shop') {
+    let out = inject(html, {
+      title: 'Shop All Pet Essentials — Dog, Cat, Bird, Horse & More | Luxedge',
+      description:
+        'Browse the Luxedge curated collection — dog beds and leashes, cat toys and fountains, bird feeders, horse grooming and livestock essentials, all sourced and ready to ship.',
+      canonical: `${root}/shop`,
+    });
+    out = injectShopBody(out);
+    return { html: out, status: 200 };
+  }
+
+  // Static pages (about also receives the shared About copy pre-rendered).
   const staticKey = `/${segs.join('/')}`;
   const staticMeta = STATIC_PAGES[staticKey];
   if (staticMeta) {
-    return inject(html, {
+    let out = inject(html, {
       title: staticMeta.title,
       description: staticMeta.description,
       canonical: `${root}${staticKey}`,
     });
+    // Pre-render body content for each static page so crawlers see
+    // substantive material, not an empty SPA shell.
+    if (staticKey === '/about') out = injectAboutBody(out);
+    else if (staticKey === '/contact') out = injectContactBody(out);
+    else if (staticKey === '/privacy') out = injectLegalBody(out, 'Privacy Policy', PRIVACY_SECTIONS);
+    else if (staticKey === '/terms') out = injectLegalBody(out, 'Terms of Service', TERMS_SECTIONS);
+    else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS);
+    else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS);
+    else if (staticKey === '/faq') out = injectFaqBody(out);
+    else if (staticKey === '/careers') out = injectCareersBody(out);
+    return { html: out, status: 200 };
   }
 
   // /product/:slug
   if (segs.length === 2 && segs[0] === 'product') {
     const slug = decodeURIComponent(segs[1]);
     const products = await getProducts();
-    if (products === null) return injectCanonical(html, `${root}/product/${slug}`); // DB unavailable — keep canonical correct
+    if (products === null) {
+      return { html: injectCanonical(html, `${root}/product/${slug}`), status: 200 }; // DB unavailable — keep canonical correct
+    }
     const p = products.find((x) => x.slug === slug);
     if (!p) {
-      return inject(html, {
-        title: 'Product Not Found | Luxedge',
-        description: 'This product is no longer available.',
-        canonical: `${root}/product/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Product Not Found | Luxedge',
+          description: 'This product is no longer available.',
+          canonical: `${root}/product/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/product/${slug}`;
     const title = (p.seo_title || `${p.name} | Luxedge`).replace(/\s*\|\s*Luxedge\s*$/, '') + ' | Luxedge';
-    return inject(html, {
+    let out = inject(html, {
       title,
-      description: cleanText(p.seo_description || p.description || '', 200),
+      description: cleanText(p.seo_description || p.short_description || p.description || '', 200),
       canonical,
       jsonLd: [productJsonLd(p, canonical), breadcrumbJsonLd(p.name, canonical)],
     });
+    // Pre-render the real product facts into #root (same content the client
+    // renders after hydration) so crawlers see page-specific substance.
+    out = injectProductBody(out, p);
+    return { html: out, status: 200 };
   }
 
   // /blog/:slug
   if (segs.length === 2 && segs[0] === 'blog') {
     const slug = decodeURIComponent(segs[1]);
     const posts = await getBlogRegistry(origin, env);
-    if (posts === null) return injectCanonical(html, `${root}/blog/${slug}`); // registry unavailable — keep canonical correct
+    if (posts === null) {
+      return { html: injectCanonical(html, `${root}/blog/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+    }
     const post = posts.find((x) => x.slug === slug);
     if (!post) {
-      return inject(html, {
-        title: 'Post Not Found | Luxedge',
-        description: 'This article is no longer available.',
-        canonical: `${root}/blog/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Post Not Found | Luxedge',
+          description: 'This article is no longer available.',
+          canonical: `${root}/blog/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/blog/${slug}`;
     // One semantic path: full head metadata AND the pre-rendered article body
@@ -497,25 +824,30 @@ export async function maybeInjectSeo(
       jsonLd: blogJsonLd(post, canonical),
     });
     out = injectArticleBody(out, post);
-    return out;
+    return { html: out, status: 200 };
   }
 
   // /category/:slug
   if (segs.length === 2 && segs[0] === 'category') {
     const slug = decodeURIComponent(segs[1]);
     const categories = await getCategories();
-    if (categories === null) return injectCanonical(html, `${root}/category/${slug}`);
+    if (categories === null) {
+      return { html: injectCanonical(html, `${root}/category/${slug}`), status: 200 };
+    }
     const cat = categories.find((x) => x.slug === slug);
     if (!cat) {
-      return inject(html, {
-        title: 'Category Not Found | Luxedge',
-        description: 'This category is no longer available.',
-        canonical: `${root}/category/${slug}`,
-        noindex: true,
-      });
+      return {
+        html: inject(html, {
+          title: 'Category Not Found | Luxedge',
+          description: 'This category is no longer available.',
+          canonical: `${root}/category/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
     }
     const canonical = `${root}/category/${slug}`;
-    return inject(html, {
+    let out = inject(html, {
       title: `${cat.name} — Pet Essentials | Luxedge`,
       description: `Shop ${cat.name} at Luxedge — curated, supplier-verified essentials for you and your pets.`,
       canonical,
@@ -526,7 +858,36 @@ export async function maybeInjectSeo(
         url: canonical,
       },
     });
+    // Pre-render the category intro + real product links (the client renders
+    // the same products as its category grid).
+    const products = await getProducts();
+    if (products !== null) out = injectCategoryBody(out, cat, products);
+    return { html: out, status: 200 };
   }
 
-  return null;
+  // /blog/write — client-side composition tool; nothing to index.
+  if (segs.length === 2 && segs[0] === 'blog' && segs[1] === 'write') {
+    return {
+      html: inject(html, {
+        title: 'Write | Luxedge',
+        description: '',
+        canonical: `${root}/blog/write`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
+  // Unknown route: the SPA fallback would otherwise serve an indexable copy of
+  // the homepage under a URL that does not exist (stale WordPress-era slugs,
+  // typos, probes). Serve a real 404 with noindex so the index self-cleans.
+  return {
+    html: inject(html, {
+      title: 'Page Not Found | Luxedge',
+      description: 'This page does not exist.',
+      canonical: `${root}/404`,
+      noindex: true,
+    }),
+    status: 404,
+  };
 }

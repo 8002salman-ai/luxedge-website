@@ -67,7 +67,7 @@ describe('mapRowToBlogPost', () => {
     const p = mapRowToBlogPost(row);
     expect(p.image).toBe('');
     expect(p.images).toEqual([]);
-    expect(p.authorName).toBe('Luxedge');
+    expect(p.authorName).toBe('Luxedge Editorial Team');
     expect(p.faq).toBeUndefined();
   });
 });

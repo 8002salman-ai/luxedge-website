@@ -235,7 +235,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
         content: body.content || '',
         hero_image_url: body.hero_image_url || null,
         tags: body.tags || [],
-        author_name: body.author_name || 'Luxedge',
+        author_name: body.author_name || 'Luxedge Editorial Team',
         status: 'draft',
         scheduled_at: body.scheduled_at || null,
         seo_title: body.seo_title || null,
@@ -279,7 +279,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
           content: body.content || '',
           hero_image_url: body.hero_image_url || null,
           tags: body.tags || [],
-          author_name: body.author_name || 'Luxedge',
+          author_name: body.author_name || 'Luxedge Editorial Team',
           status: 'draft',
           scheduled_at: body.scheduled_at || null,
           seo_title: body.seo_title || null,
@@ -305,7 +305,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
         const reasons = [`Auto-publish frequency cap reached (${AUTO_MAX_PER_7D} per 7 days).`];
         const row = {
           slug, title, excerpt: body.excerpt || null, content: body.content || '',
-          hero_image_url: body.hero_image_url || null, tags: body.tags || [], author_name: body.author_name || 'Luxedge',
+          hero_image_url: body.hero_image_url || null, tags: body.tags || [], author_name: body.author_name || 'Luxedge Editorial Team',
           status: 'scheduled', scheduled_at: body.scheduled_at || null, seo_title: body.seo_title || null,
           meta_description: body.meta_description || null, target_keyword: body.target_keyword || null,
           secondary_keywords: body.secondary_keywords || [], search_intent: body.search_intent || null,
@@ -339,7 +339,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
       }
       const row = {
         slug, title, excerpt: body.excerpt || null, content: body.content || '',
-        hero_image_url: body.hero_image_url || null, tags: body.tags || [], author_name: body.author_name || 'Luxedge',
+        hero_image_url: body.hero_image_url || null, tags: body.tags || [], author_name: body.author_name || 'Luxedge Editorial Team',
         status: 'published', scheduled_at: null, published_at: now, seo_title: body.seo_title || null,
         meta_description: body.meta_description || null, target_keyword: body.target_keyword || null,
         secondary_keywords: body.secondary_keywords || [], search_intent: body.search_intent || null,

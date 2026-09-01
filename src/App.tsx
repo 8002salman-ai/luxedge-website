@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -12,6 +12,7 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { loadPublishedBlogs } from './services/blog';
+import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
 import {
@@ -272,6 +273,23 @@ const INIT_BLOGS: BlogPost[] = [
   { id:'b28', slug:'horse-salt-lick-placement-guide', title:'Where to Place a Horse Salt Lick (Stall, Pasture & Height)', excerpt:'Placement decides whether a horse actually uses a salt lick. Learn the right height, where to hang it in the stall, and how to keep it clean and reachable outdoors.', content:'Hang a salt lick at roughly nose to slightly-chest height in a dry, protected spot the horse already visits \u2014 typically in the stall near the water source or in a sheltered corner of the pasture. Keep it off the ground, out of direct weather, and within easy reach so the horse uses it throughout the day.\n\n## Why Placement Matters\nA salt lick does a horse no good if it is hard to reach or buried under bedding. Placing it where the horse naturally spends time \u2014 and at the right height \u2014 makes it far more likely to be used consistently.\n\n## Height Rule of Thumb\n- A good starting height is **around the horse\u2019s nose to a little below chest level**, so the horse can lick comfortably without straining its neck too high or stooping too low.\n- For a hanging rope-style lick, that sits roughly at the front of the chest when hung in a gooseneck hanger.\n- Hanging too high forces an awkward reach; resting on the ground picks up dirt, manure, and moisture.\n\n## In the Stall\n- Place the hanger in the stall near the **waterer or feed area**, out of the direct line of urine and away from where the horse backs up.\n- Keep it away from heavy traffic corners where a horse might brush it and knock it down.\n- Position it so droppings and wet bedding do not splash onto the lick.\n\n## In the Pasture\n- Choose a **sheltered spot** out of direct rain and prolonged sun so the block does not melt or moulder.\n- Keep it near shade or a run-in shelter, off the moist ground, and check it after storms.\n- Place it where multiple horses can reach it, but not so it becomes a single point of fighting \u2014 give more than one lick if your herd is larger.\n\n## Keep It Clean and Reachable\n- Rinse off dust and debris between uses and dry the hanger area.\n- Inspect the hanger hardware for sharp edges or rust before each use.\n- Refill or replace the block before it disappears into the holder so the horse never has to lick metal or the hanger.\n\n## Part of the Daily Horse Setup\nSalt-lick placement is one detail in a horse\u2019s everyday turnout care. It pairs with a correctly fitted [halter and lead rope](/blog/horse-halter-lead-rope-buyers-guide) used to bring the horse in and out, and the comfort routine in our [Horse Grooming Kit Buyer\u2019s Guide](/blog/horse-grooming-kit-buyers-guide). For the bigger picture on choosing and using salt licks, see the [Himalayan Salt Lick for Horses](/blog/horse-salt-lick-buyers-guide) guide.\n\n**Shop the category \u2192 [Horse Supplies](/category/horse)**\n\n**Related products \u2192**\n- [Himalayan Round Rope Salt Lick \u2014 6 lb (Pack of 4)](/product/himalayan-round-rope-salt-lick-6-lb-pack-of-4)\n- [Himalayan Round Rope Salt Lick \u2014 2 lb (Pack of 6)](/product/himalayan-round-rope-salt-lick-2-lb-pack-of-6)\n- [Himalayan 30 lb Trace Mineral Salt Block](/product/himalayan-30-lb-trace-mineral-salt-block)\n\n## Frequently Asked Questions\n\n### At what height should a horse salt lick be hung?\nAround the horse\u2019s nose to a little below chest level \u2014 high enough that the horse does not stoop, low enough that it does not strain its neck.\n\n### Where should a horse salt lick go in the stall?\nNear the waterer or feed area, in a dry spot away from urine and wet bedding, so it stays clean and within easy reach.\n\n### Can a salt lick be placed outside in the pasture?\nYes \u2014 in a sheltered spot out of direct rain and sun, off the moist ground, near shade, and away from puddles.\n\n### Should I place more than one lick for multiple horses?\nFor a larger herd, place more than one lick in separate spots to avoid one point of crowding or fighting.', image:'https://images.pexels.com/photos/1268855/pexels-photo-1268855.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['horse','salt lick','himalayan salt','horse care','stall'], authorId:'adm', authorName:'Admin', faq:[{ q:'At what height should a horse salt lick be hung?', a:'Around the horse\u2019s nose to a little below chest level \u2014 high enough that the horse does not stoop, low enough that it does not strain its neck.' },{ q:'Where should a horse salt lick go in the stall?', a:'Near the waterer or feed area, in a dry spot away from urine and wet bedding, so it stays clean and within easy reach.' },{ q:'Can a salt lick be placed outside in the pasture?', a:'Yes \u2014 in a sheltered spot out of direct rain and sun, off the moist ground, near shade, and away from puddles.' },{ q:'Should I place more than one lick for multiple horses?', a:'For a larger herd, place more than one lick in separate spots to avoid one point of crowding or fighting.' }], status:'published', date:'2026-08-29' },
 ];
 
+// The CMS is the live source of truth. This fallback is intentionally limited
+// to the same editorial set retained in the CMS, so a temporary CMS outage
+// cannot bring retired or low-quality articles back into public view.
+const RETAINED_FALLBACK_BLOG_SLUGS = new Set([
+  'how-to-clean-a-bird-feeder',
+  'grooming-routine-long-haired-pets',
+  'dog-car-safety-seat-belt-guide',
+  'how-to-choose-cattle-trough-feed-water-setup',
+  'best-bird-feeder-buyers-guide',
+  'horse-grooming-kit-buyers-guide',
+  'horse-halter-lead-rope-buyers-guide',
+  'horse-fly-mask-buyers-guide',
+  'how-to-fit-no-pull-dog-harness',
+  'how-to-choose-a-cat-tunnel',
+]);
+const SAFE_INIT_BLOGS = INIT_BLOGS.filter((post) => RETAINED_FALLBACK_BLOG_SLUGS.has(post.slug));
+
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies', 'Horse', 'Cattle'];
 const CAT_META: Record<string, { desc: string }> = {
   'Dog Supplies': { desc: 'Walking, training & everyday dog essentials' },
@@ -363,11 +381,11 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
-  const [blogs, setBlogs] = useState<BlogPost[]>(INIT_BLOGS);
+  const [blogs, setBlogs] = useState<BlogPost[]>(SAFE_INIT_BLOGS);
   const [notif, setNotif] = useState<string | null>(null);
 
   // Phase B: blog content lives in the Supabase CMS. Until the CMS is seeded
-  // (or the DB is unreachable / table not migrated) we keep INIT_BLOGS as a
+  // (or the DB is unreachable / table not migrated) we keep SAFE_INIT_BLOGS as a
   // migration/rollback fallback; once the CMS returns real posts they become
   // the source of truth. Publishing from the Admin Blog Manager updates the
   // DB, and reloadBlogs() refreshes this in-memory list WITHOUT any deploy.
@@ -1459,7 +1477,7 @@ function ProductDetailPage() {
               : product.shippingCost && parseFloat(product.shippingCost) > 0
                 ? <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Shipping ${parseFloat(product.shippingCost).toFixed(2)}</span>
                 : null}
-            <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />30-day easy returns</span>
+            <span className="text-gray-500"><RefreshCcw01 strokeWidth={1.5} size={13} className="inline mr-1" />Return requests within 30 days</span>
           </div>
 
           {/* Short Desc */}
@@ -1530,7 +1548,7 @@ function ProductDetailPage() {
           {isFoodOrFeedProduct(product) && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
               <p className="font-semibold">Pet food and feed safety notice</p>
-              <p className="mt-1">This listing is for animal food/feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge does not make veterinary, nutritional, disease-treatment, or FDA approval claims. Stop use and contact a veterinarian if your animal has an adverse reaction.</p>
+              <p className="mt-1">This listing is for animal food or feed only. Check the product label, ingredients, warnings, intended species, and local requirements before use. Do not use it as human food. Luxedge provides general product information only; follow the label and contact an appropriate qualified professional if you have questions about use.</p>
               {product.supplierUrl && <p className="mt-2">Source information: <a className="underline" href={product.supplierUrl} target="_blank" rel="noopener noreferrer">view supplier listing</a>{product.supplierProductRef ? ` (${product.supplierProductRef})` : ''}</p>}
             </div>
           )}
@@ -2139,7 +2157,7 @@ function HomePage() {
 
 function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
-  const { products, reviews } = useApp();
+  const { products } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
 
@@ -2148,7 +2166,6 @@ function ShopPage() {
   const [q, setQ] = useState(params.get('q') || '');
   const [sort, setSort] = useState('featured');
   const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
-  const [minRating, setMinRating] = useState(0); // 0 = any
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
   const [onlyNew, setOnlyNew] = useState(false);
@@ -2167,19 +2184,12 @@ function ShopPage() {
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
   useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
-  // Rating filter uses verified review averages only — catalog rating is stub data.
-  const verifiedAvgFor = (pid: string): number => {
-    const v = reviews.filter(r => r.productId === pid && r.status === 'approved');
-    return v.length ? v.reduce((s, r) => s + r.rating, 0) / v.length : 0;
-  };
-
   const f = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
     .filter(p => isDeals
       ? (p.saleEnabled || p.originalPrice > p.price || dealFallbackIds.has(p.id))
       : p.name.toLowerCase().includes(q.toLowerCase()))
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
-    .filter(p => minRating === 0 || verifiedAvgFor(p.id) >= minRating)
     .filter(p => !onlyInStock || p.stock > 0)
     .filter(p => !onlyFreeShipping || p.freeShipping)
     .filter(p => !onlyNew || p.newArrival)
@@ -2200,7 +2210,7 @@ function ShopPage() {
       ...utmParams(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, q, sort, maxPrice, minRating, onlyInStock, onlyFreeShipping, onlyNew]);
+  }, [cat, q, sort, maxPrice, onlyInStock, onlyFreeShipping, onlyNew]);
 
   const handleCatChange = (newCat: string) => {
     if (newCat === 'All') nav('/shop');
@@ -2211,9 +2221,9 @@ function ShopPage() {
   const pageDesc = isDeals
     ? (hasRealDeals ? 'Real catalog offers and sale picks, updated as new deals land.' : 'Featured pet essentials selected from the current collection.')
     : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
-  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (minRating > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
+  const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
 
-  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setMinRating(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
+  const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
 
   // Reusable sidebar filter block (desktop sidebar + mobile drawer)
   const FilterBlock = () => (
@@ -2251,21 +2261,6 @@ function ShopPage() {
                 active ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
               }`}>
               <span className="flex items-center gap-1"><CheckCircle strokeWidth={1.5} size={12} className={active ? 'text-luxe-gold' : 'text-gray-300'} /> {label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <h3 className="text-xs font-bold text-luxe-black uppercase tracking-wider mb-3">Verified rating</h3>
-        <div className="space-y-1">
-          {[4.5, 4, 0].map(r => (
-            <button key={r} onClick={() => setMinRating(r)}
-              className={`w-full text-left text-[13px] px-3 py-2 rounded-lg transition-colors ${
-                minRating === r ? 'bg-luxe-gold-soft text-luxe-gold-dark font-semibold' : 'text-gray-600 hover:bg-gray-50'
-              }`}>
-              {r === 0 ? 'Any rating' : (
-                <span className="flex items-center gap-1"><Star01 strokeWidth={1.5} size={12} className="text-amber-400 fill-amber-400" /> {r}+ &amp; up</span>
-              )}
             </button>
           ))}
         </div>
@@ -3304,18 +3299,18 @@ function LS({ t, children }: { t: string; children: ReactNode }) { return <div><
 function AboutPage() {
   return (<div>
     <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
-      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
+      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">About</p>
       <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
-      <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
+      <p className="text-gray-500 max-w-xl mx-auto">{ABOUT_QUOTE}</p>
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
-      <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
-      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
-      <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We aim to provide clear product information, delivery estimates, and responsive support. Returns, replacements, and any refunds are handled under our published policies and applicable law. Please review those policies before ordering.</p>
-      <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
+      <p className="text-lg text-gray-700 leading-relaxed">{ABOUT_LEAD}</p>
+      {ABOUT_SECTIONS.map((s) => (
+        <Fragment key={s.title}>
+          <h2 className="text-xl font-bold text-gray-900 pt-4">{s.title}</h2>
+          <p className="text-gray-600 leading-relaxed">{s.body}</p>
+        </Fragment>
+      ))}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
         {[{v:'Eligible',l:'Shipping Options'},{v:'30-Day',l:'Return Requests'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
@@ -3357,7 +3352,7 @@ function TermsPage() {
       <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
       <LS t="Shipping and Delivery"><p>Shipping availability, cost, and estimated delivery windows are shown at checkout or on the relevant product page. Estimates are not guarantees and may change because of supplier processing, carrier delays, weather, or events outside our control. Please review our Shipping Policy.</p></LS>
       <LS t="Returns, Replacements, and Refunds"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Unless applicable law requires otherwise, Luxedge does not offer change-of-mind refunds as a standard remedy. Nothing in these Terms limits a consumer right that cannot legally be waived.</p></LS>
-      <LS t="Product Safety and Information"><p>Product information is provided for general shopping purposes and is not veterinary, medical, agricultural, or professional advice. Follow the product's instructions and seek qualified professional advice when appropriate. Stop using a product and contact a professional if it appears unsafe or causes harm.</p><p className="mt-2"><strong>Animal food and feed:</strong> Luxedge does not manufacture or independently certify animal food, feed, treats, supplements, or salt/mineral products. Check the label, ingredients, intended species, warnings, lot/expiry information, and applicable requirements before use. Do not use animal products as human food, and do not rely on a listing as an FDA approval, nutritional, disease-treatment, or veterinary claim. If a product lacks a verifiable supplier reference, label information, or destination support, we may remove or pause the listing. Stop use and contact a veterinarian if an animal has an adverse reaction.</p></LS>
+      <LS t="Product Information"><p>Product information is provided for general shopping purposes. Follow the product label, instructions, warnings, and applicable requirements. Stop using a product if it appears unsafe or causes harm, and contact an appropriate qualified professional when needed.</p><p className="mt-2"><strong>Animal food and feed:</strong> Luxedge does not manufacture or independently certify animal food, feed, treats, supplements, or salt/mineral products. Check the label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and destination support before use. Do not use animal products as human food. Listings may be removed or paused where this information cannot be verified.</p></LS>
       <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
       <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
       <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
@@ -3417,7 +3412,7 @@ function FAQPage() {
       { q: 'Is my payment information secure?', a: 'When checkout is enabled, payment is handled by the configured third-party provider and Luxedge does not store complete card details. Payment is not currently available and no charge is made until a successful transaction is confirmed.' },
       { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
     ]},      { c: 'Products & Quality', qs: [
-      { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and shipping eligibility before use. Luxedge does not claim that a product is FDA-approved or provide veterinary or nutritional advice. Do not use animal products as human food; ask a veterinarian about dietary or safety questions.' },
+      { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and shipping eligibility before use. Do not use animal products as human food. For product-specific questions, follow the label or contact an appropriate qualified professional.' },
       { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
       { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
       { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
@@ -3703,7 +3698,7 @@ function BlogDetailPage() {
         image: post.image || undefined,
         datePublished: post.date,
         dateModified: post.date,
-        author: { '@type': 'Person', name: post.authorName || 'Luxedge' },
+        author: { '@type': 'Person', name: post.authorName || 'Luxedge Editorial Team' },
         publisher: { '@type': 'Organization', name: 'Luxedge', url: 'https://luxedge.us' },
         mainEntityOfPage: `https://luxedge.us/blog/${post.slug}`,
         keywords: post.tags.join(', '),
@@ -3779,12 +3774,16 @@ function BlogDetailPage() {
           {/* Title */}
           <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-luxe-black leading-tight mb-4">{post.title}</h1>
 
-          {/* Meta */}
+          {/* Meta — truthful attribution: individual author when the CMS records
+              one, otherwise the Luxedge editorial team. No invented personas. */}
           <div className="flex items-center gap-4 pb-6 border-b mb-8">
-            <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{post.authorName.charAt(0)}</span></div>
+            <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{(post.authorName || 'Luxedge Editorial Team').charAt(0)}</span></div>
             <div>
-              <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
+              <p className="font-semibold text-sm text-gray-900">Written by {post.authorName || 'Luxedge Editorial Team'}</p>
               <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar strokeWidth={1.5} size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              {(post.authorName || 'Luxedge Editorial Team') === 'Luxedge Editorial Team' && (
+                <p className="text-[11px] text-gray-400 mt-1">Buying guides are prepared by the Luxedge editorial team for general product information. Always follow the product label and instructions.</p>
+              )}
             </div>
           </div>
 
