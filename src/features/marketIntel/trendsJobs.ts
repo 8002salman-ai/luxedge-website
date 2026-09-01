@@ -174,10 +174,15 @@ export async function ingestTrendsJob(
 export async function latestTrendsEvidence(
   db: DbAdapter,
   keyword: string
-): Promise<{ keyword: string; trend: TrendEvidence | null; coverage: number }> {
+): Promise<{ keyword: string; trend: TrendEvidence | null; coverage: number; ingestedAt: string | null }> {
   const jobs = await listTrendsJobs(db);
   const norm = normalizeKeyword(keyword);
   const hit = jobs.find((j) => j.status === 'completed' && normalizeKeyword(j.keyword) === norm);
-  if (!hit) return { keyword, trend: null, coverage: 0 };
-  return { keyword: hit.keyword, trend: hit.output?.trend ?? null, coverage: hit.output?.coverage ?? 0 };
+  if (!hit) return { keyword, trend: null, coverage: 0, ingestedAt: null };
+  return {
+    keyword: hit.keyword,
+    trend: hit.output?.trend ?? null,
+    coverage: hit.output?.coverage ?? 0,
+    ingestedAt: hit.output?.ingestedAt ?? null,
+  };
 }

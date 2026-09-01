@@ -37,7 +37,7 @@ export interface TrendEvidence {
   relatedQueries?: string[];
   risingQueries?: string[];
   note?: string;
-  source?: 'official_api' | 'bigquery' | 'hermes_browser' | 'unavailable';
+  source?: 'official_api' | 'bigquery' | 'hermes_browser' | 'hermes_ingested' | 'unavailable';
 }
 
 export interface AmazonPublicEvidence {

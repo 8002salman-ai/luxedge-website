@@ -17,7 +17,7 @@
 // rejects. Parsers consume plain text, so the envelope is unwrapped here.
 // ============================================================================
 
-import type { ProductOpportunityResult, SourceStatus, TrendDirection } from './types';
+import type { ProductOpportunityResult, SourceStatus, TrendDirection, TrendEvidence } from './types';
 import { trendScore, hermesTrendsTask } from './trend';
 import { parseEbaySearchPage } from './ebay';
 import { parseAmazonPublicPage } from './amazon';
@@ -28,12 +28,34 @@ import { buildOpportunityResult, type OpportunityInput } from './score';
 export const PACING_MS = 900;
 /** Short-lived cache window — repeated research within this window re-fetches nothing. */
 export const RESEARCH_CACHE_TTL_MS = 15 * 60_000;
+/**
+ * Freshness window for previously ingested Hermes trends evidence (7 days).
+ * Within this window a consumed job's verified TREND_SCORE is reused instead
+ * of queueing a redundant browser task; beyond it, evidence is stale and a
+ * new Hermes job is queued.
+ */
+export const TREND_EVIDENCE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** A previously ingested Hermes trends result (from latestTrendsEvidence). */
+export interface IngestedTrend {
+  trend: TrendEvidence;
+  /** Observed-period coverage (0..1) recorded at ingestion. */
+  coverage: number;
+  /** ISO timestamp when the job's observations were ingested. */
+  ingestedAt: string;
+}
 
 export interface ResearchDeps {
   /** Fetches a page; resolves to the JSON page envelope or rejects. */
   fetchPage: (url: string) => Promise<string>;
   /** Queues a Hermes browser task (agent_jobs); may be absent or fail — never fatal. */
   queueHermes?: (payload: Record<string, unknown>) => Promise<string | null>;
+  /**
+   * Reads previously ingested Hermes trends evidence for a keyword, or null
+   * when none exists. When present and fresh, research reuses it and skips
+   * the queue; when missing/stale/empty it queues a new browser job.
+   */
+  readTrends?: (keyword: string) => Promise<IngestedTrend | null>;
   /** Override for tests; default PACING_MS. */
   pacingMs?: number;
 }
@@ -63,6 +85,13 @@ function normalizeKeyword(keyword: string): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
+}
+
+/** True when an ingested-at timestamp is parseable and within the evidence TTL. */
+function isFreshIngested(ingestedAt: string): boolean {
+  const t = Date.parse(ingestedAt);
+  if (Number.isNaN(t)) return false; // unparseable → treat as stale, queue a new job
+  return Date.now() - t <= TREND_EVIDENCE_TTL_MS;
 }
 
 /**
@@ -142,25 +171,56 @@ export async function researchKeyword(keyword: string, deps: ResearchDeps): Prom
   });
   const hasSupplierData = economics.landedCost !== null;
 
-  // ---- Google Trends: honest NOT_CONFIGURED + Hermes browser queue ----
-  // Trends data is never invented; missing data reports INSUFFICIENT_DATA and
-  // the keyword is queued for a Hermes trends.google.com comparison instead.
-  const trendDir: TrendDirection = 'INSUFFICIENT_DATA';
-  const tScore = trendScore({ direction: trendDir });
-  let hermesQueued = false;
-  try {
-    if (deps.queueHermes) {
-      const queuedId = await deps.queueHermes(hermesTrendsTask(q));
-      hermesQueued = queuedId !== null;
+  // ---- Google Trends: consumed evidence first, Hermes queue only when needed ----
+  // The §2 loop: a previously ingested Hermes trends job for this keyword
+  // (provider=hermes → latestTrendsEvidence) is FRESH (within TTL), matches
+  // the keyword, and carries a real direction — reuse it as the source's
+  // TREND_SCORE and SKIP the redundant queue. Missing/stale/empty/wrong-key
+  // evidence queues a new browser job. Any read failure falls through to the
+  // queue path. Trends data is never invented — a queue failure degrades to
+  // honest PARTIAL (INSUFFICIENT_DATA, null score), never a fabricated one.
+  let trendEvidence: TrendEvidence | null = null;
+  let trendCoverage = 0;
+  let trendIngestedAt: string | null = null;
+  if (deps.readTrends) {
+    try {
+      const lookup = await deps.readTrends(q);
+      if (
+        lookup?.trend &&
+        isFreshIngested(lookup.ingestedAt) &&
+        normalizeKeyword(lookup.trend.keyword) === normalizeKeyword(q) &&
+        lookup.trend.direction !== 'INSUFFICIENT_DATA'
+      ) {
+        trendEvidence = lookup.trend;
+        trendCoverage = lookup.coverage ?? 0;
+        trendIngestedAt = lookup.ingestedAt;
+      }
+    } catch {
+      trendEvidence = null; // read failure → queue a fresh job instead
     }
-  } catch {
-    hermesQueued = false; // queue write failure must never stop the research job
+  }
+
+  const trendDir: TrendDirection = trendEvidence ? trendEvidence.direction : 'INSUFFICIENT_DATA';
+  const tScore =
+    trendEvidence && trendEvidence.score !== null
+      ? trendEvidence.score
+      : trendScore({ direction: trendDir });
+  let hermesQueued = false;
+  if (!trendEvidence) {
+    try {
+      if (deps.queueHermes) {
+        const queuedId = await deps.queueHermes(hermesTrendsTask(q));
+        hermesQueued = queuedId !== null;
+      }
+    } catch {
+      hermesQueued = false; // queue write failure must never stop the research job
+    }
   }
 
   const input: OpportunityInput = {
     trendDirection: trendDir,
-    risingQueries: [],
-    relatedQueries: [],
+    risingQueries: trendEvidence?.risingQueries ?? [],
+    relatedQueries: trendEvidence?.relatedQueries ?? [],
     usRelevant: true,
     amazonDemand: {
       volume: null,
@@ -192,17 +252,27 @@ export async function researchKeyword(keyword: string, deps: ResearchDeps): Prom
   const result = buildOpportunityResult(q, input, {
     queries: [q],
     aiProvider: null,
-    trend: {
-      status: 'NOT_CONFIGURED',
-      keyword: q,
-      country: 'US',
-      direction: trendDir,
-      score: tScore,
-      source: 'unavailable',
-      note: hermesQueued
-        ? 'Official Trends API not configured — queued for Hermes browser (trends.google.com).'
-        : 'Official Trends API not configured — Hermes browser fallback unavailable.',
-    },
+    trend: trendEvidence
+      ? {
+          ...trendEvidence,
+          keyword: q,
+          source: 'hermes_ingested',
+          note:
+            `Ingested from Hermes trends browser on ${trendIngestedAt ?? 'unknown'} · ` +
+            `coverage ${Math.round(trendCoverage * 100)}% · ` +
+            `fresh within ${Math.round(TREND_EVIDENCE_TTL_MS / 86_400_000)}d TTL`,
+        }
+      : {
+          status: 'NOT_CONFIGURED',
+          keyword: q,
+          country: 'US',
+          direction: trendDir,
+          score: tScore,
+          source: 'unavailable',
+          note: hermesQueued
+            ? 'Official Trends API not configured — queued for Hermes browser (trends.google.com).'
+            : 'Official Trends API not configured — Hermes browser fallback unavailable.',
+        },
     amazonOpportunity: {
       status: 'LOGIN_REQUIRED',
       note: 'Amazon Product Opportunity Explorer requires an authorized Seller Central session.',

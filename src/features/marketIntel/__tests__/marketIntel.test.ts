@@ -12,7 +12,8 @@ import { parseAmazonPublicPage, amazonOpportunityStatus, bsrVelocity } from '../
 import { landedCost, profitEconomics } from '../supplier';
 import { opportunityScore, verdictFrom } from '../score';
 import { familyKey, mergeTrending } from '../trending';
-import { researchKeyword, resetResearchCache } from '../research';
+import { researchKeyword, resetResearchCache, TREND_EVIDENCE_TTL_MS } from '../research';
+import type { TrendEvidence } from '../types';
 
 describe('trendDirectionFromPoints + trendScore (honesty)', () => {
   it('returns INSUFFICIENT_DATA / null when no data exists — never a fake positive', () => {
@@ -278,5 +279,164 @@ describe('researchKeyword — resilience pipeline', () => {
 
   it('rejects an empty keyword at the boundary', async () => {
     await expect(researchKeyword('   ', { fetchPage: async () => '' })).rejects.toThrow(/keyword/);
+  });
+});
+
+describe('researchKeyword — ingested trends evidence loop (§2 feedback)', () => {
+  beforeEach(() => resetResearchCache());
+
+  const jsonPage = (text: string) => JSON.stringify({ text, images: [] });
+
+  const evidenceFor = (keyword: string, overrides: Partial<TrendEvidence> = {}): TrendEvidence => ({
+    status: 'AVAILABLE',
+    keyword,
+    country: 'US',
+    direction: 'STRONGLY_RISING',
+    score: 85,
+    source: 'hermes_browser',
+    note: 'test evidence',
+    ...overrides,
+  });
+
+  const baseDeps = {
+    fetchPage: async () => { throw new Error('blocked'); },
+    pacingMs: 1,
+  };
+
+  it('fresh matching evidence → score used, NO queue, provenance marked hermes_ingested', async () => {
+    let queued = 0;
+    const out = await researchKeyword('dog poop scooper', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('dog poop scooper'),
+        coverage: 0.75,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(queued).toBe(0); // fresh evidence → redundant queue SKIPPED
+    expect(out.hermesQueued).toBe(false);
+    const t = out.result.provenance.trend;
+    expect(t.status).toBe('AVAILABLE');
+    expect(t.direction).toBe('STRONGLY_RISING');
+    expect(t.score).toBe(85);
+    expect(t.source).toBe('hermes_ingested');
+    expect(t.note).toMatch(/Ingested from Hermes trends browser/);
+    expect(t.note).toMatch(/coverage 75%/);
+    // The evidence participates in scoring — trend component present → confidence > 0.
+    expect(out.result.confidence).toBeGreaterThan(0);
+  });
+
+  it('stale evidence → still queues a fresh Hermes job and reports honestly', async () => {
+    let queued = 0;
+    const out = await researchKeyword('dog poop scooper', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('dog poop scooper'),
+        coverage: 1,
+        ingestedAt: new Date(Date.now() - (TREND_EVIDENCE_TTL_MS + 60_000)).toISOString(),
+      }),
+    });
+    expect(queued).toBe(1);
+    expect(out.result.provenance.trend.status).toBe('NOT_CONFIGURED');
+    expect(out.result.provenance.trend.direction).toBe('INSUFFICIENT_DATA');
+    expect(out.result.provenance.trend.score).toBeNull();
+  });
+
+  it('evidence for a different keyword is never used → queues', async () => {
+    let queued = 0;
+    const out = await researchKeyword('dog poop scooper', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('cat litter scoop'),
+        coverage: 1,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(queued).toBe(1);
+    expect(out.result.provenance.trend.direction).toBe('INSUFFICIENT_DATA');
+    expect(out.result.provenance.trend.keyword).toBe('dog poop scooper');
+  });
+
+  it('INSUFFICIENT_DATA evidence is not usable — an empty ingestion retries with a new queue', async () => {
+    let queued = 0;
+    const out = await researchKeyword('pet travel bottle', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('pet travel bottle', { direction: 'INSUFFICIENT_DATA', score: null }),
+        coverage: 0,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(queued).toBe(1); // no verified direction to feed TREND_SCORE → retry
+    expect(out.result.provenance.trend.score).toBeNull();
+    expect(out.result.provenance.trend.status).toBe('NOT_CONFIGURED');
+  });
+
+  it('unparseable ingestedAt is treated as stale → queues', async () => {
+    let queued = 0;
+    const out = await researchKeyword('dog leash', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('dog leash'),
+        coverage: 1,
+        ingestedAt: 'not-a-timestamp',
+      }),
+    });
+    expect(queued).toBe(1);
+    expect(out.result.provenance.trend.score).toBeNull();
+  });
+
+  it('a readTrends failure falls through to the queue path without crashing', async () => {
+    let queued = 0;
+    const out = await researchKeyword('cat tree', {
+      ...baseDeps,
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => { throw new Error('db down'); },
+    });
+    expect(queued).toBe(1);
+    expect(out.result.partial).toBe(true);
+    expect(out.result.opportunityScore).toBe(0);
+  });
+
+  it('queue failure with no usable evidence → honest partial, never a fabricated score', async () => {
+    const out = await researchKeyword('dog bowl', {
+      ...baseDeps,
+      queueHermes: async () => { throw new Error('queue down'); },
+      readTrends: async () => null,
+    });
+    expect(out.hermesQueued).toBe(false);
+    expect(out.result.provenance.trend.score).toBeNull(); // never fabricated
+    expect(out.result.provenance.trend.status).toBe('NOT_CONFIGURED');
+    expect(out.result.opportunityScore).toBe(0);
+    expect(out.result.confidence).toBe(0);
+  });
+
+  it('hosts a truthful fetch page sample alongside the evidence (regression: parse still works when evidence is used)', async () => {
+    const calls: string[] = [];
+    const out = await researchKeyword('dog toy', {
+      fetchPage: async (url) => {
+        calls.push(url);
+        return url.includes('ebay')
+          ? jsonPage('About 1,234 results for dog toy\n 56 sold\n 12 watchers\n $14.99')
+          : jsonPage('#1,234 in Pet Supplies\n$24.99 - $34.99\n4.6 out of 5 stars\n1,200 ratings');
+      },
+      pacingMs: 1,
+      queueHermes: async () => 'job-x',
+      readTrends: async () => ({
+        trend: evidenceFor('dog toy'),
+        coverage: 1,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(calls.length).toBe(2); // marketplace fetches still happen
+    expect(out.result.provenance.ebay.status).toBe('AVAILABLE');
+    expect(out.result.provenance.ebay.activeListings).toBe(1234);
+    expect(out.result.provenance.trend.source).toBe('hermes_ingested');
+    expect(out.result.confidence).toBeGreaterThan(0);
   });
 });
