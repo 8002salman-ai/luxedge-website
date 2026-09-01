@@ -1,5 +1,13 @@
 # AdSense — account setup & where to look (luxedge.us)
 
+> **Identities (target, 2026-08-31):**
+> - AdSense publisher/account owner = **basco.pk@gmail.com**
+> - Google Cloud project / OAuth client owner = **8002salman@gmail.com** (dev identity)
+> - OAuth consent for the AdSense API must be granted by **basco.pk@gmail.com**
+>   (the account that has access to the AdSense account).
+> - Luxedge code is email-agnostic — it uses OAuth/account IDs, never hardcoded Gmail.
+>
+
 > **Site side is already done (verified 2026-08-25):** the `adsbygoogle.js`
 > script (`ca-pub-5473713135927706`), the `google-adsense-account` ownership
 > meta tag, `/ads.txt`, and auto-ads config are all live and correct. The only
@@ -9,8 +17,11 @@
 
 ## 1. Sign in / create the account
 
-1. Go to **https://adsense.google.com/start/** and sign in with the same
-   Google account used for the business (8002salman@gmail.com).
+1. Go to **https://adsense.google.com/start/** and sign in with the Google
+   account that OWNS the AdSense publisher (the AdSense account is
+   `basco.pk@gmail.com`). The Google Cloud project / OAuth client (the
+   developer identity, `8002salman@gmail.com`) is a DIFFERENT, separate
+   Google identity — keep them distinct:
 2. If you have never created an AdSense account:
    - Enter the site URL: **luxedge.us**
    - Pick a country (US) and agree to the terms.
