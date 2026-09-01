@@ -42,7 +42,7 @@ import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
 import { buildSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
-import adsenseHandler from '../api/adsense/index';
+import adsenseHandler, { setAdSenseRuntimeBindings } from '../api/adsense/index';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -247,6 +247,7 @@ export default {
     // Google AdSense earnings API (server-side). Routed by path prefix
     // because it has multiple sub-routes (status/auth/oauth/sync/earnings).
     if (url.pathname.startsWith('/api/adsense')) {
+      setAdSenseRuntimeBindings(env as unknown as Record<string, unknown>);
       const req = makeReq(request, url) as IncomingMessage & { env?: Env };
       req.env = env;
       const res = makeRes() as ShimRes;
