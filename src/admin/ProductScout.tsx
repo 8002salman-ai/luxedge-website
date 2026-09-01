@@ -25,7 +25,7 @@ import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
 import { runScoutResearch, runMarketIntelligenceJob, qaCandidate, cjMarketContextFor } from '../features/scout/engine';
 import type { QAOutcome } from '../features/scout/engine';
-import { createJob, completeJob, createProductDraft, findCategoryId } from '../features/scout/persist';
+import { createJob, completeJob, createProductDraft, findCategoryId, queueHermesFallback } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
 import { RETAIL_EVIDENCE_DOMAINS } from '../features/scout/retailDiscovery';
 import { GoogleAdsServerDemandAdapter } from '../features/scout/marketDemand';
@@ -287,11 +287,15 @@ export default function ProductScout() {
       if (result.urls.length) {
         const merged = [...new Set([...runUrls.split('\n').map((s) => s.trim()).filter(Boolean), ...result.urls])];
         setRunUrls(merged.join('\n'));
-        setDiscoverNote(`${result.urls.length} product URLs discovered${result.duplicates ? ` (${result.duplicates} duplicates dropped)` : ''} — ${result.urls.length} added to the list.`);
+        setDiscoverNote(`${result.urls.length} product URLs discovered${result.source ? ` via ${result.source}` : ''}${result.duplicates ? ` (${result.duplicates} duplicates dropped)` : ''} — ${result.urls.length} added to the list.`);
         notify(`Discovered ${result.urls.length} product URLs`);
       } else {
-        setDiscoverNote(`No product pages discovered for “${q}”. ${result.warning || 'Try a different query or use manual URL mode below.'}`);
-        notify('Discovery found no product pages');
+        // Every automated search source failed → queue for Hermes browser
+        // search instead of silently ending the run (no single API outage
+        // takes the supplier pipeline down).
+        const queuedId = await queueHermesFallback(db, 'search', { query: q, market: discoverMarket.trim() || null });
+        setDiscoverNote(`No product pages discovered for “${q}”. ${result.warning || 'Try a different query or use manual URL mode below.'}${queuedId ? ' Queued for Hermes browser search.' : ''}`);
+        notify(queuedId ? 'Discovery empty — queued for Hermes browser search' : 'Discovery found no product pages');
       }
     } catch (e) {
       setDiscoverNote(`Discovery failed: ${(e as Error).message}`);

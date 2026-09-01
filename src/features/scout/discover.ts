@@ -62,6 +62,8 @@ export interface DiscoverResult {
   duplicates: number;
   /** Optional warning (e.g. "search endpoint unreachable"). */
   warning?: string;
+  /** Which search source produced the results (e.g. 'duckduckgo', 'mojeek'). */
+  source?: string;
 }
 
 /** Decode a DuckDuckGo /l/?uddg= redirect URL into the real target. */
@@ -180,16 +182,26 @@ function dedupeKeyForUrl(url: string): string {
 }
 
 /**
- * Build the DuckDuckGo HTML search URL from the query + options.
- * Market/category/cost bias the query text — they never invent results.
+ * Search-source fallback chain (resilience): discovery never depends on a
+ * single public search endpoint. Each source is a keyless HTML endpoint
+ * fetched through the same proxy chain as the importer — nothing new ships
+ * in the bundle. If one source is down/empty the next is tried, so a single
+ * API outage can never take the whole Supplier DB down.
  */
+export const SEARCH_SOURCES = [
+  { id: 'duckduckgo', label: 'DuckDuckGo HTML', build: (q: string) => `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}` },
+  { id: 'mojeek', label: 'Mojeek', build: (q: string) => `https://www.mojeek.com/search?q=${encodeURIComponent(q)}` },
+  { id: 'startpage', label: 'Startpage HTML', build: (q: string) => `https://www.startpage.com/sp/search?query=${encodeURIComponent(q)}` },
+];
+
+/** Build the primary (DuckDuckGo) search URL — kept for legacy callers/tests. */
 export function buildSearchUrl(opts: DiscoverOptions): string {
   const parts = [opts.query.trim(), opts.market?.trim(), opts.category?.trim()].filter(Boolean);
   if (opts.maxSupplierCost && opts.maxSupplierCost > 0) {
     parts.push(`under $${opts.maxSupplierCost}`);
   }
   const q = parts.join(' ');
-  return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`;
+  return SEARCH_SOURCES[0].build(q);
 }
 
 /**
@@ -254,20 +266,30 @@ export async function discoverUrls(
   let filtered = 0;
   let duplicates = 0;
   let warning = '';
+  // Track which search source actually produced results (audit/UI honesty).
+  let sourceUsed: string | null = null;
 
   for (const query of queries) {
-    const url = buildSearchUrl({ ...opts, query });
+    const q = [opts.market?.trim(), opts.category?.trim()].filter(Boolean).join(' ');
+    const fullQuery = [query, q].filter(Boolean).join(' ');
+    // Try each search source in order; a source that is down or returns junk
+    // falls through to the next. A single search endpoint outage must never
+    // kill discovery for the whole run.
     let raw = '';
-    try {
-      raw = await fetchRaw(url);
-    } catch (e) {
-      warning = `Search endpoint unreachable for “${query}”: ${(e as Error).message}`;
-      continue;
+    for (const src of SEARCH_SOURCES) {
+      try {
+        const candidate = await fetchRaw(src.build(fullQuery));
+        if (candidate && candidate.trim().length >= 100) {
+          raw = candidate;
+          sourceUsed = src.id;
+          break;
+        }
+        warning = warning || `Search source “${src.label}” returned no usable content for “${query}”.`;
+      } catch (e) {
+        warning = warning || `Search source “${src.label}” unreachable for “${query}”: ${(e as Error).message}`;
+      }
     }
-    if (!raw || raw.trim().length < 100) {
-      warning = warning || `Search returned no usable content for “${query}”.`;
-      continue;
-    }
+    if (!raw) continue;
     for (const link of extractLinks(raw)) {
       const real = decodeRedirectUrl(link);
       if (!real) continue;
@@ -288,6 +310,7 @@ export async function discoverUrls(
     filtered,
     duplicates,
     warning: warning || undefined,
+    source: sourceUsed ?? undefined,
   };
 }
 

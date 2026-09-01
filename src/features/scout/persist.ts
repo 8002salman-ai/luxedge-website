@@ -296,6 +296,54 @@ export async function addLog(db: DbAdapter, jobId: string, level: 'info' | 'warn
 }
 
 // ---------------------------------------------------------------------------
+// Hermes fallback queue — resilience (no single API outage kills the pipeline)
+// ---------------------------------------------------------------------------
+
+/**
+ * Which stage of the supplier pipeline needs Hermes browser/computer-use.
+ * Mirrors the engine fallback architecture: search → page-read → ai-analysis.
+ */
+export type HermesQueueStage = 'search' | 'page-read' | 'ai-analysis';
+
+/**
+ * Queue a job for Hermes (browser/computer-use) when every automated path
+ * failed. Reuses the existing agent_jobs table with type PRODUCT_RESEARCH and
+ * provider='hermes' + an explicit input marker, so NO schema migration is
+ * needed and the audit trail stays uniform. The pipeline continues — a queued
+ * item never blocks or fails the rest of the run.
+ */
+export async function queueHermesFallback(
+  db: DbAdapter,
+  stage: HermesQueueStage,
+  payload: Record<string, unknown>
+): Promise<string | null> {
+  try {
+    const row: AgentJobRow = {
+      id: newId(),
+      type: 'PRODUCT_RESEARCH',
+      status: 'queued',
+      input: { hermesQueue: true, stage, queuedAt: now(), ...payload },
+      output: null,
+      error: null,
+      provider: 'hermes',
+      model: null,
+      token_cost: null,
+      retries: 0,
+      max_retries: 3,
+      created_at: now(),
+      started_at: null,
+      finished_at: null,
+    };
+    const inserted = await db.insert<AgentJobRow>('agent_jobs', row);
+    return inserted.id;
+  } catch {
+    // Queue write failure must never take the pipeline down — the run
+    // continues with the warning already surfaced by the caller.
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Product draft (owner-approval gate → status 'draft', never published)
 // ---------------------------------------------------------------------------
 

@@ -40,7 +40,7 @@ import { collectDemandSignals, type MarketDemandAdapter, type DemandCollectionRe
 import { identityEvidenceFromExtract, hasExplicitIdentity, aggregateReviewEvidence } from './identity';
 import {
   ensureSupplier, persistSupplierProduct, persistCandidate, persistScore,
-  createJob, completeJob, addRun, addLog,
+  createJob, completeJob, addRun, addLog, queueHermesFallback,
 } from './persist';
 import type { DiscoverResult } from './discover';
 
@@ -904,6 +904,19 @@ export async function runScoutResearch(opts: ScoutRunOptions): Promise<ScoutRunR
     retries: researchRetries,
     candidateIds: candidates.map((c) => c.id),
   });
+
+  // Page-read resilience: when EVERY URL failed automated fetch/extract (all
+  // proxies down or all pages JS-only), queue the batch for Hermes
+  // browser/computer-use instead of ending the run with zero candidates and
+  // no handoff. The pipeline continues (score/QA still run on what survived).
+  if (failed > 0 && candidates.length === 0) {
+    await queueHermesFallback(db, 'page-read', {
+      urls,
+      jobId: researchJobId,
+      reason: `${failed} URLs failed automated fetch/extract`,
+    });
+    progress(`[queue] ${failed} URLs queued for Hermes browser page-read`);
+  }
 
   // ------------------------------------------------------------------ JOB 2
   const scoreJobId = await createJob(db, 'PRODUCT_SCORE', {
