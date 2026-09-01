@@ -124,6 +124,79 @@ describe('loadStorefrontCatalog', () => {
     expect(cat!.products[0].commerceReadiness).toBe('COMMERCE_READY');
   });
 
+  it('parses comma-separated STRING tags (the CJ-import rows) into arrays', async () => {
+    // Live rows (verified against production): some CJ products store tags as a
+    // plain text value e.g. "horse,grooming,brush,tack,equestrian" instead of a
+    // jsonb array — PostgREST returns it as a JSON string. tagsOf must split it.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'p1', name: 'Horse Grooming Kit', slug: 'horse-grooming-kit', status: 'active', price: 39.99, tags: 'horse,grooming,brush,tack,equestrian', supplier_source: 'CJ', cost_price: 10, us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY' },
+          { id: 'p2', name: 'Bird Feeder', slug: 'bird-feeder', status: 'active', price: 19.99, tags: 'bird, feeder , outdoor', supplier_source: 'CJ', cost_price: 5, us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY' },
+        ]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const cat = await loadStorefrontCatalog();
+    const byId = new Map(cat!.products.map((p) => [p.id, p]));
+    expect(byId.get('p1')?.tags).toEqual(['horse', 'grooming', 'brush', 'tack', 'equestrian']);
+    expect(byId.get('p2')?.tags).toEqual(['bird', 'feeder', 'outdoor']); // whitespace trimmed
+  });
+
+  it('accepts a JSON-string array shape and keeps jsonb arrays unchanged', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'p1', name: 'JSON String Array', slug: 'json-string', status: 'active', price: 9.99, tags: '["cat","toys"]', supplier_source: 'CJ', cost_price: 2, us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY' },
+          { id: 'p2', name: 'Real Array', slug: 'real-array', status: 'active', price: 9.99, tags: ['dog', 'bed'], seo_keywords: 'walking,training', supplier_source: 'CJ', cost_price: 2, us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY' },
+        ]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const cat = await loadStorefrontCatalog();
+    const byId = new Map(cat!.products.map((p) => [p.id, p]));
+    expect(byId.get('p1')?.tags).toEqual(['cat', 'toys']);
+    // jsonb array rows behave exactly as before…
+    expect(byId.get('p2')?.tags).toEqual(['dog', 'bed']);
+    // …and the shared parser also covers seo_keywords (same tagsOf path).
+    expect(byId.get('p2')?.seoKeywords).toEqual(['walking', 'training']);
+  });
+
+  it('never throws on any tags shape and degrades to [] only for absent/malformed values', async () => {
+    // [shape → expected tags]: the mapper must never throw; array-parseable
+    // shapes survive (non-string elements filtered), everything else degrades
+    // to [].
+    const cases: Array<readonly [unknown, string[]]> = [
+      [null, []],
+      [undefined, []],
+      ['', []],
+      ['   ', []],
+      ['["broken', []],          // array intent, malformed JSON → []
+      ['["a",5,"b"]', ['a', 'b']], // parsed array, non-string filtered
+      [42, []],
+      [true, []],
+      [{}, []],
+    ];
+    for (let i = 0; i < cases.length; i++) {
+      const [shape, expected] = cases[i];
+      const row: Record<string, unknown> = {
+        id: `s${i}`, name: `Shape ${i}`, slug: `shape-${i}`, status: 'active',
+        price: 9.99, tags: shape, supplier_source: 'CJ', cost_price: 2,
+        us_inventory: true, stock_status: 'in_stock', commerce_readiness: 'COMMERCE_READY',
+      };
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+        if (url.includes('/products')) return Promise.resolve(jsonResponse([row]));
+        return Promise.resolve(jsonResponse([]));
+      }));
+      const cat = await loadStorefrontCatalog();
+      expect(cat).not.toBeNull();
+      expect(cat!.products[0].tags).toEqual(expected);
+    }
+  });
+
   it('handles the legacy schema (title + integer cents) defensively', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
