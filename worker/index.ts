@@ -26,6 +26,7 @@ import webhookHandler from '../api/webhook';
 import salmanOsHandler from '../api/salman-os';
 import cjHandler from '../api/suppliers/cj';
 import hermesIngestHandler from '../api/hermes/ingest';
+import marketIntelTrendsHandler from '../api/market-intel/trends';
 import googleAdsHandler from '../api/market-demand/google-ads';
 import omnisendStatusHandler from '../api/omnisend/status';
 import emailSendHandler from '../api/email/send';
@@ -266,6 +267,23 @@ export default {
       const res = makeRes() as ShimRes;
       try {
         await adsenseHandler(req, res);
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const contentType = res._headers['content-type'] || 'text/plain; charset=utf-8';
+      return new Response(res._body || '', { status: res._status, headers: { ...res._headers, 'content-type': contentType } });
+    }
+    // Market intelligence API (server-side, admin-JWT). Routed by path prefix
+    // because it has multiple sub-routes (trends jobs: list/claim/result).
+    if (url.pathname.startsWith('/api/market-intel')) {
+      const req = makeReq(request, url) as IncomingMessage & { env?: Env };
+      req.env = env;
+      const res = makeRes() as ShimRes;
+      try {
+        await marketIntelTrendsHandler(req, res);
       } catch (err) {
         return new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
