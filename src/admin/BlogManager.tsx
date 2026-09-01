@@ -154,7 +154,7 @@ export default function BlogManager() {
         await adminUpdate(editing!.id, toPatch);
       }
       notify('Saved.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       setCreating(false); setEditing(null);
       await load();
     } catch (e) {
@@ -177,7 +177,7 @@ export default function BlogManager() {
             ? 'Unpublished — moved to drafts.'
             : `Post ${action}.`;
       notify(notice);
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Action failed.', 'error');
@@ -195,7 +195,7 @@ export default function BlogManager() {
     try {
       await adminSetLifecycle(id, 'schedule', { scheduled_at: iso });
       notify('Scheduled.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Could not schedule.', 'error');
@@ -239,7 +239,7 @@ export default function BlogManager() {
     try {
       await adminDelete(confirm.id, confirm.permanent);
       notify(confirm.permanent ? 'Deleted permanently.' : 'Archived.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Delete failed.', 'error');
@@ -264,7 +264,7 @@ export default function BlogManager() {
       setRows(fresh);
       const r = fresh.find((x) => x.id === blogId);
       if (r) startEdit(r);
-      await reloadBlogs();
+      await reloadBlogs(true);
     } catch (e) {
       notify((e as Error).message || 'Restore failed.', 'error');
     } finally {

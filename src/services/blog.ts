@@ -28,7 +28,7 @@ export interface CmsBlogRow {
   slug: string;
   title: string;
   excerpt: string | null;
-  content: string;
+  content: string | null;
   hero_image_url: string | null;
   hero_image_alt: string | null;
   tags: string[] | null;
@@ -55,6 +55,30 @@ export interface CmsBlogRow {
 
 export type BlogStatus = CmsBlogRow['status'];
 
+const PUBLIC_BLOG_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readBlogCache(): BlogPost[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem('luxedge:published-blogs:v2');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; data?: BlogPost[] };
+    if (!parsed.ts || Date.now() - parsed.ts > PUBLIC_BLOG_CACHE_TTL_MS) return null;
+    return Array.isArray(parsed.data) ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBlogCache(posts: BlogPost[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem('luxedge:published-blogs:v2', JSON.stringify({ ts: Date.now(), data: posts }));
+  } catch {
+    /* storage unavailable - live request already succeeded */
+  }
+}
+
 const rowStatusToBlog = (status: CmsBlogRow['status']): BlogPost['status'] => {
   if (status === 'published') return 'published';
   if (status === 'scheduled') return 'pending'; // visible to author only pre-date
@@ -69,7 +93,7 @@ export function mapRowToBlogPost(r: CmsBlogRow): BlogPost {
     slug: r.slug,
     title: r.title,
     excerpt: r.excerpt || r.title || '',
-    content: r.content,
+    content: r.content || '',
     image: primary,
     images: primary ? [primary] : [],
     tags: Array.isArray(r.tags) ? r.tags.filter((t): t is string => typeof t === 'string') : [],
@@ -92,21 +116,45 @@ export function mapRowToBlogPost(r: CmsBlogRow): BlogPost {
  * status=published filter, so a draft can never leak to visitors even if a
  * future RLS or role change regresses.
  */
-export async function loadPublishedBlogs(): Promise<BlogPost[] | null> {
+export async function loadPublishedBlogs(opts: { forceFresh?: boolean } = {}): Promise<BlogPost[] | null> {
+  if (!opts.forceFresh) {
+    const cached = readBlogCache();
+    if (cached) return cached;
+  }
   const db = getDb();
   try {
     if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
       (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
     }
-    const rows = await db.list<CmsBlogRow>('blog_posts', { orderBy: 'published_at.desc', filters: { status: 'published' } });
+    const rows = await db.list<CmsBlogRow>('blog_posts', { select: 'id,slug,title,excerpt,hero_image_url,hero_image_alt,tags,author_name,author_id,status,created_at,updated_at,published_at,date_label', orderBy: 'published_at.desc', filters: { status: 'published' } });
     if (!Array.isArray(rows)) return null;
-    return rows.map(mapRowToBlogPost);
+    const posts = rows.map(mapRowToBlogPost);
+    writeBlogCache(posts);
+    return posts;
   } catch {
     // Unreachable / table not migrated yet -> null (caller keeps its fallback).
     return null;
   }
 }
 
+
+export async function loadPublishedBlogBySlug(slug: string): Promise<BlogPost | null> {
+  const db = getDb();
+  try {
+    if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
+      (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
+    }
+    const rows = await db.list<CmsBlogRow>('blog_posts', {
+      select: 'id,slug,title,excerpt,content,hero_image_url,hero_image_alt,tags,author_name,author_id,status,created_at,updated_at,published_at,date_label,faq',
+      limit: 1,
+      filters: { status: 'published', slug },
+    });
+    if (!Array.isArray(rows) || !rows[0]) return null;
+    return mapRowToBlogPost(rows[0]);
+  } catch {
+    return null;
+  }
+}
 // ---------------------------------------------------------------------------
 // Admin (authenticated JWT — RLS sees the admin role)
 // ---------------------------------------------------------------------------
