@@ -16,7 +16,7 @@ import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
 import { extractPageFacts } from '../extract';
 import { runScoutResearch, qaCandidate, runMarketIntelligenceJob } from '../engine';
 import type { MarketDemandAdapter } from '../marketDemand';
-import { persistCandidate, persistScore, ensureSupplier, createProductDraft } from '../persist';
+import { persistCandidate, persistScore, ensureSupplier, createProductDraft, queueHermesFallback } from '../persist';
 import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, buildQueries, discoverUrls } from '../discover';
 import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
 import { DEFAULT_AUTONOMY_CONFIG, evaluateAutonomy, pushAttentionItem, loadAttentionItems, resolveAttentionItem, attentionForCandidate } from '../autonomy';
@@ -357,6 +357,43 @@ describe('discovery (autonomous mode)', () => {
     expect(r.urls.length).toBe(0);
   });
 
+  it('falls through to the next search source when the primary is down (resilience)', async () => {
+    // Primary (DuckDuckGo) throws; the chain must try Mojeek and return its results.
+    const fetchRaw = vi.fn(async (url: string) => {
+      if (url.includes('duckduckgo.com')) throw new Error('DDG down');
+      if (url.includes('mojeek.com')) {
+        return '[KONG Classic](https://www.kongcompany.com/kong-classic/) — durable natural rubber dog toy for chewing and fetch.';
+      }
+      throw new Error('unexpected source');
+    });
+    const r = await discoverUrls({ query: 'KONG Classic dog toy', maxResults: 10 }, fetchRaw);
+    expect(r.urls).toContain('https://www.kongcompany.com/kong-classic');
+    expect(r.source).toBe('mojeek');
+    expect(r.warning).toContain('DuckDuckGo HTML');
+  });
+
+  it('uses the third source when the first two fail — a single outage never kills discovery', async () => {
+    const fetchRaw = vi.fn(async (url: string) => {
+      if (url.includes('duckduckgo.com')) throw new Error('DDG down');
+      if (url.includes('mojeek.com')) throw new Error('Mojeek down');
+      if (url.includes('startpage.com')) {
+        return '[KONG Classic](https://www.kongcompany.com/kong-classic/) — durable natural rubber dog toy for chewing and fetch.';
+      }
+      throw new Error('unexpected source');
+    });
+    const r = await discoverUrls({ query: 'KONG Classic dog toy', maxResults: 10 }, fetchRaw);
+    expect(r.urls).toContain('https://www.kongcompany.com/kong-classic');
+    expect(r.source).toBe('startpage');
+  });
+
+  it('reports which source produced the results when the primary works', async () => {
+    const fetchRaw = vi.fn(async () =>
+      '[KONG Classic](https://duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.kongcompany.com%2Fkong-classic%2F&rut=1)'
+    );
+    const r = await discoverUrls({ query: 'KONG Classic dog toy', maxResults: 10 }, fetchRaw);
+    expect(r.source).toBe('duckduckgo');
+  });
+
   it('PHASE 4J — single door dog cage is searched as itself, never expanded to generic dog toy/cat toy', async () => {
     const queries = buildQueries({ query: 'single door dog cage', market: 'US' });
     expect(queries).toEqual(['single door dog cage US']);
@@ -445,6 +482,32 @@ describe('researchUrl + runScoutResearch pipeline', () => {
     if (url.includes('chewy')) return page('og:title Chewy Pet Toy\nPrice: $14.99\nin stock\nFree Shipping\n4.6 out of 5\nMade in USA\nSizes: S, M', IMGS);
     if (url.includes('bad')) return page('nothing useful here');
     return page('og:title Generic Pet Toy\nPrice: $9.99\nin stock', IMGS);
+  });
+
+  it('queues a Hermes page-read fallback when EVERY url fails automated fetch', async () => {
+    db.token = adminToken();
+    const fetchAllFail = vi.fn(async () => { throw new Error('all proxies down'); });
+    await runScoutResearch({
+      urls: ['https://www.chewy.com/dp/1', 'https://www.chewy.com/dp/2'],
+      db: db as unknown as DbAdapter,
+      fetchPage: fetchAllFail,
+    });
+    const jobs = db.rows.get('agent_jobs') as { type: string; status: string; provider: string | null; input: Record<string, unknown> }[];
+    const queued = jobs.filter((j) => j.status === 'queued' && j.provider === 'hermes');
+    expect(queued.length).toBe(1);
+    expect((queued[0].input as Record<string, unknown>).stage).toBe('page-read');
+    expect((queued[0].input as Record<string, unknown>).urls).toEqual(['https://www.chewy.com/dp/1', 'https://www.chewy.com/dp/2']);
+  });
+
+  it('does NOT queue a Hermes page-read fallback when some URLs survived', async () => {
+    db.token = adminToken();
+    await runScoutResearch({
+      urls: ['https://www.chewy.com/dp/1', 'https://www.chewy.com/dp/zz-bad'],
+      db: db as unknown as DbAdapter,
+      fetchPage: fetchOk,
+    });
+    const jobs = db.rows.get('agent_jobs') as { status: string; provider: string | null }[];
+    expect(jobs.some((j) => j.status === 'queued' && j.provider === 'hermes')).toBe(false);
   });
 
   it('creates a candidate + score + three durable jobs (RESEARCH → SCORE → QA)', async () => {
@@ -564,6 +627,37 @@ describe('persistence + admin-only mutations', () => {
     await expect(db.insert('product_candidates', { id: '1' })).rejects.toThrow('row-level security');
     db.token = adminToken(); // admin
     await expect(db.insert('product_candidates', { id: '1', title: 'T', source: 'S', source_url: 'u', images: [], status: 'researching', created_at: 't', updated_at: 't' })).resolves.toBeTruthy();
+  });
+
+  it('queues a Hermes fallback job (search stage) with the audit marker', async () => {
+    db.token = adminToken();
+    const id = await queueHermesFallback(db as unknown as DbAdapter, 'search', { query: 'dog toys', market: 'USA' });
+    expect(id).toBeTruthy();
+    const jobs = db.rows.get('agent_jobs') as unknown[];
+    expect(jobs.length).toBe(1);
+    const job = jobs[0] as Record<string, unknown>;
+    expect(job.type).toBe('PRODUCT_RESEARCH');
+    expect(job.status).toBe('queued');
+    expect(job.provider).toBe('hermes');
+    expect((job.input as Record<string, unknown>).hermesQueue).toBe(true);
+    expect((job.input as Record<string, unknown>).stage).toBe('search');
+    expect((job.input as Record<string, unknown>).query).toBe('dog toys');
+  });
+
+  it('queues a Hermes fallback job for the page-read stage with the failed URLs', async () => {
+    db.token = adminToken();
+    const id = await queueHermesFallback(db as unknown as DbAdapter, 'page-read', { urls: ['https://x.com/p/1', 'https://x.com/p/2'], jobId: 'j1', reason: 'all proxies down' });
+    expect(id).toBeTruthy();
+    const job = (db.rows.get('agent_jobs') as unknown[])[0] as Record<string, unknown>;
+    expect((job.input as Record<string, unknown>).stage).toBe('page-read');
+    expect(((job.input as Record<string, unknown>).urls as string[]).length).toBe(2);
+    expect((job.input as Record<string, unknown>).reason).toContain('proxies');
+  });
+
+  it('never throws when the queue write itself fails — the pipeline continues', async () => {
+    db.token = null; // anonymous → RLS blocks the insert
+    const id = await queueHermesFallback(db as unknown as DbAdapter, 'ai-analysis', { query: 'x' });
+    expect(id).toBeNull(); // graceful degradation, no throw
   });
 
   it('does not duplicate suppliers across www / non-www base URLs', async () => {
