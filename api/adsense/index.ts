@@ -38,6 +38,14 @@ const REDIRECT_URI = (process.env.ADSENSE_REDIRECT_URI || '').trim() || 'https:/
 
 const SETTING_REFRESH_TOKEN = 'ADSENSE_REFRESH_TOKEN';
 const SETTING_CACHE = 'ADSENSE_EARNINGS_CACHE';
+
+type RuntimeBindings = Record<string, unknown>;
+let runtimeBindings: RuntimeBindings | null = null;
+
+/** Set by the Cloudflare Worker adapter for each request. */
+export function setAdSenseRuntimeBindings(bindings: RuntimeBindings): void {
+  runtimeBindings = bindings;
+}
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 min — no Google calls per render
 
 // In-memory access-token cache (worker instance). Never persisted, never sent
@@ -107,8 +115,12 @@ async function deleteSetting(key: string): Promise<boolean> {
 }
 
 function getOAuthClient() {
-  const clientId = (process.env.GOOGLE_ADSENSE_CLIENT_ID || '').trim();
-  const clientSecret = (process.env.GOOGLE_ADSENSE_CLIENT_SECRET || '').trim();
+  const binding = (name: string) => {
+    const value = runtimeBindings?.[name];
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const clientId = binding('GOOGLE_ADSENSE_CLIENT_ID') || (process.env.GOOGLE_ADSENSE_CLIENT_ID || '').trim();
+  const clientSecret = binding('GOOGLE_ADSENSE_CLIENT_SECRET') || (process.env.GOOGLE_ADSENSE_CLIENT_SECRET || '').trim();
   return { clientId, clientSecret };
 }
 

@@ -42,7 +42,7 @@ import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
 import { buildSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
-import adsenseHandler from '../api/adsense/index';
+import adsenseHandler, { setAdSenseRuntimeBindings } from '../api/adsense/index';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -191,13 +191,34 @@ interface AssetsFetcher {
 
 export interface Env {
   ASSETS: AssetsFetcher;
+  /** CJ supplier credential — a Cloudflare secret binding, never client-side. */
+  CJ_API_KEY?: string;
+  GOOGLE_ADSENSE_CLIENT_ID?: string;
+  GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
     send: (msg: { from: string; to: string; subject: string; html?: string; text?: string; reply_to?: string }) => Promise<void>;
   };
 }
 
+/**
+ * The API modules were originally written for a Node/Vercel runtime and read
+ * configuration from process.env. Cloudflare provides bindings on `env` per
+ * request, so expose string bindings to those compatible handlers without
+ * replacing the process.env object or serialising non-string bindings.
+ */
+function populateProcessEnv(env: Env): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string') process.env[key] ??= value;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    populateProcessEnv(env);
+    // Secret bindings are not guaranteed to be enumerable in every Worker
+    // runtime. CJ's server handler reads process.env, so preserve this one
+    // explicitly instead of silently reporting a configured key as missing.
+    if (env.CJ_API_KEY) process.env.CJ_API_KEY = env.CJ_API_KEY;
     const url = new URL(request.url);
     // Canonical host + scheme: www and HTTP must permanently redirect to the
     // non-www HTTPS apex, preserving the full path+query. Prevents a
@@ -234,6 +255,12 @@ export default {
     // Google AdSense earnings API (server-side). Routed by path prefix
     // because it has multiple sub-routes (status/auth/oauth/sync/earnings).
     if (url.pathname.startsWith('/api/adsense')) {
+      // Cloudflare bindings can be non-enumerable, so pass OAuth bindings
+      // explicitly instead of relying on Object.entries(env).
+      setAdSenseRuntimeBindings({
+        GOOGLE_ADSENSE_CLIENT_ID: env.GOOGLE_ADSENSE_CLIENT_ID,
+        GOOGLE_ADSENSE_CLIENT_SECRET: env.GOOGLE_ADSENSE_CLIENT_SECRET,
+      });
       const req = makeReq(request, url) as IncomingMessage & { env?: Env };
       req.env = env;
       const res = makeRes() as ShimRes;
