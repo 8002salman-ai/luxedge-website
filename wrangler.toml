@@ -23,6 +23,9 @@ run_worker_first = true
 name = "SEND_MAIL"
 
 # Plain-text env (non-secret). Secrets are set with `wrangler secret put`.
+# keep_vars = true：保留在 Cloudflare 控制台设置的普通变量（如 GOOGLE_ADSENSE_CLIENT_ID），
+# 否则每次 wrangler deploy 会删除未在本文件 [vars] 中定义的控制台变量。
+keep_vars = true
 [vars]
 VERCEL_ENV = "production"
 DEPLOYMENT_ENV = "production"
