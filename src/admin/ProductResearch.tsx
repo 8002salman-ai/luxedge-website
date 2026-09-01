@@ -17,7 +17,7 @@ import type { ProductOpportunityResult, TrendingPetProduct, SourceStatus } from 
 import { OPPORTUNITY_WEIGHTS } from '../features/marketIntel/score';
 import { mergeTrending } from '../features/marketIntel/trending';
 import { researchKeyword } from '../features/marketIntel/research';
-import { listTrendsJobs, type TrendsJobView } from '../features/marketIntel/trendsJobs';
+import { listTrendsJobs, latestTrendsEvidence, type TrendsJobView } from '../features/marketIntel/trendsJobs';
 import { fetchPageContent } from '../features/ai/importer';
 import { queueHermesFallback } from '../features/scout/persist';
 import { getDb } from '../services/db';
@@ -92,6 +92,13 @@ export default function ProductResearch() {
       const outcome = await researchKeyword(q, {
         fetchPage: fetchPageContent,
         queueHermes: (payload) => queueHermesFallback(d, 'search', payload),
+        // §2 loop feedback: fresh, keyword-matching ingested Hermes trends
+        // evidence feeds this run's TREND_SCORE and skips a redundant queue.
+        readTrends: async (kw) => {
+          const r = await latestTrendsEvidence(d, kw);
+          if (!r.trend || !r.ingestedAt) return null;
+          return { trend: r.trend, coverage: r.coverage, ingestedAt: r.ingestedAt };
+        },
       });
       const res = outcome.result;
       setQueuedForHermes(outcome.hermesQueued);
