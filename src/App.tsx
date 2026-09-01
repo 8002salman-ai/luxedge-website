@@ -752,6 +752,7 @@ function Header() {
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
             <Link key={c.l} to={c.to} className="nav-underline px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
+          <Link to="/blog" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Blog</Link>
           <Link to="/shop?q=deal" className="ml-auto px-4 py-2 text-[13.5px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
       </nav>
