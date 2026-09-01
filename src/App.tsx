@@ -2298,8 +2298,8 @@ function ShopPage() {
             className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
             <option value="featured">Featured</option>
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Lowâ†’High</option>
-            <option value="price-high">Price: Highâ†’Low</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="price-high">Price: High to Low</option>
           </select>
         </div>
       </div>
