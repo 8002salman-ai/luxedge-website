@@ -210,6 +210,29 @@ interface DbSettingRow {
   [k: string]: unknown;
 }
 
+const PUBLIC_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function readPublicCache<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; data?: T };
+    if (!parsed.ts || Date.now() - parsed.ts > PUBLIC_CACHE_TTL_MS) return null;
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writePublicCache<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    /* storage unavailable - live request already succeeded */
+  }
+}
 function num(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -235,12 +258,14 @@ function tagsOf(v: unknown): string[] {
  */
 export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null> {
   if (getDbMode() !== 'supabase') return null;
+  const cached = readPublicCache<StorefrontCatalog>('luxedge:storefront-catalog:v1');
+  if (cached) return cached;
   const db = getDb();
 
   try {
     const [catRows, prodRows] = await Promise.all([
-      db.list<DbCategoryRow>('categories', { orderBy: 'sort_order' }),
-      db.list<DbProductRow>('products', { orderBy: 'created_at' }),
+      db.list<DbCategoryRow>('categories', { select: 'id,name,slug,is_active', orderBy: 'sort_order' }),
+      db.list<DbProductRow>('products', { select: 'id,slug,title,name,short_description,description,price,price_amount,compare_at_price,compare_at_amount,category_id,inventory_qty,image_url,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku', orderBy: 'created_at' }),
     ]);
 
     if (!Array.isArray(catRows) || !Array.isArray(prodRows)) return null;
@@ -274,7 +299,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Tolerate failures (missing table, grants, RLS) without failing the load.
     let imagesByProduct = new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>();
     try {
-      const imgRows = await db.list<DbImageRow>('product_images', { limit: 1000 });
+      const imgRows = await db.list<DbImageRow>('product_images', { select: 'product_id,url,public_url,alt_text,is_primary,sort_order,variant_id', limit: 1000 });
       if (Array.isArray(imgRows)) {
         imagesByProduct = (imgRows as DbImageRow[]).reduce((acc, img) => {
           const url = img.url || img.public_url;
@@ -301,7 +326,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Optional: attach product variants (real options only — never invented).
     let variantsByProduct = new Map<string, DbVariantRow[]>();
     try {
-      const varRows = await db.list<DbVariantRow>('product_variants', { limit: 1000 });
+      const varRows = await db.list<DbVariantRow>('product_variants', { select: 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty', limit: 1000 });
       if (Array.isArray(varRows)) {
         variantsByProduct = (varRows as DbVariantRow[]).reduce((acc, v) => {
           if (!v || !v.product_id) return acc;
@@ -403,7 +428,9 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       };
     });
 
-    return { products, categories, source: 'supabase' };
+    const result = { products, categories, source: 'supabase' as const };
+    writePublicCache('luxedge:storefront-catalog:v1', result);
+    return result;
   } catch {
     // Unreachable / schema not provisioned / permission denied â†’ null.
     // The caller must NOT fall back to demo products — the storefront stays
@@ -451,12 +478,14 @@ function isStorefrontReady(p: DbProductRow): boolean {
  */
 export async function loadStorefrontPromotions(): Promise<StorePromotions> {
   if (getDbMode() !== 'supabase') return { coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50 };
+  const promoCache = readPublicCache<StorePromotions>('luxedge:storefront-promotions:v1');
+  if (promoCache) return promoCache;
   const db = getDb();
   const out: StorePromotions = { coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50 };
   try {
     const [couponRows, settingRows] = await Promise.all([
-      db.list<DbCouponRow>('coupons', { limit: 200 }),
-      db.list<DbSettingRow>('store_settings', { limit: 20 }).catch(() => [] as DbSettingRow[]),
+      db.list<DbCouponRow>('coupons', { select: 'id,code,description,discount_type,discount_value,min_cart_value,eligible_product_ids,eligible_category_ids,end_at,usage_limit,used_count', limit: 200 }),
+      db.list<DbSettingRow>('store_settings', { select: 'key,value', limit: 20 }).catch(() => [] as DbSettingRow[]),
     ]);
     if (Array.isArray(couponRows)) {
       out.coupons = (couponRows as DbCouponRow[])
@@ -484,5 +513,6 @@ export async function loadStorefrontPromotions(): Promise<StorePromotions> {
   } catch {
     /* promotions unavailable — safe defaults */
   }
+  writePublicCache('luxedge:storefront-promotions:v1', out);
   return out;
 }

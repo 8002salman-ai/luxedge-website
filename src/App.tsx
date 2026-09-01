@@ -11,7 +11,7 @@ import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
-import { loadPublishedBlogs } from './services/blog';
+import { loadPublishedBlogBySlug, loadPublishedBlogs } from './services/blog';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
@@ -318,7 +318,7 @@ interface Ctx {
   user: AppUser | null; cart: CartItem[];
   products: Product[]; users: AppUser[]; reviews: Review[]; categories: AdminCategory[];
   blogs: BlogPost[]; setBlogs: React.Dispatch<React.SetStateAction<BlogPost[]>>;
-  reloadBlogs: () => Promise<void>;
+  reloadBlogs: (forceFresh?: boolean) => Promise<void>;
   login: (e: string, p: string, admin?: boolean) => Promise<string | null>;
   guestLogin: () => void;
   logout: () => void; signup: (n: string, e: string, p: string) => Promise<string | null>;
@@ -389,8 +389,8 @@ function AppProvider({ children }: { children: ReactNode }) {
   // migration/rollback fallback; once the CMS returns real posts they become
   // the source of truth. Publishing from the Admin Blog Manager updates the
   // DB, and reloadBlogs() refreshes this in-memory list WITHOUT any deploy.
-  const reloadBlogs = useCallback(async () => {
-    const posts = await loadPublishedBlogs();
+  const reloadBlogs = useCallback(async (forceFresh = false) => {
+    const posts = await loadPublishedBlogs({ forceFresh });
     // Only switch to CMS when it returned actual posts — null (failure) or an
     // empty DB keeps the last-known set so a DB blip never blanks the blog.
     if (posts && posts.length > 0) setBlogs(posts);
@@ -3663,10 +3663,19 @@ function BlogListPage() {
 function BlogDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { blogs: allBlogs } = useApp();
-  const post = allBlogs.find(b => b.slug === slug && b.status === 'published');
+  const listPost = allBlogs.find(b => b.slug === slug && b.status === 'published');
+  const [cmsPost, setCmsPost] = useState<BlogPost | null>(null);
+  const post = cmsPost || listPost;
   const relatedPosts = allBlogs.filter(b => b.slug !== slug && b.status === 'published').slice(0, 3);
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+  useEffect(() => {
+    let cancelled = false;
+    setCmsPost(null);
+    if (!slug) return () => { cancelled = true; };
+    void loadPublishedBlogBySlug(slug).then((row) => { if (!cancelled && row) setCmsPost(row); });
+    return () => { cancelled = true; };
+  }, [slug]);
 
   // SEO: canonical + meta description + BlogPosting & BreadcrumbList JSON-LD
   useEffect(() => {

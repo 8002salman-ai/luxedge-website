@@ -133,7 +133,7 @@ export default function BlogManager() {
           await adminCreate({
             slug,
             title: form.title,
-            content: form.content,
+            content: form.content ?? '',
             excerpt: form.excerpt || undefined,
             heroImageUrl: form.hero_image_url || undefined,
             heroImageAlt: form.hero_image_alt || undefined,
@@ -154,7 +154,7 @@ export default function BlogManager() {
         await adminUpdate(editing!.id, toPatch);
       }
       notify('Saved.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       setCreating(false); setEditing(null);
       await load();
     } catch (e) {
@@ -177,7 +177,7 @@ export default function BlogManager() {
             ? 'Unpublished — moved to drafts.'
             : `Post ${action}.`;
       notify(notice);
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Action failed.', 'error');
@@ -195,7 +195,7 @@ export default function BlogManager() {
     try {
       await adminSetLifecycle(id, 'schedule', { scheduled_at: iso });
       notify('Scheduled.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Could not schedule.', 'error');
@@ -210,7 +210,7 @@ export default function BlogManager() {
       await adminCreate({
         slug: `${r.slug}-copy`,
         title: `${r.title} (Copy)`,
-        content: r.content,
+        content: r.content ?? '',
         excerpt: r.excerpt || undefined,
         heroImageUrl: r.hero_image_url || undefined,
         heroImageAlt: r.hero_image_alt || undefined,
@@ -239,7 +239,7 @@ export default function BlogManager() {
     try {
       await adminDelete(confirm.id, confirm.permanent);
       notify(confirm.permanent ? 'Deleted permanently.' : 'Archived.');
-      await reloadBlogs();
+      await reloadBlogs(true);
       await load();
     } catch (e) {
       notify((e as Error).message || 'Delete failed.', 'error');
@@ -264,7 +264,7 @@ export default function BlogManager() {
       setRows(fresh);
       const r = fresh.find((x) => x.id === blogId);
       if (r) startEdit(r);
-      await reloadBlogs();
+      await reloadBlogs(true);
     } catch (e) {
       notify((e as Error).message || 'Restore failed.', 'error');
     } finally {
@@ -386,7 +386,7 @@ export default function BlogManager() {
             <div className="space-y-4">
               <div>
                 <label className={label}>Content (markdown: ## headings, [label](/path) links)</label>
-                <textarea className={`${input} font-mono`} rows={10} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+                <textarea className={`${input} font-mono`} rows={10} value={form.content ?? ''} onChange={(e) => setForm({ ...form, content: e.target.value })} />
               </div>
               <div>
                 <label className={label}>SEO title (max 60)</label>
@@ -425,7 +425,7 @@ export default function BlogManager() {
             <div className="border rounded-lg p-4 bg-gray-50 text-sm">
               <h3 className="text-lg font-bold mb-2">{form.title}</h3>
               <div id="blog-cms-preview" className="space-y-2"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(form.content) }} />
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(form.content ?? '') }} />
             </div>
           </div>
 
