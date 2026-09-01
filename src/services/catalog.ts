@@ -265,7 +265,12 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
   try {
     const [catRows, prodRows] = await Promise.all([
       db.list<DbCategoryRow>('categories', { select: 'id,name,slug,is_active', orderBy: 'sort_order' }),
-      db.list<DbProductRow>('products', { select: 'id,slug,title,name,short_description,description,price,price_amount,compare_at_price,compare_at_amount,category_id,inventory_qty,image_url,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku', orderBy: 'created_at' }),
+      // Column-scoped read — ONLY schema-proven columns (migrations 0001/0004/0010/0016).
+      // title/description/price_amount/compare_at_amount/image_url are NOT columns on
+      // public.products → including them makes PostgREST 400 the entire query and the
+      // storefront renders empty. The mapping below falls back (name||title, '' desc,
+      // price) exactly as it did under the old select=*.
+      db.list<DbProductRow>('products', { select: 'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku', orderBy: 'created_at' }),
     ]);
 
     if (!Array.isArray(catRows) || !Array.isArray(prodRows)) return null;
@@ -299,7 +304,9 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Tolerate failures (missing table, grants, RLS) without failing the load.
     let imagesByProduct = new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>();
     try {
-      const imgRows = await db.list<DbImageRow>('product_images', { select: 'product_id,url,public_url,alt_text,is_primary,sort_order,variant_id', limit: 1000 });
+      // public_url is not a product_images column (migrations use `url`); requesting it
+      // 400s the query and silently drops ALL product images.
+      const imgRows = await db.list<DbImageRow>('product_images', { select: 'product_id,url,alt_text,is_primary,sort_order,variant_id', limit: 1000 });
       if (Array.isArray(imgRows)) {
         imagesByProduct = (imgRows as DbImageRow[]).reduce((acc, img) => {
           const url = img.url || img.public_url;
