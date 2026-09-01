@@ -55,6 +55,13 @@ export interface CmsBlogRow {
 
 export type BlogStatus = CmsBlogRow['status'];
 
+// Column-scoped public reads — every column MUST exist on blog_posts (the
+// schema contract is enforced by __tests__/select-schema.test.ts against
+// supabase/migrations/*.sql; a missing column 400s the whole query).
+export const BLOG_LIST_PUBLIC_SELECT =
+  'id,slug,title,excerpt,hero_image_url,hero_image_alt,tags,author_name,author_id,status,created_at,updated_at,published_at,date_label';
+export const BLOG_DETAIL_PUBLIC_SELECT = `${BLOG_LIST_PUBLIC_SELECT},content,faq`;
+
 const PUBLIC_BLOG_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function readBlogCache(): BlogPost[] | null {
@@ -126,7 +133,7 @@ export async function loadPublishedBlogs(opts: { forceFresh?: boolean } = {}): P
     if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
       (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
     }
-    const rows = await db.list<CmsBlogRow>('blog_posts', { select: 'id,slug,title,excerpt,hero_image_url,hero_image_alt,tags,author_name,author_id,status,created_at,updated_at,published_at,date_label', orderBy: 'published_at.desc', filters: { status: 'published' } });
+    const rows = await db.list<CmsBlogRow>('blog_posts', { select: BLOG_LIST_PUBLIC_SELECT, orderBy: 'published_at.desc', filters: { status: 'published' } });
     if (!Array.isArray(rows)) return null;
     const posts = rows.map(mapRowToBlogPost);
     writeBlogCache(posts);
@@ -145,7 +152,7 @@ export async function loadPublishedBlogBySlug(slug: string): Promise<BlogPost | 
       (db as { setAccessToken: (t: string | null) => void }).setAccessToken(null);
     }
     const rows = await db.list<CmsBlogRow>('blog_posts', {
-      select: 'id,slug,title,excerpt,content,hero_image_url,hero_image_alt,tags,author_name,author_id,status,created_at,updated_at,published_at,date_label,faq',
+      select: BLOG_DETAIL_PUBLIC_SELECT,
       limit: 1,
       filters: { status: 'published', slug },
     });

@@ -210,6 +210,24 @@ interface DbSettingRow {
   [k: string]: unknown;
 }
 
+// ============================================================================
+// PUBLIC READ SELECTS (egress-scoped)
+//
+// Every column below MUST exist on the live table — PostgREST rejects the
+// whole query with a 400 when any requested column is missing (this happened
+// once: the storefront silently rendered empty). The contract is enforced by
+// src/services/__tests__/select-schema.test.ts against
+// supabase/migrations/*.sql as the source of truth.
+// ============================================================================
+export const CATEGORIES_PUBLIC_SELECT = 'id,name,slug,is_active';
+export const PRODUCTS_PUBLIC_SELECT =
+  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku';
+export const PRODUCT_IMAGES_PUBLIC_SELECT = 'product_id,url,alt_text,is_primary,sort_order,variant_id';
+export const PRODUCT_VARIANTS_PUBLIC_SELECT = 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty';
+export const COUPONS_PUBLIC_SELECT =
+  'id,code,description,discount_type,discount_value,min_cart_value,eligible_product_ids,eligible_category_ids,end_at,usage_limit,used_count';
+export const STORE_SETTINGS_PUBLIC_SELECT = 'key,value';
+
 const PUBLIC_CACHE_TTL_MS = 5 * 60 * 1000;
 
 function readPublicCache<T>(key: string): T | null {
@@ -264,13 +282,8 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
   try {
     const [catRows, prodRows] = await Promise.all([
-      db.list<DbCategoryRow>('categories', { select: 'id,name,slug,is_active', orderBy: 'sort_order' }),
-      // Column-scoped read — ONLY schema-proven columns (migrations 0001/0004/0010/0016).
-      // title/description/price_amount/compare_at_amount/image_url are NOT columns on
-      // public.products → including them makes PostgREST 400 the entire query and the
-      // storefront renders empty. The mapping below falls back (name||title, '' desc,
-      // price) exactly as it did under the old select=*.
-      db.list<DbProductRow>('products', { select: 'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku', orderBy: 'created_at' }),
+      db.list<DbCategoryRow>('categories', { select: CATEGORIES_PUBLIC_SELECT, orderBy: 'sort_order' }),
+      db.list<DbProductRow>('products', { select: PRODUCTS_PUBLIC_SELECT, orderBy: 'created_at' }),
     ]);
 
     if (!Array.isArray(catRows) || !Array.isArray(prodRows)) return null;
@@ -304,9 +317,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Tolerate failures (missing table, grants, RLS) without failing the load.
     let imagesByProduct = new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>();
     try {
-      // public_url is not a product_images column (migrations use `url`); requesting it
-      // 400s the query and silently drops ALL product images.
-      const imgRows = await db.list<DbImageRow>('product_images', { select: 'product_id,url,alt_text,is_primary,sort_order,variant_id', limit: 1000 });
+      const imgRows = await db.list<DbImageRow>('product_images', { select: PRODUCT_IMAGES_PUBLIC_SELECT, limit: 1000 });
       if (Array.isArray(imgRows)) {
         imagesByProduct = (imgRows as DbImageRow[]).reduce((acc, img) => {
           const url = img.url || img.public_url;
@@ -333,7 +344,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Optional: attach product variants (real options only — never invented).
     let variantsByProduct = new Map<string, DbVariantRow[]>();
     try {
-      const varRows = await db.list<DbVariantRow>('product_variants', { select: 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty', limit: 1000 });
+      const varRows = await db.list<DbVariantRow>('product_variants', { select: PRODUCT_VARIANTS_PUBLIC_SELECT, limit: 1000 });
       if (Array.isArray(varRows)) {
         variantsByProduct = (varRows as DbVariantRow[]).reduce((acc, v) => {
           if (!v || !v.product_id) return acc;
@@ -491,8 +502,8 @@ export async function loadStorefrontPromotions(): Promise<StorePromotions> {
   const out: StorePromotions = { coupons: [], freeShippingEnabled: false, freeShippingThreshold: 50 };
   try {
     const [couponRows, settingRows] = await Promise.all([
-      db.list<DbCouponRow>('coupons', { select: 'id,code,description,discount_type,discount_value,min_cart_value,eligible_product_ids,eligible_category_ids,end_at,usage_limit,used_count', limit: 200 }),
-      db.list<DbSettingRow>('store_settings', { select: 'key,value', limit: 20 }).catch(() => [] as DbSettingRow[]),
+      db.list<DbCouponRow>('coupons', { select: COUPONS_PUBLIC_SELECT, limit: 200 }),
+      db.list<DbSettingRow>('store_settings', { select: STORE_SETTINGS_PUBLIC_SELECT, limit: 20 }).catch(() => [] as DbSettingRow[]),
     ]);
     if (Array.isArray(couponRows)) {
       out.coupons = (couponRows as DbCouponRow[])
