@@ -25,6 +25,15 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
+import {
+  CONTACT_INFO,
+  CONTACT_INTRO,
+  PRIVACY_SECTIONS,
+  TERMS_SECTIONS,
+  RETURNS_SECTIONS,
+  SHIPPING_SECTIONS,
+  FAQ_DATA,
+} from '../src/content/policies';
 
 export interface SeoEnv {
   ASSETS: {
@@ -421,8 +430,16 @@ function renderArticleBody(content: string): string {
  * duplication, no hidden/SEO-only markup. */
 function injectArticleBody(html: string, post: BlogEntry): string {
   const image = post.image ? `<img src="${esc(post.image)}" alt="${esc(post.title)}" />` : '';
+  const author = post.authorName || 'Luxedge Editorial Team';
+  const date = post.date
+    ? new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  const byline = `<p>Written by ${esc(author)}${date ? ' \u2014 ' + esc(date) : ''}</p>`;
+  const editorialNote = author === 'Luxedge Editorial Team'
+    ? '<p><em>Buying guides are researched and reviewed by the Luxedge editorial team. They are informational and not veterinary, medical, or nutritional advice.</em></p>'
+    : '';
   const body = renderArticleBody(post.content || post.excerpt || '');
-  const article = `<article><h1>${esc(post.title)}</h1>${image}${body}</article>`;
+  const article = `<article><h1>${esc(post.title)}</h1>${byline}${editorialNote}${image}${body}</article>`;
   return html.replace('<div id="root"></div>', `<div id="root">${article}</div>`);
 }
 
@@ -554,6 +571,72 @@ function injectAboutBody(html: string): string {
   return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
+/** Pre-renders the /contact page with contact info and intro. */
+function injectContactBody(html: string): string {
+  const cards = CONTACT_INFO.map((c) => `<li><strong>${esc(c.label)}:</strong> ${esc(c.value)} (${esc(c.sub)})</li>`).join('');
+  const parts: string[] = [
+    `<h1>Contact Us</h1>`,
+    `<p>${esc(CONTACT_INTRO)}</p>`,
+    `<ul>${cards}</ul>`,
+    `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Phone: (440) 941-8002 | Hours: Mon-Fri, 9AM-6PM CT</p>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders a legal/policy page from shared section data. */
+function injectLegalBody(html: string, title: string, sections: { title: string; body: string }[]): string {
+  const parts: string[] = [`<h1>${esc(title)}</h1>`, `<p>Last updated: August 26, 2026</p>`];
+  for (const s of sections) {
+    parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /faq page with categories and questions. */
+function injectFaqBody(html: string): string {
+  const parts: string[] = [`<h1>Frequently Asked Questions</h1>`];
+  for (const cat of FAQ_DATA) {
+    parts.push(`<h2>${esc(cat.category)}</h2>`);
+    for (const item of cat.items) {
+      parts.push(`<h3>${esc(item.q)}</h3>`, `<p>${esc(item.a)}</p>`);
+    }
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /shop page with category navigation. */
+function injectShopBody(html: string): string {
+  const cats = [
+    ['Dog Supplies', '/category/dog-supplies'], ['Cat Supplies', '/category/cat-supplies'],
+    ['Pet Beds', '/category/pet-beds'], ['Pet Toys', '/category/pet-toys'],
+    ['Feeding & Water', '/category/feeding-water'], ['Grooming', '/category/grooming'],
+    ['Pet Accessories', '/category/pet-accessories'], ['Bird Supplies', '/category/bird-supplies'],
+    ['Horse', '/category/horse'], ['Cattle', '/category/cattle'],
+  ];
+  const links = cats.map(([label, to]) => `<li><a href="${esc(to)}">${esc(label)}</a></li>`).join('');
+  const parts: string[] = [
+    `<h1>Shop All Pet Essentials</h1>`,
+    `<p>Handpicked for quality, comfort, and value. Browse by category below.</p>`,
+    `<h2>Categories</h2>`,
+    `<ul>${links}</ul>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /blog index with recent post links from the CMS. */
+async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): Promise<string> {
+  const posts = await getBlogRegistry(origin, env);
+  const parts: string[] = [
+    `<h1>Blog</h1>`,
+    `<p>Practical pet care guides from Luxedge — puppy essentials, cat enrichment, bird care, horse grooming, cattle basics, and honest buying advice.</p>`,
+  ];
+  if (posts && posts.length > 0) {
+    const items = posts.slice(0, 15).map((p) => `<li><a href="/blog/${esc(p.slug)}">${esc(p.title)}</a> — ${esc(p.excerpt || '').slice(0, 100)}</li>`).join('');
+    parts.push(`<h2>Latest articles</h2>`, `<ul>${items}</ul>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
 export async function maybeInjectSeo(
   html: string,
   pathname: string,
@@ -567,6 +650,17 @@ export async function maybeInjectSeo(
   // same head (title/desc/canonical/og/robots/JSON-LD), and blog articles also
   // receive their pre-rendered body with real internal links. React replaces
   // #root on mount, so bots and humans see the same semantic content.
+
+  // Noindex utility/private routes so they never appear in search results.
+  const noIndexRoutes = ['admin', 'checkout', 'login', 'signup', 'account'];
+  if (segs.length === 1 && noIndexRoutes.includes(segs[0])) {
+    return inject(html, {
+      title: `${segs[0].charAt(0).toUpperCase() + segs[0].slice(1)} | Luxedge`,
+      description: '',
+      canonical: `${root}/${segs[0]}`,
+      noindex: true,
+    });
+  }
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
@@ -588,14 +682,28 @@ export async function maybeInjectSeo(
     return out;
   }
 
-  // /blog (index) and /blog/write are not indexed targets — keep /blog only.
+  // /blog (index) — pre-render the index with recent post links from the CMS.
   if (segs.length === 1 && segs[0] === 'blog') {
-    return inject(html, {
+    let out = inject(html, {
       title: 'Pet Care Blog — Guides, Tips & Buying Advice | Luxedge',
       description:
         'Practical pet care guides from Luxedge — puppy essentials, cat enrichment, bird care, horse grooming, cattle basics, and honest buying advice.',
       canonical: `${root}/blog`,
     });
+    out = await injectBlogIndexBody(out, origin, env);
+    return out;
+  }
+
+  // /shop — pre-render category navigation.
+  if (segs.length === 1 && segs[0] === 'shop') {
+    let out = inject(html, {
+      title: 'Shop All Pet Essentials — Dog, Cat, Bird, Horse & More | Luxedge',
+      description:
+        'Browse the Luxedge curated collection — dog beds and leashes, cat toys and fountains, bird feeders, horse grooming and livestock essentials, all sourced and ready to ship.',
+      canonical: `${root}/shop`,
+    });
+    out = injectShopBody(out);
+    return out;
   }
 
   // Static pages (about also receives the shared About copy pre-rendered).
@@ -607,7 +715,15 @@ export async function maybeInjectSeo(
       description: staticMeta.description,
       canonical: `${root}${staticKey}`,
     });
+    // Pre-render body content for each static page so crawlers see
+    // substantive material, not an empty SPA shell.
     if (staticKey === '/about') out = injectAboutBody(out);
+    else if (staticKey === '/contact') out = injectContactBody(out);
+    else if (staticKey === '/privacy') out = injectLegalBody(out, 'Privacy Policy', PRIVACY_SECTIONS);
+    else if (staticKey === '/terms') out = injectLegalBody(out, 'Terms of Service', TERMS_SECTIONS);
+    else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS);
+    else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS);
+    else if (staticKey === '/faq') out = injectFaqBody(out);
     return out;
   }
 
