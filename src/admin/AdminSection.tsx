@@ -14,6 +14,7 @@ import { AIImportPanel } from './AIImportPanel';
 import { loadProviderSettings, saveProviderSettings } from '../features/ai/providers';
 import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RULES } from '../features/ai/pricing';
 import ProductScout from './ProductScout';
+import ProductResearch from './ProductResearch';
 import CJSetup from './CJSetup';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
@@ -99,6 +100,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
         { to: '/admin/ai', icon: Robot, label: 'AI Hub', g: 'linear-gradient(135deg,#4f46e5,#7c3aed)', dot: '#818cf8' },
         { to: '/admin/ai-import', icon: Robot, label: 'AI Import', g: 'linear-gradient(135deg,#9333ea,#c026d3)', dot: '#c084fc' },
         { to: '/admin/scout', icon: Target, label: 'Product Scout', g: 'linear-gradient(135deg,#f43f5e,#fb923c)', dot: '#fb7185' },
+        { to: '/admin/product-research', icon: TrendUp, label: 'Product Research', g: 'linear-gradient(135deg,#0d9488,#0891b2)', dot: '#2dd4bf' },
         { to: '/admin/ai-control', icon: Cpu, label: 'AI Control', g: 'linear-gradient(135deg,#0ea5e9,#8b5cf6)', dot: '#60a5fa' },
         { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence', g: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', dot: '#a78bfa' },
       ],
@@ -5282,6 +5284,7 @@ export default function AdminSection() {
       <Route path="ai" element={<AdminLayout><AAIHub /></AdminLayout>} />
       <Route path="ai-import" element={<AdminLayout><AAIImport /></AdminLayout>} />
       <Route path="scout" element={<AdminLayout><ProductScout /></AdminLayout>} />
+      <Route path="product-research" element={<AdminLayout><ProductResearch /></AdminLayout>} />
       <Route path="ai-control" element={<AdminLayout><AiControlCenter /></AdminLayout>} />
       <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
       <Route path="cj-setup" element={<AdminLayout><CJSetup /></AdminLayout>} />
