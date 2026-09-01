@@ -1,3 +1,5 @@
+import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_SELECT } from './selects';
+
 // ============================================================================
 // LUXEDGE — dynamic /sitemap.xml (worker side)
 //
@@ -96,10 +98,10 @@ const xmlEscape = (s: string): string =>
 export async function buildSitemap(): Promise<string | null> {
   const [prods, cats, blogs] = await Promise.all([
     fetchRows<ProductRow[]>(
-      'products?select=id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness&status=in.(active,published)&limit=500',
+      `products?select=${SITEMAP_PRODUCTS_SELECT}&status=in.(active,published)&limit=500`,
     ),
-    fetchRows<CategoryRow[]>('categories?select=slug&is_active=eq.true&limit=200'),
-    fetchRows<BlogRow[]>('blog_posts?select=slug&status=eq.published&limit=500'),
+    fetchRows<CategoryRow[]>(`categories?select=${SITEMAP_CATEGORIES_SELECT}&is_active=eq.true&limit=200`),
+    fetchRows<BlogRow[]>(`blog_posts?select=${SITEMAP_BLOG_POSTS_SELECT}&status=eq.published&limit=500`),
   ]);
 
   // DB is not reachable / not provisioned — fall back to the static sitemap.

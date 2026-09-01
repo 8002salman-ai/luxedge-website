@@ -34,6 +34,7 @@ import {
   SHIPPING_SECTIONS,
   FAQ_DATA,
 } from '../src/content/policies';
+import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT } from './selects';
 
 export interface SeoEnv {
   ASSETS: {
@@ -151,7 +152,7 @@ async function getProducts(): Promise<ProductRow[] | null> {
     fetchJson<ProductRow[]>(
       base,
       key,
-      'products?select=slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)&status=eq.active&limit=500',
+      `products?select=${SEO_PRODUCTS_SELECT}&status=eq.active&limit=500`,
     ),
   );
 }
@@ -166,7 +167,7 @@ async function getCategories(): Promise<CategoryRow[] | null> {
   const key = supabaseAnon();
   if (!base || !key) return null;
   return cachedFetch('seo:categories', TTL_DB, () =>
-    fetchJson<CategoryRow[]>(base, key, 'categories?select=slug,name&limit=200'),
+    fetchJson<CategoryRow[]>(base, key, `categories?select=${SEO_CATEGORIES_SELECT}&limit=200`),
   );
 }
 
@@ -228,7 +229,7 @@ async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[]
       const rows = await fetchJson<BlogCmsRow[]>(
         base,
         key,
-        'blog_posts?select=slug,title,excerpt,hero_image_url,published_at,created_at,author_name,content,faq&status=eq.published&order=published_at.desc',
+        `blog_posts?select=${SEO_BLOG_POSTS_SELECT}&status=eq.published&order=published_at.desc`,
       );
       if (!rows) throw new Error('blog_cms unavailable');
       return rows
