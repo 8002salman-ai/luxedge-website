@@ -14,13 +14,13 @@ import {
   TrendUp, MagnifyingGlass, ShieldCheck, Flask,
 } from '@phosphor-icons/react';
 import type { ProductOpportunityResult, TrendingPetProduct, SourceStatus } from '../features/marketIntel/types';
-import { trendDirectionFromPoints, trendScore } from '../features/marketIntel/trend';
-import { profitEconomics } from '../features/marketIntel/supplier';
-import { opportunityScore, verdictFrom, OPPORTUNITY_WEIGHTS } from '../features/marketIntel/score';
+import { OPPORTUNITY_WEIGHTS } from '../features/marketIntel/score';
 import { mergeTrending } from '../features/marketIntel/trending';
+import { researchKeyword } from '../features/marketIntel/research';
 import { fetchPageContent } from '../features/ai/importer';
-import { parseEbaySearchPage } from '../features/marketIntel/ebay';
-import { parseAmazonPublicPage } from '../features/marketIntel/amazon';
+import { queueHermesFallback } from '../features/scout/persist';
+import { getDb } from '../services/db';
+import { getAccessToken } from '../services/supabase';
 
 const STATUS_BADGE: Record<SourceStatus, string> = {
   AVAILABLE: 'bg-green-100 text-green-700',
@@ -50,105 +50,48 @@ export default function ProductResearch() {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ProductOpportunityResult | null>(null);
   const [trending, setTrending] = useState<TrendingPetProduct[]>([]);
+  const [queuedForHermes, setQueuedForHermes] = useState(false);
+  const [cached, setCached] = useState(false);
 
-  /** Run one research pass — every provider failure degrades to PARTIAL, never stops the job. */
+  /**
+   * Run one research pass via the injectable pipeline — every provider
+   * failure degrades to PARTIAL (never stops the job), live fetches are
+   * paced + short-cached, and Google Trends queues a Hermes browser task
+   * instead of faking data.
+   */
   const research = async () => {
     const q = keyword.trim();
     if (!q) { notify('Enter a product or keyword (e.g. “dog poop scooper”)'); return; }
     setRunning(true);
     setResult(null);
+    setQueuedForHermes(false);
+    setCached(false);
     try {
-      // ---- eBay signal (public search page, best-effort) ----
-      let ebayStatus: SourceStatus = 'FAILED';
-      let ebayData = { soldQuantity: null as number | null, watchers: null as number | null, activeListings: null as number | null, competitorCount: null as number | null, avgSoldPrice: null as number | null };
-      try {
-        const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&_sop=15`;
-        const raw = await fetchPageContent(ebayUrl);
-        const parsed = parseEbaySearchPage(raw);
-        ebayData = {
-          soldQuantity: parsed.soldQuantity,
-          watchers: parsed.watchers,
-          activeListings: parsed.activeListings,
-          competitorCount: null,
-          avgSoldPrice: parsed.avgSoldPrice,
-        };
-        ebayStatus = 'AVAILABLE';
-      } catch {
-        ebayStatus = 'FAILED';
+      // The Hermes queue write goes through the db adapter with the admin
+      // JWT (same pattern as Product Scout) so RLS accepts the agent_jobs row.
+      const d = getDb();
+      if ('setAccessToken' in d && typeof (d as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {
+        (d as { setAccessToken: (t: string | null) => void }).setAccessToken(getAccessToken());
       }
-
-      // ---- Amazon public (best-effort: BSR/price/reviews from a search PDP) ----
-      let amazonStatus: SourceStatus = 'FAILED';
-      let amazon = { volume: null as number | null, bsrVelocity: null as 'rising' | 'stable' | 'declining' | null, reviews: null as number | null };
-      try {
-        const amzUrl = `https://www.amazon.com/s?k=${encodeURIComponent(q)}`;
-        const raw = await fetchPageContent(amzUrl);
-        const parsed = parseAmazonPublicPage(raw, amzUrl);
-        if (parsed.bestSellersRank !== null && parsed.bestSellersRank !== undefined) {
-          amazon.bsrVelocity = parsed.bestSellersRank <= 5000 ? 'rising' : parsed.bestSellersRank <= 30000 ? 'stable' : 'declining';
-        }
-        amazon.reviews = parsed.reviewCount ?? null;
-        amazonStatus = 'AVAILABLE';
-      } catch {
-        amazonStatus = 'FAILED';
-      }
-
-      // ---- Supplier economics (real numbers only; demo fallback is honest NOT_FOUND) ----
-      const landed = ebayData.avgSoldPrice !== null ? Math.round((ebayData.avgSoldPrice * 0.3) * 100) / 100 : null;
-      const economics = profitEconomics({
-        unitCost: landed !== null ? Math.round(landed * 0.4 * 100) / 100 : null,
-        shippingCost: landed !== null ? Math.round(landed * 0.2 * 100) / 100 : null,
+      const outcome = await researchKeyword(q, {
+        fetchPage: fetchPageContent,
+        queueHermes: (payload) => queueHermesFallback(d, 'search', payload),
       });
+      const res = outcome.result;
+      setQueuedForHermes(outcome.hermesQueued);
+      setCached(outcome.cached);
+      setResult(res);
 
-      // ---- Trend (honest: browser-queued unless configured; never fake a direction) ----
-      const trendDir = trendDirectionFromPoints(null, null, null, null); // INSUFFICIENT_DATA
-      const tScore = trendScore({ direction: trendDir });
-
-      // Honest structural flags: only claim shipping simplicity / IP safety
-      // when there is actual evidence. With no supplier cost there is no
-      // shipping evidence either — null keeps confidence truthful.
-      const hasSupplierData = economics.landedCost !== null;
-      const input = {
-        trendDirection: trendDir,
-        risingQueries: [] as string[],
-        relatedQueries: [] as string[],
-        usRelevant: true,
-        amazonDemand: amazon,
-        ebay: ebayData,
-        supplierAvailable: hasSupplierData,
-        economics,
-        shippingSimple: hasSupplierData ? true : null,
-        ipSafe: null,
-      };
-      const { score, confidence, breakdown } = opportunityScore(input);
-      const verdict = verdictFrom(score, confidence, economics);
-
-      setResult({
-        keyword: q,
-        opportunityScore: score,
-        confidence,
-        breakdown,
-        economics,
-        verdict,
-        provenance: {
-          researchDate: new Date().toISOString(),
-          keyword: q,
-          queries: [q],
-          aiProvider: null,
-          trend: { status: 'NOT_CONFIGURED', keyword: q, direction: trendDir, score: tScore, source: 'unavailable', note: 'Official Trends API not configured — Hermes browser task can be queued.' },
-          amazonOpportunity: { status: 'LOGIN_REQUIRED', note: 'Seller Central Opportunity Explorer requires an authorized session.' },
-          amazonPublic: { status: amazonStatus, sourcePages: [], note: amazonStatus === 'AVAILABLE' ? 'Public market signals captured.' : 'Public fetch failed (page blocked or empty).' },
-          ebay: { status: ebayStatus, soldQuantity: ebayData.soldQuantity, watchers: ebayData.watchers, activeListings: ebayData.activeListings, note: ebayStatus === 'AVAILABLE' ? 'Visible listing signals parsed.' : 'eBay page fetch failed.' },
-          supplier: { status: economics.landedCost !== null ? 'AVAILABLE' : 'NOT_CONFIGURED', unitCost: null, landedCost: economics.landedCost },
-          confidence,
-          finalScore: score,
-        },
-        partial: breakdown.covered < breakdown.components,
-      });
-
-      // ---- Trending families (deterministic merge of discovered keywords) ----
+      // ---- Trending families (deterministic merge of researched keyword) ----
       setTrending(mergeTrending([
-        { keyword: q, source: 'manual', trendDirection: trendDir, trendScore: tScore, opportunityScore: score, confidence },
+        {
+          keyword: res.keyword,
+          source: 'manual',
+          trendDirection: res.provenance.trend.direction,
+          trendScore: res.provenance.trend.score,
+          opportunityScore: res.opportunityScore,
+          confidence: res.confidence,
+        },
       ]));
       notify('Research complete');
     } catch (e) {
@@ -187,6 +130,9 @@ export default function ProductResearch() {
           >
             {running ? 'Researching…' : <><MagnifyingGlass size={16} /> RESEARCH PRODUCT</>}
           </button>
+          {cached && (
+            <span className="self-center text-xs text-gray-400">cached result · refetches within 15 min are skipped</span>
+          )}
         </div>
       </div>
 
@@ -241,7 +187,7 @@ export default function ProductResearch() {
           <div className="bg-white rounded-2xl border border-gray-200 p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><ShieldCheck size={16} className="text-green-600" /> Source Breakdown</h3>
             <div className="grid md:grid-cols-2 gap-2 text-sm">
-              <SourceRow label="GOOGLE TRENDS" status={result.provenance.trend.status} />
+              <SourceRow label="GOOGLE TRENDS" status={result.provenance.trend.status} detail={queuedForHermes ? 'queued for Hermes browser' : undefined} />
               <SourceRow label="AMAZON OPPORTUNITY EXPLORER" status={result.provenance.amazonOpportunity.status} />
               <SourceRow label="AMAZON PUBLIC" status={result.provenance.amazonPublic.status} />
               <SourceRow label="EBAY" status={result.provenance.ebay.status} />
