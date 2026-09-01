@@ -133,7 +133,7 @@ export default function BlogManager() {
           await adminCreate({
             slug,
             title: form.title,
-            content: form.content,
+            content: form.content ?? '',
             excerpt: form.excerpt || undefined,
             heroImageUrl: form.hero_image_url || undefined,
             heroImageAlt: form.hero_image_alt || undefined,
@@ -210,7 +210,7 @@ export default function BlogManager() {
       await adminCreate({
         slug: `${r.slug}-copy`,
         title: `${r.title} (Copy)`,
-        content: r.content,
+        content: r.content ?? '',
         excerpt: r.excerpt || undefined,
         heroImageUrl: r.hero_image_url || undefined,
         heroImageAlt: r.hero_image_alt || undefined,
@@ -386,7 +386,7 @@ export default function BlogManager() {
             <div className="space-y-4">
               <div>
                 <label className={label}>Content (markdown: ## headings, [label](/path) links)</label>
-                <textarea className={`${input} font-mono`} rows={10} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} />
+                <textarea className={`${input} font-mono`} rows={10} value={form.content ?? ''} onChange={(e) => setForm({ ...form, content: e.target.value })} />
               </div>
               <div>
                 <label className={label}>SEO title (max 60)</label>
@@ -425,7 +425,7 @@ export default function BlogManager() {
             <div className="border rounded-lg p-4 bg-gray-50 text-sm">
               <h3 className="text-lg font-bold mb-2">{form.title}</h3>
               <div id="blog-cms-preview" className="space-y-2"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(form.content) }} />
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(form.content ?? '') }} />
             </div>
           </div>
 

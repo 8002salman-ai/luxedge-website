@@ -10,7 +10,10 @@
 //      swallowed, never fatal.
 //   3. Live page fetches are paced (never hammer two marketplaces back to
 //      back) and short-cached per keyword so a repeated research of the same
-//      keyword within the TTL does not re-fetch.
+//      keyword within the TTL does not re-fetch. The cache is evidence-aware:
+//      freshly ingested Hermes trends evidence bypasses a cached outcome that
+//      predates it, so a consumed score shows immediately — never masked by
+//      the 15-min research window.
 //
 // fetchPage contract (src/features/ai/importer.ts): resolves to
 // JSON.stringify(parseHtmlPage(...)) — a {"text","images",...} envelope — or
@@ -54,6 +57,8 @@ export interface ResearchDeps {
    * Reads previously ingested Hermes trends evidence for a keyword, or null
    * when none exists. When present and fresh, research reuses it and skips
    * the queue; when missing/stale/empty it queues a new browser job.
+   * Consulted BEFORE the short-lived keyword cache so fresh evidence bypasses
+   * a cached outcome that predates the ingestion.
    */
   readTrends?: (keyword: string) => Promise<IngestedTrend | null>;
   /** Override for tests; default PACING_MS. */
@@ -71,6 +76,8 @@ export interface ResearchOutcome {
 interface CacheEntry {
   at: number;
   outcome: ResearchOutcome;
+  /** ingestedAt of the trends evidence the cached outcome was built with, or null. */
+  trendIngestedAt: string | null;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -92,6 +99,31 @@ function isFreshIngested(ingestedAt: string): boolean {
   const t = Date.parse(ingestedAt);
   if (Number.isNaN(t)) return false; // unparseable → treat as stale, queue a new job
   return Date.now() - t <= TREND_EVIDENCE_TTL_MS;
+}
+
+/**
+ * Best-effort read of USABLE ingested trends evidence: present, parseable and
+ * fresh within the evidence TTL, normalized-keyword match, and carrying a
+ * real direction (INSUFFICIENT_DATA is not usable — the research queues a new
+ * job rather than suppressing it forever). Read failures are swallowed → the
+ * caller falls through to the queue path.
+ */
+async function readUsableTrend(deps: ResearchDeps, q: string): Promise<IngestedTrend | null> {
+  if (!deps.readTrends) return null;
+  try {
+    const lookup = await deps.readTrends(q);
+    if (
+      lookup?.trend &&
+      isFreshIngested(lookup.ingestedAt) &&
+      normalizeKeyword(lookup.trend.keyword) === normalizeKeyword(q) &&
+      lookup.trend.direction !== 'INSUFFICIENT_DATA'
+    ) {
+      return lookup;
+    }
+  } catch {
+    return null; // read failure → treat as absent, queue a fresh job instead
+  }
+  return null;
 }
 
 /**
@@ -117,9 +149,24 @@ export async function researchKeyword(keyword: string, deps: ResearchDeps): Prom
   if (!q) throw new Error('Enter a product or keyword to research.');
 
   const key = normalizeKeyword(q);
+
+  // Evidence-aware cache: consult ingested Hermes trends evidence BEFORE the
+  // short-lived keyword cache. Fresh usable evidence bypasses a cached outcome
+  // that predates it (or was built with older evidence) so a consumed Hermes
+  // score shows immediately instead of after the 15-min window. Only when the
+  // cached outcome was already built with the SAME (or newer) evidence
+  // timestamp is the cache still served — rebuilding would change nothing.
+  const usableTrend = await readUsableTrend(deps, q);
+
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < RESEARCH_CACHE_TTL_MS) {
-    return { ...hit.outcome, cached: true };
+    const cacheCurrent =
+      usableTrend === null ||
+      (hit.trendIngestedAt !== null &&
+        !Number.isNaN(Date.parse(hit.trendIngestedAt)) &&
+        Date.parse(hit.trendIngestedAt) >= Date.parse(usableTrend.ingestedAt));
+    if (cacheCurrent) return { ...hit.outcome, cached: true };
+    // Cached outcome lacks (or predates) the fresh evidence → rebuild below.
   }
 
   const pacing = deps.pacingMs ?? PACING_MS;
@@ -179,25 +226,15 @@ export async function researchKeyword(keyword: string, deps: ResearchDeps): Prom
   // evidence queues a new browser job. Any read failure falls through to the
   // queue path. Trends data is never invented — a queue failure degrades to
   // honest PARTIAL (INSUFFICIENT_DATA, null score), never a fabricated one.
+  // The evidence consulted above the cache — missing/stale/empty already fell
+  // through to the queue path, so there is no second read here.
   let trendEvidence: TrendEvidence | null = null;
   let trendCoverage = 0;
   let trendIngestedAt: string | null = null;
-  if (deps.readTrends) {
-    try {
-      const lookup = await deps.readTrends(q);
-      if (
-        lookup?.trend &&
-        isFreshIngested(lookup.ingestedAt) &&
-        normalizeKeyword(lookup.trend.keyword) === normalizeKeyword(q) &&
-        lookup.trend.direction !== 'INSUFFICIENT_DATA'
-      ) {
-        trendEvidence = lookup.trend;
-        trendCoverage = lookup.coverage ?? 0;
-        trendIngestedAt = lookup.ingestedAt;
-      }
-    } catch {
-      trendEvidence = null; // read failure → queue a fresh job instead
-    }
+  if (usableTrend) {
+    trendEvidence = usableTrend.trend;
+    trendCoverage = usableTrend.coverage ?? 0;
+    trendIngestedAt = usableTrend.ingestedAt;
   }
 
   const trendDir: TrendDirection = trendEvidence ? trendEvidence.direction : 'INSUFFICIENT_DATA';
@@ -301,6 +338,6 @@ export async function researchKeyword(keyword: string, deps: ResearchDeps): Prom
   });
 
   const outcome: ResearchOutcome = { result, hermesQueued, cached: false };
-  cache.set(key, { at: Date.now(), outcome });
+  cache.set(key, { at: Date.now(), outcome, trendIngestedAt });
   return outcome;
 }

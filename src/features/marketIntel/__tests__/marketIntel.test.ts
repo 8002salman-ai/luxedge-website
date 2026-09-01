@@ -439,4 +439,90 @@ describe('researchKeyword — ingested trends evidence loop (§2 feedback)', () 
     expect(out.result.provenance.trend.source).toBe('hermes_ingested');
     expect(out.result.confidence).toBeGreaterThan(0);
   });
+
+  it('evidence-aware cache: fresh evidence bypasses a cached outcome that predates it', async () => {
+    let fetches = 0;
+    let queued = 0;
+    const deps = {
+      fetchPage: async () => { fetches++; return jsonPage('About 100 results'); },
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => null, // no evidence at first run
+      pacingMs: 1,
+    };
+    const first = await researchKeyword('dog poop scooper', deps);
+    expect(first.result.provenance.trend.status).toBe('NOT_CONFIGURED'); // pre-ingestion cached outcome
+    expect(fetches).toBe(2);
+    expect(queued).toBe(1);
+
+    // Hermes ingests observations; re-research happens INSIDE the 15-min cache window.
+    const out = await researchKeyword('dog poop scooper', {
+      ...deps,
+      readTrends: async () => ({
+        trend: evidenceFor('dog poop scooper'),
+        coverage: 0.75,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(out.cached).toBe(false); // evidence-aware: cache bypassed
+    expect(fetches).toBe(4); // full re-run happened
+    expect(queued).toBe(1); // …but no redundant Hermes queue
+    expect(out.result.provenance.trend.source).toBe('hermes_ingested');
+    expect(out.result.provenance.trend.score).toBe(85);
+    expect(out.result.confidence).toBeGreaterThan(0);
+  });
+
+  it('cache already built with the same evidence is still served — no re-fetch', async () => {
+    const ingestedAt = new Date().toISOString();
+    let fetches = 0;
+    let queued = 0;
+    const deps = {
+      fetchPage: async () => { fetches++; return jsonPage('About 100 results'); },
+      queueHermes: async () => { queued++; return 'job-x'; },
+      readTrends: async () => ({
+        trend: evidenceFor('dog toy'),
+        coverage: 1,
+        ingestedAt,
+      }),
+      pacingMs: 1,
+    };
+    const first = await researchKeyword('dog toy', deps);
+    expect(first.result.provenance.trend.source).toBe('hermes_ingested');
+    expect(fetches).toBe(2);
+    expect(queued).toBe(0); // evidence used — no queue on first run
+
+    const second = await researchKeyword('dog toy', deps); // same evidence timestamp
+    expect(second.cached).toBe(true);
+    expect(fetches).toBe(2); // cache hit — zero additional fetches
+    expect(queued).toBe(0);
+  });
+
+  it('evidence re-ingested (newer timestamp) rebuilds instead of serving the stale cached score', async () => {
+    const older = new Date(Date.now() - 10 * 60_000).toISOString(); // fresh (<7d) but older
+    let fetches = 0;
+    const deps = {
+      fetchPage: async () => { fetches++; return jsonPage('About 100 results'); },
+      queueHermes: async () => 'job-x',
+      readTrends: async () => ({
+        trend: evidenceFor('cat water fountain', { direction: 'RISING', score: 60 }),
+        coverage: 0.5,
+        ingestedAt: older,
+      }),
+      pacingMs: 1,
+    };
+    await researchKeyword('cat water fountain', deps);
+    expect(fetches).toBe(2);
+
+    const second = await researchKeyword('cat water fountain', {
+      ...deps,
+      readTrends: async () => ({
+        trend: evidenceFor('cat water fountain', { direction: 'STRONGLY_RISING', score: 92 }),
+        coverage: 1,
+        ingestedAt: new Date().toISOString(),
+      }),
+    });
+    expect(second.cached).toBe(false);
+    expect(second.result.provenance.trend.source).toBe('hermes_ingested');
+    expect(second.result.provenance.trend.score).toBe(92);
+    expect(fetches).toBe(4);
+  });
 });
