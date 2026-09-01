@@ -199,6 +199,18 @@ export interface Env {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    // Canonical host + scheme: www and HTTP must permanently redirect to the
+    // non-www HTTPS apex, preserving the full path+query. Prevents a
+    // duplicate-host index (Google was indexing www.luxedge.us as a separate
+    // site) and a mixed-content/HTTP duplicate.
+    const host = (url.hostname || '').toLowerCase();
+    const needsRedirect = host === 'www.luxedge.us' || url.protocol === 'http:';
+    if (needsRedirect) {
+      const target = new URL(url.pathname + url.search, 'https://luxedge.us');
+      // Preserve the hash is not possible server-side (browsers strip it),
+      // but path+query are fully retained.
+      return Response.redirect(target.toString(), 301);
+    }
     // Consolidate the duplicate /home homepage (Google has indexed both /
     // and /home/) into a single canonical URL with a permanent redirect.
     if (url.pathname === '/home' || url.pathname === '/home/') {
@@ -313,8 +325,8 @@ export default {
         env,
       );
       if (injected) {
-        return new Response(injected, {
-          status: 200,
+        return new Response(injected.html, {
+          status: injected.status,
           headers: {
             'content-type': 'text/html; charset=utf-8',
             'cache-control': 'public, max-age=60',
