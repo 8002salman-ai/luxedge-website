@@ -191,6 +191,8 @@ interface AssetsFetcher {
 
 export interface Env {
   ASSETS: AssetsFetcher;
+  /** CJ supplier credential — a Cloudflare secret binding, never client-side. */
+  CJ_API_KEY?: string;
   GOOGLE_ADSENSE_CLIENT_ID?: string;
   GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
@@ -213,6 +215,10 @@ function populateProcessEnv(env: Env): void {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     populateProcessEnv(env);
+    // Secret bindings are not guaranteed to be enumerable in every Worker
+    // runtime. CJ's server handler reads process.env, so preserve this one
+    // explicitly instead of silently reporting a configured key as missing.
+    if (env.CJ_API_KEY) process.env.CJ_API_KEY = env.CJ_API_KEY;
     const url = new URL(request.url);
     // Canonical host + scheme: www and HTTP must permanently redirect to the
     // non-www HTTPS apex, preserving the full path+query. Prevents a
