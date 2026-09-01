@@ -196,8 +196,21 @@ export interface Env {
   };
 }
 
+/**
+ * The API modules were originally written for a Node/Vercel runtime and read
+ * configuration from process.env. Cloudflare provides bindings on `env` per
+ * request, so expose string bindings to those compatible handlers without
+ * replacing the process.env object or serialising non-string bindings.
+ */
+function populateProcessEnv(env: Env): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string') process.env[key] ??= value;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    populateProcessEnv(env);
     const url = new URL(request.url);
     // Canonical host + scheme: www and HTTP must permanently redirect to the
     // non-www HTTPS apex, preserving the full path+query. Prevents a
