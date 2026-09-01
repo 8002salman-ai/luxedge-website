@@ -5,13 +5,14 @@
 // is separate from opportunity; no paid tool is ever required.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { trendDirectionFromPoints, trendScore, officialTrendsStatus, hermesTrendsTask } from '../trend';
 import { ebayScores, parseEbaySearchPage } from '../ebay';
 import { parseAmazonPublicPage, amazonOpportunityStatus, bsrVelocity } from '../amazon';
 import { landedCost, profitEconomics } from '../supplier';
 import { opportunityScore, verdictFrom } from '../score';
 import { familyKey, mergeTrending } from '../trending';
+import { researchKeyword, resetResearchCache } from '../research';
 
 describe('trendDirectionFromPoints + trendScore (honesty)', () => {
   it('returns INSUFFICIENT_DATA / null when no data exists — never a fake positive', () => {
@@ -196,5 +197,86 @@ describe('trending merge/dedupe', () => {
 
   it('familyKey is stable regardless of token order', () => {
     expect(familyKey('dog grooming vacuum')).toBe(familyKey('vacuum grooming dog'));
+  });
+});
+
+describe('researchKeyword — resilience pipeline', () => {
+  beforeEach(() => resetResearchCache());
+
+  const jsonPage = (text: string) => JSON.stringify({ text, images: [] });
+
+  it('unwraps the JSON page envelope before parsing (fetch-fix: parsers get plain text)', async () => {
+    const calls: string[] = [];
+    const out = await researchKeyword('dog toy', {
+      fetchPage: async (url) => {
+        calls.push(url);
+        return url.includes('ebay')
+          ? jsonPage('About 1,234 results for dog toy\n 56 sold\n 12 watchers\n $14.99')
+          : jsonPage('#1,234 in Pet Supplies\n$24.99 - $34.99\n4.6 out of 5 stars\n1,200 ratings');
+      },
+      pacingMs: 1,
+    });
+    expect(calls.length).toBe(2);
+    expect(out.result.provenance.ebay.status).toBe('AVAILABLE');
+    expect(out.result.provenance.ebay.activeListings).toBe(1234);
+    expect(out.result.provenance.ebay.soldQuantity).toBe(56);
+    expect(out.result.provenance.amazonPublic.status).toBe('AVAILABLE');
+    expect(out.result.provenance.amazonPublic.bestSellersRank).toBe(1234);
+    // Supplier economics derived from the visible eBay price range midpoint.
+    expect(out.result.economics.landedCost).not.toBeNull();
+    expect(out.result.confidence).toBeGreaterThan(0);
+  });
+
+  it('all live sources failing still completes the score pipeline and queues a Hermes trends job', async () => {
+    const queued: Record<string, unknown>[] = [];
+    const out = await researchKeyword('dog poop scooper', {
+      fetchPage: async () => { throw new Error('blocked'); },
+      queueHermes: async (payload) => { queued.push(payload); return 'job-1'; },
+      pacingMs: 1,
+    });
+    expect(queued.length).toBe(1);
+    expect(queued[0].intent).toBe('google_trends_browser');
+    expect(queued[0].keyword).toBe('dog poop scooper');
+    expect(out.hermesQueued).toBe(true);
+    // The job completed with honest PARTIAL data — it did NOT stop.
+    expect(out.result.partial).toBe(true);
+    expect(out.result.opportunityScore).toBe(0);
+    expect(out.result.confidence).toBe(0);
+    expect(out.result.verdict.verdict).toBe('WATCH');
+    expect(out.result.provenance.ebay.status).toBe('FAILED');
+    expect(out.result.provenance.amazonPublic.status).toBe('FAILED');
+    expect(out.result.provenance.supplier.status).toBe('NOT_CONFIGURED');
+  });
+
+  it('second research of the same keyword within TTL hits the cache — zero re-fetches', async () => {
+    let fetches = 0;
+    const deps = {
+      fetchPage: async () => { fetches++; return jsonPage('About 100 results'); },
+      queueHermes: async () => 'job-x',
+      pacingMs: 1,
+    };
+    const first = await researchKeyword('dog bowl', deps);
+    expect(fetches).toBe(2); // eBay + Amazon
+    const second = await researchKeyword('  DOG BOWL  ', deps); // normalized same key
+    expect(fetches).toBe(2); // cache hit — no additional fetches
+    expect(second.cached).toBe(true);
+    expect(first.cached).toBe(false);
+    expect(second.result).toEqual(first.result);
+    expect(second.hermesQueued).toBe(first.hermesQueued);
+  });
+
+  it('Hermes queue failure never stops the research job', async () => {
+    const out = await researchKeyword('cat water fountain', {
+      fetchPage: async () => { throw new Error('blocked'); },
+      queueHermes: async () => { throw new Error('db down'); },
+      pacingMs: 1,
+    });
+    expect(out.hermesQueued).toBe(false);
+    expect(out.result.opportunityScore).toBe(0);
+    expect(out.result.partial).toBe(true);
+  });
+
+  it('rejects an empty keyword at the boundary', async () => {
+    await expect(researchKeyword('   ', { fetchPage: async () => '' })).rejects.toThrow(/keyword/);
   });
 });
