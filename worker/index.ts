@@ -191,6 +191,8 @@ interface AssetsFetcher {
 
 export interface Env {
   ASSETS: AssetsFetcher;
+  GOOGLE_ADSENSE_CLIENT_ID?: string;
+  GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
     send: (msg: { from: string; to: string; subject: string; html?: string; text?: string; reply_to?: string }) => Promise<void>;
   };
@@ -247,7 +249,12 @@ export default {
     // Google AdSense earnings API (server-side). Routed by path prefix
     // because it has multiple sub-routes (status/auth/oauth/sync/earnings).
     if (url.pathname.startsWith('/api/adsense')) {
-      setAdSenseRuntimeBindings(env as unknown as Record<string, unknown>);
+      // Cloudflare bindings can be non-enumerable, so pass OAuth bindings
+      // explicitly instead of relying on Object.entries(env).
+      setAdSenseRuntimeBindings({
+        GOOGLE_ADSENSE_CLIENT_ID: env.GOOGLE_ADSENSE_CLIENT_ID,
+        GOOGLE_ADSENSE_CLIENT_SECRET: env.GOOGLE_ADSENSE_CLIENT_SECRET,
+      });
       const req = makeReq(request, url) as IncomingMessage & { env?: Env };
       req.env = env;
       const res = makeRes() as ShimRes;
