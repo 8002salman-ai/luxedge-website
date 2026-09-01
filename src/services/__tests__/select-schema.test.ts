@@ -90,32 +90,23 @@ function parseMigrationSchema(): Schema {
 const schema = parseMigrationSchema();
 
 // ============================================================================
-// LIVE-VERIFIED OUT-OF-BAND COLUMNS
+// LIVE-VERIFIED OUT-OF-BAND COLUMNS — TEMPORARY BRIDGE ONLY
 //
-// supabase/migrations/*.sql is the base source of truth, but the LIVE
-// production schema carries columns added out-of-band (never committed to a
-// migration). Each entry below was verified against production on 2026-09-01
-// with the anon key: `select=<col>&limit=1` returned HTTP 200 (row present);
-// a genuinely absent column returns 400 with `column <t>.<c> does not exist`
-// (PostgreSQL 42703).
+// supabase/migrations/*.sql is the source of truth. The columns that once
+// existed live but not in a migration (products.title/description/
+// compare_at_amount/image_url, product_images.public_url — live-verified
+// HTTP 200 via the anon key on 2026-09-01) were reconciled into migration
+// 0025, so this set must be EMPTY. products.price_amount was verified absent
+// (HTTP 400, PostgreSQL 42703) and is correctly NOT reconciled — it is the
+// real root cause pinned by the bug-class guard below.
 //
-//   products.title              → HTTP 200 — exists live; migration miss only
-//   products.description        → HTTP 200 — exists live; migration miss only
-//   products.compare_at_amount  → HTTP 200 — exists live; migration miss only
-//   products.image_url          → HTTP 200 — exists live; migration miss only
-//   product_images.public_url   → HTTP 200 — exists live; migration miss only
-//   products.price_amount       → HTTP 400 42703 — genuinely does NOT exist
-//                                 live. This was the REAL cause of the
-//                                 storefront catalog 400 incident; none of the
-//                                 other pre-fix select columns were missing.
-//
-// Reconcile: once these columns are added to a migration (schema drift fixed),
-// remove them from this set — the migration parser then covers them again.
+// Future out-of-band additions: do NOT leave an entry here. The rule is to
+// commit the reconciling ALTER TABLE ... ADD COLUMN IF NOT EXISTS migration in
+// the SAME PR (the migration need not be applied live yet — the parser reads
+// the file, and IF NOT EXISTS makes it a safe no-op on live). The empty-set
+// assertion below enforces that rule.
 // ============================================================================
-const LIVE_VERIFIED_EXTRA_COLUMNS: Record<string, ReadonlySet<string>> = {
-  products: new Set(['title', 'description', 'compare_at_amount', 'image_url']),
-  product_images: new Set(['public_url']),
-};
+const LIVE_VERIFIED_EXTRA_COLUMNS: Record<string, ReadonlySet<string>> = {};
 
 function isKnownColumn(table: string, col: string): boolean {
   return schema[table]?.has(col) === true || LIVE_VERIFIED_EXTRA_COLUMNS[table]?.has(col) === true;
@@ -172,13 +163,21 @@ describe('public-read selects match the migration schema', () => {
     expect(schema.coupons?.size ?? 0).toBeGreaterThan(5);
   });
 
+  it('the live-verified bridge stays empty — out-of-band columns must be reconciled into a migration in the same PR', () => {
+    // Migration 0025 reconciled the former entries; any future entry means a
+    // select depends on a live column the repo schema cannot account for.
+    // Commit the reconciling ADD COLUMN IF NOT EXISTS migration alongside it
+    // (parser reads the file; IF NOT EXISTS is a no-op on live) instead.
+    expect(LIVE_VERIFIED_EXTRA_COLUMNS).toEqual({});
+  });
+
   it('every select column exists on its table — fails loudly with the named column', () => {
     const missing: string[] = [];
     for (const [table, select, source] of SELECT_CONTRACTS) {
       for (const [refTable, col] of columnRefs(table, select)) {
         if (!isKnownColumn(refTable, col)) {
           missing.push(
-            `${refTable}.${col} — referenced by ${source} but not defined in supabase/migrations/*.sql (nor in the live-verified extras)`,
+            `${refTable}.${col} — referenced by ${source} but not defined in supabase/migrations/*.sql`,
           );
         }
       }
