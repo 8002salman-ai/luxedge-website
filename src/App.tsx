@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -12,6 +12,7 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { loadPublishedBlogs } from './services/blog';
+import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
 import {
@@ -3304,18 +3305,18 @@ function LS({ t, children }: { t: string; children: ReactNode }) { return <div><
 function AboutPage() {
   return (<div>
     <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-16"><div className="max-w-4xl mx-auto px-4 text-center">
-      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">Our Story</p>
+      <p className="text-luxe-gold text-xs font-semibold uppercase tracking-wider mb-3">About</p>
       <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-3">About Luxedge</h1>
-      <p className="text-gray-500 max-w-xl mx-auto">More than a store — a commitment to quality you can feel.</p>
+      <p className="text-gray-500 max-w-xl mx-auto">{ABOUT_QUOTE}</p>
     </div></section>
     <section className="py-14"><div className="max-w-3xl mx-auto px-4 space-y-6">
-      <p className="text-lg text-gray-700 leading-relaxed">Luxedge was born from a simple frustration: finding quality products online shouldn't feel like a gamble. Too many marketplaces are flooded with low-quality items, misleading photos, and unreliable sellers.</p>
-      <p className="text-gray-600 leading-relaxed">We decided to build something different. Based in Irving, Texas, Luxedge is a curated ecommerce destination where every product is handpicked by our team before it ever reaches our shelves. We carefully compare and curate hundreds of items to list only the ones we'd genuinely recommend to friends and family.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Our Mission</h2>
-      <p className="text-gray-600 leading-relaxed">To make premium-quality products accessible to everyone — without the premium markup. We believe great design and solid craftsmanship shouldn't cost a fortune. Every item on Luxedge represents the best value we could find at its price point.</p>
-      <h2 className="text-xl font-bold text-gray-900 pt-4">Customer-First, Always</h2>
-      <p className="text-gray-600 leading-relaxed">We aim to provide clear product information, delivery estimates, and responsive support. Returns, replacements, and any refunds are handled under our published policies and applicable law. Please review those policies before ordering.</p>
-      <p className="text-gray-600 leading-relaxed">Whether you're setting up a cozy corner for your cat, outfitting your dog for adventure, or simply spoiling your furry friend with something well-made, Luxedge is here to help you shop smarter and keep your pet happier.</p>
+      <p className="text-lg text-gray-700 leading-relaxed">{ABOUT_LEAD}</p>
+      {ABOUT_SECTIONS.map((s) => (
+        <Fragment key={s.title}>
+          <h2 className="text-xl font-bold text-gray-900 pt-4">{s.title}</h2>
+          <p className="text-gray-600 leading-relaxed">{s.body}</p>
+        </Fragment>
+      ))}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mt-10 pt-8 border-t">
         {[{v:'Eligible',l:'Shipping Options'},{v:'30-Day',l:'Return Requests'},{v:'1-3 days',l:'Order Processing'},{v:'Mon–Fri',l:'Support 9AM–6PM CT'}].map((s,i)=>
           <div key={i} className="text-center"><p className="text-2xl font-bold text-luxe-gold">{s.v}</p><p className="text-xs text-gray-500 mt-1">{s.l}</p></div>
@@ -3703,7 +3704,7 @@ function BlogDetailPage() {
         image: post.image || undefined,
         datePublished: post.date,
         dateModified: post.date,
-        author: { '@type': 'Person', name: post.authorName || 'Luxedge' },
+        author: { '@type': 'Person', name: post.authorName || 'Luxedge Editorial Team' },
         publisher: { '@type': 'Organization', name: 'Luxedge', url: 'https://luxedge.us' },
         mainEntityOfPage: `https://luxedge.us/blog/${post.slug}`,
         keywords: post.tags.join(', '),
@@ -3779,12 +3780,16 @@ function BlogDetailPage() {
           {/* Title */}
           <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold text-luxe-black leading-tight mb-4">{post.title}</h1>
 
-          {/* Meta */}
+          {/* Meta — truthful attribution: individual author when the CMS records
+              one, otherwise the Luxedge editorial team. No invented personas. */}
           <div className="flex items-center gap-4 pb-6 border-b mb-8">
-            <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{post.authorName.charAt(0)}</span></div>
+            <div className="w-10 h-10 bg-luxe-gold-soft rounded-full flex items-center justify-center"><span className="font-bold text-luxe-gold-dark text-sm">{(post.authorName || 'Luxedge Editorial Team').charAt(0)}</span></div>
             <div>
-              <p className="font-semibold text-sm text-gray-900">{post.authorName}</p>
+              <p className="font-semibold text-sm text-gray-900">Written by {post.authorName || 'Luxedge Editorial Team'}</p>
               <p className="text-xs text-gray-400 flex items-center gap-1"><Calendar strokeWidth={1.5} size={11} />{new Date(post.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              {(post.authorName || 'Luxedge Editorial Team') === 'Luxedge Editorial Team' && (
+                <p className="text-[11px] text-gray-400 mt-1">Buying guides are researched and reviewed by the Luxedge editorial team. They are informational and not veterinary, medical, or nutritional advice.</p>
+              )}
             </div>
           </div>
 

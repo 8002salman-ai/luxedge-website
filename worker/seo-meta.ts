@@ -4,17 +4,27 @@
 // The storefront is a client-rendered SPA, so every route serves the same
 // generic index.html shell. This module rewrites the shell for the requested
 // route BEFORE it is returned, for ALL user agents (no bot detection):
-//   /product/:slug   → product seo_title/seo_description + Product + Breadcrumb JSON-LD
-//   /blog/:slug      → post title/excerpt + BlogPosting/FAQPage JSON-LD + the
-//                      article body pre-rendered into #root (same content the
-//                      client renders, with its real internal links)
-//   /category/:slug  → category name + CollectionPage JSON-LD
-//   static pages     → unique title/description
+//   /product/:slug    → product seo_title/seo_description + Product + Breadcrumb
+//                       JSON-LD + a pre-rendered product summary in #root
+//                       (title, price, stock/shipping facts, description,
+//                       category link) — the same content the client renders
+//   /blog/:slug       → post title/excerpt + BlogPosting/FAQPage JSON-LD + the
+//                       article body pre-rendered into #root (same content the
+//                       client renders, with its real internal links)
+//   /category/:slug   → category name + CollectionPage JSON-LD + a pre-rendered
+//                       category intro with real product links (mirrors the
+//                       client category grid)
+//   / (homepage)      → WebSite JSON-LD + pre-rendered hero + category navigation
+//   /about            → unique title/description + About copy pre-rendered from
+//                       src/content/about.ts (same copy the client renders)
+//   static pages      → unique title/description
 // Every indexable route also gets an exact route-specific canonical + og:url.
 // React's createRoot().render() replaces #root on mount, so JS users see the
-// identical client-rendered article — no duplicated or hidden content.
+// identical client-rendered content — no duplicated or hidden content.
 // No secrets — reads Supabase with the anon key exactly like api/google-feed.ts.
 // ============================================================================
+
+import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
 
 export interface SeoEnv {
   ASSETS: {
@@ -71,13 +81,23 @@ interface ProductRow {
   slug?: string | null;
   name: string;
   description?: string | null;
+  short_description?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
   seo_keywords?: string | null;
   price?: number | null;
+  compare_at_price?: number | null;
   brand?: string | null;
   stock_status?: string | null;
   us_inventory?: boolean | null;
+  free_shipping?: boolean | null;
+  shipping_cost?: number | null;
+  delivery_min_days?: number | null;
+  delivery_max_days?: number | null;
+  currency?: string | null;
+  /** Embedded category name via categories(name) — the REST key is the
+   * relation name `categories`. */
+  categories?: { name?: string } | null;
 }
 
 const cache = new Map<string, { ts: number; data: unknown }>();
@@ -114,11 +134,15 @@ async function getProducts(): Promise<ProductRow[] | null> {
   const base = supabaseBase();
   const key = supabaseAnon();
   if (!base || !key) return null;
+  // Page-specific fields the storefront shows: short/long description, price,
+  // stock, shipping and delivery estimates, plus the embedded category name for
+  // a contextual "More in {category}" link. features/specifications are mostly
+  // empty in the live catalog, so they are deliberately not pre-rendered.
   return cachedFetch('seo:products', TTL_DB, () =>
     fetchJson<ProductRow[]>(
       base,
       key,
-      'products?select=slug,name,description,seo_title,seo_description,seo_keywords,price,brand,stock_status,us_inventory&status=eq.active&limit=500',
+      'products?select=slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)&status=eq.active&limit=500',
     ),
   );
 }
@@ -171,7 +195,10 @@ function mapCmsToBlogEntry(r: BlogCmsRow): BlogEntry | null {
     excerpt: r.excerpt || r.title || '',
     image: r.hero_image_url || undefined,
     date,
-    authorName: r.author_name || undefined,
+    // Truthful default attribution: when the CMS row has no individual author,
+    // attribute the article to the editorial team instead of a bare brand name
+    // or an invented persona.
+    authorName: r.author_name || 'Luxedge Editorial Team',
     content: r.content || undefined,
     faq: Array.isArray(r.faq) && r.faq.length ? r.faq : undefined,
   };
@@ -302,7 +329,9 @@ function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown>[] 
     mainEntityOfPage: canonical,
   };
   if (b.date) post.datePublished = b.date;
-  if (b.authorName) post.author = { '@type': 'Person', name: b.authorName };
+  // Truthful organic attribution (BlogPosting is a Person schema): default to
+  // the editorial team when no individual author is recorded in the CMS.
+  post.author = { '@type': 'Person', name: b.authorName || 'Luxedge Editorial Team' };
   if (b.image) post.image = b.image;
   const blocks: Record<string, unknown>[] = [post];
   if (b.faq && b.faq.length) {
@@ -397,6 +426,134 @@ function injectArticleBody(html: string, post: BlogEntry): string {
   return html.replace('<div id="root"></div>', `<div id="root">${article}</div>`);
 }
 
+// ---------------------------------------------------------------------------
+// Pre-rendered route bodies (product / category / homepage / about)
+// ---------------------------------------------------------------------------
+
+/** Static category intros — mirrors CAT_META in src/App.tsx (keep in sync).
+ * Used only when the live categories table has no description for the slug,
+ * so the pre-render and the client category header show the same line. */
+const CATEGORY_DESC: Record<string, string> = {
+  'dog-supplies': 'Walking, training & everyday dog essentials',
+  'cat-supplies': 'Play, comfort & everyday cat essentials',
+  'pet-beds': 'Comfort-led pieces for deeper rest',
+  'pet-toys': 'Interactive play and everyday enrichment',
+  'feeding-water': 'Considered pieces for daily mealtimes',
+  grooming: 'Simple tools for everyday care',
+  'pet-accessories': 'Useful pieces for life together',
+  'bird-supplies': 'Seed, feed & care essentials for feathered friends',
+  horse: 'Practical care and stable essentials for horses',
+  cattle: 'Useful feeding and care essentials for cattle and livestock',
+};
+
+function money(value: number | null | undefined): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return `$${n.toFixed(2)}`;
+}
+
+/** Pre-renders the product essentials into the SPA shell: the same title,
+ * price, stock/shipping facts, description and category link the Product
+ * detail page renders after hydration. Only real catalog columns are used —
+ * nothing is invented. */
+function injectProductBody(html: string, p: ProductRow): string {
+  const parts: string[] = [`<h1>${esc(p.name)}</h1>`];
+  const price = money(p.price);
+  const compare = money(p.compare_at_price);
+  if (price) {
+    parts.push(compare ? `<p>Price: <strong>${price}</strong> <s>${compare}</s></p>` : `<p>Price: <strong>${price}</strong></p>`);
+  }
+  const facts: string[] = [];
+  if (p.stock_status === 'in_stock' || p.us_inventory === true) facts.push('In stock');
+  else if (p.stock_status && p.stock_status !== 'in_stock') facts.push('Availability confirmed at checkout');
+  if (p.free_shipping === true) facts.push('Free shipping');
+  else if (p.shipping_cost && Number(p.shipping_cost) > 0) facts.push(`Shipping ${money(p.shipping_cost)}`);
+  if (p.delivery_min_days != null && p.delivery_max_days != null) {
+    facts.push(`Estimated delivery ${p.delivery_min_days}–${p.delivery_max_days} business days`);
+  }
+  if (facts.length) parts.push(`<p>${esc(facts.join(' · '))}</p>`);
+  const lead = (p.short_description || '').trim() || (p.description || '').trim();
+  if (lead) parts.push(`<h2>Details</h2>`, `<p>${esc(lead)}</p>`);
+  if (p.description && p.description.trim() && p.description.trim() !== lead) {
+    parts.push(`<h2>Description</h2>`);
+    parts.push(...p.description.split(/\n+/).filter((l) => l.trim()).map((l) => `<p>${esc(l)}</p>`));
+  }
+  const links: string[] = [];
+  if (p.categories && p.categories.name) {
+    const catSlug = (p.categories.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    links.push(`<a href="/category/${esc(catSlug)}">More in ${esc(p.categories.name)}</a>`);
+  }
+  links.push('<a href="/shop">Shop all pet essentials</a>');
+  parts.push(`<p>${links.join(' · ')}</p>`);
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the category intro into the SPA shell: the category name, the
+ * same descriptive line the client header shows, and links to the real
+ * products in the category (the client renders these same products as cards). */
+function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
+  const inCategory = products.filter(
+    (p) => p.slug && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
+  );
+  // Mirror the client category header exactly (CAT_META in src/App.tsx or the
+  // client's `Browse our {category} collection` fallback) so the pre-render and
+  // the hydrated page show the same line. The DB description column is ignored
+  // here because the client does not render it. Keep CATEGORY_DESC in sync.
+  const desc = CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
+  const parts: string[] = [`<h1>${esc(cat.name)}</h1>`, `<p>${esc(desc)}</p>`];
+  if (inCategory.length > 0) {
+    const items = inCategory
+      .slice(0, 12)
+      .map((p) => `<li><a href="/product/${esc(p.slug!)}">${esc(p.name)}</a></li>`)
+      .join('');
+    parts.push(`<ul>${items}</ul>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the homepage hero + category navigation into the SPA shell.
+ * Mirrors the HomePage section copy and every link the client renders. */
+function injectHomeBody(html: string): string {
+  const parts: string[] = [
+    `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
+    `<p>Sourced worldwide. Chosen with care.</p>`,
+    `<p>We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.</p>`,
+    `<p>Shop by pet</p>`,
+    `<h2>Who are you shopping for?</h2>`,
+    `<ul>` +
+      `<li><a href="/category/dog-supplies">Dog</a></li>` +
+      `<li><a href="/category/cat-supplies">Cat</a></li>` +
+      `<li><a href="/category/bird-supplies">Birds</a></li>` +
+      `<li><a href="/category/horse">Horse</a></li>` +
+      `<li><a href="/category/cattle">Livestock</a></li>` +
+      `</ul>`,
+    `<p>Browse</p>`,
+    `<h2>Popular Categories</h2>`,
+    `<ul>` +
+      `<li><a href="/shop">Shop all products</a></li>` +
+      `<li><a href="/category/dog-supplies">Dog walking &amp; training</a></li>` +
+      `<li><a href="/category/pet-beds">Beds &amp; mats</a></li>` +
+      `<li><a href="/category/grooming">Grooming</a></li>` +
+      `<li><a href="/category/feeding-water">Feeding &amp; water</a></li>` +
+      `<li><a href="/category/pet-toys">Toys</a></li>` +
+      `<li><a href="/category/pet-accessories">Travel &amp; accessories</a></li>` +
+      `<li><a href="/category/cat-supplies">Cat essentials</a></li>` +
+      `<li><a href="/category/bird-supplies">Bird supplies</a></li>` +
+      `</ul>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders the /about copy (shared with the client AboutPage) so the
+ * initial HTML carries the same truthful content the hydrated page shows. */
+function injectAboutBody(html: string): string {
+  const parts: string[] = [`<h1>About Luxedge</h1>`, `<p>${esc(ABOUT_QUOTE)}</p>`, `<p>${esc(ABOUT_LEAD)}</p>`];
+  for (const s of ABOUT_SECTIONS) {
+    parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
 export async function maybeInjectSeo(
   html: string,
   pathname: string,
@@ -413,7 +570,7 @@ export async function maybeInjectSeo(
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
-    return inject(html, {
+    let out = inject(html, {
       title: 'Luxedge — Premium Pet Essentials | Better Products for Happier Pets',
       description:
         "Luxedge curates the world's best pet essentials — from orthopedic dog beds to interactive cat toys, smart feeders, grooming, and travel gear. Clear delivery options, return policies, and handpicked quality you can trust.",
@@ -425,6 +582,10 @@ export async function maybeInjectSeo(
         url: root,
       },
     });
+    // Pre-render the hero + category navigation so the initial HTML (and any
+    // non-JS crawler) sees real substantive content, not an empty shell.
+    out = injectHomeBody(out);
+    return out;
   }
 
   // /blog (index) and /blog/write are not indexed targets — keep /blog only.
@@ -437,15 +598,17 @@ export async function maybeInjectSeo(
     });
   }
 
-  // Static pages
+  // Static pages (about also receives the shared About copy pre-rendered).
   const staticKey = `/${segs.join('/')}`;
   const staticMeta = STATIC_PAGES[staticKey];
   if (staticMeta) {
-    return inject(html, {
+    let out = inject(html, {
       title: staticMeta.title,
       description: staticMeta.description,
       canonical: `${root}${staticKey}`,
     });
+    if (staticKey === '/about') out = injectAboutBody(out);
+    return out;
   }
 
   // /product/:slug
@@ -464,12 +627,16 @@ export async function maybeInjectSeo(
     }
     const canonical = `${root}/product/${slug}`;
     const title = (p.seo_title || `${p.name} | Luxedge`).replace(/\s*\|\s*Luxedge\s*$/, '') + ' | Luxedge';
-    return inject(html, {
+    let out = inject(html, {
       title,
-      description: cleanText(p.seo_description || p.description || '', 200),
+      description: cleanText(p.seo_description || p.short_description || p.description || '', 200),
       canonical,
       jsonLd: [productJsonLd(p, canonical), breadcrumbJsonLd(p.name, canonical)],
     });
+    // Pre-render the real product facts into #root (same content the client
+    // renders after hydration) so crawlers see page-specific substance.
+    out = injectProductBody(out, p);
+    return out;
   }
 
   // /blog/:slug
@@ -515,7 +682,7 @@ export async function maybeInjectSeo(
       });
     }
     const canonical = `${root}/category/${slug}`;
-    return inject(html, {
+    let out = inject(html, {
       title: `${cat.name} — Pet Essentials | Luxedge`,
       description: `Shop ${cat.name} at Luxedge — curated, supplier-verified essentials for you and your pets.`,
       canonical,
@@ -526,6 +693,11 @@ export async function maybeInjectSeo(
         url: canonical,
       },
     });
+    // Pre-render the category intro + real product links (the client renders
+    // the same products as its category grid).
+    const products = await getProducts();
+    if (products !== null) out = injectCategoryBody(out, cat, products);
+    return out;
   }
 
   return null;
