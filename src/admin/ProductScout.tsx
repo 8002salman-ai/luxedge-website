@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Warning, Prohibit, Brain, CheckCircle, Compass, Eye, FilePlus, SpinnerGap, Package, Play,
+  Warning, Prohibit, Brain, CheckCircle, Compass, Eye, FilePlus, SpinnerGap, Package, Play, Rocket,
   ArrowClockwise, MagnifyingGlass, ShieldCheck, Siren, Target, Lightning,
 } from '@phosphor-icons/react';
 import { useApp, Modal, fetchPageContent } from '../App';
@@ -61,11 +61,15 @@ interface SupplierRow { id: string; name: string; slug: string; base_url: string
 interface SupplierProductRow { id: string; supplier_id: string; title: string; url: string | null; images: string[]; }
 interface CandidateRow { id: string; supplier_product_id: string | null; title: string; source: string; source_url: string; images: string[]; evidence: CandidateEvidence | null; status: string; rejection_reason: string | null; created_at: string; updated_at: string; }
 
+interface ProductRow { id: string; name: string; slug: string; status: string; price: number | null; }
+
 interface ViewCandidate {
   candidate: CandidateRow;
   score?: ScoreRow;
   supplier?: SupplierRow;
   supplierProduct?: SupplierProductRow;
+  /** Matching products row (draft or live) created from this candidate. */
+  product?: ProductRow | null;
 }
 
 interface JobRow {
@@ -187,14 +191,23 @@ export default function ProductScout() {
     setLoading(true);
     setError('');
     try {
-      const [candRows, scoreRows, supRows, spRows, jobRows] = await Promise.all([
+      const [candRows, scoreRows, supRows, spRows, jobRows, prodRows] = await Promise.all([
         d.list<CandidateRow>('product_candidates', { orderBy: 'created_at.desc' }),
         d.list<ScoreRow>('product_scores'),
         d.list<SupplierRow>('suppliers'),
         d.list<SupplierProductRow>('supplier_products'),
         d.list<JobRow>('agent_jobs', { orderBy: 'created_at.desc', limit: 12 }),
+        d.list<ProductRow>('products'),
       ]);
       setJobs(Array.isArray(jobRows) ? jobRows : []);
+      // Match candidate → product by the deterministic slug createProductDraft
+      // generates from the candidate title (title→slug, slice 80), so approved
+      // candidates show their draft/live product status.
+      const products = new Map((Array.isArray(prodRows) ? prodRows : []).map((p) => [p.slug, p]));
+      const productFor = (c: CandidateRow): ProductRow | null => {
+        const slug = c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item';
+        return products.get(slug) ?? null;
+      };
       const byId = <T extends { id: string }>(rows: T[] | null) => new Map((Array.isArray(rows) ? rows : []).map((r) => [r.id, r]));
       // product_scores reference their candidate via candidate_id (not id).
       const scores = new Map((Array.isArray(scoreRows) ? scoreRows : []).map((r) => [r.candidate_id, r] as const));
@@ -205,6 +218,7 @@ export default function ProductScout() {
         score: scores.get(c.id),
         supplier: c.supplier_product_id ? suppliers.get(sps.get(c.supplier_product_id)?.supplier_id || '') : undefined,
         supplierProduct: c.supplier_product_id ? sps.get(c.supplier_product_id) : undefined,
+        product: productFor(c),
       }));
       setCandidates(view);
     } catch (e) {
@@ -390,6 +404,24 @@ export default function ProductScout() {
       await load();
     } catch (e) {
       notify(`Action failed: ${(e as Error).message}`);
+    } finally {
+      setActing(null);
+    }
+  };
+
+  /** Publish an existing product draft to the live storefront (status → active). */
+  const makeLive = async (v: ViewCandidate) => {
+    if (!db) return;
+    const prod = v.product;
+    if (!prod) { notify('No product draft found for this candidate — create a draft first'); return; }
+    if (prod.status === 'active') { notify('This product is already live'); return; }
+    setActing(v.candidate.id);
+    try {
+      await db.update<{ id: string; status: string }>('products', prod.id, { status: 'active' });
+      notify(`${prod.name} is now LIVE on the storefront`);
+      await load();
+    } catch (e) {
+      notify(`Publish failed: ${(e as Error).message}`);
     } finally {
       setActing(null);
     }
@@ -1030,8 +1062,17 @@ export default function ProductScout() {
                         <div className="flex items-center gap-3">
                           {img ? <img src={img} alt="" className="w-12 h-12 rounded-lg object-cover" /> : <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center"><Package size={18} className="text-gray-300" /></div>}
                           <div>
-                            <p className="font-medium text-gray-900 max-w-[240px] truncate">{c.title}</p>
-                            <p className="text-xs text-gray-400 max-w-[240px] truncate">{c.source_url}</p>
+                            {c.source_url ? (
+                              <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 hover:text-blue-600 hover:underline max-w-[240px] truncate block">{c.title}</a>
+                            ) : (
+                              <p className="font-medium text-gray-900 max-w-[240px] truncate">{c.title}</p>
+                            )}
+                            {c.source_url ? <a href={c.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline max-w-[240px] truncate block">{c.source_url}</a> : <p className="text-xs text-gray-400 max-w-[240px] truncate">{c.source_url}</p>}
+                            {v.product && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold mt-1 ${v.product.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {v.product.status === 'active' ? 'LIVE ON STORE' : 'DRAFT'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1087,6 +1128,12 @@ export default function ProductScout() {
                             className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 disabled:opacity-50"
                             title="Create product draft"
                           ><FilePlus size={15} /></button>
+                          <button
+                            onClick={() => void makeLive(v)}
+                            disabled={acting === c.id || !v.product || v.product.status === 'active'}
+                            className={`p-1.5 rounded-lg disabled:opacity-40 ${v.product && v.product.status === 'active' ? 'bg-emerald-50 text-emerald-500 cursor-default' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600'}`}
+                            title={v.product && v.product.status === 'active' ? 'Product is already live' : v.product ? 'Publish draft to storefront' : 'Create a product draft first, then publish'}
+                          ><Rocket size={15} /></button>
                           <button onClick={() => setEvidenceFor(v)} className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500" title="View evidence"><Eye size={15} /></button>
                         </div>
                       </td>
