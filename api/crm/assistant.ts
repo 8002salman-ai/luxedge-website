@@ -102,7 +102,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       model: 'deepseek-v4-flash',
       system: SYSTEM,
     });
-    sendJson(res, 200, { reply: text.trim(), provider: 'deepseek', model: 'deepseek-v4-flash' });
+    const reply = (text || '').trim();
+    // DeepSeek occasionally returns empty content — never emit reply:""
+    // (the client treats it as a broken response). Fall back to canned.
+    if (!reply) {
+      sendJson(res, 200, {
+        reply: 'I hit a small snag on my side. Please try again in a moment — or reach us instantly on WhatsApp (+1 440-941-8002) / sales@luxedge.us.',
+        provider: 'canned',
+        leadStored: true,
+      });
+      return;
+    }
+    sendJson(res, 200, { reply, provider: 'deepseek', model: 'deepseek-v4-flash' });
   } catch {
     sendJson(res, 200, {
       reply: 'I hit a small snag on my side. Please try again in a moment — or reach us instantly on WhatsApp (+1 440-941-8002) / sales@luxedge.us.',

@@ -38,8 +38,20 @@ export default function AIAssistant() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history }),
       });
-      const j = await r.json().catch(() => null);
-      const reply = j?.reply || 'Sorry, I could not respond right now. Please try again or message us on WhatsApp (+1 440-941-8002).';
+      const j = await r.json().catch(() => null) as { reply?: string; error?: string } | null;
+      // Surface real backend errors (rate limit / validation) verbatim instead
+      // of hiding them behind a generic fallback.
+      if (j && !r.ok && typeof j.error === 'string') {
+        const errorMsg: string = j.error;
+        setMsgs((m) => [...m, { role: 'assistant', content: errorMsg }]);
+        return;
+      }
+      // A 200 always carries a non-empty reply (server falls back to canned on
+      // empty model output); guard anyway so an empty string never shows the
+      // alarming broken-widget message.
+      const reply = j && typeof j.reply === 'string' && j.reply.trim()
+        ? j.reply
+        : 'Sorry, I could not respond right now. Please try again or message us on WhatsApp (+1 440-941-8002).';
       setMsgs((m) => [...m, { role: 'assistant', content: reply }]);
     } catch {
       setMsgs((m) => [...m, { role: 'assistant', content: 'Connection issue on my side. Please try again — or reach us on WhatsApp (+1 440-941-8002).' }]);
