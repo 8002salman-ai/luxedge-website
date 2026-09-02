@@ -143,6 +143,29 @@ describe('SupabaseAdapter expired-token recovery (PGRST303 JWT expired)', () => 
     expect(getSession).toHaveBeenCalledTimes(1);
   });
 
+  it('force-refreshes on 401 even when the stored token looked locally valid (server-side revocation)', async () => {
+    // The stored session still has far-future expiresAt, so a non-forced
+    // getSession() would return the SAME rejected token and the 401 would
+    // surface. The adapter must force the refresh regardless of the clock.
+    const localValid = { ...session(), accessToken: 'fresh-token-2', expiresAt: Date.now() + 60 * 60 * 1000 };
+    vi.mocked(getSession).mockResolvedValue(localValid as never);
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const auth = ((init?.headers as Record<string, string> | undefined) || {}).Authorization || '';
+      calls.push(auth);
+      if (calls.length === 1) return new Response(JSON.stringify({ code: 'PGRST303', message: 'JWT expired' }), { status: 401 });
+      return new Response(JSON.stringify([{ id: 'row-1' }]), { status: 200 });
+    }));
+
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    adapter.setAccessToken('stale-token');
+    const rows = await adapter.list<{ id: string }>('products');
+    expect(rows).toEqual([{ id: 'row-1' }]);
+    expect(calls).toEqual(['Bearer stale-token', 'Bearer fresh-token-2']);
+    // Forced refresh was requested — the clock alone would have skipped it.
+    expect(getSession).toHaveBeenCalledWith(true);
+  });
+
   it('does NOT refresh when the response is not an auth failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify([{ id: 'ok' }]), { status: 200, headers: { 'content-type': 'application/json' } })));
     const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');

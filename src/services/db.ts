@@ -199,7 +199,11 @@ export class SupabaseAdapter implements DbAdapter {
     const attempt = () => fetch(url, { ...init, headers: this.headers(init.method || 'GET') });
     let res = await attempt();
     if (res.status === 401 && this.accessToken) {
-      const session = await getSession(); // refreshes the stored session when near/expired
+      // Force-refresh: the token may have been invalidated server-side while
+      // its local expiresAt still looked valid (new sign-in elsewhere, session
+      // rotation). The clock-based getSession() guard alone would return the
+      // same rejected token and the caller would see a bogus 401.
+      const session = await getSession(true);
       const fresh = session?.accessToken || null;
       if (fresh && fresh !== this.accessToken) {
         this.accessToken = fresh;
