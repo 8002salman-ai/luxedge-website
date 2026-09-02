@@ -129,6 +129,72 @@ export function providerKeys(providerId: string): string[] {
   return keys;
 }
 
+// ---------------------------------------------------------------------------
+// DB-stored provider keys (optional owner-attached keys)
+//
+// Owners can attach their own provider keys from the admin UI without touching
+// env vars: the key is stored in the Supabase `app_settings` table as
+// `AI_KEY_<PROVIDER>` (e.g. `AI_KEY_DEEPSEEK`, `AI_KEY_OPENROUTER`,
+// `AI_KEY_CODEX`, and `AI_KEY_CHATGPT_OAUTH` for a Codex subscription token).
+// env vars always win when both exist; DB keys are the fallback. Values are
+// cached per warm instance for 60s to avoid hammering Supabase on every call.
+// ---------------------------------------------------------------------------
+
+let dbKeysCache: Record<string, string> | null = null;
+let dbKeysLoadedAt = 0;
+const DB_KEYS_TTL_MS = 60_000;
+
+async function supabaseConfig() {
+  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  return url && key ? { url, key } : null;
+}
+
+/** Load AI_KEY_* rows from app_settings (service role, read-only on those rows). */
+export async function loadDbProviderKeys(force = false): Promise<Record<string, string>> {
+  const cfg = await supabaseConfig();
+  if (!cfg) return {};
+  if (!force && dbKeysCache && Date.now() - dbKeysLoadedAt < DB_KEYS_TTL_MS) return dbKeysCache;
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/app_settings?key=like.AI_KEY_%25&select=key,value`, {
+      headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return dbKeysCache || {};
+    const rows = (await res.json()) as Array<{ key: string; value: string }>;
+    const out: Record<string, string> = {};
+    for (const r of rows) out[r.key.replace(/^AI_KEY_/, '')] = r.value.trim();
+    dbKeysCache = out;
+    dbKeysLoadedAt = Date.now();
+    return out;
+  } catch {
+    return dbKeysCache || {};
+  }
+}
+
+/** Test-only hook: clear the DB keys cache so tests are deterministic. */
+export function __resetDbKeysForTests(): void {
+  dbKeysCache = null;
+  dbKeysLoadedAt = 0;
+}
+
+/** True when the provider has a key in env OR attached via the admin UI. */
+export async function isConfiguredFull(providerId: string): Promise<boolean> {
+  if (isConfigured(providerId)) return true;
+  const db = await loadDbProviderKeys();
+  if (providerId === 'codex' && db['CHATGPT_OAUTH']) return true;
+  return Boolean(db[providerId.toUpperCase()]);
+}
+
+/** Resolve the key for a provider: env wins, then DB-attached key. */
+export async function resolveProviderKey(providerId: string): Promise<string> {
+  const env = providerKey(providerId);
+  if (env) return env;
+  const db = await loadDbProviderKeys();
+  if (providerId === 'codex') return db['CHATGPT_OAUTH'] || db['CODEX'] || '';
+  return db[providerId.toUpperCase()] || '';
+}
+
 /** Round-robin cursor for multi-key providers (module-level, per warm instance). */
 let keyCursor = 0;
 
@@ -168,8 +234,9 @@ export interface GenerateOptions {
 
 /** Call the requested provider from the server. Throws on failure. */
 export async function generate(providerId: string, opts: GenerateOptions): Promise<string> {
-  const key = providerKey(providerId);
-  if (!key) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var)`);
+  // Env wins, then DB-attached key (owner-provided via admin UI).
+  const key = await resolveProviderKey(providerId);
+  if (!key) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var — attach a key in Settings → AI & Scraping Keys)`);
   const { prompt, model, system } = opts;
   if (!isValidModel(model)) throw new Error('Invalid model identifier');
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
@@ -312,7 +379,7 @@ export async function generateWithFallback(
     const text = await generateWithRetry(providerId, opts);
     return { text, provider: providerId, model: opts.model, fallbackUsed: false };
   } catch (primaryErr) {
-    if (fallbackProviderId && fallbackProviderId !== providerId && isConfigured(fallbackProviderId)) {
+    if (fallbackProviderId && fallbackProviderId !== providerId && (await isConfiguredFull(fallbackProviderId))) {
       try {
         const fallbackModel = defaultModelFor(fallbackProviderId) || opts.model;
         const text = await generateWithRetry(fallbackProviderId, { ...opts, model: fallbackModel });
@@ -327,8 +394,8 @@ export async function generateWithFallback(
 
 /** Test connectivity server-side. Never leaks the key. */
 export async function testProvider(providerId: string, model?: string): Promise<{ ok: boolean; message: string }> {
-  if (!isConfigured(providerId)) {
-    return { ok: false, message: `Not configured — add ${PROVIDER_ENV[providerId]} env var on the server` };
+  if (!(await isConfiguredFull(providerId))) {
+    return { ok: false, message: `Not configured — add ${PROVIDER_ENV[providerId]} env var or attach a key in Settings → AI & Scraping Keys` };
   }
   try {
     const text = await generate(providerId, {
