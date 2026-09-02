@@ -8,6 +8,8 @@
 // compare price and cost are kept only when the CSV actually provides them.
 // ============================================================================
 
+import { parseTagList } from './tags';
+
 export interface CsvVariant {
   attributes: Record<string, string>;
 }
@@ -174,11 +176,6 @@ function splitImages(v: unknown): string[] {
   return [...new Set(out)];
 }
 
-function splitTags(v: unknown): string[] {
-  if (v == null) return [];
-  return [...new Set(String(v).split(/[,;|]+/).map((s) => s.trim()).filter(Boolean))];
-}
-
 /** Parse a variants cell: "Color:Red; Size:M" | "Red / M" | [{"Color":"Red"}] */
 function parseVariants(v: unknown): CsvVariant[] {
   if (v == null) return [];
@@ -269,7 +266,7 @@ export function parseCsvImport(text: string): CsvParseResult {
       brand: rec.brand || undefined,
       category: rec.category || undefined,
       subcategory: rec.subcategory || undefined,
-      tags: splitTags(rec.tags),
+      tags: parseTagList(rec.tags),
       images,
       supplierUrl: rec.supplierUrl || undefined,
       supplierSource: rec.supplierSource || undefined,

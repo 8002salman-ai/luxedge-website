@@ -3,6 +3,7 @@ import { resetDbForTests, __setDbConfigForTests, getDb, type DbAdapter } from '.
 import {
   createProduct, updateProduct, setProductStatus, archiveProduct, hardDeleteProduct,
   duplicateProduct, saveProductImages, saveProductVariants, listProducts, getProduct,
+  rowToProduct,
   createCoupon, updateCoupon, deleteCoupon, listCoupons, getCouponByCode, validateCoupon,
   createOffer, updateOffer, deleteOffer, listOffers,
   getStoreSettings, saveStoreSettings, quoteShipping, setDbToken, uid,
@@ -67,6 +68,19 @@ describe('catalog repository (local adapter)', () => {
     expect(updated!.slug).toBe(p.slug);
     expect(updated!.stockStatus).toBe('low_stock');
     expect(updated!.marginPercent).toBeCloseTo(((24.99 - 6) / 24.99) * 100, 1);
+  });
+
+  it('maps string-tags rows to arrays (admin edit must not wipe CJ text tags)', () => {
+    // Live CJ rows store tags as comma-separated text; if rowToProduct kept
+    // them as-is, the admin editor would save `tags: []` and silently erase them.
+    const row = {
+      id: 'p1', slug: 'p1', name: 'Horse Grooming Kit', status: 'active', price: 39.99,
+      tags: 'horse,grooming,brush,tack,equestrian', seo_keywords: 'curry comb,body brush',
+    } as unknown as Parameters<typeof rowToProduct>[0];
+    const p = rowToProduct(row, [], [], []);
+    expect(p.tags).toEqual(['horse', 'grooming', 'brush', 'tack', 'equestrian']);
+    expect(Array.isArray(p.tags)).toBe(true);
+    expect(p.seoKeywords).toEqual(['curry comb', 'body brush']);
   });
 
   it('sets status, archives (not delete), and lists all', async () => {

@@ -31,6 +31,7 @@
 
 import { getDb, getDbMode } from './db';
 import { deriveCommerceReadiness, deriveInventorySource, deriveSourceType, type CommerceReadiness } from '../features/catalog/commerceReadiness';
+import { parseTagList } from '../features/catalog/tags';
 
 export interface CatalogProduct {
   id: string;
@@ -261,31 +262,6 @@ function centsToDollars(cents: unknown): number {
   return Math.round(num(cents)) / 100;
 }
 
-/** Extract string tags from a jsonb column (V2 schema), tolerating both live
- * shapes: a jsonb array AND the CJ-import rows that store tags as plain text
- * (`horse,grooming,brush,tack,equestrian`) or a JSON string array
- * (`["a","b"]`). Never throws: null/undefined/empty/malformed/non-string
- * values degrade to []. Array rows behave exactly as before. */
-function tagsOf(v: unknown): string[] {
-  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
-  if (typeof v !== 'string' || !v.trim()) return [];
-  const s = v.trim();
-  // JSON string array shape — parse only when the value clearly intends an
-  // array (starts or ends with a bracket). A failed parse degrades to []:
-  // broken array data must not surface as junk tag text.
-  if (s.startsWith('[') || s.endsWith(']')) {
-    try {
-      const parsed: unknown = JSON.parse(s);
-      if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
-    } catch {
-      /* fall through */
-    }
-    return [];
-  }
-  // Plain comma-separated text (the CJ-sourced rows).
-  return s.split(',').map((t) => t.trim()).filter(Boolean);
-}
-
 /**
  * Load the storefront catalog from Supabase.
  * Returns an EMPTY REAL CATALOG when the DB is reachable but has zero
@@ -382,7 +358,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       return categories.find((c) => c.id === id)?.name || '';
     };
 
-    const rawTagList = (p: DbProductRow): string[] => tagsOf(p.tags);
+    const rawTagList = (p: DbProductRow): string[] => parseTagList(p.tags);
     const products: CatalogProduct[] = usable.map((p) => {
       const rawPrice = num(p.price) > 0 ? num(p.price) : centsToDollars(p.price_amount);
       const rawCompare = num(p.compare_at_price) > 0 ? num(p.compare_at_price) : centsToDollars(p.compare_at_amount);
@@ -457,7 +433,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         variants,
         seoTitle: p.seo_title || undefined,
         seoDescription: p.seo_description || undefined,
-        seoKeywords: tagsOf(p.seo_keywords),
+        seoKeywords: parseTagList(p.seo_keywords),
         sku: typeof p.sku === 'string' ? p.sku : undefined,
         supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
         supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
