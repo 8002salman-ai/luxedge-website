@@ -22,6 +22,7 @@ import {
   deriveCommerceReadiness, deriveInventorySource, deriveSourceType,
   type CommerceReadiness, type SourceType, type InventorySource,
 } from './commerceReadiness';
+import { parseTagList } from './tags';
 
 // ---------------------------------------------------------------------------
 // Live-schema awareness
@@ -389,7 +390,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     supplierUrl: row.supplier_url || null,
     supplierStockStatus: row.supplier_stock_status || null,
     riskFlags: Array.isArray(row.risk_flags) ? row.risk_flags.filter((x): x is string => typeof x === 'string') : [],
-    tags: strArr(row.tags),
+    tags: parseTagList(row.tags),
     featured: !!row.featured,
     newArrival: !!row.new_arrival,
     trending: !!row.trending,
@@ -401,7 +402,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     discountValue: row.discount_value != null ? num(row.discount_value) : undefined,
     seoTitle: row.seo_title || row.name,
     seoDescription: row.seo_description || row.short_description || '',
-    seoKeywords: strArr(row.seo_keywords),
+    seoKeywords: parseTagList(row.seo_keywords),
     canonicalSlug: row.canonical_slug || undefined,
     ogImage: row.og_image || undefined,
     images: myImages,
