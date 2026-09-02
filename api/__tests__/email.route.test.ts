@@ -133,3 +133,111 @@ describe('/api/email/send', () => {
     expect(JSON.stringify(r.body)).toContain('send_email binding');
   });
 });
+
+describe('/api/email/send — CRM-leads campaign (audience=leads)', () => {
+  function bodyReq(body: unknown, token = ADMIN_TOKEN): IncomingMessage {
+    const payload = JSON.stringify(body);
+    const headers: Record<string, string> = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const r = {
+      method: 'POST',
+      url: '/api/email/send',
+      headers,
+      env: {
+        SEND_MAIL: {
+          send: async (msg: { to: string }) => { sentTo.push(msg.to); },
+        },
+      },
+    } as unknown as IncomingMessage;
+    const listeners: Record<string, ((c?: Buffer) => void)[]> = {};
+    (r as unknown as { on: (n: string, fn: (c?: Buffer) => void) => unknown }).on = (n: string, fn: (c?: Buffer) => void) => {
+      (listeners[n] ||= []).push(fn);
+      if (n === 'data' && payload) queueMicrotask(() => fn(Buffer.from(payload)));
+      if (n === 'end') queueMicrotask(() => fn());
+      return r;
+    };
+    return r;
+  }
+
+  const sentTo: string[] = [];
+  const ORIG_ENV = { url: process.env.VITE_SUPABASE_URL, role: process.env.SUPABASE_SERVICE_ROLE_KEY, secret: process.env.SUPABASE_JWT_SECRET };
+
+  beforeEach(() => {
+    sentTo.length = 0;
+    process.env.SUPABASE_JWT_SECRET = SECRET;
+  });
+  afterEach(() => {
+    process.env.VITE_SUPABASE_URL = ORIG_ENV.url;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = ORIG_ENV.role;
+    process.env.SUPABASE_JWT_SECRET = ORIG_ENV.secret;
+    vi.unstubAllGlobals();
+  });
+
+  function stubLeads(rows: Array<{ email: string | null }>) {
+    process.env.VITE_SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
+    vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+      if (String(url).includes('/rest/v1/crm_leads')) return new Response(JSON.stringify(rows), { status: 200 });
+      return new Response('{}', { status: 500 });
+    }));
+  }
+
+  function captured(): { status: number; body: unknown; server: ServerResponse } {
+    const cap = { status: 200, body: null as unknown, server: null as unknown as ServerResponse };
+    const server = {
+      statusCode: 200,
+      setHeader: () => {},
+      end: (payload?: unknown) => {
+        cap.status = (server as { statusCode: number }).statusCode;
+        try { cap.body = payload ? JSON.parse(String(payload)) : null; } catch { cap.body = String(payload); }
+      },
+    } as unknown as ServerResponse;
+    cap.server = server;
+    return cap;
+  }
+
+  it('sends to every opted-in lead and reports counts (never returns emails)', async () => {
+    stubLeads([{ email: 'a@example.com' }, { email: 'b@example.com' }, { email: null }, { email: 'a@example.com' }, { email: 'bad-email' }]);
+    const r = captured();
+    await sendHandler(bodyReq({ audience: 'leads', subject: 'S', text: 'T' }), r.server);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, sent: 2, failed: 0, total: 2 });
+    expect(sentTo).toEqual(['a@example.com', 'b@example.com']);
+    expect(JSON.stringify(r.body)).not.toContain('@example.com');
+  });
+
+  it('reports zero leads honestly', async () => {
+    stubLeads([]);
+    const r = captured();
+    await sendHandler(bodyReq({ audience: 'leads', subject: 'S', html: '<p>H</p>' }), r.server);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, sent: 0, total: 0 });
+    expect(sentTo.length).toBe(0);
+  });
+
+  it('counts per-recipient failures without aborting the campaign', async () => {
+    stubLeads([{ email: 'ok@example.com' }, { email: 'bad@example.com' }]);
+    const cap = { status: 200, body: null as unknown };
+    const server = {
+      statusCode: 200,
+      setHeader: () => {},
+      end: (payload?: unknown) => {
+        cap.status = (server as { statusCode: number }).statusCode;
+        try { cap.body = payload ? JSON.parse(String(payload)) : null; } catch { cap.body = String(payload); }
+      },
+    } as unknown as ServerResponse;
+    // Override the binding: fail on the second recipient.
+    const payload = JSON.stringify({ audience: 'leads', subject: 'S', text: 'T' });
+    const headers: Record<string, string> = { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' };
+    const r = { method: 'POST', url: '/api/email/send', headers, env: { SEND_MAIL: { send: async (msg: { to: string }) => { if (msg.to === 'bad@example.com') throw new Error('nope'); sentTo.push(msg.to); } } } } as unknown as IncomingMessage;
+    const listeners: Record<string, ((c?: Buffer) => void)[]> = {};
+    (r as unknown as { on: (n: string, fn: (c?: Buffer) => void) => unknown }).on = (n: string, fn: (c?: Buffer) => void) => {
+      (listeners[n] ||= []).push(fn);
+      if (n === 'data') queueMicrotask(() => fn(Buffer.from(payload)));
+      if (n === 'end') queueMicrotask(() => fn());
+      return r;
+    };
+    await sendHandler(r, server);
+    expect(cap.status).toBe(200);
+    expect(cap.body).toMatchObject({ ok: true, sent: 1, failed: 1, total: 2 });
+  });
+});

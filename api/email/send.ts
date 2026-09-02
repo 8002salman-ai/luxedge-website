@@ -33,7 +33,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  let body: { to?: string; subject?: string; text?: string; html?: string } = {};
+  let body: { to?: string; audience?: string; subject?: string; text?: string; html?: string } = {};
   try {
     body = await readJsonBody(req);
   } catch {
@@ -41,20 +41,76 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const to = String(body.to || '').trim().toLowerCase();
   const subject = String(body.subject || '').trim();
   const text = String(body.text || '').trim();
   const html = String(body.html || '').trim();
-  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-    sendJson(res, 400, { ok: false, error: 'A valid recipient email is required.' });
-    return;
-  }
   if (!subject) {
     sendJson(res, 400, { ok: false, error: 'Subject is required.' });
     return;
   }
   if (!text && !html) {
     sendJson(res, 400, { ok: false, error: 'Provide text or html content.' });
+    return;
+  }
+
+  // Batch send to CRM leads (opt-in marketing list). Reads opted-in lead
+  // emails server-side via the service role — never returns the list.
+  if (body.audience === 'leads') {
+    const cfg = (() => {
+      const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+      const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+      return url && serviceRole ? { url, serviceRole } : null;
+    })();
+    if (!cfg) {
+      sendJson(res, 502, { ok: false, error: 'CRM leads are unavailable (Supabase service role not configured on the server).' });
+      return;
+    }
+    let leads: Array<{ email?: string | null }> = [];
+    try {
+      const r = await fetch(`${cfg.url}/rest/v1/crm_leads?opted_in=eq.true&select=email`, {
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      leads = (await r.json()) as Array<{ email?: string | null }>;
+    } catch {
+      sendJson(res, 502, { ok: false, error: 'Could not load CRM leads from the server.' });
+      return;
+    }
+    const emails = [...new Set(leads.map((l) => (l.email || '').trim().toLowerCase()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))].slice(0, 200);
+    if (!emails.length) {
+      sendJson(res, 200, { ok: true, sent: 0, failed: 0, total: 0, message: 'No opted-in CRM leads with valid emails.' });
+      return;
+    }
+    let sent = 0;
+    const failed: string[] = [];
+    for (const to of emails) {
+      try {
+        await binding.send({
+          from: DEFAULT_FROM,
+          to,
+          subject,
+          ...(text ? { text } : {}),
+          ...(html ? { html } : {}),
+        });
+        sent++;
+      } catch {
+        failed.push(to);
+      }
+    }
+    sendJson(res, 200, {
+      ok: true,
+      sent,
+      failed: failed.length,
+      total: emails.length,
+      message: `Campaign sent to ${sent} of ${emails.length} opted-in lead${emails.length === 1 ? '' : 's'}${failed.length ? `; ${failed.length} failed` : ''}.`,
+    });
+    return;
+  }
+
+  const to = String(body.to || '').trim().toLowerCase();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    sendJson(res, 400, { ok: false, error: 'A valid recipient email is required.' });
     return;
   }
 
