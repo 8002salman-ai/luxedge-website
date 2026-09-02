@@ -1734,7 +1734,7 @@ const EMPTY_VIDEO: VideoScript = { youtubeTitle: '', youtubeDesc: '', youtubeTag
 const META_CTA_OPTIONS = ['Shop Now','Learn More','Get Offer','Order Now','Sign Up','Book Now','Contact Us','Download'];
 
 function AMarketingGen() {
-  const { products } = useApp();
+  const { products, notify } = useApp();
   const nav = useNavigate();
   const [tab, setTab] = useState<MktTab>('google');
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -1752,6 +1752,77 @@ function AMarketingGen() {
   const [copied, setCopied] = useState('');
   const [newInterest, setNewInterest] = useState('');
   const [newCallout, setNewCallout] = useState('');
+
+  // ── Email sending (test send + CRM leads campaign) ──
+  const [sendSubjectChoice, setSendSubjectChoice] = useState<'A' | 'B'>('A');
+  const [sendTo, setSendTo] = useState('');
+  const [sendTarget, setSendTarget] = useState<'test' | 'leads'>('leads');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const emailSubject = sendSubjectChoice === 'A' ? email.subjectA : email.subjectB;
+
+  /** Build a simple HTML email from the generated draft. */
+  const buildEmailHtml = () => {
+    const p = selectedProduct;
+    const productLine = p
+      ? `<p style="margin:16px 0 0;color:#6b7280;font-size:13px;line-height:1.6">Featured product: <strong>${p.name}</strong> — $${p.price ?? ''}</p>`
+      : '';
+    return `
+      <div style="background:#f4f4f6;padding:32px 16px">
+        <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif">
+          <div style="background:linear-gradient(135deg,#7c3aed,#db2777);padding:32px 24px;text-align:center">
+            <p style="margin:0;color:#ffffff;font-size:22px;font-weight:bold">${email.heroHeadline || 'Luxedge'}</p>
+          </div>
+          <div style="padding:24px">
+            <p style="margin:0;color:#374151;font-size:15px;line-height:1.7;white-space:pre-wrap">${(email.body || '').replace(/\n/g, '<br/>')}</p>
+            ${productLine}
+            ${email.urgency ? `<p style="margin:16px 0 0;color:#2563eb;font-weight:600;font-size:14px">${email.urgency}</p>` : ''}
+            <p style="text-align:center;margin:24px 0 0"><a href="https://luxedge.us/shop" style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#db2777);color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;font-size:14px">${email.ctaText || 'Shop Now →'}</a></p>
+            <p style="margin:24px 0 0;color:#9ca3af;font-size:11px;line-height:1.5">You are receiving this because you opted in at luxedge.us. Unsubscribe anytime by replying with "unsubscribe".<br/>Luxedge — 8002salman@gmail.com</p>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  /** Send the generated email (test send or CRM-leads campaign). */
+  const sendEmail = async () => {
+    const subject = emailSubject.trim();
+    if (!subject) { notify('Generate (or write) a subject line first — version A or B.'); return; }
+    if (!email.body.trim()) { notify('Email body is empty — generate content first.'); return; }
+    if (sendTarget === 'test' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sendTo.trim())) {
+      notify('Enter a valid test recipient email.');
+      return;
+    }
+    setSendingEmail(true);
+    setSendResult(null);
+    try {
+      const token = getAccessToken();
+      const body = sendTarget === 'leads'
+        ? { audience: 'leads', subject, text: `${email.preheader ? email.preheader + '\n\n' : ''}${email.heroHeadline ? email.heroHeadline + '\n\n' : ''}${email.body}\n\n${email.ctaText || 'Shop Now'} → https://luxedge.us/shop${email.urgency ? '\n\n' + email.urgency : ''}`, html: buildEmailHtml() }
+        : { to: sendTo.trim(), subject, text: `${email.preheader ? email.preheader + '\n\n' : ''}${email.heroHeadline ? email.heroHeadline + '\n\n' : ''}${email.body}\n\n${email.ctaText || 'Shop Now'} → https://luxedge.us/shop${email.urgency ? '\n\n' + email.urgency : ''}`, html: buildEmailHtml() };
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({})) as { ok?: boolean; message?: string; error?: string; sent?: number; failed?: number; total?: number };
+      if (!res.ok || d.ok === false) {
+        setSendResult({ ok: false, msg: d.error || d.message || `Send failed (HTTP ${res.status})` });
+        notify(`Send failed: ${d.error || d.message || 'unknown error'}`);
+      } else {
+        const msg = sendTarget === 'leads'
+          ? `Sent to ${d.sent ?? 0} of ${d.total ?? 0} opted-in leads${d.failed ? ` (${d.failed} failed)` : ''}`
+          : `Test email sent to ${sendTo.trim()}`;
+        setSendResult({ ok: true, msg });
+        notify(msg);
+      }
+    } catch (e: any) {
+      setSendResult({ ok: false, msg: `Send failed: ${e.message}` });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   const allProviders: AIProvider[] = loadAIProviders();
   const activeProviders = allProviders.filter(p => p.enabled);
@@ -2343,6 +2414,60 @@ function parseJ<T>(raw: string, fb: T): T {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Send Email — test send + CRM-leads campaign */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><PaperPlaneRight size={14} className="text-green-600" /> Send This Email</h3>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-1">Subject (A/B pick)</label>
+                <div className="flex gap-2">
+                  {(['A', 'B'] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => setSendSubjectChoice(v)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${sendSubjectChoice === v ? 'bg-green-600 text-white border-green-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                      {v}: {(v === 'A' ? email.subjectA : email.subjectB) || '(empty)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-1">Recipients</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setSendTarget('leads')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${sendTarget === 'leads' ? 'bg-green-600 text-white border-green-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    CRM leads (opted-in)
+                  </button>
+                  <button type="button" onClick={() => setSendTarget('test')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${sendTarget === 'test' ? 'bg-green-600 text-white border-green-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    Test email
+                  </button>
+                </div>
+                {sendTarget === 'test' && (
+                  <input value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="your@email.com"
+                    className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                )}
+                {sendTarget === 'leads' && (
+                  <p className="mt-2 text-[11px] text-gray-400">Sends to every opted-in CRM lead (welcome popup / AI chat / manual signups) from sales@luxedge.us. Store-account users are not emailed — only the marketing opt-in list.</p>
+                )}
+              </div>
+            </div>
+            {sendTarget === 'leads' && (
+              <p className="mt-3 text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                ⚠️ This sends real emails to every opted-in lead. Check the preview above first, then confirm.
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+              <button type="button" onClick={() => { if (sendTarget === 'leads' && !window.confirm('Send this email to ALL opted-in CRM leads now? This cannot be undone.')) return; void sendEmail(); }}
+                disabled={sendingEmail}
+                className="px-5 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
+                {sendingEmail ? <SpinnerGap size={14} className="animate-spin" /> : <PaperPlaneRight size={14} />}
+                {sendingEmail ? 'Sending…' : sendTarget === 'leads' ? 'Send to CRM Leads' : 'Send Test Email'}
+              </button>
+              {sendResult && (
+                <span className={`text-xs font-medium ${sendResult.ok ? 'text-green-600' : 'text-red-600'}`}>{sendResult.msg}</span>
+              )}
             </div>
           </div>
         </div>
