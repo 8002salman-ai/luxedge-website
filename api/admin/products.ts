@@ -166,32 +166,51 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     // product_images legacy NOT NULLs: storage_path, public_url, alt_text.
+    let imagesSaved = 0;
     for (let i = 0; i < images.length; i++) {
       const url = images[i] as string;
-      await fetch(`${base}/rest/v1/product_images`, {
+      const row = {
+        id: crypto.randomUUID(),
+        product_id: productId,
+        storage_path: url,
+        public_url: url,
+        url,
+        alt_text: title,
+        kind: 'product',
+        is_primary: i === 0,
+        sort_order: i,
+        created_at: now,
+      };
+      let imgRes = await fetch(`${base}/rest/v1/product_images`, {
         method: 'POST',
         headers: {
           apikey: key,
           Authorization: `Bearer ${key}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          id: crypto.randomUUID(),
-          product_id: productId,
-          storage_path: url,
-          public_url: url,
-          url,
-          alt_text: title,
-          kind: 'product',
-          is_primary: i === 0,
-          sort_order: i,
-          created_at: now,
-        }),
+        body: JSON.stringify(row),
         signal: AbortSignal.timeout(15_000),
       });
+      if (!imgRes.ok) {
+        // LIVE-db quirk: product_images.storage_path has an out-of-band UNIQUE
+        // constraint (not in migrations), so a URL already used by another
+        // product 409s. Keep the real display url/public_url and uniquify only
+        // the legacy storage_path so the listing still carries its image.
+        imgRes = await fetch(`${base}/rest/v1/product_images`, {
+          method: 'POST',
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ...row, storage_path: `${url}#api-${productId.slice(0, 8)}` }),
+          signal: AbortSignal.timeout(15_000),
+        });
+      }
+      if (imgRes.ok) imagesSaved++;
     }
 
-    sendJson(res, 201, { ok: true, id: productId, slug, url: `/product/${slug}`, status: live ? 'active' : 'draft' });
+    sendJson(res, 201, { ok: true, id: productId, slug, url: `/product/${slug}`, status: live ? 'active' : 'draft', images: imagesSaved });
   } catch {
     sendJson(res, 500, { error: 'Failed to create product — try again' });
   }

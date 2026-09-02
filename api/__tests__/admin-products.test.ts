@@ -50,6 +50,7 @@ function makeReq(method: string, payload: Record<string, unknown>): IncomingMess
 describe('/api/admin/products', () => {
   const calls: { url: string; method: string; body: Record<string, unknown> | null }[] = [];
   let slugTaken = false;
+  let imageConflictOnce = false;
   const originalFetch = globalThis.fetch;
   const original = {
     VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL,
@@ -59,6 +60,7 @@ describe('/api/admin/products', () => {
   beforeEach(() => {
     calls.length = 0;
     slugTaken = false;
+    imageConflictOnce = false;
     process.env.VITE_SUPABASE_URL = 'https://proj.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-key';
     vi.mocked(requireAdmin).mockResolvedValue({ sub: 'admin-1', role: 'admin' } as never);
@@ -79,6 +81,9 @@ describe('/api/admin/products', () => {
         return new Response(JSON.stringify([{ id: 'p-new-1' }]), { status: 201, headers: { 'content-type': 'application/json' } });
       }
       if (url.endsWith('/product_images')) {
+        if (imageConflictOnce && imageInserts++ === 0) {
+          return new Response(JSON.stringify({ code: '23505', message: 'duplicate key value violates unique constraint "product_images_storage_path_key"' }), { status: 409, headers: { 'content-type': 'application/json' } });
+        }
         imageInserts++;
         return new Response(JSON.stringify([{ id: `img-${imageInserts}` }]), { status: 201, headers: { 'content-type': 'application/json' } });
       }
@@ -136,11 +141,12 @@ describe('/api/admin/products', () => {
       brand: 'KONG',
     }), server);
     expect(captured.status).toBe(201);
-    const body = captured.body as { ok: boolean; id: string; slug: string; url: string; status: string };
+    const body = captured.body as { ok: boolean; id: string; slug: string; url: string; status: string; images?: number };
     expect(body.ok).toBe(true);
     expect(body.slug).toBe('kong-classic-dog-toy');
     expect(body.url).toBe('/product/kong-classic-dog-toy');
     expect(body.status).toBe('active');
+    expect(body.images).toBe(2);
 
     const insert = calls.find((c) => c.method === 'POST' && c.url === 'products');
     expect(insert, `calls=${JSON.stringify(calls)}`).toBeTruthy();
@@ -166,6 +172,19 @@ describe('/api/admin/products', () => {
     expect(product.status).toBe('draft');
     expect(product.commerce_readiness).toBeNull();
     expect(product.published_at).toBeNull();
+  });
+
+  it('survives a product_images storage_path UNIQUE conflict (live-db drift): retries with a uniquified storage_path', async () => {
+    imageConflictOnce = true; // simulate the out-of-band unique constraint 409 on the first insert
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { title: 'KONG Classic Dog Toy', price: 9.99, image_urls: ['https://img.example/1.jpg'] }), server);
+    expect(captured.status).toBe(201);
+    expect((captured.body as { images: number }).images).toBe(1);
+    const imgPosts = calls.filter((c) => c.method === 'POST' && c.url === 'product_images');
+    expect(imgPosts.length).toBe(2); // original + retry with uniquified storage_path
+    const retry = imgPosts[1].body as { storage_path: string; url: string };
+    expect(retry.url).toBe('https://img.example/1.jpg'); // display URL untouched
+    expect(retry.storage_path).toContain('https://img.example/1.jpg#api-'); // legacy column uniquified
   });
 
   it('dedupes a taken slug with a numeric suffix', async () => {
