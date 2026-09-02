@@ -742,7 +742,7 @@ export default function ProductScout() {
     if (!db) { notify('Database not ready'); return; }
     setScanning(true);
     try {
-      let added = 0;
+      const beforeCount = loadAttentionItems().length;
       for (const v of candidates) {
         const c = toScoutCandidate(v);
         const decision = evaluateAutonomy({
@@ -752,12 +752,14 @@ export default function ProductScout() {
           config: autonomyCfg,
         });
         const items = attentionForCandidate(c, decision, marketScoreFor(v), qaCandidate(c));
-        for (const it of items) {
-          pushAttentionItem(it);
-          added++;
-        }
+        for (const it of items) pushAttentionItem(it);
       }
-      setAttention(loadAttentionItems());
+      // Count what was ACTUALLY queued (pushAttentionItem dedupes by
+      // candidate+reason), so a repeat scan of the same candidates reports
+      // "No attention items" instead of re-announcing every matched rule.
+      const afterItems = loadAttentionItems();
+      const added = afterItems.length - beforeCount;
+      setAttention(afterItems);
       notify(added ? `${added} attention item(s) queued` : 'No attention items — candidates within policy');
     } catch (e) {
       // A scan must never die silently — surface the failure so the owner
