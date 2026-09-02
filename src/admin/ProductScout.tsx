@@ -36,6 +36,8 @@ import type { CandidateEvidence, ScoutCandidate, AutonomyConfig, OwnerAttentionI
 import type { FetchedSourcePage } from '../features/scout/types';
 import { loadAutonomyConfig, saveAutonomyConfig, setEmergencyPause, AUTONOMY_MODES, evaluateAutonomy, attentionForCandidate, loadAttentionItems, pushAttentionItem, resolveAttentionItem } from '../features/scout/autonomy';
 import { qaListing, generateListingDraft, buildDeterministicListing } from '../features/scout/listing';
+import { suggestedSellPrice } from '../features/scout/normalize';
+import type { SuggestedSellPrice } from '../features/scout/normalize';
 import { loadAiControlConfig } from '../features/scout/aiControl';
 
 // Real seed sources for the first controlled research run (pet products,
@@ -140,6 +142,11 @@ export default function ProductScout() {
   const [listingFor, setListingFor] = useState<ViewCandidate | null>(null);
   const [listingResult, setListingResult] = useState<{ listing: ListingDraft; qa: ListingQAResult; decision: { eligibleForAutoPublish: boolean; reason: string } | null; draftId: string | null; aiUsed: boolean; deterministic: boolean; autoPublished: boolean } | null>(null);
   const [confirmPublishAll, setConfirmPublishAll] = useState(false);
+  /** Owner price-resolution for publishing candidates without an exact price. */
+  const [publishFor, setPublishFor] = useState<ViewCandidate | null>(null);
+  const [publishPrice, setPublishPrice] = useState('');
+  const [publishPricing, setPublishPricing] = useState<SuggestedSellPrice | null>(null);
+  const [publishingPrice, setPublishingPrice] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
 
   // Run state
@@ -418,11 +425,11 @@ export default function ProductScout() {
   const slugOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item';
 
   /** Ensure a products draft exists for this candidate; returns its id. */
-  const draftFor = async (v: ViewCandidate, shortDesc = '', grossMargin: number | null = null): Promise<string> => {
+  const draftFor = async (v: ViewCandidate, shortDesc = '', grossMargin: number | null = null, priceOverride: number | null = null): Promise<string> => {
     if (!db) throw new Error('Database not ready');
     if (v.product?.id) return v.product.id;
     const ev = v.candidate.evidence;
-    const price = (ev?.supplierPrice?.value as number | null) ?? null;
+    const price = priceOverride ?? (ev?.supplierPrice?.value as number | null) ?? null;
     const category = String(ev?.category?.value || '');
     const categoryId = category ? await findCategoryId(db, category) : null;
     const result = await createProductDraft(db, {
@@ -460,21 +467,22 @@ export default function ProductScout() {
 
   /**
    * Publish a candidate's product LIVE on the storefront (draft auto-created
-   * when missing). Gates: candidate needs a supplier price + at least one
-   * image, and the emergency pause must be OFF (owner-explicit action,
-   * allowed in any autonomy mode).
+   * when missing). Gates: a sell price (evidence exact OR owner override) +
+   * at least one image, emergency pause OFF (owner-explicit action, allowed
+   * in any autonomy mode). When the owner supplied a price override for an
+   * existing price-less draft, patch the product row at publish time.
    */
-  const publishCandidate = async (v: ViewCandidate, opts: { silent?: boolean } = {}): Promise<'live' | 'already' | 'skipped' | 'missing'> => {
+  const publishCandidate = async (v: ViewCandidate, opts: { silent?: boolean } = {}, priceOverride: number | null = null): Promise<'live' | 'already' | 'skipped' | 'missing'> => {
     if (!db) return 'missing';
     if (autonomyCfg.emergencyPause) {
       if (!opts.silent) notify('Emergency pause active — publishing blocked');
       return 'skipped';
     }
     const ev = v.candidate.evidence;
-    const price = (ev?.supplierPrice?.value as number | null) ?? null;
+    const price = priceOverride ?? (ev?.supplierPrice?.value as number | null) ?? null;
     const hasImage = v.candidate.images.length > 0 || (v.supplierProduct?.images || []).length > 0;
     if (price === null || price <= 0 || !hasImage) {
-      if (!opts.silent) notify('Cannot publish — candidate needs a supplier price and at least one image');
+      if (!opts.silent) notify('Cannot publish — candidate needs a sell price and at least one image');
       return 'skipped';
     }
     if (v.product?.status === 'active') {
@@ -483,7 +491,11 @@ export default function ProductScout() {
     }
     setActing(v.candidate.id);
     try {
-      const draftId = await draftFor(v);
+      const draftId = await draftFor(v, '', null, price);
+      // Owner-price path: patch the sell price onto an existing price-less draft.
+      if (v.product && !v.product.price && priceOverride !== null && priceOverride > 0) {
+        await db.update<{ id: string; price: number }>('products', draftId, { price: priceOverride });
+      }
       const res = await publishProductDraft(db, {
         productId: draftId,
         candidateId: v.candidate.id,
@@ -503,6 +515,50 @@ export default function ProductScout() {
       return 'missing';
     } finally {
       setActing(null);
+    }
+  };
+
+  /**
+   * Publish entry point: exact evidence price → publish directly; otherwise
+   * open the owner price-resolution modal (evidence-suggested price + basis,
+   * editable). Never fabricates a price. Bulk publishing stays strict
+   * (exact prices only) so owners review unpriced rows individually.
+   */
+  const publishFlow = async (v: ViewCandidate) => {
+    if (!db) return;
+    if (autonomyCfg.emergencyPause) { notify('Emergency pause active — publishing blocked'); return; }
+    const hasImage = v.candidate.images.length > 0 || (v.supplierProduct?.images || []).length > 0;
+    if (!hasImage) { notify('Cannot publish — candidate needs at least one image'); return; }
+    if (v.product?.status === 'active') { notify('This product is already live'); return; }
+    const pricing = suggestedSellPrice(v.candidate.evidence);
+    if (pricing.source === 'exact' && pricing.price !== null && pricing.price > 0) {
+      await publishCandidate(v);
+      return;
+    }
+    setPublishPricing(pricing);
+    setPublishPrice(pricing.price !== null ? pricing.price.toFixed(2) : '');
+    setPublishFor(v);
+  };
+
+  const confirmPublishPrice = async () => {
+    if (!publishFor || !db) return;
+    const parsed = parseFloat(publishPrice);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      notify('Enter a valid sell price (≥ $0.01)');
+      return;
+    }
+    const price = Math.round(parsed * 100) / 100;
+    setPublishingPrice(true);
+    try {
+      const res = await publishCandidate(publishFor, {}, price);
+      // res drives the toast inside publishCandidate; the modal just closes.
+      if (res === 'live' || res === 'already') {
+        setPublishFor(null);
+        setPublishPricing(null);
+        setPublishPrice('');
+      }
+    } finally {
+      setPublishingPrice(false);
     }
   };
 
@@ -1204,10 +1260,10 @@ export default function ProductScout() {
                             title="Create product draft"
                           ><FilePlus size={15} /></button>
                           <button
-                            onClick={() => void publishCandidate(v)}
+                            onClick={() => void publishFlow(v)}
                             disabled={acting === c.id || acting === 'bulk'}
                             className={`p-1.5 rounded-lg disabled:opacity-40 ${v.product && v.product.status === 'active' ? 'bg-emerald-50 text-emerald-500 cursor-default' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600'}`}
-                            title={v.product && v.product.status === 'active' ? 'Product is already live' : 'Publish to storefront (draft auto-created — one click)'}
+                            title={v.product && v.product.status === 'active' ? 'Product is already live' : 'Publish to storefront (sets price if missing — one click)'}
                           ><Rocket size={15} /></button>
                           <button onClick={() => setEvidenceFor(v)} className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500" title="View evidence"><Eye size={15} /></button>
                         </div>
@@ -1544,6 +1600,12 @@ export default function ProductScout() {
               )}
             </div>
 
+            {listingResult.draftId && !listingResult.autoPublished && (
+              <button
+                onClick={() => { const v = listingFor; setListingFor(null); if (v) void publishFlow(v); }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold"
+              >Publish LIVE now {autonomyCfg.emergencyPause ? '(blocked — emergency pause)' : ''}</button>
+            )}
             <button onClick={() => setListingFor(null)} className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-semibold">Close</button>
           </div>
         )}
@@ -1567,6 +1629,42 @@ export default function ProductScout() {
             <button onClick={() => setConfirmPublishAll(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600">Cancel</button>
           </div>
         </div>
+      </Modal>
+
+      {/* Owner price-resolution modal — publish unpriceable candidates honestly */}
+      <Modal open={!!publishFor} onClose={() => { if (!publishingPrice) { setPublishFor(null); setPublishPricing(null); setPublishPrice(''); } }} title="Publish — set the selling price">
+        {publishFor && publishPricing && (
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-gray-900">{publishFor.candidate.title}</p>
+            <div className={`rounded-xl p-3 text-xs ${publishPricing.source === 'none' ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-blue-50 border border-blue-200 text-blue-800'}`}>
+              {publishPricing.source === 'retail' && <p>No exact supplier (CJ) price captured. Real retail reference found — see suggested value below.</p>}
+              {publishPricing.source === 'range' && <p>No exact price. Midpoint of the manufacturer price range is a starting suggestion — adjust freely.</p>}
+              {publishPricing.source === 'none' && <p>This candidate has no pricing evidence. Enter a selling price to publish — your call, it's your store.</p>}
+              <p className="mt-1 font-bold">Basis: {publishPricing.label}</p>
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-gray-400 uppercase mb-1">Selling price (USD)</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={publishPrice}
+                onChange={(e) => setPublishPrice(e.target.value)}
+                disabled={publishingPrice}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">This price becomes the storefront sell price. Cost/margin stay unknown until CJ pricing is captured for this product — publishing is your explicit decision.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => void confirmPublishPrice()}
+                disabled={publishingPrice}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+              >{publishingPrice ? 'Publishing…' : 'Publish LIVE'}</button>
+              <button onClick={() => { setPublishFor(null); setPublishPricing(null); setPublishPrice(''); }} disabled={publishingPrice} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">Cancel</button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
