@@ -12,8 +12,15 @@ import { CatalogProduct, CatalogImage, effectivePrice } from './types';
 
 export const SITE_URL = 'https://luxedge.us';
 
-export function productUrl(p: Pick<CatalogProduct, 'id' | 'slug'>): string {
-  return `${SITE_URL}/product/${p.slug || p.id}`;
+/** Relative product-route path — the slug is the canonical crawlable form
+ * (the worker emits full Product JSON-LD/canonical only for slug URLs); id is
+ * a safety fallback when a slug is missing. */
+export function productPath(p: { id: string; slug?: string | null }): string {
+  return `/product/${p.slug || p.id}`;
+}
+
+export function productUrl(p: { id: string; slug?: string | null }): string {
+  return `${SITE_URL}${productPath(p)}`;
 }
 
 export function shopUrl(categorySlug?: string): string {

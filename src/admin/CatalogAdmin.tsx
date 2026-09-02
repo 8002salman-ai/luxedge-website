@@ -31,7 +31,7 @@ import {
   type CatalogProduct, type CatalogCategory, type CatalogImage, type CatalogVariant, type Coupon, type StoreOffer, type StoreSettings,
   speciesOf,
 } from '../features/catalog/types';
-import { buildFeedCsv, buildProductJsonLd, buildProductMeta } from '../features/catalog/seo';
+import { buildFeedCsv, buildProductJsonLd, buildProductMeta, productPath } from '../features/catalog/seo';
 import {
   COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
   type CommerceReadiness,
@@ -420,7 +420,7 @@ export function CatalogProductsPage() {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY'
-                      ? <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
+                      ? <a href={productPath(p)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
                       : <span className="text-[10px] text-gray-400" title={p.status !== 'active' ? 'Not active' : p.commerceReadiness === 'COMMERCE_READY' ? '' : 'Active but not commerce-ready'}>{p.status !== 'active' ? `not active` : `active · ${p.commerceReadiness || 'unclassified'}`}</span>}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -481,8 +481,8 @@ export function CatalogProductsPage() {
                       )}
                       <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600 shrink-0"><PencilSimple size={16} /></button>
                       <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600 shrink-0"><Copy size={16} /></button>
-                      <button onClick={() => nav(`/product/${p.id}`)} title="Preview product page" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
-                      <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" title="View live on storefront" className="p-2 hover:bg-sky-50 rounded text-sky-600 shrink-0"><ArrowSquareOut size={16} /></a>
+                      <button onClick={() => nav(productPath(p))} title="Preview product page" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
+                      <a href={productPath(p)} target="_blank" rel="noreferrer" title="View live on storefront" className="p-2 hover:bg-sky-50 rounded text-sky-600 shrink-0"><ArrowSquareOut size={16} /></a>
                       <button onClick={() => setDelId(p.id)} title="Archive/Delete" className="p-2 hover:bg-red-50 rounded text-red-500 shrink-0"><Trash size={16} /></button>
                     </div>
                   </td>
@@ -1039,8 +1039,8 @@ export function CatalogProductEditor() {
         <div className="flex-1" />
         {!isNew && mode !== 'ai' && (
           <>
-            <button onClick={() => nav(`/product/${p.id}`)} title="Preview product page" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-green-600 hover:bg-green-50 flex items-center gap-1.5 shrink-0"><Eye size={14} /> Preview</button>
-            <a href={`/product/${p.id}`} target="_blank" rel="noreferrer" title="View live on storefront" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-sky-600 hover:bg-sky-50 flex items-center gap-1.5 shrink-0"><ArrowSquareOut size={14} /> View</a>
+            <button onClick={() => nav(productPath(p))} title="Preview product page" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-green-600 hover:bg-green-50 flex items-center gap-1.5 shrink-0"><Eye size={14} /> Preview</button>
+            <a href={productPath(p)} target="_blank" rel="noreferrer" title="View live on storefront" className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-sky-600 hover:bg-sky-50 flex items-center gap-1.5 shrink-0"><ArrowSquareOut size={14} /> View</a>
           </>
         )}
         {mode !== 'ai' && (

@@ -109,6 +109,7 @@ function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
 // are server-side only; the browser proxies through /api/ai/*)
 // ============================================================================
 import { classifyProductSafety } from './features/catalog/productSafety';
+import { productPath } from './features/catalog/seo';
 
 import type {
   AIProvider, ImportHistoryEntry, AIExtractedProduct, EnterpriseVariant,
@@ -1030,7 +1031,7 @@ function PCard({ product }: { product: Product }) {
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
-    <article className="product-card group">        <Link to={`/product/${product.id}`} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
+    <article className="product-card group">        <Link to={productPath(product)} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
         <div className="product-card-media">
           <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
           {secondImage && (
@@ -1046,7 +1047,7 @@ function PCard({ product }: { product: Product }) {
         </div>
       </Link>
       <div className="product-card-info">
-        <Link to={`/product/${product.id}`} className="block min-w-0">
+        <Link to={productPath(product)} className="block min-w-0">
           <p className="product-card-category">{product.category}</p>
           <h3 className="product-card-title line-clamp-2">{product.name}</h3>
         </Link>
@@ -1835,7 +1836,7 @@ function HomePage() {
                 <img src={heroParrotImage} alt="Colorful parrot" loading="eager" decoding="async" onError={onImageError} />
                 <span>Shop bird essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
               </Link>
-              {heroProduct && <Link to={`/product/${heroProduct.id}`} className="home-hero-product-chip">
+              {heroProduct && <Link to={productPath(heroProduct)} className="home-hero-product-chip">
                 <span>Featured from the collection</span><strong>{heroProduct.name}</strong>
               </Link>}
             </div>
@@ -2570,7 +2571,7 @@ function CartPage() {
               <div key={i.product.id} className="flex gap-4 p-5">
                 <img src={img} alt={i.product.name || 'Product'} onError={onImageError} className="w-20 h-20 object-cover rounded-xl border border-luxe-silver/60" />
                 <div className="flex-1 min-w-0">
-                  <Link to={`/product/${i.product.id}`} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
+                  <Link to={productPath(i.product)} className="font-semibold text-luxe-black hover:text-luxe-gold-dark transition-colors line-clamp-1">{i.product.name}</Link>
                   <p className="text-luxe-gray text-xs mt-0.5">{i.product.category}</p>
                   <div className="flex items-center gap-3 mt-3">
                     <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">

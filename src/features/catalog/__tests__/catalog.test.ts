@@ -13,7 +13,7 @@ import {
   effectivePrice, deriveStockStatus, deriveMarginPercent, DEFAULT_STORE_SETTINGS,
 } from '../types';
 import {
-  buildProductJsonLd, buildFeedRow, buildFeedCsv, buildProductMeta, altTextFor, productUrl,
+  buildProductJsonLd, buildFeedRow, buildFeedCsv, buildProductMeta, altTextFor, productUrl, productPath,
 } from '../seo';
 import type { CatalogProduct, CatalogStatus } from '../types';
 
@@ -296,6 +296,21 @@ describe('seo + feed', () => {
     const withReviews = buildProductJsonLd(p, { count: 4, average: 4.5 });
     const rated = withReviews.find((x) => x['@type'] === 'Product') as Record<string, unknown>;
     expect((rated.aggregateRating as Record<string, unknown>).reviewCount).toBe(4);
+  });
+
+  it('productPath always resolves to the canonical slug form (GSC merchant-listing contract)', () => {
+    // Slug present → slug is the only kind of link the storefront emits.
+    expect(productPath({ id: 'uuid-1', slug: 'horse-grooming-kit-12-piece' })).toBe('/product/horse-grooming-kit-12-piece');
+    // id fallback only when the slug is genuinely missing/empty.
+    expect(productPath({ id: 'uuid-2' })).toBe('/product/uuid-2');
+    expect(productPath({ id: 'uuid-3', slug: '' })).toBe('/product/uuid-3');
+    expect(productPath({ id: 'uuid-4', slug: null as unknown as undefined })).toBe('/product/uuid-4');
+  });
+
+  it('productUrl is the absolute form of the same slug-first path', () => {
+    const p = { id: 'uuid-1', slug: 'horse-grooming-kit-12-piece' };
+    expect(productUrl(p)).toBe('https://luxedge.us/product/horse-grooming-kit-12-piece');
+    expect(productUrl({ id: 'uuid-5' })).toBe('https://luxedge.us/product/uuid-5');
   });
 
   it('builds feed rows + CSV for Merchant readiness', () => {
