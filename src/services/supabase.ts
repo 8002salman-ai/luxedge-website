@@ -271,10 +271,17 @@ export async function signOut(): Promise<void> {
  * Load the current session, refreshing the access token when it is close to
  * expiring. Returns null when signed out. Never throws for "no session".
  */
-export async function getSession(): Promise<SbSession | null> {
+/**
+ * Load the current session, refreshing the access token when it is close to
+ * expiring. Pass `force` to refresh unconditionally — used when the server
+ * rejected a token that still "looks" valid locally (revoked/invalidated
+ * mid-session), which the clock-based guard would otherwise never refresh.
+ * Returns null when signed out. Never throws for "no session".
+ */
+export async function getSession(force = false): Promise<SbSession | null> {
   const session = readStoredSession();
   if (!session) return null;
-  if (session.expiresAt - Date.now() > REFRESH_LEAD_MS) return session;
+  if (!force && session.expiresAt - Date.now() > REFRESH_LEAD_MS) return session;
 
   const config = getSupabaseConfig();
   if (!config) {
