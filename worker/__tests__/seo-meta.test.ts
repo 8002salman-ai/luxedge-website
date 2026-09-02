@@ -107,6 +107,33 @@ describe('productJsonLd', () => {
     expect(ld['url']).toBe(canonical);
     expect((ld['offers'] as { price?: string }).price).toBe('49.95');
   });
+
+  it('offer carries the real merchant return policy + shipping details (GSC warnings)', () => {
+    const ld = productJsonLd(
+      row({ free_shipping: true, delivery_min_days: 2, delivery_max_days: 7 }),
+      canonical,
+    ) as { offers?: Record<string, never> };
+    const offers = ld.offers as Record<string, any>;
+    const policy = offers.hasMerchantReturnPolicy as Record<string, unknown>;
+    expect(policy.applicableCountry).toBe('US');
+    expect(policy.merchantReturnDays).toBe(30);
+    const sd = offers.shippingDetails as Record<string, any>;
+    expect(sd.shippingDestination.addressCountry).toBe('US');
+    expect(sd.shippingRate.value).toBe('0'); // free shipping is a real recorded value
+    expect(sd.deliveryTime.transitTime.minValue).toBe(2);
+    expect(sd.deliveryTime.transitTime.maxValue).toBe(7);
+  });
+
+  it('omits shippingRate and transitTime when unknown — never fabricated', () => {
+    const ld = productJsonLd(
+      row({ free_shipping: false, shipping_cost: null, delivery_min_days: null, delivery_max_days: null }),
+      canonical,
+    ) as { offers?: Record<string, never> };
+    const offers = ld.offers as Record<string, any>;
+    expect(offers.hasMerchantReturnPolicy.merchantReturnDays).toBe(30);
+    expect(offers.shippingDetails.shippingRate).toBeUndefined();
+    expect(offers.shippingDetails.deliveryTime.transitTime).toBeUndefined();
+  });
 });
 
 describe('resolveUuidProductRedirect (PR #35 residual — legacy UUID product URLs)', () => {

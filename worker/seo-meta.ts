@@ -35,6 +35,7 @@ import {
   FAQ_DATA,
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT } from './selects';
+import { merchantOfferExtras } from '../src/features/catalog/seo';
 
 export interface SeoEnv {
   ASSETS: {
@@ -346,6 +347,14 @@ export function productJsonLd(p: ProductRow, canonical: string): Record<string, 
   };
   if (p.stock_status === 'in_stock' || p.us_inventory === true) offers.availability = 'https://schema.org/InStock';
   else if (p.stock_status && p.stock_status !== 'in_stock') offers.availability = 'https://schema.org/OutOfStock';
+  // GSC merchant-listing warnings: real return policy + shipping details.
+  Object.assign(offers, merchantOfferExtras({
+    freeShipping: p.free_shipping,
+    shippingCost: p.shipping_cost,
+    deliveryMinDays: p.delivery_min_days,
+    deliveryMaxDays: p.delivery_max_days,
+    currency: p.currency,
+  }));
   const product: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Product',

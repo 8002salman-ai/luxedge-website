@@ -23,6 +23,57 @@ export function productUrl(p: { id: string; slug?: string | null }): string {
   return `${SITE_URL}${productPath(p)}`;
 }
 
+/** Merchant-listing offer extras (GSC: hasMerchantReturnPolicy +
+ * shippingDetails on the Offer). Only real values are emitted: the 30-day
+ * return policy Luxedge advertises, a US shipping destination, shippingRate
+ * only when free shipping or a cost is recorded, and transitTime only when
+ * per-product delivery estimates exist. Shared by worker SSR + client so the
+ * crawl HTML and the hydrated DOM carry identical markup. */
+export function merchantOfferExtras(p: {
+  freeShipping?: boolean | null;
+  shippingCost?: number | null;
+  deliveryMinDays?: number | null;
+  deliveryMaxDays?: number | null;
+  currency?: string | null;
+}): Record<string, unknown> {
+  const extras: Record<string, unknown> = {
+    hasMerchantReturnPolicy: {
+      '@type': 'MerchantReturnPolicy',
+      applicableCountry: 'US',
+      returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+      merchantReturnDays: 30,
+      merchantReturnLink: `${SITE_URL}/returns`,
+    },
+    shippingDetails: {
+      '@type': 'OfferShippingDetails',
+      shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'US' },
+      deliveryTime: {
+        '@type': 'ShippingDeliveryTime',
+        handlingTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 2, unitCode: 'DAY' },
+      },
+    },
+  };
+  const shippingDetails = extras.shippingDetails as Record<string, unknown>;
+  if (p.freeShipping === true) {
+    shippingDetails.shippingRate = { '@type': 'MonetaryAmount', value: '0', currency: p.currency || 'USD' };
+  } else if (p.shippingCost != null && Number(p.shippingCost) > 0) {
+    shippingDetails.shippingRate = {
+      '@type': 'MonetaryAmount',
+      value: Number(p.shippingCost).toFixed(2),
+      currency: p.currency || 'USD',
+    };
+  }
+  if (p.deliveryMinDays != null || p.deliveryMaxDays != null) {
+    (shippingDetails.deliveryTime as Record<string, unknown>).transitTime = {
+      '@type': 'QuantitativeValue',
+      minValue: p.deliveryMinDays ?? 1,
+      maxValue: p.deliveryMaxDays ?? p.deliveryMinDays ?? 1,
+      unitCode: 'DAY',
+    };
+  }
+  return extras;
+}
+
 export function shopUrl(categorySlug?: string): string {
   return categorySlug ? `${SITE_URL}/category/${categorySlug}` : `${SITE_URL}/shop`;
 }
@@ -75,6 +126,13 @@ export function buildProductJsonLd(p: CatalogProduct, reviews?: ReviewFacts): Re
   };
   if (p.sku) offer.sku = p.sku;
   if (p.images[0]) offer.image = p.images[0].url;
+  Object.assign(offer, merchantOfferExtras({
+    freeShipping: p.freeShipping,
+    shippingCost: p.shippingCost,
+    deliveryMinDays: p.deliveryMinDays,
+    deliveryMaxDays: p.deliveryMaxDays,
+    currency: p.currency,
+  }));
   const product: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Product',
