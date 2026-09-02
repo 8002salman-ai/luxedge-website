@@ -361,6 +361,8 @@ export interface ProductDraftInput {
   sourceUrl: string;
   supplierName: string;
   scoreOverall: number | null;
+  /** CJ/supplier_products row this draft's evidence came from (provenance). */
+  supplierProductId?: string | null;
 }
 
 const LEGACY_TAX_CODE = 'txcd_99999999';
@@ -405,6 +407,7 @@ export async function createProductDraft(db: DbAdapter, input: ProductDraftInput
       sourceUrl: input.sourceUrl,
       supplier: input.supplierName,
       score: input.scoreOverall,
+      supplierProductId: input.supplierProductId ?? null,
       draftedAt: t,
       status: 'draft',
     },
@@ -430,6 +433,62 @@ export async function createProductDraft(db: DbAdapter, input: ProductDraftInput
     await db.insert('product_images', row);
   }
   return { id: inserted.id, existing: false };
+}
+
+// ---------------------------------------------------------------------------
+// Product publish (scout → live storefront)
+// ---------------------------------------------------------------------------
+
+export interface PublishDraftInput {
+  productId: string;
+  candidateId: string | null;
+  candidateTitle: string;
+  scoreOverall: number | null;
+  /** 'owner' = explicit click (any mode); 'auto' = AUTO-mode policy gates passed. */
+  channel: 'owner' | 'auto';
+}
+
+/**
+ * Publish a scout-created product draft to the live storefront: status
+ * 'active' (+ published_at) with an explicit COMMERCE_READY stamp — a scout
+ * draft would otherwise derive FULFILLMENT_PENDING (inventory 0) and never
+ * surface. Requires an existing draft (caller ensures it). Idempotent:
+ * already-active products stay live without a second audit job. Always writes
+ * a PRODUCT_PUBLISH audit row (best-effort — never blocks publishing).
+ */
+export async function publishProductDraft(
+  db: DbAdapter,
+  input: PublishDraftInput
+): Promise<{ published: boolean; reason: 'live' | 'already-live' | 'missing' }> {
+  const existing = await db.get<{ id: string; status: string; product_source_evidence: Record<string, unknown> | null }>('products', input.productId);
+  if (!existing) return { published: false, reason: 'missing' };
+  if (existing.status === 'active') return { published: true, reason: 'already-live' };
+
+  const t = new Date().toISOString();
+  const prior = existing.product_source_evidence && typeof existing.product_source_evidence === 'object'
+    ? existing.product_source_evidence
+    : {};
+  await db.update<{ id: string; status: string; published_at: string; commerce_readiness: string; product_source_evidence: Record<string, unknown> }>('products', input.productId, {
+    status: 'active',
+    published_at: t,
+    commerce_readiness: 'COMMERCE_READY',
+    product_source_evidence: {
+      ...prior,
+      status: 'published',
+      publishedAt: t,
+      publishedVia: input.channel,
+      candidateId: input.candidateId,
+      score: input.scoreOverall,
+    },
+  });
+
+  try {
+    const jobId = await createJob(db, 'PRODUCT_PUBLISH', { productId: input.productId, candidateId: input.candidateId, title: input.candidateTitle, channel: input.channel });
+    await completeJob(db, jobId, 'completed', { productId: input.productId, publishedAt: t });
+  } catch {
+    /* audit is best-effort — a failed audit write never blocks publishing */
+  }
+  return { published: true, reason: 'live' };
 }
 
 /** Resolve a category by exact name; null when it does not exist. */

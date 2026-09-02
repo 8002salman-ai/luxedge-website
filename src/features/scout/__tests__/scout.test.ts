@@ -16,7 +16,7 @@ import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
 import { extractPageFacts } from '../extract';
 import { runScoutResearch, qaCandidate, runMarketIntelligenceJob } from '../engine';
 import type { MarketDemandAdapter } from '../marketDemand';
-import { persistCandidate, persistScore, ensureSupplier, createProductDraft, queueHermesFallback } from '../persist';
+import { persistCandidate, persistScore, ensureSupplier, createProductDraft, queueHermesFallback, publishProductDraft } from '../persist';
 import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, buildQueries, discoverUrls } from '../discover';
 import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
 import { DEFAULT_AUTONOMY_CONFIG, evaluateAutonomy, pushAttentionItem, loadAttentionItems, resolveAttentionItem, attentionForCandidate } from '../autonomy';
@@ -735,6 +735,78 @@ describe('persistence + admin-only mutations', () => {
     expect(prod.currency).toBe('USD');
     expect(prod.title).toBe('KONG Classic Dog Toy');
     expect(db.rows.get('product_images')?.length).toBe(1);
+  });
+
+  it('publishes a scout draft to the live storefront (active + COMMERCE_READY + audit)', async () => {
+    db.token = adminToken();
+    const { id } = await createProductDraft(db as unknown as DbAdapter, {
+      title: 'KONG Classic Dog Toy',
+      slug: 'kong-classic-dog-toy',
+      categoryId: null,
+      price: 11.96,
+      compareAtPrice: null,
+      costPrice: 11.96,
+      landedCost: 11.96,
+      grossMargin: null,
+      images: ['https://img/1.jpg'],
+      shortDesc: 'Durable rubber toy',
+      sourceUrl: 'https://www.kongcompany.com/kong-classic/',
+      supplierName: 'KONG Company',
+      scoreOverall: 82,
+      supplierProductId: 'sp-1',
+    });
+    const res = await publishProductDraft(db as unknown as DbAdapter, {
+      productId: id,
+      candidateId: 'c1',
+      candidateTitle: 'KONG Classic Dog Toy',
+      scoreOverall: 82,
+      channel: 'owner',
+    });
+    expect(res.published).toBe(true);
+    expect(res.reason).toBe('live');
+    const prod = db.rows.get('products')?.[0] as Record<string, unknown>;
+    expect(prod.status).toBe('active'); // storefront filter: published|active
+    expect(prod.published_at).toBeTruthy();
+    expect(prod.commerce_readiness).toBe('COMMERCE_READY');
+    const ev = prod.product_source_evidence as Record<string, unknown>;
+    expect(ev.status).toBe('published');
+    expect(ev.publishedVia).toBe('owner');
+    expect(ev.supplierProductId).toBe('sp-1'); // CJ provenance preserved
+    const jobs = db.rows.get('agent_jobs') || [];
+    expect(jobs.some((j) => j.type === 'PRODUCT_PUBLISH' && j.status === 'completed')).toBe(true);
+  });
+
+  it('publish is idempotent: already-active products stay live without a second audit job', async () => {
+    db.token = adminToken();
+    const { id } = await createProductDraft(db as unknown as DbAdapter, {
+      title: 'X', slug: 'x', categoryId: null, price: 5, compareAtPrice: null,
+      costPrice: 5, landedCost: 5, grossMargin: null, images: ['https://img/1.jpg'],
+      shortDesc: '', sourceUrl: 'https://s', supplierName: 'S', scoreOverall: null,
+    });
+    await publishProductDraft(db as unknown as DbAdapter, { productId: id, candidateId: null, candidateTitle: 'X', scoreOverall: null, channel: 'owner' });
+    const res2 = await publishProductDraft(db as unknown as DbAdapter, { productId: id, candidateId: null, candidateTitle: 'X', scoreOverall: null, channel: 'auto' });
+    expect(res2.published).toBe(true);
+    expect(res2.reason).toBe('already-live');
+    const jobs = db.rows.get('agent_jobs') || [];
+    expect(jobs.filter((j) => j.type === 'PRODUCT_PUBLISH').length).toBe(1);
+  });
+
+  it('publish of a missing product returns missing without throwing or auditing', async () => {
+    db.token = adminToken();
+    const res = await publishProductDraft(db as unknown as DbAdapter, {
+      productId: 'nope', candidateId: null, candidateTitle: 'X', scoreOverall: null, channel: 'owner',
+    });
+    expect(res.published).toBe(false);
+    expect(res.reason).toBe('missing');
+    expect((db.rows.get('agent_jobs') || []).length).toBe(0);
+  });
+
+  it('publish honors the admin-JWT RLS contract (anon writes rejected)', async () => {
+    // db.token stays null (anon) — the products update must throw.
+    db.rows.set('products', [{ id: 'p1', status: 'draft' }]);
+    await expect(
+      publishProductDraft(db as unknown as DbAdapter, { productId: 'p1', candidateId: null, candidateTitle: 'X', scoreOverall: null, channel: 'owner' })
+    ).rejects.toThrow('row-level security');
   });
 
   it('approval transitions are explicit owner actions only', async () => {
