@@ -20,7 +20,7 @@ import { persistCandidate, persistScore, ensureSupplier, createProductDraft, que
 import { decodeRedirectUrl, extractLinks, isLikelyProductPage, cleanUrl, dedupeUrls, buildSearchUrl, buildQueries, discoverUrls } from '../discover';
 import { signalsFromDiscovery, scoreMarketOpportunity, finalOpportunityScore, parseMarketAnalysis, runMarketIntelligence } from '../market';
 import { DEFAULT_AUTONOMY_CONFIG, evaluateAutonomy, pushAttentionItem, loadAttentionItems, resolveAttentionItem, attentionForCandidate } from '../autonomy';
-import { evidenceFingerprint, cacheGet, cachePut, clearAiCache, candidateEvidenceKey, aiPrefilter, makeAiBudget } from '../aiCost';
+import type { AutonomyDecision } from '../types';import { evidenceFingerprint, cacheGet, cachePut, clearAiCache, candidateEvidenceKey, aiPrefilter, makeAiBudget } from '../aiCost';
 import { qaListing, buildDeterministicListing, generateListingDraft, parseListingJson } from '../listing';
 import type { FetchedSourcePage, ScoutCandidate, AutonomyConfig } from '../types';
 
@@ -1023,11 +1023,11 @@ describe('guarded autonomy (Phase 4B)', () => {
     expect(loadAttentionItems(storage)[0].status).toBe('resolved');
   });
 
-  it('owner attention surfaces high-margin risk and missing market score', () => {
+  it('owner attention surfaces high-margin risk as the single item when all else is within policy', () => {
     const candidate = makeCandidate({ margin: { supplierPrice: 5, shippingCost: 1, landedCost: 6, proposedLuxedgePrice: 14.99, grossMarginDollars: 8.99, grossMarginPct: 0.6, confidence: 'high', notes: [] } });
-    const items = attentionForCandidate(candidate, { eligibleForAutoPublish: false, reason: 'x', gates: {}, needsOwnerAttention: true }, null, null);
-    expect(items.some((i) => i.reason.includes('No market opportunity'))).toBe(true);
-    expect(items.some((i) => i.reason.includes('high margin'))).toBe(true);
+    const items = attentionForCandidate(candidate, { eligibleForAutoPublish: false, reason: 'x', gates: {}, needsOwnerAttention: false }, 70, { candidateId: 'c', title: 'x', passed: true, issues: [] });
+    expect(items).toHaveLength(1);
+    expect(items[0].reason).toContain('high margin');
   });
 });
 
@@ -1231,5 +1231,102 @@ describe('MARKET_INTELLIGENCE job (Phase 4B)', () => {
     expect(result.demand.status).toBe('not_configured');
     expect(result.demand.keywordsRequested).toBe(0);
     expect(result.signals).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Owner attention queue — one item per candidate, dedupe, cap (Scan flood fix)
+// ---------------------------------------------------------------------------
+describe('owner attention queue collapse', () => {
+  const makeCand = (over: Partial<ScoutCandidate>): ScoutCandidate => ({
+    id: 'c1', title: 'KONG Classic', source: 'KONG', sourceUrl: 'https://www.kongcompany.com/kong-classic/', supplierSlug: 'kong',
+    images: ['https://img/1.jpg'],
+    evidence: {
+      sourceUrl: 'https://www.kongcompany.com/kong-classic/', observedAt: 't',
+      title: { status: 'verified', value: 'KONG Classic' },
+      supplierPrice: { status: 'verified', value: 11.96 },
+      shippingCost: { status: 'inferred', value: 0, note: 'Free shipping' },
+      shippingDays: { status: 'verified', value: { min: 3, max: 5 } },
+      availability: { status: 'verified', value: 'available' },
+      images: { status: 'verified', value: ['https://img/1.jpg'] },
+      rating: { status: 'unknown', value: null },
+      origin: { status: 'verified', value: 'USA' },
+      category: { status: 'inferred', value: 'Dog' },
+      sizes: { status: 'verified', value: ['S', 'M', 'L'] },
+      unknownFields: [], riskNotes: [],
+    },
+    margin: { supplierPrice: 11.96, shippingCost: 0, landedCost: 11.96, proposedLuxedgePrice: 29.99, grossMarginDollars: 18.03, grossMarginPct: 0.6, confidence: 'high', notes: [] },
+    score: { overall: 80, weights: {}, breakdown: {}, explanation: 'ok' },
+    status: 'qualified', createdAt: 't',
+    ...over,
+  });
+
+  const reviewDecision = (needs: boolean, reason = 'Mode REVIEW — owner approval required.'): AutonomyDecision => ({
+    eligibleForAutoPublish: false, reason, needsOwnerAttention: needs, gates: {},
+  });
+
+  it('multi-reason candidate yields ONE item with the highest-severity reason (QA fail)', () => {
+    // Matches QA fail + owner gate + no market score + high margin (60%) —
+    // must collapse to the QA-flagged reason only.
+    const cand = makeCand({ status: 'approved' });
+    const items = attentionForCandidate(cand, reviewDecision(true), null, { candidateId: 'c1', title: 'x', passed: false, issues: ['No verified supplier price'] });
+    expect(items).toHaveLength(1);
+    expect(items[0].reason).toContain('QA flagged');
+  });
+
+  it('owner-gate reason beats no-market-score and high-margin when QA passes', () => {
+    const cand = makeCand({ status: 'approved' });
+    const items = attentionForCandidate(cand, reviewDecision(true), null, { candidateId: 'c1', title: 'x', passed: true, issues: [] });
+    expect(items).toHaveLength(1);
+    expect(items[0].reason).toContain('owner approval required');
+  });
+
+  it('no-market-score beats high-margin and hard-rejected ordering holds', () => {
+    const cand = makeCand({ status: 'qualified' });
+    const items = attentionForCandidate(cand, reviewDecision(false), null, null);
+    expect(items).toHaveLength(1);
+    expect(items[0].reason).toContain('No market opportunity score');
+
+    const rejected = makeCand({ status: 'rejected', rejectionReason: 'counterfeit risk' });
+    const rItems = attentionForCandidate(rejected, reviewDecision(false), null, null);
+    expect(rItems).toHaveLength(1);
+    expect(rItems[0].reason).toContain('Hard-rejected');
+  });
+
+  it('all-within-policy candidate yields no item', () => {
+    const items = attentionForCandidate(
+      makeCand({ status: 'approved', margin: { supplierPrice: 11.96, shippingCost: 0, landedCost: 11.96, proposedLuxedgePrice: 29.99, grossMarginDollars: 18.03, grossMarginPct: 0.4, confidence: 'high', notes: [] } }),
+      reviewDecision(false),
+      70,
+      { candidateId: 'c1', title: 'x', passed: true, issues: [] },
+    );
+    expect(items).toHaveLength(0);
+  });
+
+  it('repeat scan never grows the queue (dedupe by candidate+reason)', () => {
+    const storage = new Map<string, string>();
+    const store: Pick<Storage, 'getItem' | 'setItem'> = {
+      getItem: (k) => storage.get(k) ?? null,
+      setItem: (k, v) => { storage.set(k, v); },
+    };
+    const cand = makeCand({ status: 'approved' });
+    const item = attentionForCandidate(cand, reviewDecision(true), null, null)[0];
+    pushAttentionItem(item, store);
+    expect(loadAttentionItems(store)).toHaveLength(1);
+    pushAttentionItem(item, store);
+    pushAttentionItem(item, store);
+    expect(loadAttentionItems(store)).toHaveLength(1);
+  });
+
+  it('storage cap still applies (50 max)', () => {
+    const storage = new Map<string, string>();
+    const store: Pick<Storage, 'getItem' | 'setItem'> = {
+      getItem: (k) => storage.get(k) ?? null,
+      setItem: (k, v) => { storage.set(k, v); },
+    };
+    for (let i = 0; i < 60; i++) {
+      pushAttentionItem({ candidateId: `c${i}`, title: `P${i}`, reason: `reason ${i}`, recommendedAction: 'a', riskIfIgnored: 'r', evidence: 'e' }, store);
+    }
+    expect(loadAttentionItems(store).length).toBe(50);
   });
 });
