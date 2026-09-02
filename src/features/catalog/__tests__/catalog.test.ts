@@ -298,6 +298,16 @@ describe('seo + feed', () => {
     expect((rated.aggregateRating as Record<string, unknown>).reviewCount).toBe(4);
   });
 
+  it('client Offer carries merchant return policy + US shipping details (GSC parity)', () => {
+    const ld = buildProductJsonLd(p);
+    const offer = (ld.find((x) => x['@type'] === 'Product') as Record<string, unknown>)['offers'] as Record<string, unknown>;
+    const policy = offer.hasMerchantReturnPolicy as Record<string, unknown>;
+    expect(policy.merchantReturnDays).toBe(30);
+    expect(policy.applicableCountry).toBe('US');
+    const sd = offer.shippingDetails as Record<string, unknown>;
+    expect((sd.shippingDestination as Record<string, unknown>).addressCountry).toBe('US');
+  });
+
   it('productPath always resolves to the canonical slug form (GSC merchant-listing contract)', () => {
     // Slug present → slug is the only kind of link the storefront emits.
     expect(productPath({ id: 'uuid-1', slug: 'horse-grooming-kit-12-piece' })).toBe('/product/horse-grooming-kit-12-piece');
