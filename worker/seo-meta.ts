@@ -723,7 +723,8 @@ export function resolveUuidProductRedirect(
 ): string | null {
   if (!products || !UUID_RE.test(param)) return null;
   const id = param.toLowerCase();
-  const p = products.find((x) => x.id.toLowerCase() === id);
+  // x.id must be null-safe: rows from a stale cache may predate the id column.
+  const p = products.find((x) => x.id && x.id.toLowerCase() === id);
   return p && p.slug ? `/product/${p.slug}` : null;
 }
 
