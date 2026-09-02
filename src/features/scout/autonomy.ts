@@ -223,66 +223,45 @@ export function resolveAttentionItem(id: string, storage?: Pick<Storage, 'getIte
   saveAttentionItems(items.map((i) => (i.id === id ? { ...i, status: 'resolved' } : i)), storage);
 }
 
-/** Build attention items for a candidate based on its decision + evidence. */
+/**
+ * Build attention items for a candidate. Each candidate surfaces AT MOST ONE
+ * item — the highest-severity actionable reason (or none when everything is
+ * within policy) — so the owner queue stays an exception router instead of a
+ * rule flood. Severity order, most decision-relevant first:
+ *   1. QA failed            — listing integrity (unsupported claims/assets)
+ *   2. Owner gate           — autonomy gate failure: owner must approve/reject
+ *   3. No market score      — opportunity unjudged: decide after analysis
+ *   4. Hard-rejected        — policy/evidence issue (informational)
+ *   5. Unusually high margin— verify pricing before listing
+ */
 export function attentionForCandidate(
   candidate: ScoutCandidate,
   decision: AutonomyDecision,
   marketScore: number | null,
   qa: QAOutcome | null
 ): Omit<OwnerAttentionItem, 'id' | 'createdAt' | 'status'>[] {
-  const out: Omit<OwnerAttentionItem, 'id' | 'createdAt' | 'status'>[] = [];
   const price = candidate.evidence.supplierPrice?.value as number | null;
   const marginPct = candidate.margin?.grossMarginPct !== null ? Math.round((candidate.margin?.grossMarginPct ?? 0) * 100) : null;
+  const base = {
+    candidateId: candidate.id,
+    title: candidate.title,
+    evidence: `Source: ${candidate.sourceUrl}`,
+  };
 
-  if (candidate.status === 'rejected' && candidate.rejectionReason) {
-    out.push({
-      candidateId: candidate.id,
-      title: candidate.title,
-      reason: `Hard-rejected: ${candidate.rejectionReason}`,
-      recommendedAction: 'Review rejection reason; correct source data and re-run, or discard.',
-      riskIfIgnored: 'Riskier product could be listed against policy.',
-      evidence: `Source: ${candidate.sourceUrl}`,
-    });
-  }
-  if (marketScore === null && candidate.status !== 'rejected') {
-    out.push({
-      candidateId: candidate.id,
-      title: candidate.title,
-      reason: 'No market opportunity score — market intelligence not run.',
-      recommendedAction: 'Run Market Intelligence for this candidate before deciding.',
-      riskIfIgnored: 'Opportunity may be weak or strong without evidence to decide.',
-      evidence: `Source: ${candidate.sourceUrl}`,
-    });
-  }
-  if (price !== null && marginPct !== null && marginPct >= 55) {
-    out.push({
-      candidateId: candidate.id,
-      title: candidate.title,
-      reason: `Unusually high margin (${marginPct}%) — elevated risk possible.`,
-      recommendedAction: 'Verify pricing/supplier before listing; confirm the price is real, not an error.',
-      riskIfIgnored: 'A pricing error could cause losses or chargebacks.',
-      evidence: `Supplier price $${price.toFixed(2)}, margin ${marginPct}%`,
-    });
-  }
   if (qa && !qa.passed) {
-    out.push({
-      candidateId: candidate.id,
-      title: candidate.title,
-      reason: `QA flagged: ${qa.issues.join('; ')}`,
-      recommendedAction: 'Correct the evidence gaps or reject the candidate.',
-      riskIfIgnored: 'Listing could carry unsupported claims or unusable assets.',
-      evidence: `QA ${qa.passed ? 'PASS' : 'FAIL'}`,
-    });
+    return [{ ...base, reason: `QA flagged: ${qa.issues.join('; ')}`, recommendedAction: 'Correct the evidence gaps or reject the candidate.', riskIfIgnored: 'Listing could carry unsupported claims or unusable assets.', evidence: `QA FAIL` }];
   }
   if (decision.needsOwnerAttention && candidate.status !== 'rejected') {
-    out.push({
-      candidateId: candidate.id,
-      title: candidate.title,
-      reason: decision.reason,
-      recommendedAction: decision.eligibleForAutoPublish ? 'Approve to prepare the listing draft.' : 'Review gates and approve/reject manually.',
-      riskIfIgnored: 'Candidate stalls in the queue; no autonomous action taken.',
-      evidence: `Product ${candidate.score?.overall ?? 'n/a'}/100 · Market ${marketScore ?? 'n/a'}/100`,
-    });
+    return [{ ...base, reason: decision.reason, recommendedAction: decision.eligibleForAutoPublish ? 'Approve to prepare the listing draft.' : 'Review gates and approve/reject manually.', riskIfIgnored: 'Candidate stalls in the queue; no autonomous action taken.', evidence: `Product ${candidate.score?.overall ?? 'n/a'}/100 · Market ${marketScore ?? 'n/a'}/100` }];
   }
-  return out;
+  if (marketScore === null && candidate.status !== 'rejected') {
+    return [{ ...base, reason: 'No market opportunity score — market intelligence not run.', recommendedAction: 'Run Market Intelligence for this candidate before deciding.', riskIfIgnored: 'Opportunity may be weak or strong without evidence to decide.' }];
+  }
+  if (candidate.status === 'rejected' && candidate.rejectionReason) {
+    return [{ ...base, reason: `Hard-rejected: ${candidate.rejectionReason}`, recommendedAction: 'Review rejection reason; correct source data and re-run, or discard.', riskIfIgnored: 'Riskier product could be listed against policy.' }];
+  }
+  if (price !== null && marginPct !== null && marginPct >= 55) {
+    return [{ ...base, reason: `Unusually high margin (${marginPct}%) — elevated risk possible.`, recommendedAction: 'Verify pricing/supplier before listing; confirm the price is real, not an error.', riskIfIgnored: 'A pricing error could cause losses or chargebacks.', evidence: `Supplier price $${price.toFixed(2)}, margin ${marginPct}%` }];
+  }
+  return [];
 }
