@@ -36,7 +36,7 @@ import AdSenseEarnings from './AdSenseEarnings';
 import {
   Warning, ArrowLeft, ArrowRight, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
   Clipboard, Code, Cpu, CurrencyDollar, Download, PencilSimple, Eye, FileText, TreeStructure, Globe,
-  Image as ImageIcon, Stack, SquaresFour, LinkSimple, SpinnerGap, Lock, SignOut, Megaphone, List,
+  Image as ImageIcon, Camera, Stack, SquaresFour, LinkSimple, SpinnerGap, Lock, SignOut, Megaphone, List,
   Monitor, Package, Plus, ArrowClockwise, ArrowCounterClockwise, FloppyDisk, MagnifyingGlass, PaperPlaneRight, GearSix,
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
@@ -1672,7 +1672,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
 // ============================================================================
 // ENTERPRISE MARKETING GENERATOR
 // ============================================================================
-type MktTab = 'google'|'meta'|'social'|'email'|'video'|'vault';
+type MktTab = 'google'|'meta'|'social'|'email'|'video'|'media'|'vault';
 type MktTone = 'luxury'|'urgent'|'friendly'|'professional';
 const MKT_TONES: MktTone[] = ['luxury','urgent','friendly','professional'];
 
@@ -1752,6 +1752,46 @@ function AMarketingGen() {
   const [copied, setCopied] = useState('');
   const [newInterest, setNewInterest] = useState('');
   const [newCallout, setNewCallout] = useState('');
+
+  // ── Media Studio (real AI image/video generation) ──
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [mediaProvider, setMediaProvider] = useState<'openai' | 'gemini'>('openai');
+  const [mediaPrompt, setMediaPrompt] = useState('');
+  const [mediaGenerating, setMediaGenerating] = useState(false);
+  const [mediaResult, setMediaResult] = useState<{ ok: boolean; msg: string; url?: string } | null>(null);
+
+  const mediaPromptFromProduct = () => {
+    const p = selectedProduct;
+    if (!p) return '';
+    return `Professional product photo of ${p.name}${p.category ? ` (${p.category})` : ''}, luxury e-commerce style, clean studio lighting, soft shadows, high detail, no text overlay`;
+  };
+
+  const generateMedia = async () => {
+    const prompt = mediaPrompt.trim();
+    if (!prompt) { notify('Describe the image/video you want first.'); return; }
+    setMediaGenerating(true);
+    setMediaResult(null);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/media/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ type: mediaType, provider: mediaProvider, prompt }),
+      });
+      const d = await res.json().catch(() => ({})) as { ok?: boolean; error?: string; url?: string; contentType?: string };
+      if (!res.ok || d.ok === false) {
+        setMediaResult({ ok: false, msg: d.error || `Generation failed (HTTP ${res.status})` });
+        notify(`Generation failed: ${d.error || 'unknown error'}`);
+      } else {
+        setMediaResult({ ok: true, msg: `${mediaType === 'image' ? 'Image' : 'Video'} ready`, url: d.url });
+        notify(`${mediaType === 'image' ? 'Image' : 'Video'} generated and stored`);
+      }
+    } catch (e: any) {
+      setMediaResult({ ok: false, msg: `Generation failed: ${e.message}` });
+    } finally {
+      setMediaGenerating(false);
+    }
+  };
 
   // ── Email sending (test send + CRM leads campaign) ──
   const [sendSubjectChoice, setSendSubjectChoice] = useState<'A' | 'B'>('A');
@@ -1928,6 +1968,7 @@ function parseJ<T>(raw: string, fb: T): T {
     { key: 'social', label: 'Social Posts', icon: ShareNetwork },
     { key: 'email', label: 'Email', icon: PaperPlaneRight },
     { key: 'video', label: 'Video', icon: DeviceMobile },
+    { key: 'media', label: 'Media Studio', icon: Camera },
     { key: 'vault', label: 'Vault', icon: Star },
   ];
 
@@ -2538,6 +2579,87 @@ function parseJ<T>(raw: string, fb: T): T {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── MEDIA STUDIO TAB — real AI image/video generation ── */}
+      {tab === 'media' && (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><Camera size={18} className="text-pink-600" /> Media Studio — generate real images &amp; videos</h2>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 block mb-1">Type</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setMediaType('image')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${mediaType === 'image' ? 'bg-pink-600 text-white border-pink-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    <ImageIcon size={12} className="inline mr-1" />Image
+                  </button>
+                  <button type="button" onClick={() => setMediaType('video')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${mediaType === 'video' ? 'bg-pink-600 text-white border-pink-600' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    <DeviceMobile size={12} className="inline mr-1" />Video (Veo)
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600 block mb-1">AI Provider</label>
+                <select value={mediaProvider} onChange={e => setMediaProvider(e.target.value as 'openai' | 'gemini')}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-300">
+                  <option value="openai">OpenAI (gpt-image-1) — images</option>
+                  <option value="gemini">Google Gemini (Imagen / Veo) — images &amp; video</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button type="button" onClick={() => setMediaPrompt(mediaPromptFromProduct())}
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+                  ✨ Build prompt from selected product
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Prompt {mediaType === 'video' && <span className="text-gray-400 font-normal">— keep it short (Veo takes ~1-2 min)</span>}</label>
+              <textarea value={mediaPrompt} onChange={e => setMediaPrompt(e.target.value)} rows={3}
+                placeholder="e.g. Professional product photo of a Himalayan salt block on a wooden table, luxury studio lighting…"
+                className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-pink-300 resize-none" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => void generateMedia()} disabled={mediaGenerating}
+                className="px-5 py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
+                {mediaGenerating ? <SpinnerGap size={14} className="animate-spin" /> : <Sparkle size={14} />}
+                {mediaGenerating ? (mediaType === 'video' ? 'Generating video (1-2 min)…' : 'Generating image…') : `Generate ${mediaType}`}
+              </button>
+              {mediaResult && (
+                <span className={`text-xs font-medium ${mediaResult.ok ? 'text-green-600' : 'text-red-600'}`}>{mediaResult.msg}</span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-400">Needs an API key on the server: <strong>OpenAI</strong> (gpt-image-1) ya <strong>Google Gemini</strong> (Imagen for images, Veo for video). DeepSeek/Codex sirf text banate hain — media ke liye nahi. Gemini Plus/Pro membership consumer app ka hai — API ke liye alag key chahiye (AI Hub → Attach Key).</p>
+          </div>
+
+          {mediaResult?.ok && mediaResult.url && (
+            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Result — stored on luxedge.us ✓</h3>
+              {mediaType === 'image' ? (
+                <img src={mediaResult.url} alt="Generated media" className="max-h-96 rounded-xl border border-gray-200" />
+              ) : (
+                <video src={mediaResult.url} controls className="max-h-96 rounded-xl border border-gray-200" />
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => { navigator.clipboard.writeText(mediaResult.url || ''); notify('URL copied'); }}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+                  <LinkSimple size={12} /> Copy URL
+                </button>
+                <button type="button" onClick={() => { saveVault('media', mediaResult.url || ''); notify('Saved to Vault'); }}
+                  className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1">
+                  <FloppyDisk size={12} /> Save to Vault
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

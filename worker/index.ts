@@ -33,6 +33,7 @@ import omnisendStatusHandler from '../api/omnisend/status';
 import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
+import mediaGenerateHandler from '../api/media/generate';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import crmLeadHandler from '../api/crm/lead';
@@ -80,6 +81,7 @@ const ROUTES: Route[] = [
   { path: '/api/email/send', handler: emailSendHandler },
   { path: '/api/email/status', handler: emailStatusHandler },
   { path: '/api/email/routes', handler: emailRoutesHandler },
+  { path: '/api/media/generate', handler: mediaGenerateHandler },
   { path: '/api/crm/welcome', handler: crmWelcomeHandler },
   { path: '/api/crm/subscribe', handler: crmSubscribeHandler },
   { path: '/api/crm/lead', handler: crmLeadHandler },
