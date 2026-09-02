@@ -25,7 +25,7 @@ import { getAccessToken } from '../services/supabase';
 import type { DbAdapter } from '../services/db';
 import { runScoutResearch, runMarketIntelligenceJob, qaCandidate, cjMarketContextFor } from '../features/scout/engine';
 import type { QAOutcome } from '../features/scout/engine';
-import { createJob, completeJob, createProductDraft, findCategoryId, queueHermesFallback } from '../features/scout/persist';
+import { createJob, completeJob, createProductDraft, findCategoryId, queueHermesFallback, publishProductDraft } from '../features/scout/persist';
 import { discoverUrls } from '../features/scout/discover';
 import { RETAIL_EVIDENCE_DOMAINS } from '../features/scout/retailDiscovery';
 import { GoogleAdsServerDemandAdapter } from '../features/scout/marketDemand';
@@ -138,7 +138,8 @@ export default function ProductScout() {
   const [attention, setAttention] = useState<OwnerAttentionItem[]>(() => loadAttentionItems());
   const [scanning, setScanning] = useState(false);
   const [listingFor, setListingFor] = useState<ViewCandidate | null>(null);
-  const [listingResult, setListingResult] = useState<{ listing: ListingDraft; qa: ListingQAResult; decision: { eligibleForAutoPublish: boolean; reason: string } | null; draftId: string | null; aiUsed: boolean; deterministic: boolean } | null>(null);
+  const [listingResult, setListingResult] = useState<{ listing: ListingDraft; qa: ListingQAResult; decision: { eligibleForAutoPublish: boolean; reason: string } | null; draftId: string | null; aiUsed: boolean; deterministic: boolean; autoPublished: boolean } | null>(null);
+  const [confirmPublishAll, setConfirmPublishAll] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
 
   // Run state
@@ -413,54 +414,119 @@ export default function ProductScout() {
     }
   };
 
-  /** Publish an existing product draft to the live storefront (status → active). */
-  const makeLive = async (v: ViewCandidate) => {
-    if (!db) return;
-    const prod = v.product;
-    if (!prod) { notify('No product draft found for this candidate — create a draft first'); return; }
-    if (prod.status === 'active') { notify('This product is already live'); return; }
-    setActing(v.candidate.id);
-    try {
-      await db.update<{ id: string; status: string }>('products', prod.id, { status: 'active' });
-      notify(`${prod.name} is now LIVE on the storefront`);
-      await load();
-    } catch (e) {
-      notify(`Publish failed: ${(e as Error).message}`);
-    } finally {
-      setActing(null);
-    }
+  /** Deterministic slug for candidate/product rows (must match row mapper). */
+  const slugOf = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item';
+
+  /** Ensure a products draft exists for this candidate; returns its id. */
+  const draftFor = async (v: ViewCandidate, shortDesc = '', grossMargin: number | null = null): Promise<string> => {
+    if (!db) throw new Error('Database not ready');
+    if (v.product?.id) return v.product.id;
+    const ev = v.candidate.evidence;
+    const price = (ev?.supplierPrice?.value as number | null) ?? null;
+    const category = String(ev?.category?.value || '');
+    const categoryId = category ? await findCategoryId(db, category) : null;
+    const result = await createProductDraft(db, {
+      title: v.candidate.title,
+      slug: slugOf(v.candidate.title),
+      categoryId,
+      price,
+      compareAtPrice: null,
+      costPrice: price,
+      landedCost: price,
+      grossMargin,
+      images: v.candidate.images.length ? v.candidate.images : (v.supplierProduct?.images || []),
+      shortDesc,
+      sourceUrl: v.candidate.source_url,
+      supplierName: v.candidate.source,
+      scoreOverall: v.score?.overall ?? null,
+      supplierProductId: v.supplierProduct?.id ?? null,
+    });
+    return result.id;
   };
 
   const createDraft = async (v: ViewCandidate) => {
     if (!db) return;
     setDrafting(v.candidate.id);
     try {
-      const ev = v.candidate.evidence;
-      const price = (ev?.supplierPrice?.value as number | null) ?? null;
-      const category = String(ev?.category?.value || '');
-      const categoryId = category ? await findCategoryId(db, category) : null;
-      const scoreOverall = v.score?.overall ?? null;
-      const result = await createProductDraft(db, {
-        title: v.candidate.title,
-        slug: v.candidate.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item',
-        categoryId,
-        price,
-        compareAtPrice: null,
-        costPrice: price,
-        landedCost: price,
-        grossMargin: null,
-        images: v.candidate.images.length ? v.candidate.images : (v.supplierProduct?.images || []),
-        shortDesc: '',
-        sourceUrl: v.candidate.source_url,
-        supplierName: v.candidate.source,
-        scoreOverall,
-      });
-      notify(result.existing ? 'Draft already exists' : `Product draft created (${v.candidate.title})`);
+      await draftFor(v);
+      notify(`Product draft ready — ${v.candidate.title}`);
       await load();
     } catch (e) {
       notify(`Draft failed: ${(e as Error).message}`);
     } finally {
       setDrafting(null);
+    }
+  };
+
+  /**
+   * Publish a candidate's product LIVE on the storefront (draft auto-created
+   * when missing). Gates: candidate needs a supplier price + at least one
+   * image, and the emergency pause must be OFF (owner-explicit action,
+   * allowed in any autonomy mode).
+   */
+  const publishCandidate = async (v: ViewCandidate, opts: { silent?: boolean } = {}): Promise<'live' | 'already' | 'skipped' | 'missing'> => {
+    if (!db) return 'missing';
+    if (autonomyCfg.emergencyPause) {
+      if (!opts.silent) notify('Emergency pause active — publishing blocked');
+      return 'skipped';
+    }
+    const ev = v.candidate.evidence;
+    const price = (ev?.supplierPrice?.value as number | null) ?? null;
+    const hasImage = v.candidate.images.length > 0 || (v.supplierProduct?.images || []).length > 0;
+    if (price === null || price <= 0 || !hasImage) {
+      if (!opts.silent) notify('Cannot publish — candidate needs a supplier price and at least one image');
+      return 'skipped';
+    }
+    if (v.product?.status === 'active') {
+      if (!opts.silent) notify('This product is already live');
+      return 'already';
+    }
+    setActing(v.candidate.id);
+    try {
+      const draftId = await draftFor(v);
+      const res = await publishProductDraft(db, {
+        productId: draftId,
+        candidateId: v.candidate.id,
+        candidateTitle: v.candidate.title,
+        scoreOverall: v.score?.overall ?? null,
+        channel: 'owner',
+      });
+      if (res.published) {
+        if (!opts.silent) notify(`${v.candidate.title} is now LIVE on the storefront`);
+      } else if (!opts.silent) {
+        notify(`Publish failed: ${res.reason}`);
+      }
+      if (!opts.silent) await load();
+      return res.published ? 'live' : 'missing';
+    } catch (e) {
+      if (!opts.silent) notify(`Publish failed: ${(e as Error).message}`);
+      return 'missing';
+    } finally {
+      setActing(null);
+    }
+  };
+
+  /** Bulk-publish every approved candidate (explicit owner action, any mode). */
+  const publishApproved = async () => {
+    if (!db) return;
+    setConfirmPublishAll(false);
+    setActing('bulk');
+    try {
+      const approved = candidates.filter((v) => v.candidate.status === 'approved');
+      let live = 0, already = 0, skipped = 0;
+      const skippedNames: string[] = [];
+      for (const v of approved) {
+        const res = await publishCandidate(v, { silent: true });
+        if (res === 'live') live++;
+        else if (res === 'already') already++;
+        else { skipped++; skippedNames.push(v.candidate.title); }
+      }
+      notify(`Publish complete — ${live} LIVE${already ? `, ${already} already live` : ''}${skipped ? `, ${skipped} skipped (${skippedNames.slice(0, 3).join('; ')}${skipped > 3 ? '…' : ''})` : ''}`);
+    } catch (e) {
+      notify(`Bulk publish failed: ${(e as Error).message}`);
+    } finally {
+      setActing(null);
+      await load();
     }
   };
 
@@ -667,29 +733,23 @@ export default function ProductScout() {
         config: autonomyCfg,
       });
 
-      // DRAFT ONLY — never published. Requires explicit owner UI action (this button).
+      // Draft is created on QA pass; AUTO mode publishes it LIVE when every
+      // policy gate passed (the missing consumer half of the autonomy engine).
+      // MANUAL/REVIEW keep the draft for an explicit owner publish action.
       let draftId: string | null = null;
+      let autoPublished = false;
       if (lqa.passed) {
-        const ev = v.candidate.evidence;
-        const price = (ev?.supplierPrice?.value as number | null) ?? null;
-        const category = String(ev?.category?.value || '');
-        const categoryId = category ? await findCategoryId(db, category) : null;
-        const result = await createProductDraft(db, {
-          title: listing.title,
-          slug: c.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'item',
-          categoryId,
-          price,
-          compareAtPrice: null,
-          costPrice: price,
-          landedCost: price,
-          grossMargin: c.margin.grossMarginPct,
-          images: v.candidate.images.length ? v.candidate.images : (v.supplierProduct?.images || []),
-          shortDesc: listing.shortDescription,
-          sourceUrl: v.candidate.source_url,
-          supplierName: v.candidate.source,
-          scoreOverall: v.score?.overall ?? null,
-        });
-        draftId = result.id;
+        draftId = await draftFor(v, listing.shortDescription, c.margin.grossMarginPct);
+        if (draftId && decision.eligibleForAutoPublish) {
+          const res = await publishProductDraft(db, {
+            productId: draftId,
+            candidateId: c.id,
+            candidateTitle: c.title,
+            scoreOverall: v.score?.overall ?? null,
+            channel: 'auto',
+          });
+          autoPublished = res.published;
+        }
       }
 
       setListingResult({
@@ -699,6 +759,7 @@ export default function ProductScout() {
         draftId,
         aiUsed,
         deterministic,
+        autoPublished,
       });
       setListingFor(v);
     } catch (e) {
@@ -820,9 +881,19 @@ export default function ProductScout() {
         </div>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold">Product Scout</h1>
-          <p className="text-sm text-gray-500">Autonomous research → verify → score → shortlist (no auto-publishing)</p>
+          <p className="text-sm text-gray-500">Autonomous research → verify → score → shortlist → publish live (AUTO under policy gates; one-click any mode)</p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
+          {stats.approved > 0 && (
+            <button
+              onClick={() => setConfirmPublishAll(true)}
+              disabled={acting === 'bulk' || autonomyCfg.emergencyPause}
+              title={autonomyCfg.emergencyPause ? 'Emergency pause blocks publishing' : `Publish all ${stats.approved} approved candidates LIVE`}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap disabled:opacity-50"
+            >
+              {acting === 'bulk' ? <SpinnerGap size={16} className="animate-spin" /> : <Rocket size={16} />} Publish Approved
+            </button>
+          )}
           <button
             onClick={() => setMiOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap"
@@ -1133,10 +1204,10 @@ export default function ProductScout() {
                             title="Create product draft"
                           ><FilePlus size={15} /></button>
                           <button
-                            onClick={() => void makeLive(v)}
-                            disabled={acting === c.id || !v.product || v.product.status === 'active'}
+                            onClick={() => void publishCandidate(v)}
+                            disabled={acting === c.id || acting === 'bulk'}
                             className={`p-1.5 rounded-lg disabled:opacity-40 ${v.product && v.product.status === 'active' ? 'bg-emerald-50 text-emerald-500 cursor-default' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600'}`}
-                            title={v.product && v.product.status === 'active' ? 'Product is already live' : v.product ? 'Publish draft to storefront' : 'Create a product draft first, then publish'}
+                            title={v.product && v.product.status === 'active' ? 'Product is already live' : 'Publish to storefront (draft auto-created — one click)'}
                           ><Rocket size={15} /></button>
                           <button onClick={() => setEvidenceFor(v)} className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500" title="View evidence"><Eye size={15} /></button>
                         </div>
@@ -1325,7 +1396,7 @@ export default function ProductScout() {
             </button>
             <button onClick={() => setRunOpen(false)} disabled={running} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">Cancel</button>
           </div>
-          <p className="text-[11px] text-gray-400">No AI credits consumed — extraction and scoring are rule-based. Candidates are never auto-published.</p>
+          <p className="text-[11px] text-gray-400">No AI credits consumed — extraction and scoring are rule-based. Candidates go live only via AUTO policy gates or your explicit Publish action.</p>
         </div>
       </Modal>
 
@@ -1425,14 +1496,15 @@ export default function ProductScout() {
         </div>
       </Modal>
 
-      {/* One-product listing result modal — generated listing + factual QA + AUTO decision + DRAFT ONLY */}
-      <Modal open={!!listingFor} onClose={() => setListingFor(null)} title="Listing Preparation — DRAFT ONLY">
+      {/* One-product listing result modal — generated listing + factual QA + AUTO decision + publish status */}
+      <Modal open={!!listingFor} onClose={() => setListingFor(null)} title="Listing Preparation">
         {listingFor && listingResult && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${listingResult.aiUsed ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>{listingResult.aiUsed ? 'DeepSeek-generated' : 'Deterministic (AI not configured)'}</span>
               <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${listingResult.qa.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Factual QA {listingResult.qa.passed ? 'PASS' : 'FAIL'}</span>
-              {listingResult.draftId && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700">Draft created (never published)</span>}
+              {listingResult.autoPublished && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-100 text-green-700">AUTO-PUBLISHED LIVE</span>}
+              {listingResult.draftId && !listingResult.autoPublished && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700">Draft created — ready to publish</span>}
             </div>
 
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
@@ -1460,15 +1532,41 @@ export default function ProductScout() {
               )}
             </div>
 
-            <div className={`rounded-xl p-3 text-xs ${listingResult.decision?.eligibleForAutoPublish ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+            <div className={`rounded-xl p-3 text-xs ${listingResult.autoPublished ? 'bg-green-50 border border-green-200 text-green-800' : listingResult.decision?.eligibleForAutoPublish ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
               <p className="font-bold">AUTO POLICY DECISION: {listingResult.decision?.eligibleForAutoPublish ? 'eligible_for_auto_publish = YES' : 'eligible_for_auto_publish = NO'}</p>
               <p className="mt-1">{listingResult.decision?.reason}</p>
-              <p className="mt-2 font-semibold text-gray-700">ACTUAL PHASE 4B ACTION: KEEP DRAFT — never auto-published.</p>
+              {listingResult.autoPublished ? (
+                <p className="mt-2 font-semibold text-green-700">✓ PHASE 4B ACTION: PUBLISHED LIVE on the storefront (AUTO policy gates passed).</p>
+              ) : listingResult.draftId ? (
+                <p className="mt-2 font-semibold text-gray-700">Draft created — click the 🚀 on the candidate row (or Publish Approved) to go live.</p>
+              ) : (
+                <p className="mt-2 font-semibold text-gray-700">No draft created (listing QA did not pass).</p>
+              )}
             </div>
 
             <button onClick={() => setListingFor(null)} className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-xl text-sm font-semibold">Close</button>
           </div>
         )}
+      </Modal>
+
+      {/* Bulk publish confirm — explicit owner action, allowed in any mode */}
+      <Modal open={confirmPublishAll} onClose={() => setConfirmPublishAll(false)} title="Publish Approved Candidates">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Publish <strong>{stats.approved}</strong> approved candidate{stats.approved === 1 ? '' : 's'}{' '}
+            LIVE on the storefront? Each product is created as needed (title, supplier price, images,
+            CJ supplier provenance) and stamped ready-to-sell. Candidates without a supplier price or
+            image are skipped and reported.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => void publishApproved()}
+              disabled={acting === 'bulk'}
+              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+            >{acting === 'bulk' ? 'Publishing…' : `Publish ${stats.approved} LIVE`}</button>
+            <button onClick={() => setConfirmPublishAll(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600">Cancel</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
