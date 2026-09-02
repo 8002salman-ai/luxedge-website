@@ -112,9 +112,11 @@ export function evaluateAutonomy(input: AutonomyInput): AutonomyDecision {
   gates.marginHigh = !!marginHigh;
   gates.minMargin = !!marginHigh && (candidate.margin?.grossMarginPct ?? 0) >= config.minMarginPct;
 
-  // USA delivery requirement.
+  // USA delivery requirement. `!= null` so evidence that simply lacks
+  // shippingDays fails the gate instead of crashing on `.status` (undefined
+  // is not null — the old `!== null` guard fell through to the property read).
   const deliveryOk = !config.requireUsaDelivery ||
-    (candidate.evidence.shippingDays !== null &&
+    (candidate.evidence.shippingDays != null &&
      candidate.evidence.shippingDays.status !== 'unknown' &&
      candidate.evidence.availability?.value !== 'unavailable');
   gates.usaDelivery = deliveryOk;

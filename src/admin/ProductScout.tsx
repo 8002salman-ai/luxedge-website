@@ -13,7 +13,7 @@
 // service-role key and never calls provider endpoints.
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Warning, Prohibit, Brain, CheckCircle, Compass, Eye, FilePlus, SpinnerGap, Package, Play, Rocket,
   ArrowClockwise, MagnifyingGlass, ShieldCheck, Siren, Target, Lightning,
@@ -154,6 +154,9 @@ export default function ProductScout() {
   const [runUrls, setRunUrls] = useState(SCOUT_SEED_URLS.join('\n'));
   const [running, setRunning] = useState(false);
   const [runLog, setRunLog] = useState<string[]>([]);
+  const [runStage, setRunStage] = useState<'idle' | 'research' | 'score' | 'qa' | 'done'>('idle');
+  const [runCounts, setRunCounts] = useState({ ok: 0, skip: 0, fail: 0, total: 0 });
+  const logRef = useRef<HTMLDivElement>(null);
 
   // Discovery state (autonomous mode)
   const [discoverQuery, setDiscoverQuery] = useState('pet accessories');
@@ -239,11 +242,16 @@ export default function ProductScout() {
   useEffect(() => { void load(); }, [load]);
 
   const stats = useMemo(() => {
-    const s = { candidates: candidates.length, qualified: 0, rejected: 0, approved: 0 };
+    const s = { candidates: candidates.length, qualified: 0, rejected: 0, approved: 0, published: 0 };
     for (const v of candidates) {
       if (v.candidate.status === 'qualified') s.qualified++;
       else if (v.candidate.status === 'rejected') s.rejected++;
-      else if (v.candidate.status === 'approved') s.approved++;
+      else if (v.candidate.status === 'approved') {
+        // Candidates whose product is already LIVE on the storefront are counted
+        // as 'published' so the Approved count clears after publishing.
+        if (v.product?.status === 'active') s.published++;
+        else s.approved++;
+      }
     }
     return s;
   }, [candidates]);
@@ -251,7 +259,10 @@ export default function ProductScout() {
   const filtered = useMemo(() => {
     return candidates.filter((v) => {
       const c = v.candidate;
-      if (fStatus !== 'all' && c.status !== fStatus) return false;
+      // 'published' is a derived state: approved candidates whose product is live
+      if (fStatus === 'published') {
+        if (c.status !== 'approved' || v.product?.status !== 'active') return false;
+      } else if (fStatus !== 'all' && c.status !== fStatus) return false;
       if (fSource && !(c.source || '').toLowerCase().includes(fSource.toLowerCase())) return false;
       const evPrice = (c.evidence?.supplierPrice?.value as number | null) ?? null;
       if (fMaxPrice && evPrice !== null && evPrice > parseFloat(fMaxPrice)) return false;
@@ -380,8 +391,23 @@ export default function ProductScout() {
     if (!db) { notify('Database not ready'); return; }
     setRunning(true);
     setRunLog([]);
+    setRunStage('research');
+    setRunCounts({ ok: 0, skip: 0, fail: 0, total: urls.length });
     const log: string[] = [];
-    const onProgress = (m: string) => { log.push(m); setRunLog([...log]); };
+    const counts = { ok: 0, skip: 0, fail: 0, total: urls.length };
+    const onProgress = (m: string) => {
+      log.push(m);
+      setRunLog([...log]);
+      if (m.startsWith('[ok]')) counts.ok++;
+      else if (m.startsWith('[skip]')) counts.skip++;
+      else if (m.startsWith('[fail]')) counts.fail++;
+      else if (m.startsWith('[score]')) setRunStage('score');
+      else if (m.startsWith('[qa]')) setRunStage('qa');
+      else if (m.startsWith('Done')) setRunStage('done');
+      setRunCounts({ ...counts });
+      // Auto-scroll log to bottom
+      setTimeout(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, 50);
+    };
     try {
       const result = await runScoutResearch({
         urls,
@@ -393,12 +419,15 @@ export default function ProductScout() {
       if (result.scoreJobId) log.push(`✔ SCORE ${result.scoreJobId}: ${result.shortlisted} shortlisted, ${result.rejected} rejected.`);
       if (result.qaJobId) log.push(`✔ QA ${result.qaJobId} complete.`);
       setRunLog([...log]);
+      setRunStage('done');
       notify(`Scout run complete — ${result.shortlisted} shortlisted`);
-      setRunOpen(false);
+      // Clear URLs so the next run starts fresh
+      setRunUrls('');
       await load();
     } catch (e) {
       log.push(`✗ ${(e as Error).message}`);
       setRunLog([...log]);
+      setRunStage('idle');
       notify(`Scout run failed: ${(e as Error).message}`);
     } finally {
       setRunning(false);
@@ -710,7 +739,7 @@ export default function ProductScout() {
 
   // ------------------------------------------------------------------- Owner attention queue
   const scanAttention = () => {
-    if (!db) return;
+    if (!db) { notify('Database not ready'); return; }
     setScanning(true);
     try {
       let added = 0;
@@ -730,6 +759,10 @@ export default function ProductScout() {
       }
       setAttention(loadAttentionItems());
       notify(added ? `${added} attention item(s) queued` : 'No attention items — candidates within policy');
+    } catch (e) {
+      // A scan must never die silently — surface the failure so the owner
+      // knows the queue was not re-evaluated.
+      notify(`Scan failed: ${(e as Error).message}`);
     } finally {
       setScanning(false);
     }
@@ -972,11 +1005,12 @@ export default function ProductScout() {
       )}
 
       {/* Real stat cards — every number is a row count from the DB. */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Candidates', value: stats.candidates, color: 'text-blue-600', icon: <Target size={18} className="text-blue-500" /> },
           { label: 'Shortlisted', value: stats.qualified, color: 'text-green-600', icon: <CheckCircle size={18} className="text-green-500" /> },
-          { label: 'Approved', value: stats.approved, color: 'text-emerald-600', icon: <ShieldCheck size={18} className="text-emerald-500" /> },
+          { label: 'Approved', value: stats.approved, color: 'text-amber-600', icon: <ShieldCheck size={18} className="text-amber-500" /> },
+          { label: 'Published', value: stats.published, color: 'text-emerald-600', icon: <Rocket size={18} className="text-emerald-500" /> },
           { label: 'Rejected', value: stats.rejected, color: 'text-red-600', icon: <Prohibit size={18} className="text-red-500" /> },
           { label: 'Scout Runs', value: 'DB', color: 'text-gray-600', icon: <Lightning size={18} className="text-gray-400" /> },
         ].map((s) => (
@@ -1129,7 +1163,8 @@ export default function ProductScout() {
             <option value="all">Status: all</option>
             <option value="researching">Researching</option>
             <option value="qualified">Shortlisted</option>
-            <option value="approved">Approved</option>
+            <option value="approved">Approved (awaiting publish)</option>
+            <option value="published">Published (live on store)</option>
             <option value="rejected">Rejected</option>
           </select>
           <input value={fSource} onChange={(e) => setFSource(e.target.value)} placeholder="Source…" className={inputCls} />
@@ -1319,140 +1354,205 @@ export default function ProductScout() {
       {/* Run modal */}
       <Modal open={runOpen} onClose={() => { if (!running) setRunOpen(false); }} title="Run Scout Research">
         <div className="space-y-4">
-          {/* Autonomous discovery mode */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-700 uppercase tracking-wide">
-              <Compass size={14} /> Autonomous Discovery
+          {/* How it works */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <p className="text-xs font-semibold text-gray-600 mb-2">How this works:</p>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold">1</span> Find URLs
+              <span className="text-gray-300">→</span>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold">2</span> Run Research (fetches each page)
+              <span className="text-gray-300">→</span>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold">3</span> Score & QA automatically
+              <span className="text-gray-300">→</span>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold">4</span> You approve & publish
             </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={discoverQuery}
-                onChange={(e) => setDiscoverQuery(e.target.value)}
-                placeholder="Query, e.g. dog toys / cat accessories / pet grooming"
-                disabled={discovering}
-                className="flex-1 min-w-[220px] px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-blue-50"
-              />
-              <input
-                value={discoverMarket}
-                onChange={(e) => setDiscoverMarket(e.target.value)}
-                placeholder="Market (USA)"
-                disabled={discovering}
-                className="w-28 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
-              />
-              <input
-                value={discoverMax}
-                onChange={(e) => setDiscoverMax(e.target.value)}
-                placeholder="Max URLs"
-                disabled={discovering}
-                className="w-24 px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
-              />
-              <button
-                onClick={() => void runDiscover()}
-                disabled={discovering}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
-              >
-                {discovering ? <SpinnerGap size={15} className="animate-spin" /> : <Compass size={15} />} {discovering ? 'Searching…' : 'Discover URLs'}
-              </button>
-            </div>
-            {discoverNote && <p className="text-xs text-blue-700">{discoverNote}</p>}
-            <p className="text-[11px] text-blue-500">Searches public sources (DuckDuckGo) for real pet-product pages, decodes redirects, filters out category/search/blog pages, dedupes, then adds the URLs to the list below.</p>
+            <p className="text-[11px] text-gray-400 mt-2">Nothing is published automatically. Duplicates are skipped. You control what goes live.</p>
           </div>
 
-          {/* Supplier API mode (CJ official API — server proxy, admin JWT) */}
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wide">
-              <Package size={14} /> Official Supplier MagnifyingGlass (CJ)
-              <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${cjHealth === 'online' || cjHealth === 'configured' ? 'bg-green-100 text-green-700' : cjHealth === 'rate_limited' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
-                {cjHealth === 'not_configured' ? 'NOT CONFIGURED' : cjHealth === 'online' || cjHealth === 'configured' ? 'ONLINE' : cjHealth === 'rate_limited' ? 'RATE LIMITED' : 'OFFLINE'}
-              </span>
-            </div>
-            <p className="text-[11px] text-indigo-500">Supplier data source (NOT an AI provider) — deterministic, admin-JWT, CJ credentials stay server-side. Returns real CJ product records with US inventory + freight evidence.</p>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={cjQuery}
-                onChange={(e) => setCjQuery(e.target.value)}
-                placeholder="CJ query, e.g. dog enrichment toy / cat scratching post"
-                disabled={cjRunning}
-                className="flex-1 min-w-[220px] px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:bg-indigo-50"
-              />
-              <input
-                value={cjMax}
-                onChange={(e) => setCjMax(e.target.value)}
-                placeholder="Max records"
-                disabled={cjRunning}
-                className="w-24 px-3 py-2 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
-              />
-              <button
-                onClick={() => void runCjSearch()}
-                disabled={cjRunning}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
-              >
-                {cjRunning ? <SpinnerGap size={15} className="animate-spin" /> : <Package size={15} />} {cjRunning ? 'Searching CJ…' : 'MagnifyingGlass CJ'}
-              </button>
-            </div>
-            {/* Market-grounded mode: link the CJ run to a REAL persisted MI job */}
-            {miJobId && (
-              <div className="flex flex-wrap items-center gap-2 bg-white border border-indigo-200 rounded-lg px-3 py-2">
-                <label className="flex items-center gap-2 text-xs text-indigo-800 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cjMarketGrounded}
-                    onChange={(e) => setCjMarketGrounded(e.target.checked)}
-                    className="rounded"
-                  />
-                  <span className="font-semibold">Market-grounded</span>
-                  <span className="font-normal text-indigo-500">(MI job {miJobId.slice(0, 8)}… — verified from DB, not React state)</span>
-                </label>
-                {cjMarketGrounded && miHypotheses.length > 0 && (
-                  <select
-                    value={cjHypothesis}
-                    onChange={(e) => { setCjHypothesis(e.target.value); setCjQuery(e.target.value); }}
-                    disabled={cjRunning}
-                    className="flex-1 min-w-[200px] px-2 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
-                  >
-                    {miHypotheses.map((h) => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                )}
+          {/* Step 1: Find URLs */}
+          <div className="border border-blue-200 rounded-xl p-4 space-y-3 bg-white">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-wide">
+              Step 1 — Find Product URLs <span className="font-normal normal-case text-blue-500">(pick one method)</span>
+            </p>
+            {/* Autonomous discovery mode */}
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold text-blue-700">
+                <Compass size={13} /> Auto-Discover <span className="font-normal text-blue-500">— searches for real product pages on the web</span>
               </div>
-            )}
-            {cjNote && <p className="text-xs text-indigo-700">{cjNote}</p>}
-            {cjLog.length > 0 && (
-              <div className="bg-gray-900 rounded-lg p-3 max-h-40 overflow-y-auto">
-                {cjLog.map((l, i) => (
-                  <p key={i} className={`text-[11px] font-mono leading-5 ${l.startsWith('✗') ? 'text-red-400' : l.startsWith('[fail]') || l.startsWith('[reject]') ? 'text-amber-400' : l.startsWith('[ok]') ? 'text-green-400' : 'text-gray-300'}`}>{l}</p>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={discoverQuery}
+                  onChange={(e) => setDiscoverQuery(e.target.value)}
+                  placeholder="e.g. dog toys / cat accessories"
+                  disabled={discovering}
+                  className="flex-1 min-w-[180px] px-3 py-1.5 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
+                />
+                <input
+                  value={discoverMarket}
+                  onChange={(e) => setDiscoverMarket(e.target.value)}
+                  placeholder="USA"
+                  disabled={discovering}
+                  className="w-20 px-3 py-1.5 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
+                />
+                <input
+                  value={discoverMax}
+                  onChange={(e) => setDiscoverMax(e.target.value)}
+                  placeholder="Max"
+                  disabled={discovering}
+                  className="w-16 px-3 py-1.5 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-400 disabled:bg-blue-50"
+                />
+                <button
+                  onClick={() => void runDiscover()}
+                  disabled={discovering}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  {discovering ? <SpinnerGap size={13} className="animate-spin" /> : <Compass size={13} />} {discovering ? 'Searching…' : 'Discover'}
+                </button>
               </div>
-            )}
+              {discoverNote && <p className="text-[11px] text-blue-700">{discoverNote}</p>}
+            </div>
+
+            {/* CJ Supplier Search */}
+            <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold text-indigo-700">
+                <Package size={13} /> CJ Supplier Search <span className="font-normal text-indigo-500">— official CJ API (no AI credits used)</span>
+                <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${cjHealth === 'online' || cjHealth === 'configured' ? 'bg-green-100 text-green-700' : cjHealth === 'rate_limited' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {cjHealth === 'not_configured' ? 'OFFLINE' : cjHealth === 'online' || cjHealth === 'configured' ? 'ONLINE' : cjHealth === 'rate_limited' ? 'RATE LIMITED' : 'OFFLINE'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={cjQuery}
+                  onChange={(e) => setCjQuery(e.target.value)}
+                  placeholder="e.g. dog enrichment toy / cat scratching post"
+                  disabled={cjRunning}
+                  className="flex-1 min-w-[180px] px-3 py-1.5 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
+                />
+                <input
+                  value={cjMax}
+                  onChange={(e) => setCjMax(e.target.value)}
+                  placeholder="Max"
+                  disabled={cjRunning}
+                  className="w-16 px-3 py-1.5 border border-indigo-200 rounded-lg text-sm bg-white focus:outline-none focus:border-indigo-400 disabled:bg-indigo-50"
+                />
+                <button
+                  onClick={() => void runCjSearch()}
+                  disabled={cjRunning}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  {cjRunning ? <SpinnerGap size={13} className="animate-spin" /> : <Package size={13} />} {cjRunning ? 'Searching…' : 'Search CJ'}
+                </button>
+              </div>
+              {miJobId && (
+                <div className="flex flex-wrap items-center gap-2 bg-white border border-indigo-200 rounded-lg px-3 py-1.5">
+                  <label className="flex items-center gap-2 text-[11px] text-indigo-800 cursor-pointer">
+                    <input type="checkbox" checked={cjMarketGrounded} onChange={(e) => setCjMarketGrounded(e.target.checked)} className="rounded" />
+                    <span className="font-semibold">Market-grounded</span>
+                    <span className="font-normal text-indigo-500">(MI job {miJobId.slice(0, 8)}…)</span>
+                  </label>
+                  {cjMarketGrounded && miHypotheses.length > 0 && (
+                    <select
+                      value={cjHypothesis}
+                      onChange={(e) => { setCjHypothesis(e.target.value); setCjQuery(e.target.value); }}
+                      disabled={cjRunning}
+                      className="flex-1 min-w-[160px] px-2 py-1 border border-indigo-200 rounded text-[11px] bg-white disabled:bg-indigo-50"
+                    >
+                      {miHypotheses.map((h) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
+              {cjNote && <p className="text-[11px] text-indigo-700">{cjNote}</p>}
+              {cjLog.length > 0 && (
+                <div className="bg-gray-900 rounded-lg p-2 max-h-32 overflow-y-auto">
+                  {cjLog.map((l, i) => (
+                    <p key={i} className={`text-[11px] font-mono leading-4 ${l.startsWith('✗') ? 'text-red-400' : l.startsWith('[fail]') || l.startsWith('[reject]') ? 'text-amber-400' : l.startsWith('[ok]') ? 'text-green-400' : 'text-gray-300'}`}>{l}</p>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Manual URL mode (advanced) */}
+          {/* Step 2: Source URLs */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Source URLs (one per line — pet products, USA focus) <span className="font-normal normal-case text-gray-400">· advanced manual mode</span></p>
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Step 2 — Review URLs</p>
+              {runUrls.split('\n').filter(Boolean).length > 0 && (
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">
+                  {runUrls.split('\n').filter(Boolean).length} ready
+                </span>
+              )}
+            </div>
             <textarea
               value={runUrls}
               onChange={(e) => setRunUrls(e.target.value)}
               disabled={running}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 min-h-[140px] disabled:bg-gray-50"
+              placeholder="Paste product URLs here (one per line), or use Auto-Discover above to fill this list"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 min-h-[100px] disabled:bg-gray-50"
             />
           </div>
-          {runLog.length > 0 && (
-            <div className="bg-gray-900 rounded-xl p-3 max-h-48 overflow-y-auto">
-              {runLog.map((l, i) => (
-                <p key={i} className={`text-[11px] font-mono leading-5 ${l.startsWith('✗') ? 'text-red-400' : l.startsWith('[fail]') ? 'text-amber-400' : l.startsWith('[ok]') ? 'text-green-400' : 'text-gray-300'}`}>{l}</p>
-              ))}
+
+          {/* Step 3: Live Progress (while running) */}
+          {running && (
+            <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <SpinnerGap size={16} className="animate-spin text-blue-600" />
+                <p className="text-sm font-bold text-blue-700">
+                  {runStage === 'research' && `Researching… ${runCounts.ok + runCounts.skip + runCounts.fail} of ${runCounts.total} URLs checked`}
+                  {runStage === 'score' && `Scoring candidates…`}
+                  {runStage === 'qa' && `Running quality checks…`}
+                  {runStage === 'done' && `Done!`}
+                </p>
+              </div>
+              {runStage === 'research' && runCounts.total > 0 && (
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, ((runCounts.ok + runCounts.skip + runCounts.fail) / runCounts.total) * 100)}%` }}
+                  />
+                </div>
+              )}
+              <div className="flex gap-4 text-[11px]">
+                <span className="text-green-600 font-semibold">✓ {runCounts.ok} new</span>
+                <span className="text-amber-600 font-semibold">⏭ {runCounts.skip} skipped</span>
+                <span className="text-red-500 font-semibold">✗ {runCounts.fail} failed</span>
+              </div>
             </div>
           )}
+
+          {/* Live log */}
+          {runLog.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-gray-500 mb-1">
+                {running ? 'Live log:' : runStage === 'done' ? 'Result:' : 'Log:'}
+              </p>
+              <div ref={logRef} className="bg-gray-900 rounded-xl p-3 max-h-48 overflow-y-auto">
+                {runLog.map((l, i) => (
+                  <p key={i} className={`text-[11px] font-mono leading-5 ${
+                    l.startsWith('✗') || l.startsWith('[fail]') ? 'text-red-400' :
+                    l.startsWith('[skip]') ? 'text-amber-400' :
+                    l.startsWith('[ok]') ? 'text-green-400' :
+                    l.startsWith('✔') ? 'text-green-300 font-bold' :
+                    l.startsWith('Done') ? 'text-blue-300 font-bold' :
+                    'text-gray-300'
+                  }`}>{l}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
           <div className="flex gap-3">
             <button
               onClick={() => void runScout()}
-              disabled={running}
+              disabled={running || !runUrls.split('\n').filter(Boolean).length}
               className="flex items-center gap-2 flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold justify-center disabled:opacity-50"
             >
-              {running ? <SpinnerGap size={16} className="animate-spin" /> : <Play size={16} />} {running ? 'Researching…' : 'Run Research'}
+              {running ? <SpinnerGap size={16} className="animate-spin" /> : <Play size={16} />} {running ? 'Researching…' : `Run Research (${runUrls.split('\n').filter(Boolean).length} URLs)`}
             </button>
-            <button onClick={() => setRunOpen(false)} disabled={running} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">Cancel</button>
+            <button onClick={() => setRunOpen(false)} disabled={running} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 disabled:opacity-50">{running ? 'Cancel' : 'Close'}</button>
           </div>
-          <p className="text-[11px] text-gray-400">No AI credits consumed — extraction and scoring are rule-based. Candidates go live only via AUTO policy gates or your explicit Publish action.</p>
+          <p className="text-[11px] text-gray-400">No AI credits consumed — extraction and scoring are rule-based. Candidates go live only via your explicit Publish action.</p>
         </div>
       </Modal>
 
@@ -1594,7 +1694,7 @@ export default function ProductScout() {
               {listingResult.autoPublished ? (
                 <p className="mt-2 font-semibold text-green-700">✓ PHASE 4B ACTION: PUBLISHED LIVE on the storefront (AUTO policy gates passed).</p>
               ) : listingResult.draftId ? (
-                <p className="mt-2 font-semibold text-gray-700">Draft created — click the 🚀 on the candidate row (or Publish Approved) to go live.</p>
+                <p className="mt-2 font-semibold text-gray-700">Draft created — click the 🚀 on the candidate row (or <strong>Publish Approved</strong>) to go live.</p>
               ) : (
                 <p className="mt-2 font-semibold text-gray-700">No draft created (listing QA did not pass).</p>
               )}
