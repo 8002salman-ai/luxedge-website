@@ -17,7 +17,7 @@
 /** Product SSR query (seo-meta.ts) — page facts + embedded category name for
  * the "More in {category}" contextual link. */
 export const SEO_PRODUCTS_SELECT =
-  'slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)';
+  'slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,product_images(url,public_url,is_primary,sort_order),categories(name)';
 
 export const SEO_CATEGORIES_SELECT = 'slug,name';
 

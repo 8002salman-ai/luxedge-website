@@ -112,11 +112,30 @@ function isKnownColumn(table: string, col: string): boolean {
   return schema[table]?.has(col) === true || LIVE_VERIFIED_EXTRA_COLUMNS[table]?.has(col) === true;
 }
 
+/** Split a select string on commas at depth 0 (paren-aware), so embedded
+ * relations with several columns, e.g. `product_images(url,public_url,is_primary)`,
+ * parse as one token instead of shattering on the inner commas. */
+function splitTopLevel(select: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of select) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) {
+      if (cur.trim()) parts.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts;
+}
+
 /** Flatten a select string into [table, column] references, resolving nested
  * embeds like `categories(name)` against the relation table. */
 function columnRefs(table: string, select: string): Array<readonly [string, string]> {
   const refs: Array<readonly [string, string]> = [];
-  for (const raw of select.split(',')) {
+  for (const raw of splitTopLevel(select)) {
     const token = raw.trim();
     if (!token) continue;
     const embed = token.match(/^([a-z_]\w*)\((.*)\)$/);
