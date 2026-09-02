@@ -331,7 +331,8 @@ interface Ctx {
   setReviews: React.Dispatch<React.SetStateAction<Review[]>>;
   setCategories: React.Dispatch<React.SetStateAction<AdminCategory[]>>;
   cartOpen: boolean; openCart: () => void; closeCart: () => void;
-  notif: string | null; notify: (m: string, type?: 'success' | 'error' | 'info') => void;
+  notif: { msg: string; type: 'success' | 'error' | 'info' } | null;
+  notify: (m: string, type?: 'success' | 'error' | 'info') => void;
   // Catalog Launch Phase — coupons + free-shipping strategy from the store.
   coupon: StoreCoupon | null;
   applyCoupon: (code: string) => string | null;
@@ -382,7 +383,8 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
   const [blogs, setBlogs] = useState<BlogPost[]>(SAFE_INIT_BLOGS);
-  const [notif, setNotif] = useState<string | null>(null);
+  const [notif, setNotif] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const notifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Phase B: blog content lives in the Supabase CMS. Until the CMS is seeded
   // (or the DB is unreachable / table not migrated) we keep SAFE_INIT_BLOGS as a
@@ -403,7 +405,14 @@ function AppProvider({ children }: { children: ReactNode }) {
   // added") retriggered any effect that listed notify as a dependency,
   // silently reloading/resetting in-progress form state right after the
   // update it was supposed to confirm.
-  const notify = useCallback((m: string, _type?: 'success' | 'error' | 'info') => { setNotif(m); setTimeout(() => setNotif(null), 3000); }, []);
+  const notify = useCallback((m: string, _type?: 'success' | 'error' | 'info') => {
+    // Replace any pending toast instead of letting the old timer clear the
+    // new one early (previously a second notify within 3s vanished almost
+    // immediately).
+    if (notifTimer.current) clearTimeout(notifTimer.current);
+    setNotif({ msg: m, type: _type ?? 'success' });
+    notifTimer.current = setTimeout(() => setNotif(null), 3000);
+  }, []);
   const [cartOpen, setCartOpen] = useState(false);
   const openCart = useCallback(() => {
     setCartOpen((wasOpen) => {
@@ -573,7 +582,22 @@ function AppProvider({ children }: { children: ReactNode }) {
 // ============================================================================
 // SHARED COMPONENTS
 // ============================================================================
-function Toast() { const { notif } = useApp(); if (!notif) return null; return <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-[200] animate-fade-in"><div className="bg-gray-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm"><CheckCircle strokeWidth={1.5} size={18} className="text-green-400" aria-hidden="true" />{notif}</div></div>; }
+function Toast() {
+  const { notif } = useApp();
+  if (!notif) return null;
+  const { msg, type } = notif;
+  const icon = type === 'success'
+    ? <CheckCircle strokeWidth={1.5} size={18} className="text-green-400" aria-hidden="true" />
+    : type === 'error'
+      ? <AlertTriangle strokeWidth={1.5} size={18} className="text-red-400" aria-hidden="true" />
+      : <span aria-hidden="true" className="w-2 h-2 rounded-full bg-gray-400" />;
+  return (
+    <div role={type === 'error' ? 'alert' : 'status'} aria-live={type === 'error' ? 'assertive' : 'polite'}
+      className="fixed bottom-6 right-6 z-[200] animate-fade-in">
+      <div className={`px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm text-white ${type === 'error' ? 'bg-red-900' : type === 'info' ? 'bg-gray-700' : 'bg-gray-900'}`}>{icon}{msg}</div>
+    </div>
+  );
+}
 
 export function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   if (!open) return null;
