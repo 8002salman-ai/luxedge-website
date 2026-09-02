@@ -370,6 +370,11 @@ export default {
         env,
       );
       if (injected) {
+        // Legacy /product/<uuid> → /product/<slug> consolidation (PR #35
+        // residual): 301 with the query string preserved.
+        if ('redirect' in injected) {
+          return Response.redirect(new URL(injected.redirect + url.search, url.origin).toString(), 301);
+        }
         return new Response(injected.html, {
           status: injected.status,
           headers: {

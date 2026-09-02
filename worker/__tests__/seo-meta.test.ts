@@ -11,7 +11,12 @@
 // ============================================================================
 
 import { describe, it, expect } from 'vitest';
-import { type ProductRow, productImageUrls, productJsonLd } from '../seo-meta';
+import {
+  type ProductRow,
+  productImageUrls,
+  productJsonLd,
+  resolveUuidProductRedirect,
+} from '../seo-meta';
 
 const ROW = {
   id: 'p1',
@@ -101,5 +106,39 @@ describe('productJsonLd', () => {
     expect(ld['name']).toBe(ROW.name);
     expect(ld['url']).toBe(canonical);
     expect((ld['offers'] as { price?: string }).price).toBe('49.95');
+  });
+});
+
+describe('resolveUuidProductRedirect (PR #35 residual — legacy UUID product URLs)', () => {
+  const products: ProductRow[] = [
+    { id: '19d0b32c-0139-428c-977b-923786e301fb', slug: 'spot-pet-mat-waterproof-silicone', name: 'Placemat' },
+    { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', name: 'No slug product' },
+  ];
+
+  it('known UUID (any case) → canonical slug redirect', () => {
+    expect(resolveUuidProductRedirect(products, '19d0b32c-0139-428c-977b-923786e301fb')).toBe(
+      '/product/spot-pet-mat-waterproof-silicone',
+    );
+    expect(resolveUuidProductRedirect(products, '19D0B32C-0139-428C-977B-923786E301FB')).toBe(
+      '/product/spot-pet-mat-waterproof-silicone',
+    );
+  });
+
+  it('unknown UUID → null (keeps today\'s unchanged behavior, no new 404s)', () => {
+    expect(resolveUuidProductRedirect(products, 'ffffffff-0000-0000-0000-000000000000')).toBeNull();
+  });
+
+  it('slug-shaped param → null (never redirected)', () => {
+    expect(resolveUuidProductRedirect(products, 'horse-grooming-kit-12-piece')).toBeNull();
+    expect(resolveUuidProductRedirect(products, 'spot-pet-mat')).toBeNull();
+  });
+
+  it('UUID-shaped param whose product has no slug → null (never links to /undefined)', () => {
+    expect(resolveUuidProductRedirect(products, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')).toBeNull();
+    expect(resolveUuidProductRedirect(products, 'not-a-real-uuid-shape')).toBeNull();
+  });
+
+  it('unavailable product list → null (DB-down keeps the unchanged shell)', () => {
+    expect(resolveUuidProductRedirect(null, '19d0b32c-0139-428c-977b-923786e301fb')).toBeNull();
   });
 });
