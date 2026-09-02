@@ -1,9 +1,11 @@
 // ============================================================================
 // LUXEDGE V2 — SCOUT NORMALIZATION + DEDUPE
 //
-// Pure helpers: slugify, supplier-from-domain, price parsing, and duplicate
-// detection keys. No I/O — fully unit-testable.
+// Pure helpers: slugify, supplier-from-domain, price parsing, suggested-sell
+// price resolution, and duplicate detection keys. No I/O — fully unit-testable.
 // ============================================================================
+
+import type { EvidenceItem } from './types';
 
 /** URL-safe slug. Empty input → 'item'. */
 export function slugify(s: string): string {
@@ -98,4 +100,70 @@ export function parseRating(text: string): number | null {
   if (!m) return null;
   const n = parseFloat(m[1]);
   return Number.isFinite(n) && n >= 0 && n <= 5 ? n : null;
+}
+
+// ---------------------------------------------------------------------------
+// Suggested sell price (honest, evidence-driven — never fabricated)
+// ---------------------------------------------------------------------------
+
+export interface SellPriceEvidence {
+  supplierPrice?: EvidenceItem | null;
+  /** e.g. "Chewy KONG Classic Dog Toy, Medium - $11.96 (https://…)" */
+  retail_reference?: unknown;
+  /** e.g. "$7.99 - $25.99" */
+  manufacturer_price_range?: unknown;
+}
+
+export interface SuggestedSellPrice {
+  price: number | null;
+  /** Where the suggestion came from — drives the publish UI label. */
+  source: 'exact' | 'retail' | 'range' | 'none';
+  label: string;
+}
+
+/**
+ * Resolve a suggested sell price from candidate evidence, best evidence
+ * first: exact supplier (CJ) price → real retail-reference price → midpoint
+ * of the manufacturer price range → nothing (owner enters one). Returns null
+ * price ONLY when no usable evidence exists — never a fabricated number.
+ */
+export function suggestedSellPrice(ev: SellPriceEvidence | null | undefined): SuggestedSellPrice {
+  const exact = ev?.supplierPrice && typeof ev.supplierPrice === 'object'
+    ? (ev.supplierPrice as EvidenceItem).value
+    : null;
+  if (typeof exact === 'number' && exact > 0) {
+    return { price: exact, source: 'exact', label: 'exact supplier (CJ) price' };
+  }
+
+  if (typeof ev?.retail_reference === 'string') {
+    const m = ev.retail_reference.match(/-\s*\$(\d+(?:\.\d+)?)/);
+    const price = m ? parseFloat(m[1]) : NaN;
+    if (Number.isFinite(price) && price > 0) {
+      const name = ev.retail_reference.split(' - ')[0].trim();
+      return {
+        price,
+        source: 'retail',
+        label: name ? `retail reference (${name.slice(0, 60)})` : 'retail reference price',
+      };
+    }
+  }
+
+  if (typeof ev?.manufacturer_price_range === 'string') {
+    const m = ev.manufacturer_price_range.match(/(\d+(?:\.\d+)?)\s*-\s*\$(\d+(?:\.\d+)?)/);
+    const m2 = ev.manufacturer_price_range.match(/\$(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)/);
+    const r = m || m2;
+    if (r) {
+      const low = parseFloat(r[1]);
+      const high = parseFloat(r[2]);
+      if (Number.isFinite(low) && Number.isFinite(high) && high >= low && low > 0) {
+        return {
+          price: Math.round(((low + high) / 2) * 100) / 100,
+          source: 'range',
+          label: 'midpoint of manufacturer price range',
+        };
+      }
+    }
+  }
+
+  return { price: null, source: 'none', label: 'no pricing evidence — you set the selling price' };
 }

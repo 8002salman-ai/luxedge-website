@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DbAdapter } from '../../../services/db';
-import { slugify, hostOf, canonicalDomain, supplierFromUrl, dedupeKey, findDuplicate, parsePrice, parseReviewCount, parseRating } from '../normalize';
+import { slugify, hostOf, canonicalDomain, supplierFromUrl, dedupeKey, findDuplicate, parsePrice, parseReviewCount, parseRating, suggestedSellPrice } from '../normalize';
 import { calculateMargin, marginAllowsAutoApprove } from '../margin';
 import { applyRejectFilters, collectRiskFlags } from '../reject';
 import { scoreCandidate, SCORE_WEIGHTS, SHORTLIST_THRESHOLD } from '../score';
@@ -114,6 +114,32 @@ function page(text: string, images: string[] = []): FetchedSourcePage {
 }
 
 describe('normalize', () => {
+  it('resolves suggested sell price: exact supplier price wins', () => {
+    expect(suggestedSellPrice({ supplierPrice: { status: 'verified', value: 8.5 }, retail_reference: 'Chewy X - $11.96', manufacturer_price_range: '$4 - $9' })).toEqual({
+      price: 8.5, source: 'exact', label: 'exact supplier (CJ) price',
+    });
+  });
+
+  it('resolves suggested sell price: retail reference when exact missing', () => {
+    const r = suggestedSellPrice({ supplierPrice: { status: 'unknown', value: null }, retail_reference: 'Chewy KONG Classic Dog Toy, Medium - $11.96 (https://chewy.com)' });
+    expect(r.price).toBe(11.96);
+    expect(r.source).toBe('retail');
+    expect(r.label).toContain('Chewy KONG Classic Dog Toy, Medium');
+  });
+
+  it('resolves suggested sell price: manufacturer range midpoint as last resort', () => {
+    const r = suggestedSellPrice({ supplierPrice: { status: 'unknown', value: null }, manufacturer_price_range: '$7.99 - $25.99' });
+    expect(r.price).toBe(16.99);
+    expect(r.source).toBe('range');
+  });
+
+  it('never invents a price when no evidence exists', () => {
+    expect(suggestedSellPrice(null)).toEqual({ price: null, source: 'none', label: 'no pricing evidence — you set the selling price' });
+    const r = suggestedSellPrice({ supplierPrice: { status: 'unknown', value: null }, retail_reference: 'no price here', manufacturer_price_range: 'unknown' });
+    expect(r.price).toBeNull();
+    expect(r.source).toBe('none');
+  });
+
   it('slugifies titles', () => {
     expect(slugify('KONG Classic Dog Toy')).toBe('kong-classic-dog-toy');
     expect(slugify('')).toBe('item');
