@@ -70,9 +70,9 @@ describe('loadAIProviders', () => {
     const or = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter');
     expect(or?.defaultModel).toBe('nvidia/nemotron-3-super-120b-a12b:free');
     expect(or?.enabled).toBe(true);
-    // DeepSeek disabled by default to prevent token burn on auto-runs;
+    // DeepSeek enabled by default (server-side key is commonly configured);
     // Codex is available on demand (still never the default).
-    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.enabled).toBe(false);
+    expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'deepseek')?.enabled).toBe(true);
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'codex')?.enabled).toBe(true);
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'codex')?.isDefault).toBe(false);
   });

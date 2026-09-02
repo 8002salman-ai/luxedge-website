@@ -39,6 +39,7 @@ import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
+import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
@@ -85,6 +86,7 @@ const ROUTES: Route[] = [
   { path: '/api/crm/list', handler: crmListHandler },
   { path: '/api/crm/assistant', handler: crmAssistantHandler },
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
+  { path: '/api/admin/ai-keys', handler: aiKeysHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },

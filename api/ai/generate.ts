@@ -8,7 +8,7 @@
 // 401/403. Defense in depth on top: body size cap, prompt length cap, model
 // allowlist regex, per-instance rate limit.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generateWithFallback, isConfigured, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
+import { generateWithFallback, isConfiguredFull, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -38,8 +38,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const fallback = typeof body.fallback === 'string' && body.fallback.trim() ? String(body.fallback) : undefined;
   const system = typeof body.system === 'string' && body.system.trim() ? String(body.system) : undefined;
 
-  if (!provider || !isConfigured(provider)) {
-    sendJson(res, 501, { error: 'AI provider not configured on server. Set the provider API key env var (see .env.example) and redeploy.' });
+  if (!provider || !(await isConfiguredFull(provider))) {
+    sendJson(res, 501, { error: 'AI provider not configured on server. Set the provider API key env var or attach a key in Settings → AI & Scraping Keys.' });
     return;
   }
   if (!prompt || prompt.length > 12000) {

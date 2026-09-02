@@ -1756,18 +1756,33 @@ function AMarketingGen() {
   const allProviders: AIProvider[] = loadAIProviders();
   const activeProviders = allProviders.filter(p => p.enabled);
   const selectedProduct = products.find(p => p.id === selectedProductId);
+  const [serverCfg, setServerCfg] = useState<Record<string, ProviderStatus> | null>(null);
 
   useEffect(() => {
     try { setVault(JSON.parse(localStorage.getItem('luxedge_mkt_vault') || '[]')); } catch { setVault([]); }
   }, []);
 
+  // Which providers actually have keys on the server? Used to auto-select a
+  // working provider instead of defaulting to one that 501s (e.g. Codex with
+  // no CODEX_API_KEY) and to label the dropdown honestly.
+  useEffect(() => {
+    serverProviderStatus().then(s => {
+      const m: Record<string, ProviderStatus> = {};
+      s.providers.forEach(p => { m[p.id] = p; });
+      setServerCfg(m);
+    }).catch(() => setServerCfg({}));
+  }, []);
+
   useEffect(() => {
     if (activeProviders.length && !aiProvider) {
-      const def = activeProviders.find(p => p.isDefault) || activeProviders[0];
+      // Prefer a provider the server reports as configured; fall back to the
+      // client default only when no server status is known yet.
+      const configured = activeProviders.find(p => serverCfg?.[p.id]?.configured);
+      const def = configured || activeProviders.find(p => p.isDefault) || activeProviders[0];
       setAiProvider(def.id);
       setAiModel(def.defaultModel);
     }
-  }, [activeProviders.length, aiProvider]);
+  }, [activeProviders.length, aiProvider, serverCfg]);
 
   function copyText(text: string, key: string) {
     navigator.clipboard.writeText(text).catch(() => {});
@@ -1892,7 +1907,11 @@ function parseJ<T>(raw: string, fb: T): T {
           <label className="text-xs font-semibold text-gray-600 block mb-1">AI Provider</label>
           <select value={aiProvider} onChange={e => { setAiProvider(e.target.value); setAiModel(''); }} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400">
             {activeProviders.length === 0 && <option value="">No providers configured</option>}
-            {activeProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {activeProviders.map(p => {
+              const cfg = serverCfg?.[p.id];
+              const label = cfg ? (cfg.configured ? `${p.name} ✓` : `${p.name} (no key)`) : p.name;
+              return <option key={p.id} value={p.id}>{label}</option>;
+            })}
           </select>
         </div>
         <div>
@@ -4206,6 +4225,74 @@ function AAIHub() {
     finally { setCheckingCredits(false); }
   };
 
+  // ── Owner-attached API keys (stored server-side, never in the browser) ──
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  const [keySaving, setKeySaving] = useState<string | null>(null);
+  const [keyStatus, setKeyStatus] = useState<Record<string, { configured: boolean; source: string; masked: string }>>({});
+
+  const loadKeyStatus = async () => {
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/admin/ai-keys', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (res.ok) {
+        const d = await res.json() as { providers: Array<{ id: string; configured: boolean; source: string; masked: string }> };
+        const m: Record<string, { configured: boolean; source: string; masked: string }> = {};
+        d.providers.forEach(p => { m[p.id] = p; });
+        setKeyStatus(m);
+      }
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { void loadKeyStatus(); }, []);
+
+  const attachKey = async (providerId: string) => {
+    const key = (keyInputs[providerId] || '').trim();
+    if (key.length < 8) { notify('Paste the full API key or OAuth token first'); return; }
+    setKeySaving(providerId);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/admin/ai-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'set', provider: providerId, key }),
+      });
+      const d = await res.json() as { ok?: boolean; error?: string; masked?: string };
+      if (res.ok && d.ok) {
+        notify(`Key saved for ${providerId} — live now`);
+        setKeyInputs(prev => ({ ...prev, [providerId]: '' }));
+        await loadKeyStatus();
+        await serverProviderStatus().then((s) => {
+          const map: Record<string, ProviderStatus> = {};
+          s.providers.forEach(p => { map[p.id] = p; });
+          setServerStatus(map);
+        }).catch(() => {});
+      } else {
+        notify(`Save failed: ${d.error || 'unknown error'}`);
+      }
+    } catch (e: any) { notify(`Save failed: ${e.message}`); }
+    finally { setKeySaving(null); }
+  };
+
+  const clearKey = async (providerId: string) => {
+    setKeySaving(providerId);
+    try {
+      const token = getAccessToken();
+      const res = await fetch('/api/admin/ai-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'clear', provider: providerId }),
+      });
+      const d = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok && d.ok) {
+        notify(`Key removed for ${providerId}`);
+        await loadKeyStatus();
+      } else {
+        notify(`Clear failed: ${d.error || 'unknown error'}`);
+      }
+    } catch (e: any) { notify(`Clear failed: ${e.message}`); }
+    finally { setKeySaving(null); }
+  };
+
 const providerIcons: Record<string, string> = {
     openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
   };
@@ -4312,6 +4399,28 @@ const providerIcons: Record<string, string> = {
                       ? 'Configured on server — key is safe (env var only)'
                       : 'Not configured — add the provider key env var on the server (see .env.example)'}
                   </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="password"
+                      value={keyInputs[provider.id] || ''}
+                      onChange={e => setKeyInputs(prev => ({ ...prev, [provider.id]: e.target.value }))}
+                      placeholder={provider.id === 'codex' ? 'Paste ChatGPT OAuth token (Codex subscription)' : `Paste ${provider.name} API key`}
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-purple-400"
+                    />
+                    <button type="button" onClick={() => attachKey(provider.id)} disabled={keySaving === provider.id}
+                      className="px-3 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold disabled:opacity-50 shrink-0">
+                      {keySaving === provider.id ? 'Saving…' : 'Attach Key'}
+                    </button>
+                    {keyStatus[provider.id]?.source === 'attached' && (
+                      <button type="button" onClick={() => clearKey(provider.id)} disabled={keySaving === provider.id}
+                        className="px-3 py-2 text-xs border border-red-200 text-red-600 hover:bg-red-50 rounded-lg font-semibold disabled:opacity-50 shrink-0">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {keyStatus[provider.id]?.source === 'attached' && (
+                    <p className="text-[10px] text-gray-400 mt-1">Attached key: {keyStatus[provider.id].masked} — stored server-side only.</p>
+                  )}
                   <p className="text-[10px] text-gray-400 mt-1">Keys never live in the browser. All AI calls proxy through /api/ai/*.</p>
                 </div>
                 <div>
