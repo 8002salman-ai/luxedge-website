@@ -8,7 +8,7 @@
 // ============================================================================
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
 const handler = (await import('../media/generate.js')).default;
 
@@ -72,13 +72,17 @@ function stubEnv(providerKey: string | null, storageOk = true) {
     delete process.env.OPENAI_API_KEY;
     delete process.env.GEMINI_API_KEY;
   }
-  vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: unknown) => {
     const url = String(input);
+    if (url.includes('/models?key=')) {
+      // Model discovery: advertise the image models the code may pick.
+      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2.5-flash-image' }, { name: 'models/veo-3.1-generate-preview' }] }), { status: 200 });
+    }
     if (url.includes('/images/generations')) {
       return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('FAKEIMG').toString('base64') }] }), { status: 200 });
     }
-    if (url.includes('imagen-3.0-generate-002:predict')) {
-      return new Response(JSON.stringify({ predictions: [{ bytesBase64Encoded: Buffer.from('FAKEIMG').toString('base64') }] }), { status: 200 });
+    if (url.includes(':generateContent?key=')) {
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('FAKEIMG').toString('base64') } }] } }] }), { status: 200 });
     }
     if (url.includes('predictLongRunning')) {
       return new Response(JSON.stringify({ name: 'operations/op-1' }), { status: 200 });

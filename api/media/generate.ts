@@ -73,27 +73,54 @@ async function generateOpenAiImage(key: string, prompt: string): Promise<{ bytes
   throw new Error('OpenAI returned no image.');
 }
 
-/** Google Imagen 3 → base64 PNG bytes. */
-async function generateGeminiImage(key: string, prompt: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=' + encodeURIComponent(key), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '1:1' } }),
-    signal: AbortSignal.timeout(90_000),
-  });
-  const d = await r.json().catch(() => ({})) as { error?: { message?: string }; predictions?: Array<{ bytesBase64Encoded?: string }> };
-  if (!r.ok) throw new Error(`Gemini image error (HTTP ${r.status})${d.error?.message ? `: ${d.error.message.slice(0, 140)}` : ''}`);
-  const b64 = d.predictions?.[0]?.bytesBase64Encoded;
-  if (!b64) throw new Error('Gemini returned no image.');
-  return { bytes: Buffer.from(b64, 'base64'), contentType: 'image/png' };
+// Gemini image-capable models that speak generateContent (Imagen's legacy
+// :predict API no longer exists on v1beta). Queried live so the best model is
+// chosen; falls back to the widely-available gemini-2.5-flash-image.
+const GEMINI_IMAGE_MODELS = [
+  'gemini-3.1-flash-image',
+  'gemini-2.5-flash-image',
+  'gemini-3-pro-image',
+  'gemini-3-pro-image-preview',
+];
+
+/** Resolve the first image-capable model available on this key. */
+async function resolveGeminiImageModel(key: string): Promise<string> {
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key), { signal: AbortSignal.timeout(15_000) });
+    if (r.ok) {
+      const d = await r.json().catch(() => null) as { models?: Array<{ name: string }> } | null;
+      const available = new Set((d?.models || []).map((m) => m.name.replace(/^models\//, '')));
+      for (const m of GEMINI_IMAGE_MODELS) if (available.has(m)) return m;
+    }
+  } catch { /* fall through to default */ }
+  return GEMINI_IMAGE_MODELS[1]; // gemini-2.5-flash-image
 }
 
-/** Google Veo 3 → long-running operation, polled until the clip is ready. */
-async function generateGeminiVideo(key: string, prompt: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const start = await fetch('https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-generate-preview:predictLongRunning?key=' + encodeURIComponent(key), {
+/** Google Gemini image model (generateContent, IMAGE modality) → image bytes. */
+async function generateGeminiImage(key: string, prompt: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const model = await resolveGeminiImageModel(key);
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ instances: [{ prompt }], parameters: { numberOfVideos: 1 } }),
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['IMAGE'] },
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  const d = await r.json().catch(() => ({})) as { error?: { message?: string }; candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }> };
+  if (!r.ok) throw new Error(`Gemini image error (HTTP ${r.status})${d.error?.message ? `: ${d.error.message.slice(0, 140)}` : ''}`);
+  const img = d.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+  if (!img?.inlineData?.data) throw new Error('Gemini returned no image.');
+  return { bytes: Buffer.from(img.inlineData.data, 'base64'), contentType: img.inlineData.mimeType || 'image/png' };
+}
+
+/** Google Veo (3.1+) → long-running operation, polled until the clip is ready. */
+async function generateGeminiVideo(key: string, prompt: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const start = await fetch('https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning?key=' + encodeURIComponent(key), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ instances: [{ prompt }] }),
     signal: AbortSignal.timeout(60_000),
   });
   const startData = await start.json().catch(() => ({})) as { error?: { message?: string }; name?: string };
