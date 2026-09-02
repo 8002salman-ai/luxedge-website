@@ -25,6 +25,7 @@ import checkoutHandler from '../api/checkout';
 import webhookHandler from '../api/webhook';
 import salmanOsHandler from '../api/salman-os';
 import cjHandler from '../api/suppliers/cj';
+import adminProductsHandler from '../api/admin/products';
 import hermesIngestHandler from '../api/hermes/ingest';
 import marketIntelTrendsHandler from '../api/market-intel/trends';
 import googleAdsHandler from '../api/market-demand/google-ads';
@@ -84,6 +85,7 @@ const ROUTES: Route[] = [
   { path: '/api/crm/list', handler: crmListHandler },
   { path: '/api/crm/assistant', handler: crmAssistantHandler },
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
+  { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },
 ];
