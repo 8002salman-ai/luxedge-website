@@ -45,6 +45,11 @@ const STATUS_LABEL: Record<SourceStatus, string> = {
   SKIPPED: 'SKIPPED',
 };
 
+/** Deep-link a keyword into Google Trends (US, trailing 12 months). */
+function googleTrendsExploreUrl(keyword: string): string {
+  return `https://trends.google.com/trends/explore?q=${encodeURIComponent(keyword.trim())}&geo=US&date=today%2012-m`;
+}
+
 export default function ProductResearch() {
   const { notify } = useApp();
   const [keyword, setKeyword] = useState('');
@@ -177,6 +182,11 @@ export default function ProductResearch() {
           >
             {running ? 'Researching…' : <><MagnifyingGlass size={16} /> RESEARCH PRODUCT</>}
           </button>
+          {keyword.trim() && (
+            <a href={googleTrendsExploreUrl(keyword)} target="_blank" rel="noopener noreferrer" className="self-center text-xs text-blue-600 hover:underline whitespace-nowrap">
+              Google Trends ↗
+            </a>
+          )}
           {cached && (
             <span className="self-center text-xs text-gray-400">cached result · refetches within 15 min are skipped</span>
           )}
@@ -187,7 +197,12 @@ export default function ProductResearch() {
       {result && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <ScoreCard label="GOOGLE TREND" value={trendCardScore !== null ? `${trendCardScore}/100` : '—'} status={trendCardStatus} />
+            <ScoreCard
+              label="GOOGLE TREND"
+              value={trendCardScore !== null ? `${trendCardScore}/100` : '—'}
+              status={trendCardStatus}
+              href={googleTrendsExploreUrl(result.keyword)}
+            />
             <ScoreCard label="AMAZON DEMAND" value={result.provenance.amazonPublic.status === 'AVAILABLE' ? 'PASS' : '—'} status={result.provenance.amazonPublic.status} />
             <ScoreCard label="EBAY DEMAND" value={result.provenance.ebay.activeListings !== null ? `${result.provenance.ebay.activeListings} listings` : '—'} status={result.provenance.ebay.status} />
             <ScoreCard label="SUPPLIER COST" value={result.economics.landedCost !== null ? `$${result.economics.landedCost.toFixed(2)}` : '—'} status={result.provenance.supplier.status} />
@@ -282,12 +297,13 @@ export default function ProductResearch() {
   );
 }
 
-function ScoreCard({ label, value, status }: { label: string; value: string; status: SourceStatus }) {
+function ScoreCard({ label, value, status, href }: { label: string; value: string; status: SourceStatus; href?: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4">
       <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">{label}</p>
       <p className="text-xl font-bold text-gray-900 mt-1">{value}</p>
       <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[status] || 'bg-gray-100 text-gray-500'}`}>{STATUS_LABEL[status] || status}</span>
+      {href && <a href={href} target="_blank" rel="noopener noreferrer" className="block mt-2 text-xs text-blue-600 hover:underline">View on Google Trends ↗</a>}
     </div>
   );
 }
