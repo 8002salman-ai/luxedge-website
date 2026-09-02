@@ -13,6 +13,8 @@
 // by design (RLS protects the tables); the service-role key stays server-side.
 // ============================================================================
 
+import { getSession } from './supabase';
+
 export type DbMode = 'local' | 'supabase' | 'unconfigured';
 
 export interface DbConnectionResult {
@@ -187,6 +189,26 @@ export class SupabaseAdapter implements DbAdapter {
     return (await res.json()) as T;
   }
 
+  /**
+   * Expired-token recovery (Supabase PGRST303 "JWT expired"): a long-open
+   * admin page's access token can expire mid-session. Refresh the GoTrue
+   * session once and retry — the caller never sees a bogus expiry failure
+   * and no page reload is required. Only fires when a user token is set.
+   */
+  private async request(url: string, init: { method?: string; body?: string } = {}): Promise<Response> {
+    const attempt = () => fetch(url, { ...init, headers: this.headers(init.method || 'GET') });
+    let res = await attempt();
+    if (res.status === 401 && this.accessToken) {
+      const session = await getSession(); // refreshes the stored session when near/expired
+      const fresh = session?.accessToken || null;
+      if (fresh && fresh !== this.accessToken) {
+        this.accessToken = fresh;
+        res = await attempt();
+      }
+    }
+    return res;
+  }
+
   async list<T>(table: string, opts?: { select?: string; orderBy?: string; limit?: number; filters?: Record<string, string> }): Promise<T[]> {
     const url = new URL(this.endpoint(table));
     if (opts?.select) url.searchParams.set('select', opts.select);
@@ -195,13 +217,13 @@ export class SupabaseAdapter implements DbAdapter {
     if (opts?.filters) {
       for (const [key, value] of Object.entries(opts.filters)) url.searchParams.append(key, `eq.${value}`);
     }
-    const res = await fetch(url.toString(), { headers: this.headers('GET') });
+    const res = await this.request(url.toString());
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) ? rows : [];
   }
 
   async get<T>(table: string, id: string): Promise<T | null> {
-    const res = await fetch(this.endpoint(table, id), { headers: this.headers('GET') });
+    const res = await this.request(this.endpoint(table, id));
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
@@ -209,27 +231,19 @@ export class SupabaseAdapter implements DbAdapter {
   async findFirst<T>(table: string, column: string, value: string): Promise<T | null> {
     const url = new URL(this.endpoint(table));
     url.searchParams.append(column, `eq.${value}`);
-    const res = await fetch(url.toString(), { headers: this.headers('GET') });
+    const res = await this.request(url.toString());
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
   async insert<T extends { id: string }>(table: string, row: T): Promise<T> {
-    const res = await fetch(this.endpoint(table), {
-      method: 'POST',
-      headers: this.headers('POST'),
-      body: JSON.stringify(row),
-    });
+    const res = await this.request(this.endpoint(table), { method: 'POST', body: JSON.stringify(row) });
     const rows = await this.handle<T[]>(res);
     return rows[0] || row;
   }
 
   async insertRaw<T>(table: string, row: T): Promise<T> {
-    const res = await fetch(this.endpoint(table), {
-      method: 'POST',
-      headers: this.headers('POST'),
-      body: JSON.stringify(row),
-    });
+    const res = await this.request(this.endpoint(table), { method: 'POST', body: JSON.stringify(row) });
     const rows = await this.handle<T[]>(res);
     return rows[0] || row;
   }
@@ -241,17 +255,13 @@ export class SupabaseAdapter implements DbAdapter {
   async updateBy<T>(table: string, column: string, value: string, patch: Partial<T>): Promise<T | null> {
     const url = new URL(this.endpoint(table));
     url.searchParams.append(column, `eq.${value}`);
-    const res = await fetch(url.toString(), {
-      method: 'PATCH',
-      headers: this.headers('PATCH'),
-      body: JSON.stringify(patch),
-    });
+    const res = await this.request(url.toString(), { method: 'PATCH', body: JSON.stringify(patch) });
     const rows = await this.handle<T[]>(res);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
   async remove(table: string, id: string): Promise<void> {
-    await fetch(this.endpoint(table, id), { method: 'DELETE', headers: this.headers('DELETE') });
+    await this.request(this.endpoint(table, id), { method: 'DELETE' });
   }
 
   /**
@@ -261,8 +271,12 @@ export class SupabaseAdapter implements DbAdapter {
    */
   async testConnection(): Promise<DbConnectionResult> {
     try {
+      // Connectivity probe is an ANON read — strip any (possibly expired)
+      // user token so an old JWT can never misreport the store as down.
+      const headers = this.headers('GET');
+      delete headers.Authorization;
       const res = await fetch(this.endpoint('categories') + '?limit=1', {
-        headers: this.headers('GET'),
+        headers,
         signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {

@@ -1,4 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../supabase', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../supabase')>();
+  return { ...actual, getSession: vi.fn() };
+});
+import { getSession } from '../supabase';
 import { LocalStorageAdapter, SupabaseAdapter, getDbMode, resetDbForTests, __setDbConfigForTests } from '../db';
 
 function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
@@ -101,5 +107,67 @@ describe('SupabaseAdapter failure behavior (no silent fallback)', () => {
     const res = await adapter.testConnection();
     expect(res.ok).toBe(false);
     expect(res.detail).toContain('ECONNREFUSED');
+  });
+});
+
+describe('SupabaseAdapter expired-token recovery (PGRST303 JWT expired)', () => {
+  const session = () => ({
+    accessToken: 'fresh-token',
+    refreshToken: 'r',
+    expiresAt: Date.now() + 60_000,
+    user: { id: 'u1', email: 'a@b.c', name: 'A', role: 'admin' as const },
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it('refreshes once and retries when a signed-in request 401s with JWT expired', async () => {
+    vi.mocked(getSession).mockResolvedValue(session() as never);
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const auth = ((init?.headers as Record<string, string> | undefined) || {}).Authorization || '';
+      calls.push(auth);
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ code: 'PGRST303', message: 'JWT expired' }), { status: 401, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify([{ id: 'row-1' }]), { status: 200, headers: { 'content-type': 'application/json' } });
+    }));
+
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    adapter.setAccessToken('stale-token');
+    const rows = await adapter.list<{ id: string }>('products');
+    expect(rows).toEqual([{ id: 'row-1' }]);
+    expect(calls).toEqual(['Bearer stale-token', 'Bearer fresh-token']);
+    expect(getSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT refresh when the response is not an auth failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify([{ id: 'ok' }]), { status: 200, headers: { 'content-type': 'application/json' } })));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    adapter.setAccessToken('stale-token');
+    await adapter.list('products');
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the failure behavior when NO token is set (anon request 401 surfaces the error)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('denied', { status: 401 })));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    await expect(adapter.list('products')).rejects.toThrow(/401/);
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it('testConnection is a pure anon probe — never sends an (expired) user token', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(((init?.headers as Record<string, string> | undefined) || {}).Authorization || '');
+      return new Response('[]', { status: 200 });
+    }));
+    const adapter = new SupabaseAdapter('https://x.supabase.co', 'anon');
+    adapter.setAccessToken('stale-token');
+    const res = await adapter.testConnection();
+    expect(res.ok).toBe(true);
+    expect(seen).toEqual(['']);
   });
 });
