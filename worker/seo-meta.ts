@@ -86,7 +86,7 @@ function supabaseAnon(): string {
   return (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
 }
 
-interface ProductRow {
+export interface ProductRow {
   id: string;
   slug?: string | null;
   name: string;
@@ -98,6 +98,8 @@ interface ProductRow {
   price?: number | null;
   compare_at_price?: number | null;
   brand?: string | null;
+  /** Legacy absolute product image URL (products.image_url). */
+  image_url?: string | null;
   stock_status?: string | null;
   us_inventory?: boolean | null;
   free_shipping?: boolean | null;
@@ -108,6 +110,15 @@ interface ProductRow {
   /** Embedded category name via categories(name) — the REST key is the
    * relation name `categories`. */
   categories?: { name?: string } | null;
+  /** Embedded product images via product_images(url,public_url,is_primary,sort_order). */
+  product_images?: ProductImageRow[] | null;
+}
+
+interface ProductImageRow {
+  url?: string | null;
+  public_url?: string | null;
+  is_primary?: boolean | null;
+  sort_order?: number | null;
 }
 
 const cache = new Map<string, { ts: number; data: unknown }>();
@@ -298,7 +309,35 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
 // JSON-LD builders
 // ---------------------------------------------------------------------------
 
-function productJsonLd(p: ProductRow, canonical: string): Record<string, unknown> {
+/** Absolute, crawlable image URLs for JSON-LD: the embedded product_images
+ * primary-first (relative assets are absolutized to the canonical origin the
+ * ASSETS binding serves), falling back to the legacy products.image_url.
+ * Empty only when the catalog genuinely has no image — never fabricated. */
+export function productImageUrls(p: ProductRow): string[] {
+  const origin = 'https://luxedge.us';
+  const abs = (u?: string | null): string | null => {
+    if (!u) return null;
+    const s = u.trim();
+    // Only absolute http(s) URLs or site-relative paths — a bare token like
+    // "garbage" must not silently become https://luxedge.us/garbage.
+    if (!/^(https?:\/\/|\/(?!\/)|[./])/i.test(s)) return null;
+    const href = new URL(s, origin).href;
+    return /^https?:\/\//i.test(href) ? href : null;
+  };
+  const rows = (p.product_images || []).slice().sort(
+    (a, b) =>
+      Number(b.is_primary === true) - Number(a.is_primary === true) ||
+      (a.sort_order ?? 0) - (b.sort_order ?? 0),
+  );
+  const urls = rows.map((r) => abs(r.url || r.public_url)).filter((u): u is string => !!u);
+  if (!urls.length) {
+    const fb = abs(p.image_url);
+    if (fb) urls.push(fb);
+  }
+  return urls;
+}
+
+export function productJsonLd(p: ProductRow, canonical: string): Record<string, unknown> {
   const offers: Record<string, unknown> = {
     '@type': 'Offer',
     price: Number(p.price ?? 0).toFixed(2),
@@ -315,6 +354,8 @@ function productJsonLd(p: ProductRow, canonical: string): Record<string, unknown
     url: canonical,
     offers,
   };
+  const images = productImageUrls(p);
+  if (images.length) product.image = images.slice(0, 8);
   if (p.brand) product.brand = { '@type': 'Brand', name: p.brand };
   return product;
 }
