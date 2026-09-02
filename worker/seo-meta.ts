@@ -708,12 +708,31 @@ async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): P
   return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
+/** UUID-shaped product param (case-insensitive) — the URL shape the
+ * storefront used to link from product cards before PR #35, still indexed.
+ * 301-ing it to the canonical slug merges the duplicate instead of leaving a
+ * self-canonicalized generic shell. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolve a UUID-shaped product param to its canonical slug redirect target.
+ * Returns null for slug-shaped params (never touched), unknown UUIDs, missing
+ * slugs, or an unavailable product list — callers keep today's behavior. */
+export function resolveUuidProductRedirect(
+  products: ProductRow[] | null,
+  param: string,
+): string | null {
+  if (!products || !UUID_RE.test(param)) return null;
+  const id = param.toLowerCase();
+  const p = products.find((x) => x.id.toLowerCase() === id);
+  return p && p.slug ? `/product/${p.slug}` : null;
+}
+
 export async function maybeInjectSeo(
   html: string,
   pathname: string,
   origin: string,
   env: SeoEnv,
-): Promise<{ html: string; status: number } | null> {
+): Promise<{ html: string; status: number } | { redirect: string } | null> {
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
@@ -812,6 +831,10 @@ export async function maybeInjectSeo(
     }
     const p = products.find((x) => x.slug === slug);
     if (!p) {
+      // Legacy UUID product URLs (pre-PR #35 storefront links) — 301 to the
+      // canonical slug so the duplicate collapses instead of soft-404ing.
+      const redirect = resolveUuidProductRedirect(products, slug);
+      if (redirect) return { redirect };
       return {
         html: inject(html, {
           title: 'Product Not Found | Luxedge',
