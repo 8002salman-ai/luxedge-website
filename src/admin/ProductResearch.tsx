@@ -45,9 +45,14 @@ const STATUS_LABEL: Record<SourceStatus, string> = {
   SKIPPED: 'SKIPPED',
 };
 
-/** Deep-link a keyword into Google Trends (US, trailing 12 months). */
+/**
+ * Deep-link a keyword into Google Trends (US, trailing 12 months), pinned to
+ * the Pets & Animals category (cat=66 — verified against Google's own
+ * /trends/api/explore/pickers/category endpoint) so the keyword lands in the
+ * pet trend view, not All categories.
+ */
 function googleTrendsExploreUrl(keyword: string): string {
-  return `https://trends.google.com/trends/explore?q=${encodeURIComponent(keyword.trim())}&geo=US&date=today%2012-m`;
+  return `https://trends.google.com/trends/explore?cat=66&q=${encodeURIComponent(keyword.trim())}&geo=US&date=today%2012-m`;
 }
 
 export default function ProductResearch() {
