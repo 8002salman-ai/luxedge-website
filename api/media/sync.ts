@@ -14,9 +14,11 @@
 // Behavior:
 //   * No key/channel configured → 501 with an honest "configure me" error.
 //   * Fetch order (per spec): official YouTube Data API only. No scraping,
-//     no polling — sync runs ONLY when the admin clicks Sync (or a future
-//     webhook), and YouTube responses are cached in-process (10 min) so
-//     repeated clicks never hammer the API.
+//     and YouTube responses are cached in-process (10 min). Runs on manual
+//     Sync clicks AND a Cloudflare cron trigger (wrangler.toml [triggers],
+//     handled by the `scheduled` export in worker/index.ts) so new uploads
+//     appear on /media automatically. The upsert is idempotent and the run
+//     costs ~3 YouTube Data API quota units, so the 6-hourly poll is cheap.
 //   * Upsert keyed on youtube_video_id. Editorial fields (summary, description,
 //     chapters, faq, featured, related_*, custom thumbnail) are NEVER
 //     overwritten by sync — it only refreshes title/thumbnail/published_at/
@@ -112,34 +114,39 @@ async function rest<T>(cfg: { url: string; serviceRole: string }, path: string, 
   }
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed — POST only' });
-    return;
-  }
-  const admin = await requireAdmin(req, res);
-  if (!admin) return; // 401/403 already sent
+export interface MediaSyncResult {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  missing?: { YOUTUBE_API_KEY: boolean; YOUTUBE_CHANNEL_ID: boolean };
+  synced?: number;
+  created?: number;
+  updated?: number;
+  videos?: { slug: string; url: string; title: string }[];
+  note?: string;
+}
 
+/**
+ * Shared sync core — runs the YouTube → media_videos import with no HTTP or
+ * auth layer, so BOTH the admin endpoint (POST /api/media/sync) and the
+ * Cloudflare scheduled cron (worker/index.ts) execute the same code. Every
+ * failure path returns an honest structured result instead of throwing.
+ */
+export async function runMediaSync(): Promise<MediaSyncResult> {
   const cfg = supabaseAdmin();
-  if (!cfg) {
-    sendJson(res, 500, { error: 'Supabase is not configured on the server.' });
-    return;
-  }
+  if (!cfg) return { ok: false, status: 500, error: 'Supabase is not configured on the server.' };
 
   const apiKey = (process.env.YOUTUBE_API_KEY || '').trim();
   const channelId = (process.env.YOUTUBE_CHANNEL_ID || '').trim();
 
   if (!apiKey || !channelId) {
-    sendJson(res, 501, {
+    return {
       ok: false,
+      status: 501,
       error:
         'YouTube sync is not configured yet. Add YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID as worker secrets/environment variables (see .env.example), then retry. Until then, add videos manually from the Media manager.',
-      missing: {
-        YOUTUBE_API_KEY: !apiKey,
-        YOUTUBE_CHANNEL_ID: !channelId,
-      },
-    });
-    return;
+      missing: { YOUTUBE_API_KEY: !apiKey, YOUTUBE_CHANNEL_ID: !channelId },
+    };
   }
 
   // 1. Resolve the uploads playlist id for the channel.
@@ -149,8 +156,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const uploads = channel?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
 
   if (!uploads) {
-    sendJson(res, 502, { ok: false, error: 'Could not resolve the channel uploads playlist — check YOUTUBE_CHANNEL_ID.' });
-    return;
+    return { ok: false, status: 502, error: 'Could not resolve the channel uploads playlist — check YOUTUBE_CHANNEL_ID.' };
   }
 
   // 2. List recent uploads (cached 10 min).
@@ -159,8 +165,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   );
   const items = (list?.items || []).filter((i) => i?.snippet?.resourceId?.videoId);
   if (items.length === 0) {
-    sendJson(res, 200, { ok: true, synced: 0, created: 0, updated: 0, videos: [], note: 'No uploads found on this channel yet.' });
-    return;
+    return { ok: true, synced: 0, created: 0, updated: 0, videos: [], note: 'No uploads found on this channel yet.' };
   }
 
   // 3. Enrich with durations (videos.list supports up to 50 ids per call).
@@ -259,12 +264,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
   }
 
-  sendJson(res, 200, {
+  return {
     ok: true,
     synced: videos.length,
     created,
     updated,
     videos,
     note: 'Imported videos are published immediately. Edit titles, summaries, chapters and related content from Admin → Media.',
-  });
+  };
+}
+
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed — POST only' });
+    return;
+  }
+  const admin = await requireAdmin(req, res);
+  if (!admin) return; // 401/403 already sent
+
+  const out = await runMediaSync();
+  sendJson(res, out.status || (out.ok ? 200 : 500), out);
 }
