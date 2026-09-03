@@ -84,6 +84,7 @@ describe('generate with multi-key rotation', () => {
 
   it('throws (instead of looping forever) when every key fails', async () => {
     stubFetch({ k1: () => err(), k2: () => err(), k3: () => err() });
-    await expect(generate('deepseek', { prompt: 'hi', model: 'deepseek-v4-flash' })).rejects.toThrow(/DeepSeek error/);
+    // Every key 429s → the classified quota message surfaces (never a silent loop).
+    await expect(generate('deepseek', { prompt: 'hi', model: 'deepseek-v4-flash' })).rejects.toThrow(/DeepSeek is out of quota/);
   });
 });
