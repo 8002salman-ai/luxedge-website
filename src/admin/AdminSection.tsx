@@ -20,6 +20,7 @@ import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
 import BlogManager from './BlogManager';
+import MediaManager from './MediaManager';
 import type {
   Product, ProductVariant, AdminCategory,
   AIProvider, EnterpriseVariant, VariantAttribute,
@@ -41,7 +42,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
-  Receipt, CloudArrowUp,
+  Receipt, CloudArrowUp, YoutubeLogo,
 } from '@phosphor-icons/react';
 
 // ADMIN PANEL - FULL WORKING SYSTEM
@@ -81,6 +82,12 @@ function AdminLayout({ children }: { children: ReactNode }) {
         { to: '/admin/categories', icon: TreeStructure, label: 'Categories', g: 'linear-gradient(135deg,#f59e0b,#f97316)', dot: '#fbbf24' },
         { to: '/admin/reviews', icon: Star, label: 'Reviews', g: 'linear-gradient(135deg,#eab308,#f59e0b)', dot: '#facc15' },
         { to: '/admin/blogs', icon: FileText, label: 'Blog Posts', g: 'linear-gradient(135deg,#0ea5e9,#06b6d4)', dot: '#38bdf8' },
+      ],
+    },
+    {
+      title: 'Media',
+      items: [
+        { to: '/admin/media', icon: YoutubeLogo, label: 'Media Hub', g: 'linear-gradient(135deg,#ef4444,#f97316)', dot: '#f87171' },
       ],
     },
     {
@@ -5674,6 +5681,7 @@ export default function AdminSection() {
       <Route path="categories" element={<AdminLayout><ACategories /></AdminLayout>} />
       <Route path="reviews" element={<AdminLayout><AReviews /></AdminLayout>} />
       <Route path="blogs" element={<AdminLayout><BlogManager /></AdminLayout>} />
+      <Route path="media" element={<AdminLayout><MediaManager /></AdminLayout>} />
       <Route path="seo-engine" element={<AdminLayout><ASEOEngine /></AdminLayout>} />
       <Route path="marketing" element={<AdminLayout><AMarketingGen /></AdminLayout>} />
       <Route path="variant-gen" element={<AdminLayout><AVariantGen /></AdminLayout>} />

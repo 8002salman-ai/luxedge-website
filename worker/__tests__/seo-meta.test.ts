@@ -16,6 +16,8 @@ import {
   productImageUrls,
   productJsonLd,
   resolveUuidProductRedirect,
+  mediaJsonLd,
+  type MediaEntry,
 } from '../seo-meta';
 
 const ROW = {
@@ -169,5 +171,66 @@ describe('resolveUuidProductRedirect (PR #35 residual — legacy UUID product UR
 
   it('unavailable product list → null (DB-down keeps the unchanged shell)', () => {
     expect(resolveUuidProductRedirect(null, '19d0b32c-0139-428c-977b-923786e301fb')).toBeNull();
+  });
+});
+describe('mediaJsonLd (Media Hub VideoObject)', () => {
+  const v = (over?: Partial<MediaEntry>): MediaEntry => ({
+    slug: 'how-himalayan-salt-licks-are-made',
+    title: 'How Himalayan Salt Licks Are Made',
+    summary: 'A factory tour.',
+    description: 'Full editorial description.',
+    thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+    youtubeVideoId: 'dQw4w9WgXcQ',
+    category: 'himalayan-salt',
+    isShort: false,
+    featured: true,
+    publishedAt: '2026-09-01T12:00:00Z',
+    duration: 'PT5M30S',
+    transcript: null,
+    chapters: [],
+    relatedProductIds: [],
+    relatedArticleSlugs: [],
+    relatedVideoSlugs: [],
+    ...over,
+  });
+
+  it('emits VideoObject with real data only (never fabricated fields)', () => {
+    const blocks = mediaJsonLd(v(), 'https://luxedge.us/media/how-himalayan-salt-licks-are-made');
+    const video = blocks.find((b) => b['@type'] === 'VideoObject');
+    expect(video).toBeDefined();
+    expect(video).toMatchObject({
+      name: 'How Himalayan Salt Licks Are Made',
+      thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+      uploadDate: '2026-09-01T12:00:00Z',
+      duration: 'PT5M30S',
+      embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      contentUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    });
+  });
+
+  it('omits optional fields when unknown — JSON.stringify drops undefined', () => {
+    const blocks = mediaJsonLd(v({ publishedAt: null, duration: null }), 'https://luxedge.us/media/x');
+    const video = blocks.find((b) => b['@type'] === 'VideoObject') as Record<string, unknown>;
+    const json = JSON.stringify(video);
+    expect(json).not.toContain('uploadDate');
+    expect(json).not.toContain('duration');
+  });
+
+  it('never emits VideoObject for non-YouTube media (no embed/content URLs invented)', () => {
+    const blocks = mediaJsonLd(v({ youtubeVideoId: null }), 'https://luxedge.us/media/x');
+    expect(blocks.find((b) => b['@type'] === 'VideoObject')).toBeUndefined();
+  });
+
+  it('adds FAQPage only when the video really has FAQ', () => {
+    const withFaq = mediaJsonLd(v({ faq: [{ q: 'Is it safe?', a: 'Yes.' }] }), 'https://luxedge.us/media/x');
+    expect(withFaq.find((b) => b['@type'] === 'FAQPage')).toBeDefined();
+    const without = mediaJsonLd(v(), 'https://luxedge.us/media/x');
+    expect(without.find((b) => b['@type'] === 'FAQPage')).toBeUndefined();
+  });
+
+  it('always includes the BreadcrumbList with Home → Media → video', () => {
+    const blocks = mediaJsonLd(v(), 'https://luxedge.us/media/how-himalayan-salt-licks-are-made');
+    const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList') as Record<string, unknown>;
+    expect(crumbs.itemListElement).toHaveLength(3);
   });
 });

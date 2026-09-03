@@ -36,13 +36,16 @@ import {
   STORE_SETTINGS_PUBLIC_SELECT,
 } from '../catalog';
 import { BLOG_LIST_PUBLIC_SELECT, BLOG_DETAIL_PUBLIC_SELECT } from '../blog';
+import { MEDIA_LIST_PUBLIC_SELECT } from '../media';
 import {
   SEO_PRODUCTS_SELECT,
   SEO_CATEGORIES_SELECT,
   SEO_BLOG_POSTS_SELECT,
+  SEO_MEDIA_SELECT,
   SITEMAP_PRODUCTS_SELECT,
   SITEMAP_CATEGORIES_SELECT,
   SITEMAP_BLOG_POSTS_SELECT,
+  SITEMAP_MEDIA_SELECT,
 } from '../../../worker/selects';
 
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../../supabase/migrations', import.meta.url));
@@ -161,6 +164,7 @@ const SELECT_CONTRACTS: Array<readonly [table: string, select: string, source: s
   ['store_settings', STORE_SETTINGS_PUBLIC_SELECT, 'src/services/catalog.ts'],
   ['blog_posts', BLOG_LIST_PUBLIC_SELECT, 'src/services/blog.ts'],
   ['blog_posts', BLOG_DETAIL_PUBLIC_SELECT, 'src/services/blog.ts'],
+  ['media_videos', MEDIA_LIST_PUBLIC_SELECT, 'src/services/media.ts'],
   // Worker SSR + sitemap reads (constants in worker/selects.ts, consumed by
   // worker/seo-meta.ts and worker/sitemap.ts). Same 400 class: a silent
   // PostgREST error here kills prerendered product pages or empties the
@@ -168,9 +172,12 @@ const SELECT_CONTRACTS: Array<readonly [table: string, select: string, source: s
   ['products', SEO_PRODUCTS_SELECT, 'worker/seo-meta.ts'],
   ['categories', SEO_CATEGORIES_SELECT, 'worker/seo-meta.ts'],
   ['blog_posts', SEO_BLOG_POSTS_SELECT, 'worker/seo-meta.ts'],
+  ['media_videos', SEO_MEDIA_SELECT, 'worker/seo-meta.ts'],
   ['products', SITEMAP_PRODUCTS_SELECT, 'worker/sitemap.ts'],
   ['categories', SITEMAP_CATEGORIES_SELECT, 'worker/sitemap.ts'],
   ['blog_posts', SITEMAP_BLOG_POSTS_SELECT, 'worker/sitemap.ts'],
+  ['media_videos', SITEMAP_MEDIA_SELECT, 'worker/sitemap.ts'],
+  ['media_videos', `${SITEMAP_MEDIA_SELECT},title,youtube_video_id,thumbnail_url,custom_thumbnail_url,published_at,duration`, 'worker/sitemap.ts (video sitemap)'],
 ];
 
 describe('public-read selects match the migration schema', () => {
@@ -180,6 +187,7 @@ describe('public-read selects match the migration schema', () => {
     expect(schema.product_images?.size ?? 0).toBeGreaterThan(4);
     expect(schema.blog_posts?.size ?? 0).toBeGreaterThan(10);
     expect(schema.coupons?.size ?? 0).toBeGreaterThan(5);
+    expect(schema.media_videos?.size ?? 0).toBeGreaterThan(15);
   });
 
   it('the live-verified bridge stays empty — out-of-band columns must be reconciled into a migration in the same PR', () => {

@@ -3,3 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /api
 Sitemap: https://luxedge.us/sitemap.xml
+Sitemap: https://luxedge.us/video-sitemap.xml

@@ -33,6 +33,11 @@ DEPLOYMENT_ENV = "production"
 # itself is a SECRET (wrangler secret put CLOUDFLARE_API_TOKEN).
 CLOUDFLARE_ACCOUNT_ID = "f542683e97458480452b0b8ef37a898a"
 CLOUDFLARE_ZONE_ID = "33109dc6283b9e9cdafc2d1a0b05b6f8"
+# YouTube Media Hub — non-secret vars (the API key itself is a SECRET:
+# `wrangler secret put YOUTUBE_API_KEY`). Channel values verified from the
+# owner data of the channel's real video YOBlXCyOh28 (2026-09-03).
+YOUTUBE_CHANNEL_ID = "UCPvPDstYz61AebGhKzKS1lw"
+YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@TheAIWithSalman"
 
 [env.staging]
 name = "luxedge-cloudflare-staging"

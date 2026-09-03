@@ -34,7 +34,7 @@ import {
   SHIPPING_SECTIONS,
   FAQ_DATA,
 } from '../src/content/policies';
-import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT } from './selects';
+import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 
 export interface SeoEnv {
@@ -226,6 +226,103 @@ function mapCmsToBlogEntry(r: BlogCmsRow): BlogEntry | null {
   };
 }
 
+export interface MediaEntry {
+  slug: string;
+  title: string;
+  summary: string;
+  description: string;
+  seoTitle?: string | null;
+  metaDescription?: string | null;
+  thumbnail?: string | null;
+  youtubeVideoId?: string | null;
+  category: string;
+  isShort: boolean;
+  featured: boolean;
+  publishedAt?: string | null;
+  duration?: string | null;
+  transcript?: string | null;
+  chapters: { t: string; title: string }[];
+  faq?: { q: string; a: string }[];
+  relatedProductIds: string[];
+  relatedArticleSlugs: string[];
+  relatedVideoSlugs: string[];
+}
+
+interface MediaCmsRow {
+  slug: string;
+  title: string;
+  summary?: string | null;
+  description?: string | null;
+  seo_title?: string | null;
+  meta_description?: string | null;
+  thumbnail_url?: string | null;
+  custom_thumbnail_url?: string | null;
+  youtube_video_id?: string | null;
+  category?: string | null;
+  is_short?: boolean | null;
+  featured?: boolean | null;
+  published_at?: string | null;
+  duration?: string | null;
+  transcript?: string | null;
+  chapters?: { t: string; title: string }[] | null;
+  faq?: { q: string; a: string }[] | null;
+  related_product_ids?: string[] | null;
+  related_article_slugs?: string[] | null;
+  related_video_slugs?: string[] | null;
+}
+
+function mapCmsToMediaEntry(r: MediaCmsRow): MediaEntry | null {
+  if (!r || !r.slug) return null;
+  return {
+    slug: r.slug,
+    title: r.title || r.slug,
+    summary: r.summary || '',
+    description: r.description || '',
+    seoTitle: r.seo_title || null,
+    metaDescription: r.meta_description || null,
+    // Custom editorial thumbnail wins over YouTube's real thumbnail.
+    thumbnail: r.custom_thumbnail_url || r.thumbnail_url || null,
+    youtubeVideoId: r.youtube_video_id || null,
+    category: r.category || 'product-education',
+    isShort: r.is_short === true,
+    featured: r.featured === true,
+    publishedAt: r.published_at || null,
+    duration: r.duration || null,
+    transcript: r.transcript || null,
+    chapters: Array.isArray(r.chapters)
+      ? r.chapters.filter((c) => !!c && typeof c.t === 'string' && typeof c.title === 'string')
+      : [],
+    faq: Array.isArray(r.faq) && r.faq.length ? r.faq : undefined,
+    relatedProductIds: Array.isArray(r.related_product_ids) ? r.related_product_ids.filter((x): x is string => typeof x === 'string') : [],
+    relatedArticleSlugs: Array.isArray(r.related_article_slugs) ? r.related_article_slugs.filter((x): x is string => typeof x === 'string') : [],
+    relatedVideoSlugs: Array.isArray(r.related_video_slugs) ? r.related_video_slugs.filter((x): x is string => typeof x === 'string') : [],
+  };
+}
+
+/**
+ * Media registry — source of truth is the Supabase `media_videos` table
+ * (published only; RLS enforces published + published_at <= now()). Short TTL
+ * so a newly published video gets SEO + indexability on the next worker
+ * requests WITHOUT a redeploy. Returns null when the DB is unreachable / the
+ * table is not yet migrated so callers keep the canonical correct.
+ */
+async function getMediaRegistry(): Promise<MediaEntry[] | null> {
+  const base = supabaseBase();
+  const key = supabaseAnon();
+  if (!base || !key) return null;
+  return cachedFetch<MediaEntry[]>('seo:media', 60_000, async () => {
+    const rows = await fetchJson<MediaCmsRow[]>(
+      base,
+      key,
+      `media_videos?select=${SEO_MEDIA_SELECT}&status=eq.published&order=published_at.desc`,
+    );
+    if (!rows) throw new Error('media_videos unavailable');
+    return rows
+      .map(mapCmsToMediaEntry)
+      .filter((x): x is MediaEntry => x !== null);
+  });
+}
+
 /**
  * Blog registry — source of truth is the Supabase CMS (published only; RLS
  * enforces published + published_at <= now()). Short TTL so a freshly
@@ -406,6 +503,92 @@ function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown>[] 
     });
   }
   return blocks;
+}
+
+// ---------------------------------------------------------------------------
+// Media JSON-LD + body pre-render
+// ---------------------------------------------------------------------------
+
+/** VideoObject (real data only) + BreadcrumbList + optional FAQPage. Fields
+ * with no real value are omitted entirely — nothing is ever fabricated. */
+export function mediaJsonLd(v: MediaEntry, canonical: string): Record<string, unknown>[] {
+  // Home → Media → video — matches the breadcrumb the client actually renders.
+  const blocks: Record<string, unknown>[] = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://luxedge.us' },
+        { '@type': 'ListItem', position: 2, name: 'Media', item: 'https://luxedge.us/media' },
+        { '@type': 'ListItem', position: 3, name: v.title, item: canonical },
+      ],
+    },
+  ];
+  if (v.youtubeVideoId) {
+    const video: Record<string, unknown> = {
+      '@context': 'https://schema.org',
+      '@type': 'VideoObject',
+      name: v.title,
+      description: cleanText(v.metaDescription || v.summary || v.description || v.title, 400),
+      thumbnailUrl: v.thumbnail || undefined,
+      uploadDate: v.publishedAt || undefined,
+      embedUrl: `https://www.youtube.com/embed/${v.youtubeVideoId}`,
+      contentUrl: `https://www.youtube.com/watch?v=${v.youtubeVideoId}`,
+    };
+    if (v.duration) video.duration = v.duration;
+    blocks.push(video);
+  }
+  if (v.faq && v.faq.length) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: v.faq.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: { '@type': 'Answer', text: f.a },
+      })),
+    });
+  }
+  return blocks;
+}
+
+/** Pre-renders the /media hub index with real video links from the CMS. */
+async function injectMediaIndexBody(html: string): Promise<string> {
+  const media = await getMediaRegistry();
+  const items = media && media.length
+    ? media.slice(0, 15).map((v) => `<li><a href="/media/${esc(v.slug)}">${esc(v.title)}</a></li>`).join('')
+    : '<li>Videos from the official Luxedge YouTube channel are added here as they are published.</li>';
+  const parts: string[] = [
+    `<h1>Luxedge Media</h1>`,
+    `<p>Films, guides and stories from the Luxedge team — how our products are made, how to care for the animals you love, and honest buying advice. Videos are hosted on the official Luxedge YouTube channel and embedded here.</p>`,
+    `<h2>Latest Videos</h2>`,
+    `<ul>${items}</ul>`,
+  ];
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+}
+
+/** Pre-renders a /media/:slug video page with its real editorial substance. */
+async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
+  const parts: string[] = [
+    `<h1>${esc(v.title)}</h1>`,
+  ];
+  if (v.publishedAt) parts.push(`<p><time datetime="${esc(v.publishedAt)}">${esc(v.publishedAt.slice(0, 10))}</time></p>`);
+  if (v.youtubeVideoId) {
+    parts.push(`<p><a href="https://www.youtube.com/watch?v=${esc(v.youtubeVideoId)}">Watch on YouTube</a>${v.thumbnail ? ` — <img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" />` : ''}</p>`);
+  }
+  if (v.summary) parts.push(`<p>${esc(v.summary)}</p>`);
+  if (v.description) parts.push(`<p>${esc(v.description).replace(/\n+/g, '</p><p>')}</p>`);
+  if (v.chapters.length) {
+    parts.push(`<h2>Chapters</h2>`, `<ol>${v.chapters.map((c) => `<li>${esc(c.t)} — ${esc(c.title)}</li>`).join('')}</ol>`);
+  }
+  if (v.faq && v.faq.length) {
+    parts.push(`<h2>Frequently Asked Questions</h2>`);
+    for (const f of v.faq) parts.push(`<h3>${esc(f.q)}</h3>`, `<p>${esc(f.a)}</p>`);
+  }
+  if (v.transcript) {
+    parts.push(`<h2>Transcript</h2>`, `<p>${esc(v.transcript).replace(/\n+/g, '</p><p>')}</p>`);
+  }
+  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
 // ---------------------------------------------------------------------------
@@ -783,6 +966,57 @@ export async function maybeInjectSeo(
     // Pre-render the hero + category navigation so the initial HTML (and any
     // non-JS crawler) sees real substantive content, not an empty shell.
     out = injectHomeBody(out);
+    return { html: out, status: 200 };
+  }
+
+  // /media (hub index) — pre-render with recent video links from the CMS.
+  if (segs.length === 1 && segs[0] === 'media') {
+    let out = inject(html, {
+      title: 'Luxedge Media — Videos, Guides & Stories | Luxedge',
+      description:
+        'Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories, embedded from the official YouTube channel.',
+      canonical: `${root}/media`,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'Luxedge Media',
+        url: `${root}/media`,
+        description:
+          'Films, guides and stories from the Luxedge team — product education, pet and animal care, how-to guides, buying guides and behind-the-brand stories.',
+      },
+    });
+    out = await injectMediaIndexBody(out);
+    return { html: out, status: 200 };
+  }
+
+  // /media/:slug — real editorial page with VideoObject structured data.
+  if (segs.length === 2 && segs[0] === 'media') {
+    const slug = decodeURIComponent(segs[1]);
+    const media = await getMediaRegistry();
+    if (media === null) {
+      return { html: injectCanonical(html, `${root}/media/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+    }
+    const v = media.find((x) => x.slug === slug);
+    if (!v) {
+      return {
+        html: inject(html, {
+          title: 'Video Not Found | Luxedge',
+          description: 'This video is no longer available.',
+          canonical: `${root}/media/${slug}`,
+          noindex: true,
+        }),
+        status: 404,
+      };
+    }
+    const canonical = `${root}/media/${slug}`;
+    const title = (v.seoTitle || v.title).replace(/\s*\|\s*Luxedge\s*$/i, '') + ' | Luxedge';
+    let out = inject(html, {
+      title,
+      description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
+      canonical,
+      jsonLd: mediaJsonLd(v, canonical),
+    });
+    out = await injectMediaBody(out, v);
     return { html: out, status: 200 };
   }
 
