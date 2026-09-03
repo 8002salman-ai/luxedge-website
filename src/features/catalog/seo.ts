@@ -43,12 +43,10 @@ export function merchantOfferExtras(p: {
       returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
       merchantReturnDays: 30,
       merchantReturnLink: `${SITE_URL}/returns`,
-      // GSC merchant-listing subfields: returns are handled by mail (replacement-based
-      // policy — no free-return claim is advertised anywhere, so the customer is
-      // responsible for return shipping by default). Flip to FreeReturn only if
-      // prepaid labels ever become the real policy.
+      // GSC merchant-listing subfields: returns are handled by mail with
+      // prepaid return labels, so the customer pays nothing (FreeReturn).
       returnMethod: 'https://schema.org/ReturnByMail',
-      returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
+      returnFees: 'https://schema.org/FreeReturn',
     },
     shippingDetails: {
       '@type': 'OfferShippingDetails',
@@ -194,6 +192,12 @@ export function buildFeedRow(p: CatalogProduct): Record<string, string | number>
     price: `${price.toFixed(2)} USD`,
     availability,
     condition: 'new',
+    // Storewide 30-day mail-return policy in CSV form — the same values as
+    // merchantOfferExtras (ReturnByMail / FreeReturn, merchantReturnDays: 30)
+    // so the feed columns match the JSON-LD on the product page.
+    return_method: 'by_mail',
+    return_fees: 'free',
+    return_days: 30,
   };
   if (p.brand && p.brand !== 'Luxedge') row.brand = p.brand;
   if (p.sku) row.sku = p.sku;
