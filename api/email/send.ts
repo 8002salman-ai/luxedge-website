@@ -11,6 +11,7 @@
 // pretending success.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, readJsonBody } from '../_lib/providers.js';
+import { supabaseAdmin, supabaseHeaders } from '../_lib/supabase.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 const DEFAULT_FROM = 'sales@luxedge.us';
@@ -56,11 +57,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // Batch send to CRM leads (opt-in marketing list). Reads opted-in lead
   // emails server-side via the service role — never returns the list.
   if (body.audience === 'leads') {
-    const cfg = (() => {
-      const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
-      const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-      return url && serviceRole ? { url, serviceRole } : null;
-    })();
+    const cfg = supabaseAdmin();
     if (!cfg) {
       sendJson(res, 502, { ok: false, error: 'CRM leads are unavailable (Supabase service role not configured on the server).' });
       return;
@@ -68,7 +65,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     let leads: Array<{ email?: string | null }> = [];
     try {
       const r = await fetch(`${cfg.url}/rest/v1/crm_leads?opted_in=eq.true&select=email`, {
-        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        headers: supabaseHeaders(cfg.serviceRole),
         signal: AbortSignal.timeout(15_000),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);

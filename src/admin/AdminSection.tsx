@@ -35,7 +35,7 @@ import TrafficDashboard from './TrafficDashboard';
 import AdSenseEarnings from './AdSenseEarnings';
 import {
   Warning, ArrowLeft, ArrowRight, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
-  Clipboard, Code, Cpu, CurrencyDollar, Download, PencilSimple, Eye, FileText, TreeStructure, Globe,
+  Clipboard, Code, Cpu, CurrencyDollar, Download, Info, Key, PencilSimple, Eye, FileText, TreeStructure, Globe,
   Image as ImageIcon, Camera, Stack, SquaresFour, LinkSimple, SpinnerGap, Lock, SignOut, Megaphone, List,
   Monitor, Package, Plus, ArrowClockwise, ArrowCounterClockwise, FloppyDisk, MagnifyingGlass, PaperPlaneRight, GearSix,
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
@@ -1933,8 +1933,8 @@ function parseJ<T>(raw: string, fb: T): T {
   }
 
   async function generateAll() {
-    if (!selectedProduct) { alert('Please select a product first.'); return; }
-    if (!activeProviders.length) { alert('Add an AI provider API key in GearSix first.'); return; }
+    if (!selectedProduct) { notify('Select a product first — every piece of copy is tailored to it.'); return; }
+    if (!activeProviders.length) { notify('No AI provider key yet — open AI Hub and attach one first.'); return; }
     setGenerating(true); setGenSection('all');
     try {
       const raw = await callAI(buildPrompt('all'));
@@ -1944,7 +1944,7 @@ function parseJ<T>(raw: string, fb: T): T {
       if (d.social) setSocial(d.social as SocialPosts);
       if (d.email) setEmail(d.email as EmailDraft);
       if (d.video) setVideo(d.video as VideoScript);
-    } catch(e) { alert(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
+    } catch(e) { notify(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
     setGenerating(false); setGenSection('');
   }
 
@@ -1958,7 +1958,7 @@ function parseJ<T>(raw: string, fb: T): T {
       else if (section === 'social') setSocial(parseJ(raw, social));
       else if (section === 'email') setEmail(parseJ(raw, email));
       else if (section === 'video') setVideo(parseJ(raw, video));
-    } catch(e) { alert(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
+    } catch(e) { notify(`AI Error: ${e instanceof Error ? e.message : String(e)}`); }
     setGenerating(false); setGenSection('');
   }
 
@@ -2039,6 +2039,13 @@ function parseJ<T>(raw: string, fb: T): T {
           </select>
         </div>
       </div>
+
+      {/* First-run guidance — why the controls are locked */}
+      {!selectedProductId && (
+        <div className="mb-6 -mt-2 flex items-center gap-1.5 text-xs text-gray-400">
+          <Info size={13} className="shrink-0" /> Select a product above to unlock generation — copy is tailored to its name, price and description.
+        </div>
+      )}
 
       {/* Honest provider state — never fake AI output */}
       {activeProviders.length === 0 && (
@@ -2628,7 +2635,7 @@ function parseJ<T>(raw: string, fb: T): T {
             </div>
 
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => void generateMedia()} disabled={mediaGenerating}
+              <button type="button" onClick={() => void generateMedia()} disabled={mediaGenerating || (serverCfg !== null && !!serverCfg[mediaProvider] && !serverCfg[mediaProvider].configured)}
                 className="px-5 py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
                 {mediaGenerating ? <SpinnerGap size={14} className="animate-spin" /> : <Sparkle size={14} />}
                 {mediaGenerating ? (mediaType === 'video' ? 'Generating video (1-2 min)…' : 'Generating image…') : `Generate ${mediaType}`}
@@ -2637,6 +2644,14 @@ function parseJ<T>(raw: string, fb: T): T {
                 <span className={`text-xs font-medium ${mediaResult.ok ? 'text-green-600' : 'text-red-600'}`}>{mediaResult.msg}</span>
               )}
             </div>
+            {serverCfg !== null && !!serverCfg[mediaProvider] && !serverCfg[mediaProvider].configured && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <Warning size={13} className="shrink-0 mt-0.5" />
+                No {mediaProvider === 'openai' ? 'OpenAI' : 'Gemini'} key on the server yet — attach one in{' '}
+                <button type="button" onClick={() => nav('/admin/ai')} className="underline font-medium text-amber-800">AI Hub → Attach Key</button>
+                {' '}to unlock real {mediaType === 'video' ? 'videos' : 'images'}.
+              </p>
+            )}
             <p className="text-[11px] text-gray-400">Needs an API key on the server: <strong>OpenAI</strong> (gpt-image-1) ya <strong>Google Gemini</strong> (Imagen for images, Veo for video). DeepSeek/Codex sirf text banate hain — media ke liye nahi. Gemini Plus/Pro membership consumer app ka hai — API ke liye alag key chahiye (AI Hub → Attach Key).</p>
           </div>
 
@@ -2678,7 +2693,7 @@ function parseJ<T>(raw: string, fb: T): T {
             <div className="text-center py-16 bg-white border border-dashed border-gray-200 rounded-xl">
               <Megaphone size={40} className="text-gray-200 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">No saved copies yet</p>
-              <p className="text-gray-400 text-sm">Click "FloppyDisk" on any tab to archive marketing copy here</p>
+              <p className="text-gray-400 text-sm">Click FloppyDisk on any tab — or Save to Vault in Media Studio — to keep your best work here</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -4541,7 +4556,7 @@ function AAIHub() {
   };
 
 const providerIcons: Record<string, string> = {
-    openrouter: '\u{1F310}', gemini: '\u{1F916}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
+    openrouter: '\u{1F310}', gemini: '\u{1F916}', deepseek: '\u{1F40B}', codex: '\u{1F9D1}\u{200D}\u{1F4BB}', openai: '\u{1F9E0}', anthropic: '\u{1F9EC}'
   };
 
   return (
@@ -4607,6 +4622,31 @@ const providerIcons: Record<string, string> = {
           <Robot size={16} className="text-purple-500" /> AI Provider Configuration
         </h2>
         <p className="text-sm text-gray-500 mb-5">Add API keys and select models for each provider. The default provider is used for all AI operations.</p>
+        {/* First-run connection status */}
+        {(() => {
+          const known = Object.entries(keyStatus);
+          const connected = known.filter(([, k]) => k.configured);
+          if (connected.length === 0) {
+            return (
+              <div className="mb-5 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm flex items-start gap-3">
+                <Key size={16} className="text-amber-700 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-amber-800">Nothing connected yet</p>
+                  <p className="text-amber-700">Attach your first provider key below, then press <strong>Test</strong> to verify it — keys are stored server-side and never live in this browser.</p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="mb-5 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2 flex-wrap text-xs">
+              <CheckCircle size={14} className="text-green-600 shrink-0" />
+              <span className="font-medium text-green-700">{connected.length} of {known.length} providers connected</span>
+              {connected.map(([id]) => (
+                <span key={id} className="px-2 py-0.5 bg-white border border-green-200 text-green-700 rounded-full font-medium">{aiProviders.find(p => p.id === id)?.name || id} ✓</span>
+              ))}
+            </div>
+          );
+        })()}
         <div className="space-y-3">
           {aiProviders.map((provider, idx) => (
             <div key={provider.id} className={`border rounded-xl p-4 transition-all ${provider.isDefault ? 'border-purple-300 bg-purple-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
@@ -4644,7 +4684,7 @@ const providerIcons: Record<string, string> = {
                     {serverStatus?.[provider.id]?.configured ? <CheckCircle size={14} className="shrink-0" /> : <Warning size={14} className="shrink-0" />}
                     {serverStatus?.[provider.id]?.configured
                       ? 'Configured on server — key is safe (env var only)'
-                      : 'Not configured — add the provider key env var on the server (see .env.example)'}
+                      : 'No key yet — paste one above to go live now (a server env var, if set, wins)'}
                   </div>
                   <div className="flex items-center gap-2 mt-2">
                     <input

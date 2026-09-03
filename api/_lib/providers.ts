@@ -2,7 +2,8 @@
 // LUXEDGE V2 — SERVER-SIDE AI PROVIDER LAYER
 //
 // This code runs ONLY inside /api serverless functions (never in the browser).
-// Provider API keys are read exclusively from environment variables.
+// Provider API keys are read from environment variables, with an optional
+// owner-attached fallback stored server-side in Supabase `app_settings`.
 //
 // SECURITY RULES (enforced here):
 //  - Keys are never logged, never echoed in errors, never returned to clients.
@@ -11,6 +12,7 @@
 // ============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { supabaseAdmin, supabaseHeaders } from './supabase.js';
 
 /** Hard cap on outbound provider calls — prevents hung serverless functions. */
 export const FETCH_TIMEOUT_MS = 45_000;
@@ -92,21 +94,12 @@ export function configuredProviders(): string[] {
   return Object.keys(PROVIDER_ENV).filter(isConfigured);
 }
 
-export function providerKey(providerId: string): string {
-  const envName = PROVIDER_ENV[providerId];
-  if (!envName) return '';
-  const primary = process.env[envName] || '';
-  if (primary) return primary;
-  // Codex may authenticate via the Freebuff ChatGPT OAuth token instead of an API key.
-  if (providerId === 'codex') return process.env['CHATGPT_OAUTH_TOKEN'] || '';
-  return '';
-}
-
 /**
- * All configured keys for a provider, in priority order. Supports the legacy
- * single key (PROVIDER_ENV[providerId]) plus numbered extras (e.g.
+ * All configured env keys for a provider, in priority order. Supports the
+ * legacy single key (PROVIDER_ENV[providerId]) plus numbered extras (e.g.
  * DEEPSEEK_API_KEY_1..N or comma-separated values in the primary var).
- * Deduplicated, whitespace-trimmed, empties dropped.
+ * Deduplicated, whitespace-trimmed, empties dropped. The DB-attached key is
+ * appended separately by resolveProviderKeys.
  */
 export function providerKeys(providerId: string): string[] {
   const envName = PROVIDER_ENV[providerId];
@@ -144,20 +137,14 @@ let dbKeysCache: Record<string, string> | null = null;
 let dbKeysLoadedAt = 0;
 const DB_KEYS_TTL_MS = 60_000;
 
-async function supabaseConfig() {
-  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  return url && key ? { url, key } : null;
-}
-
 /** Load AI_KEY_* rows from app_settings (service role, read-only on those rows). */
 export async function loadDbProviderKeys(force = false): Promise<Record<string, string>> {
-  const cfg = await supabaseConfig();
+  const cfg = supabaseAdmin();
   if (!cfg) return {};
   if (!force && dbKeysCache && Date.now() - dbKeysLoadedAt < DB_KEYS_TTL_MS) return dbKeysCache;
   try {
     const res = await fetch(`${cfg.url}/rest/v1/app_settings?key=like.AI_KEY_%25&select=key,value`, {
-      headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+      headers: supabaseHeaders(cfg.serviceRole),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return dbKeysCache || {};
@@ -186,13 +173,22 @@ export async function isConfiguredFull(providerId: string): Promise<boolean> {
   return Boolean(db[providerId.toUpperCase()]);
 }
 
-/** Resolve the key for a provider: env wins, then DB-attached key. */
-export async function resolveProviderKey(providerId: string): Promise<string> {
-  const env = providerKey(providerId);
-  if (env) return env;
+/**
+ * All keys for a provider in priority order: numbered/comma env vars first,
+ * then the DB-attached key. Used for single-key providers (first key) and
+ * DeepSeek's rotation (try each key until one succeeds).
+ */
+export async function resolveProviderKeys(providerId: string): Promise<string[]> {
+  const keys = providerKeys(providerId);
   const db = await loadDbProviderKeys();
-  if (providerId === 'codex') return db['CHATGPT_OAUTH'] || db['CODEX'] || '';
-  return db[providerId.toUpperCase()] || '';
+  const dbKey = providerId === 'codex' ? db['CHATGPT_OAUTH'] || db['CODEX'] : db[providerId.toUpperCase()];
+  if (dbKey && !keys.includes(dbKey)) keys.push(dbKey);
+  return keys;
+}
+
+/** Resolve the primary key for a provider: env wins, then DB-attached key. */
+export async function resolveProviderKey(providerId: string): Promise<string> {
+  return (await resolveProviderKeys(providerId))[0] || '';
 }
 
 /** Round-robin cursor for multi-key providers (module-level, per warm instance). */
@@ -204,21 +200,18 @@ export function __resetKeyRotationForTests(): void {
 }
 
 /** Call a provider, rotating through every configured key on failure. */
-async function generateWithKeyRotation(providerId: string, _opts: GenerateOptions, call: (key: string) => Promise<string>): Promise<string> {
-  const keys = providerKeys(providerId);
-  if (!keys.length) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var)`);
+async function generateWithKeyRotation(keys: string[], call: (key: string) => Promise<string>): Promise<string> {
   // Rotate the STARTING key so repeated calls spread across all keys.
   const start = keyCursor++ % keys.length;
   let lastErr: Error | null = null;
   for (let i = 0; i < keys.length; i++) {
-    const key = keys[(start + i) % keys.length];
     try {
-      return await call(key);
+      return await call(keys[(start + i) % keys.length]);
     } catch (e) {
       lastErr = e as Error;
     }
   }
-  throw lastErr || new Error(`${PROVIDER_NAMES[providerId]} generation failed`);
+  throw lastErr || new Error('generation failed');
 }
 
 function sanitizeError(providerId: string, status: number): string {
@@ -234,9 +227,10 @@ export interface GenerateOptions {
 
 /** Call the requested provider from the server. Throws on failure. */
 export async function generate(providerId: string, opts: GenerateOptions): Promise<string> {
-  // Env wins, then DB-attached key (owner-provided via admin UI).
-  const key = await resolveProviderKey(providerId);
-  if (!key) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var — attach a key in Settings → AI & Scraping Keys)`);
+  // Env keys win, then the DB-attached key (owner-provided via AI Hub).
+  const keys = await resolveProviderKeys(providerId);
+  if (!keys.length) throw new Error(`${PROVIDER_NAMES[providerId] || providerId} not configured on server (missing ${PROVIDER_ENV[providerId]} env var — attach a key in AI Hub → Attach Key)`);
+  const key = keys[0];
   const { prompt, model, system } = opts;
   if (!isValidModel(model)) throw new Error('Invalid model identifier');
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
@@ -258,9 +252,9 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       return text;
     }
     case 'deepseek': {
-      // Multi-key rotation: tries every configured DEEPSEEK_API_KEY(_N) in
+      // Multi-key rotation: tries every configured key (env + DB-attached) in
       // round-robin order, moving to the next key when one fails.
-      return generateWithKeyRotation('deepseek', opts, async (rotKey) => {
+      return generateWithKeyRotation(keys, async (rotKey) => {
         const r = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${rotKey}` },
@@ -395,7 +389,7 @@ export async function generateWithFallback(
 /** Test connectivity server-side. Never leaks the key. */
 export async function testProvider(providerId: string, model?: string): Promise<{ ok: boolean; message: string }> {
   if (!(await isConfiguredFull(providerId))) {
-    return { ok: false, message: `Not configured — add ${PROVIDER_ENV[providerId]} env var or attach a key in Settings → AI & Scraping Keys` };
+    return { ok: false, message: `Not configured — add ${PROVIDER_ENV[providerId]} env var or attach a key in AI Hub → Attach Key` };
   }
   try {
     const text = await generate(providerId, {

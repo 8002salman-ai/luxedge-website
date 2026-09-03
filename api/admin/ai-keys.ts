@@ -13,6 +13,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, readJsonBody, PROVIDER_ENV, PROVIDER_NAMES, resolveProviderKey, loadDbProviderKeys, testProvider, rateLimited, clientIp } from '../_lib/providers.js';
+import { upsertAppSetting, deleteAppSetting } from '../_lib/supabase.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 const DB_KEY_PREFIX = 'AI_KEY_';
@@ -29,36 +30,12 @@ function mask(key: string): string {
   return `${key.slice(0, 4)}••••${key.slice(-4)}`;
 }
 
-async function writeDbKey(provider: string, value: string): Promise<boolean> {
-  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
-  const svc = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!url || !svc) return false;
-  try {
-    const res = await fetch(`${url}/rest/v1/app_settings`, {
-      method: 'POST',
-      headers: {
-        apikey: svc,
-        Authorization: `Bearer ${svc}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates',
-      },
-      body: JSON.stringify({ key: dbKeyName(provider), value, updated_at: new Date().toISOString() }),
-    });
-    return res.ok;
-  } catch { return false; }
+function writeDbKey(provider: string, value: string): Promise<boolean> {
+  return upsertAppSetting(dbKeyName(provider), value);
 }
 
-async function clearDbKey(provider: string): Promise<boolean> {
-  const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
-  const svc = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!url || !svc) return false;
-  try {
-    const res = await fetch(`${url}/rest/v1/app_settings?key=eq.${encodeURIComponent(dbKeyName(provider))}`, {
-      method: 'DELETE',
-      headers: { apikey: svc, Authorization: `Bearer ${svc}` },
-    });
-    return res.ok || res.status === 404;
-  } catch { return false; }
+function clearDbKey(provider: string): Promise<boolean> {
+  return deleteAppSetting(dbKeyName(provider));
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -72,7 +49,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const db = await loadDbProviderKeys(true);
     const out = Object.keys(PROVIDER_ENV).map((id) => {
       const envKey = !!process.env[PROVIDER_ENV[id]]?.trim();
-      const dbVal = id === 'codex' ? (db['CODEX'] || db['CHATGPT_OAUTH'] || '') : (db[id.toUpperCase()] || '');
+      const dbVal = id === 'codex' ? (db['CHATGPT_OAUTH'] || db['CODEX'] || '') : (db[id.toUpperCase()] || '');
       return {
         id,
         name: PROVIDER_NAMES[id] || id,

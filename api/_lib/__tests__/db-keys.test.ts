@@ -7,7 +7,7 @@
 // that resolution order and the cache behavior.
 // ============================================================================
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { isConfiguredFull, resolveProviderKey, loadDbProviderKeys, __resetDbKeysForTests } from '../providers.js';
+import { isConfiguredFull, resolveProviderKey, loadDbProviderKeys, generate, __resetDbKeysForTests, __resetKeyRotationForTests } from '../providers.js';
 
 const ORIG = new Map<string, string | undefined>([
   ['DEEPSEEK_API_KEY', process.env.DEEPSEEK_API_KEY],
@@ -33,6 +33,7 @@ describe('DB-attached AI provider keys', () => {
       else process.env[k] = v;
     }
     __resetDbKeysForTests();
+    __resetKeyRotationForTests();
     vi.unstubAllGlobals();
   });
 
@@ -75,6 +76,29 @@ describe('DB-attached AI provider keys', () => {
 
     expect(await isConfiguredFull('deepseek')).toBe(false);
     expect(await resolveProviderKey('deepseek')).toBe('');
+  });
+
+  it('generate uses the DB-attached key when the env var is missing (DeepSeek rotation path)', async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    process.env.VITE_SUPABASE_URL = 'https://x.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
+    vi.stubGlobal('fetch', vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/app_settings')) {
+        return new Response(JSON.stringify([{ key: 'AI_KEY_DEEPSEEK', value: 'db-deepseek-key' }]), { status: 200 });
+      }
+      if (url.includes('api.deepseek.com')) {
+        const auth = String((init?.headers as Record<string, string> | undefined)?.Authorization || '');
+        if (auth === 'Bearer db-deepseek-key') {
+          return new Response(JSON.stringify({ choices: [{ message: { content: 'from db key' } }] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ error: 'wrong key' }), { status: 401 });
+      }
+      return new Response(JSON.stringify({ error: 'unexpected' }), { status: 500 });
+    }));
+
+    const text = await generate('deepseek', { prompt: 'hi', model: 'deepseek-v4-flash' });
+    expect(text).toBe('from db key');
   });
 
   it('caches DB keys for 60s and refreshes when forced', async () => {

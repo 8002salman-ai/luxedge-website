@@ -39,7 +39,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const system = typeof body.system === 'string' && body.system.trim() ? String(body.system) : undefined;
 
   if (!provider || !(await isConfiguredFull(provider))) {
-    sendJson(res, 501, { error: 'AI provider not configured on server. Set the provider API key env var or attach a key in Settings → AI & Scraping Keys.' });
+    sendJson(res, 501, { error: 'AI provider not configured on server. Set the provider API key env var or attach a key in AI Hub → Attach Key.' });
     return;
   }
   if (!prompt || prompt.length > 12000) {

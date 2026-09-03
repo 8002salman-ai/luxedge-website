@@ -6,11 +6,11 @@
 //
 // Supported:
 //   { type: 'image', provider: 'openai', prompt }  → OpenAI gpt-image-1
-//   { type: 'image', provider: 'gemini', prompt }  → Google Imagen 3
-//   { type: 'video', provider: 'gemini', prompt }  → Google Veo 3 (long-running, polled)
+//   { type: 'image', provider: 'gemini', prompt }  → Gemini image model (generateContent)
+//   { type: 'video', provider: 'gemini', prompt }  → Google Veo 3.1 (long-running, polled)
 //
 // Keys: OPENAI_API_KEY / GEMINI_API_KEY from env, or owner-attached via
-// Settings → AI & Scraping Keys (AI_KEY_OPENAI / AI_KEY_GEMINI). env wins.
+// AI Hub → Attach Key (AI_KEY_OPENAI / AI_KEY_GEMINI in app_settings). env wins.
 //
 // SECURITY:
 //   - Admin-only + rate limited. Prompt length capped.
@@ -19,6 +19,7 @@
 // ============================================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, rateLimited, clientIp, readJsonBody, resolveProviderKey, isConfiguredFull } from '../_lib/providers.js';
+import { supabaseAdmin, supabaseHeaders } from '../_lib/supabase.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 const BUCKET = 'product-media';
@@ -27,12 +28,6 @@ const MAX_BYTES = 12 * 1024 * 1024; // 12 MB decoded (video clips can be large)
 const POLL_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 4_000;
 
-function supabaseConfig(): { url: string; serviceRole: string } | null {
-  const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
-  const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  return url && serviceRole ? { url, serviceRole } : null;
-}
-
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'media';
 }
@@ -40,12 +35,7 @@ function slugify(s: string): string {
 async function uploadBytes(cfg: { url: string; serviceRole: string }, bytes: Uint8Array, contentType: string, filename: string): Promise<string> {
   const res = await fetch(`${cfg.url}/storage/v1/object/${BUCKET}/${filename}`, {
     method: 'POST',
-    headers: {
-      apikey: cfg.serviceRole,
-      Authorization: `Bearer ${cfg.serviceRole}`,
-      'Content-Type': contentType,
-      'x-upsert': 'true',
-    },
+    headers: { ...supabaseHeaders(cfg.serviceRole), 'Content-Type': contentType, 'x-upsert': 'true' },
     body: bytes as unknown as BodyInit,
     signal: AbortSignal.timeout(30_000),
   });
@@ -83,14 +73,32 @@ const GEMINI_IMAGE_MODELS = [
   'gemini-3-pro-image-preview',
 ];
 
-/** Resolve the first image-capable model available on this key. */
+// Model availability varies per account tier and Google keeps renaming image
+// models, so the best pick is resolved once per warm instance (10 min TTL)
+// instead of on every request. Keyed by key fingerprint so swapping the
+// attached key never reuses the old key's model.
+let geminiImageModel: { fingerprint: string; model: string } | null = null;
+let geminiImageModelAt = 0;
+const GEMINI_MODEL_TTL_MS = 10 * 60_000;
+
+/** Resolve the first image-capable model available on this key (cached per key). */
 async function resolveGeminiImageModel(key: string): Promise<string> {
+  const fingerprint = key.slice(-8);
+  if (geminiImageModel && geminiImageModel.fingerprint === fingerprint && Date.now() - geminiImageModelAt < GEMINI_MODEL_TTL_MS) {
+    return geminiImageModel.model;
+  }
   try {
     const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key), { signal: AbortSignal.timeout(15_000) });
     if (r.ok) {
       const d = await r.json().catch(() => null) as { models?: Array<{ name: string }> } | null;
       const available = new Set((d?.models || []).map((m) => m.name.replace(/^models\//, '')));
-      for (const m of GEMINI_IMAGE_MODELS) if (available.has(m)) return m;
+      for (const m of GEMINI_IMAGE_MODELS) {
+        if (available.has(m)) {
+          geminiImageModel = { fingerprint, model: m };
+          geminiImageModelAt = Date.now();
+          return m;
+        }
+      }
     }
   } catch { /* fall through to default */ }
   return GEMINI_IMAGE_MODELS[1]; // gemini-2.5-flash-image
@@ -191,7 +199,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 501, { error: `${provider} not configured on server. Attach an API key in AI Hub → Attach Key (or set ${provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'} env var), then retry.` });
     return;
   }
-  const cfg = supabaseConfig();
+  const cfg = supabaseAdmin();
   if (!cfg) {
     sendJson(res, 502, { error: 'Media storage is unavailable (Supabase service role not configured).' });
     return;
