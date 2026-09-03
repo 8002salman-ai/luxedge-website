@@ -304,10 +304,10 @@ describe('seo + feed', () => {
     const policy = offer.hasMerchantReturnPolicy as Record<string, unknown>;
     expect(policy.merchantReturnDays).toBe(30);
     expect(policy.applicableCountry).toBe('US');
-    // GSC merchant-listing subfields (returnMethod + returnFees) — honest values:
-    // returns are by mail and no free-return claim exists, so customer-responsible.
+    // GSC merchant-listing subfields (returnMethod + returnFees) — returns are
+    // by mail with prepaid labels, so fees are free.
     expect(policy.returnMethod).toBe('https://schema.org/ReturnByMail');
-    expect(policy.returnFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
+    expect(policy.returnFees).toBe('https://schema.org/FreeReturn');
     const sd = offer.shippingDetails as Record<string, unknown>;
     expect((sd.shippingDestination as Record<string, unknown>).addressCountry).toBe('US');
   });
@@ -336,6 +336,19 @@ describe('seo + feed', () => {
     const csv = buildFeedCsv([p]);
     expect(csv).toContain('id,title');
     expect(csv).toContain('p1');
+  });
+
+  it('feed rows carry the return policy in CSV form (Meta/Pinterest parity with merchantOfferExtras)', () => {
+    const row = buildFeedRow(p);
+    // Same storewide policy as the JSON-LD offer: 30-day returns by mail with
+    // prepaid labels — CSV tokens mirror the schema.org terms
+    // (ReturnByMail / FreeReturn / 30).
+    expect(row.return_method).toBe('by_mail');
+    expect(row.return_fees).toBe('free');
+    expect(row.return_days).toBe(30);
+    const csv = buildFeedCsv([p]);
+    expect(csv).toContain('return_method,return_fees,return_days');
+    expect(csv).toContain('by_mail,free,30');
   });
 
   it('alt text is deterministic and never invented', () => {
