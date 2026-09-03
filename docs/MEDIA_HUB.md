@@ -14,15 +14,22 @@ autoplay) and links back to the channel. Nothing here re-uploads video files.
 | `/sitemap.xml` | Dynamic sitemap now includes `/media` + every published video |
 | `/admin/media` | Admin Media manager — list, editor, manual add, "Sync from YouTube" |
 
-## How a video appears on the site (two paths)
+## How a video appears on the site (three paths)
 
-1. **Automatic — POST /api/media/sync** (Admin → Media Hub → Sync from YouTube).
-   Pulls the official channel's uploads via the YouTube Data API, upserts rows
-   into `media_videos` keyed on `youtube_video_id`, and publishes immediately.
-   Editorial fields (summary, description, chapters, FAQ, featured, related_*,
-   custom thumbnail) are **never overwritten** by a re-sync. YouTube responses
-   are cached in-process for 10 minutes — no polling, sync only on click.
-2. **Manual fallback** — paste a YouTube URL/id into the manager ("Start from
+1. **Automatic — Cloudflare cron** (`wrangler.toml` `[triggers]`, every 6
+   hours). The worker's `scheduled` handler calls the same `runMediaSync()`
+   core as the endpoint below, so new channel uploads appear on /media
+   **without any click**. The YouTube Data API has no push feed for channels,
+   so a 6-hourly poll of the channel's own uploads is the honest minimum;
+   each run is an idempotent upsert costing ~3 API quota units.
+2. **Automatic on demand — POST /api/media/sync** (Admin → Media Hub → Sync
+   from YouTube). Same `runMediaSync()` core — useful right after uploading a
+   video rather than waiting for the cron. Pulls the official channel's
+   uploads, upserts rows into `media_videos` keyed on `youtube_video_id`, and
+   publishes immediately. Editorial fields (summary, description, chapters,
+   FAQ, featured, related_*, custom thumbnail) are **never overwritten** by a
+   re-sync. YouTube responses are cached in-process for 10 minutes.
+3. **Manual fallback** — paste a YouTube URL/id into the manager ("Start from
    URL") or click "Add Video" and fill the editorial fields. Use this when
    sync is not configured or a video needs editing before publishing.
 

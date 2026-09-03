@@ -34,7 +34,7 @@ import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
 import mediaGenerateHandler from '../api/media/generate';
-import mediaSyncHandler from '../api/media/sync';
+import mediaSyncHandler, { runMediaSync } from '../api/media/sync';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import crmLeadHandler from '../api/crm/lead';
@@ -202,6 +202,8 @@ export interface Env {
   ASSETS: AssetsFetcher;
   /** CJ supplier credential — a Cloudflare secret binding, never client-side. */
   CJ_API_KEY?: string;
+  /** YouTube Data API key — a Cloudflare secret binding (wrangler secret put). */
+  YOUTUBE_API_KEY?: string;
   GOOGLE_ADSENSE_CLIENT_ID?: string;
   GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
@@ -426,5 +428,24 @@ export default {
       });
     }
     return indexRes;
+  },
+
+  /**
+   * Scheduled auto-sync (wrangler.toml [triggers], every 6 hours): pulls the
+   * official channel's uploads into media_videos so new videos appear on
+   * /media without a manual Sync click. Shares runMediaSync() with the admin
+   * endpoint (api/media/sync.ts) — idempotent upsert, ~3 YouTube Data API
+   * quota units per run. Clean no-op (logged) when not configured; the cron
+   * trigger itself is not externally invokable.
+   */
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    populateProcessEnv(env);
+    if (env.YOUTUBE_API_KEY) process.env.YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
+    const result = await runMediaSync();
+    if (!result.ok) {
+      console.error(`[media-cron] sync skipped: ${result.error || 'unknown error'}`);
+      return;
+    }
+    console.log(`[media-cron] sync ok: synced=${result.synced ?? 0} created=${result.created ?? 0} updated=${result.updated ?? 0}`);
   },
 };
