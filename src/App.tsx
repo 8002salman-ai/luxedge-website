@@ -12,6 +12,8 @@ import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { loadPublishedBlogBySlug, loadPublishedBlogs } from './services/blog';
+import { MediaHubPage, MediaVideoPage, MediaLatestSection } from './media/MediaHub';
+import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
@@ -25,6 +27,7 @@ import {
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
   Sliders01, Feather,
 } from '@untitledui/icons';
+import { YoutubeLogo } from '@phosphor-icons/react';
 
 // ============================================================================
 // TYPES
@@ -684,7 +687,7 @@ function Header() {
     setMob(false);
   };
   useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
-  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
+  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/media', l: 'Media' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   const catNav = [
     { l: 'Dog', to: '/category/dog-supplies' },
     { l: 'Cat', to: '/category/cat-supplies' },
@@ -795,6 +798,7 @@ function Header() {
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
             <Link key={c.l} to={c.to} className="nav-underline px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
+          <Link to="/media" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Media</Link>
           <Link to="/blog" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Blog</Link>
           <Link to="/shop?q=deal" className="ml-auto px-4 py-2 text-[13.5px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
@@ -909,6 +913,7 @@ function Footer() {
             <ColTitle>Company</ColTitle>
             <nav className="space-y-0" aria-label="Company">
               <Link to="/about" className={FL}>About Us</Link>
+              <Link to="/media" className={FL}>Media</Link>
               <Link to="/blog" className={FL}>Blog</Link>
               <Link to="/privacy" className={FL}>Privacy Policy</Link>
               <Link to="/terms" className={FL}>Terms of Service</Link>
@@ -931,6 +936,10 @@ function Footer() {
               <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
                 <Send01 strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
                 WhatsApp Us
+              </a>
+              <a href={YOUTUBE_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="Luxedge on YouTube" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
+                <YoutubeLogo strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
+                YouTube Channel
               </a>
               <div className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75">
                 <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
@@ -1139,6 +1148,10 @@ function RouteTitle() {
       const post = segs[1] && segs[1] !== "write" ? blogs.find(b => b.slug === segs[1] && b.status === 'published') : undefined;
       set(post ? post.title : (segs[1] ? (segs[1] === "write" ? "Write a Post" : "Blog") : "Blog & Insights"));
       desc(post ? (post.excerpt || post.content.slice(0, 155)) : "Pet care tips and insights from the Luxedge team.");
+    }
+    else if (segs[0] === "media") {
+      if (segs[1]) { set("Video"); desc("Watch and read the latest Luxedge media — guides, stories and product education from the official channel."); }
+      else { set("Media Hub"); desc("Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories."); }
     }
     else if (segs[0] === "login") { set("Sign In"); desc("Sign in to your Luxedge account."); }
     else if (segs[0] === "signup") { set("Create Account"); desc("Create your Luxedge account."); }
@@ -2128,6 +2141,9 @@ function HomePage() {
           </div>
         </section>
       )}
+
+      {/* â•â•â•â•â•â•â•â• LATEST FROM LUXEDGE MEDIA â•â•â•â•â•â•â•â• */}
+      <MediaLatestSection />
 
       {/* â•â•â•â•â•â•â•â• TRUST PILLS — truthful store information â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-white" aria-label="Why shop at Luxedge">
@@ -4020,6 +4036,8 @@ export default function App() {
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />
           {/* Blog */}
+          <Route path="/media" element={<SLayout><MediaHubPage /></SLayout>} />
+          <Route path="/media/:slug" element={<SLayout><MediaVideoPage /></SLayout>} />
           <Route path="/blog" element={<SLayout><BlogListPage /></SLayout>} />
           <Route path="/blog/write" element={<SLayout><BlogWritePage /></SLayout>} />
           <Route path="/blog/:slug" element={<SLayout><BlogDetailPage /></SLayout>} />

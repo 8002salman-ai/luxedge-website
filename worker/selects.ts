@@ -24,6 +24,10 @@ export const SEO_CATEGORIES_SELECT = 'slug,name';
 export const SEO_BLOG_POSTS_SELECT =
   'slug,title,excerpt,hero_image_url,published_at,created_at,author_name,content,faq';
 
+/** Media SSR query (seo-meta.ts) — hub + video page facts. */
+export const SEO_MEDIA_SELECT =
+  'slug,title,summary,description,seo_title,meta_description,thumbnail_url,custom_thumbnail_url,youtube_video_id,category,is_short,featured,published_at,duration,transcript,chapters,faq,related_product_ids,related_article_slugs,related_video_slugs';
+
 /** Sitemap product query (sitemap.ts) — the commerce-ready visibility gate
  * mirror (status + supplier/cost/fulfillment evidence). */
 export const SITEMAP_PRODUCTS_SELECT =
@@ -32,3 +36,5 @@ export const SITEMAP_PRODUCTS_SELECT =
 export const SITEMAP_CATEGORIES_SELECT = 'slug';
 
 export const SITEMAP_BLOG_POSTS_SELECT = 'slug';
+
+export const SITEMAP_MEDIA_SELECT = 'slug';

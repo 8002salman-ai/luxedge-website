@@ -34,6 +34,7 @@ import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
 import mediaGenerateHandler from '../api/media/generate';
+import mediaSyncHandler from '../api/media/sync';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import crmLeadHandler from '../api/crm/lead';
@@ -44,7 +45,7 @@ import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
-import { buildSitemap } from './sitemap';
+import { buildSitemap, buildVideoSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
 import adsenseHandler, { setAdSenseRuntimeBindings } from '../api/adsense/index';
 
@@ -82,6 +83,7 @@ const ROUTES: Route[] = [
   { path: '/api/email/status', handler: emailStatusHandler },
   { path: '/api/email/routes', handler: emailRoutesHandler },
   { path: '/api/media/generate', handler: mediaGenerateHandler },
+  { path: '/api/media/sync', handler: mediaSyncHandler },
   { path: '/api/crm/welcome', handler: crmWelcomeHandler },
   { path: '/api/crm/subscribe', handler: crmSubscribeHandler },
   { path: '/api/crm/lead', handler: crmLeadHandler },
@@ -244,13 +246,27 @@ export default {
     if (url.pathname === '/home' || url.pathname === '/home/') {
       return Response.redirect(new URL('/', url.origin).toString(), 301);
     }
-    // Dynamic sitemap from the LIVE database (CMS blogs + products + categories)
-    // so publishing a post updates sitemap.xml without a redeploy. Falls back to
-    // the static file when the DB is unreachable / not migrated / no blogs.
+    // Dynamic sitemap from the LIVE database (CMS blogs + products + categories
+    // + media videos) so publishing updates sitemap.xml without a redeploy.
+    // Falls back to the static file when the DB is unreachable / not migrated.
     if (url.pathname === '/sitemap.xml') {
       const sitemap = await buildSitemap();
       if (sitemap) {
         return new Response(sitemap, {
+          status: 200,
+          headers: {
+            'content-type': 'application/xml; charset=utf-8',
+            'cache-control': 'public, max-age=300',
+          },
+        });
+      }
+    }
+    // Google Video sitemap (media library) — real data only; 404 when the DB
+    // is unavailable so we never serve an empty/fabricated feed.
+    if (url.pathname === '/video-sitemap.xml') {
+      const videoSitemap = await buildVideoSitemap();
+      if (videoSitemap) {
+        return new Response(videoSitemap, {
           status: 200,
           headers: {
             'content-type': 'application/xml; charset=utf-8',
