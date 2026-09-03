@@ -60,8 +60,14 @@ function makeRes(): { status: number; body: unknown; server: ServerResponse } {
   return cap;
 }
 
-/** Stub env keys + a fetch that answers provider and storage endpoints. */
-function stubEnv(providerKey: string | null, storageOk = true) {
+type ImageBehavior = 'ok' | 'all-missing' | 'quota';
+
+/**
+ * Stub env keys + a fetch that answers provider and storage endpoints.
+ * Gemini image attempts are model-aware: the preferred gemini-3.1-flash-image
+ * 404s (moved/renamed) so the chain has to step down to gemini-2.5-flash-image.
+ */
+function stubEnv(providerKey: string | null, storageOk = true, imageBehavior: ImageBehavior = 'ok') {
   process.env.SUPABASE_JWT_SECRET = SECRET;
   process.env.VITE_SUPABASE_URL = 'https://x.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
@@ -74,14 +80,14 @@ function stubEnv(providerKey: string | null, storageOk = true) {
   }
   vi.stubGlobal('fetch', vi.fn(async (input: unknown) => {
     const url = String(input);
-    if (url.includes('/models?key=')) {
-      // Model discovery: advertise the image models the code may pick.
-      return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2.5-flash-image' }, { name: 'models/veo-3.1-generate-preview' }] }), { status: 200 });
-    }
     if (url.includes('/images/generations')) {
+      if (imageBehavior === 'quota') return new Response(JSON.stringify({ error: { message: 'You exceeded your current quota' } }), { status: 429 });
       return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from('FAKEIMG').toString('base64') }] }), { status: 200 });
     }
     if (url.includes(':generateContent?key=')) {
+      if (imageBehavior === 'quota') return new Response(JSON.stringify({ error: { message: 'RESOURCE_EXHAUSTED: free tier image quota' } }), { status: 429 });
+      if (imageBehavior === 'all-missing') return new Response(JSON.stringify({ error: { message: 'model not found' } }), { status: 404 });
+      if (url.includes('gemini-3.1-flash-image')) return new Response(JSON.stringify({ error: { message: 'models/gemini-3.1-flash-image not found' } }), { status: 404 });
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.from('FAKEIMG').toString('base64') } }] } }] }), { status: 200 });
     }
     if (url.includes('predictLongRunning')) {
@@ -144,12 +150,36 @@ describe('/api/media/generate', () => {
     expect(JSON.stringify(r.body)).not.toContain('openai-key');
   });
 
-  it('Gemini image: Imagen path works end-to-end', async () => {
+  it('Gemini image: steps down the model chain when the preferred model is missing', async () => {
     stubEnv('gemini-key');
     const r = makeRes();
     await handler(makeReq({ type: 'image', provider: 'gemini', prompt: 'cat toy photo' }), r.server);
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ ok: true, type: 'image', provider: 'gemini' });
+    const attempts = vi.mocked(fetch).mock.calls.map((c) => String(c[0])).filter((u) => u.includes(':generateContent'));
+    expect(attempts.length).toBeGreaterThanOrEqual(2);
+    expect(attempts[0]).toContain('gemini-3.1-flash-image'); // preferred → 404
+    expect(attempts[1]).toContain('gemini-2.5-flash-image'); // fallback → success
+  });
+
+  it('Gemini image: all models missing surfaces an honest failure, not a fake image', async () => {
+    stubEnv('gemini-key', true, 'all-missing');
+    const r = makeRes();
+    await handler(makeReq({ type: 'image', provider: 'gemini', prompt: 'cat toy photo' }), r.server);
+    expect(r.status).toBe(502);
+    expect((r.body as { error?: string }).error).toContain('none of the supported image models');
+  });
+
+  it('Gemini image: quota exhaustion is classified with the billing next step', async () => {
+    stubEnv('gemini-key', true, 'quota');
+    const r = makeRes();
+    await handler(makeReq({ type: 'image', provider: 'gemini', prompt: 'cat toy photo' }), r.server);
+    expect(r.status).toBe(502);
+    const err = (r.body as { error?: string }).error || '';
+    expect(err).toContain('quota');
+    expect(err).toContain('Enable billing on the Google Cloud project');
+    // The raw provider wording (which names the key state) must not be echoed verbatim.
+    expect(err).not.toContain('RESOURCE_EXHAUSTED:');
   });
 
   it('Gemini video: polls the Veo operation until done and uploads the clip', async () => {

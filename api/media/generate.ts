@@ -18,7 +18,7 @@
 //     upload. Missing keys/config fail closed with an honest error.
 // ============================================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendJson, rateLimited, clientIp, readJsonBody, resolveProviderKey, isConfiguredFull } from '../_lib/providers.js';
+import { sendJson, rateLimited, clientIp, readJsonBody, resolveProviderKey, isConfiguredFull, classifyProviderStatus } from '../_lib/providers.js';
 import { supabaseAdmin, supabaseHeaders } from '../_lib/supabase.js';
 import { requireAdmin } from '../_lib/auth.js';
 
@@ -52,7 +52,7 @@ async function generateOpenAiImage(key: string, prompt: string): Promise<{ bytes
     signal: AbortSignal.timeout(90_000),
   });
   const d = await r.json().catch(() => ({})) as { error?: { message?: string }; data?: Array<{ b64_json?: string; url?: string }> };
-  if (!r.ok) throw new Error(`OpenAI image error (HTTP ${r.status})${d.error?.message ? `: ${d.error.message.slice(0, 140)}` : ''}`);
+  if (!r.ok) throw new Error(classifyProviderStatus('openai', r.status, d.error?.message).message);
   const item = d.data?.[0];
   if (item?.b64_json) return { bytes: Buffer.from(item.b64_json, 'base64'), contentType: 'image/png' };
   if (item?.url) {
@@ -64,8 +64,9 @@ async function generateOpenAiImage(key: string, prompt: string): Promise<{ bytes
 }
 
 // Gemini image-capable models that speak generateContent (Imagen's legacy
-// :predict API no longer exists on v1beta). Queried live so the best model is
-// chosen; falls back to the widely-available gemini-2.5-flash-image.
+// :predict API no longer exists on v1beta). Google keeps renaming these, so
+// the handler tries them in order and steps to the next only when the model
+// itself is missing (404/not-found) — auth and quota failures abort immediately.
 const GEMINI_IMAGE_MODELS = [
   'gemini-3.1-flash-image',
   'gemini-2.5-flash-image',
@@ -73,54 +74,33 @@ const GEMINI_IMAGE_MODELS = [
   'gemini-3-pro-image-preview',
 ];
 
-// Model availability varies per account tier and Google keeps renaming image
-// models, so the best pick is resolved once per warm instance (10 min TTL)
-// instead of on every request. Keyed by key fingerprint so swapping the
-// attached key never reuses the old key's model.
-let geminiImageModel: { fingerprint: string; model: string } | null = null;
-let geminiImageModelAt = 0;
-const GEMINI_MODEL_TTL_MS = 10 * 60_000;
-
-/** Resolve the first image-capable model available on this key (cached per key). */
-async function resolveGeminiImageModel(key: string): Promise<string> {
-  const fingerprint = key.slice(-8);
-  if (geminiImageModel && geminiImageModel.fingerprint === fingerprint && Date.now() - geminiImageModelAt < GEMINI_MODEL_TTL_MS) {
-    return geminiImageModel.model;
-  }
-  try {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key), { signal: AbortSignal.timeout(15_000) });
-    if (r.ok) {
-      const d = await r.json().catch(() => null) as { models?: Array<{ name: string }> } | null;
-      const available = new Set((d?.models || []).map((m) => m.name.replace(/^models\//, '')));
-      for (const m of GEMINI_IMAGE_MODELS) {
-        if (available.has(m)) {
-          geminiImageModel = { fingerprint, model: m };
-          geminiImageModelAt = Date.now();
-          return m;
-        }
-      }
-    }
-  } catch { /* fall through to default */ }
-  return GEMINI_IMAGE_MODELS[1]; // gemini-2.5-flash-image
+/** True when the failure means "this model is not on this key" (skip it). */
+function isModelMissing(status: number, raw?: string): boolean {
+  return status === 404 || /not found|not supported|does not exist|not exist/i.test((raw || '').slice(0, 400));
 }
 
 /** Google Gemini image model (generateContent, IMAGE modality) → image bytes. */
 async function generateGeminiImage(key: string, prompt: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const model = await resolveGeminiImageModel(key);
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseModalities: ['IMAGE'] },
-    }),
-    signal: AbortSignal.timeout(120_000),
-  });
-  const d = await r.json().catch(() => ({})) as { error?: { message?: string }; candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }> };
-  if (!r.ok) throw new Error(`Gemini image error (HTTP ${r.status})${d.error?.message ? `: ${d.error.message.slice(0, 140)}` : ''}`);
-  const img = d.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
-  if (!img?.inlineData?.data) throw new Error('Gemini returned no image.');
-  return { bytes: Buffer.from(img.inlineData.data, 'base64'), contentType: img.inlineData.mimeType || 'image/png' };
+  for (const model of GEMINI_IMAGE_MODELS) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(key), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ['IMAGE'] },
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const d = await r.json().catch(() => ({})) as { error?: { message?: string }; candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }> };
+    if (r.ok) {
+      const img = d.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      if (!img?.inlineData?.data) throw new Error('Gemini returned no image.');
+      return { bytes: Buffer.from(img.inlineData.data, 'base64'), contentType: img.inlineData.mimeType || 'image/png' };
+    }
+    if (isModelMissing(r.status, d.error?.message)) continue;
+    throw new Error(classifyProviderStatus('gemini', r.status, d.error?.message).message);
+  }
+  throw new Error('Gemini image generation failed — none of the supported image models are available on this key (HTTP 404).');
 }
 
 /** Google Veo (3.1+) → long-running operation, polled until the clip is ready. */
@@ -132,7 +112,7 @@ async function generateGeminiVideo(key: string, prompt: string): Promise<{ bytes
     signal: AbortSignal.timeout(60_000),
   });
   const startData = await start.json().catch(() => ({})) as { error?: { message?: string }; name?: string };
-  if (!start.ok) throw new Error(`Veo start error (HTTP ${start.status})${startData.error?.message ? `: ${startData.error.message.slice(0, 140)}` : ''}`);
+  if (!start.ok) throw new Error(classifyProviderStatus('gemini', start.status, startData.error?.message).message);
   const opName = startData.name;
   if (!opName) throw new Error('Veo did not return an operation id.');
 
@@ -145,7 +125,7 @@ async function generateGeminiVideo(key: string, prompt: string): Promise<{ bytes
       done?: boolean;
       response?: { generatedVideos?: Array<{ video?: { videoBytesBase64?: string; uri?: string } }> };
     };
-    if (!poll.ok) throw new Error(`Veo poll error (HTTP ${poll.status})${d.error?.message ? `: ${d.error.message.slice(0, 140)}` : ''}`);
+    if (!poll.ok) throw new Error(classifyProviderStatus('gemini', poll.status, d.error?.message).message);
     if (d.done) {
       const clip = d.response?.generatedVideos?.[0]?.video;
       if (clip?.videoBytesBase64) return { bytes: Buffer.from(clip.videoBytesBase64, 'base64'), contentType: 'video/mp4' };

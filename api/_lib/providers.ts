@@ -214,9 +214,54 @@ async function generateWithKeyRotation(keys: string[], call: (key: string) => Pr
   throw lastErr || new Error('generation failed');
 }
 
-function sanitizeError(providerId: string, status: number): string {
+export type ProviderProblem = 'auth' | 'quota' | 'model' | 'unknown';
+
+/**
+ * Classify a provider HTTP failure into a category + an actionable, fully
+ * server-authored message. Raw provider bodies are only SNIFFED, never echoed:
+ * error text can contain request headers/keys, so the client only ever sees
+ * text written here.
+ */
+export function classifyProviderStatus(
+  providerId: string,
+  status: number,
+  raw?: string,
+): { problem: ProviderProblem; message: string } {
+  const name = PROVIDER_NAMES[providerId] || providerId;
+  const body = (raw || '').slice(0, 400).toLowerCase();
+  const quotaHit = status === 429 || /quota|exhausted|insufficient|rate limit|billing/i.test(body);
+  const modelHit = status === 404 || /not found|not supported|does not exist|unknown model|not exist/i.test(body);
+  const problem: ProviderProblem =
+    status === 401 || (status === 403 && !quotaHit)
+      ? 'auth'
+      : quotaHit
+        ? 'quota'
+        : modelHit
+          ? 'model'
+          : 'unknown';
+
+  switch (problem) {
+    case 'auth':
+      return { problem, message: `${name} rejected the key (HTTP ${status}). The key is invalid, revoked, or lacks access — generate a fresh key and re-attach it in AI Hub → Attach Key (a server env var, if set, wins).` };
+    case 'quota': {
+      const fix =
+        providerId === 'gemini'
+          ? 'Enable billing on the Google Cloud project this key belongs to (aistudio.google.com → API keys → your project)'
+          : providerId === 'openai'
+            ? 'Top up billing at platform.openai.com → Settings → Billing'
+            : 'Top up credits at the provider, or attach another key in AI Hub → Attach Key';
+      return { problem, message: `${name} is out of quota or rate-limited (HTTP ${status}). Free tiers are heavily limited — ${fix}, then retry.` };
+    }
+    case 'model':
+      return { problem, message: `${name} does not offer the requested model (HTTP ${status}). Pick a supported model in the UI — media generation retries the next available model automatically.` };
+    default:
+      return { problem, message: `${name} error (HTTP ${status}). Check server logs for details.` };
+  }
+}
+
+function sanitizeError(providerId: string, status: number, raw?: string): string {
   // Never include raw provider error bodies — they may echo request headers/keys.
-  return `${PROVIDER_NAMES[providerId] || providerId} error (HTTP ${status}). Check server logs for details.`;
+  return classifyProviderStatus(providerId, status, raw).message;
 }
 
 export interface GenerateOptions {
@@ -246,7 +291,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error(`${PROVIDER_NAMES[providerId]} returned no text`);
       return text;
@@ -265,7 +310,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
           signal,
         });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(sanitizeError('deepseek', r.status));
+        if (!r.ok) throw new Error(sanitizeError('deepseek', r.status, JSON.stringify(d)));
         const text = d?.choices?.[0]?.message?.content;
         if (typeof text !== 'string') throw new Error('DeepSeek returned no text');
         return text;
@@ -279,7 +324,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
       const text = d?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Gemini returned no text');
       return text;
@@ -295,7 +340,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error('OpenRouter returned no text');
       return text;
@@ -308,7 +353,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
       const text = d?.content?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Anthropic returned no text');
       return text;
@@ -322,7 +367,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status));
+      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
       let text: string | undefined;
       if (typeof d?.output_text === 'string') text = d.output_text;
       else if (Array.isArray(d?.output)) {
@@ -408,7 +453,7 @@ export function defaultModelFor(providerId: string): string {
     case 'codex': return 'gpt-5-codex';
     case 'deepseek': return 'deepseek-v4-flash';
     case 'anthropic': return 'claude-haiku-4-5-20251001';
-    case 'gemini': return 'gemini-2.0-flash-exp';
+    case 'gemini': return 'gemini-3.5-flash';
     case 'openrouter': return 'nvidia/nemotron-3-super-120b-a12b:free';
     default: return '';
   }
