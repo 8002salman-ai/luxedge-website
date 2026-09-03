@@ -1,0 +1,5 @@
+# The real /api runs on the Cloudflare worker (luxedge.us), not Vercel.
+# Without this, Vercel turns every api/*.ts route into a serverless
+# function (41 of them) and every deployment fails at the deploy stage
+# on the Hobby plan's 12-function cap. Vercel only serves the static SPA.
+api/
