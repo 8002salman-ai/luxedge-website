@@ -304,6 +304,10 @@ describe('seo + feed', () => {
     const policy = offer.hasMerchantReturnPolicy as Record<string, unknown>;
     expect(policy.merchantReturnDays).toBe(30);
     expect(policy.applicableCountry).toBe('US');
+    // GSC merchant-listing subfields (returnMethod + returnFees) — honest values:
+    // returns are by mail and no free-return claim exists, so customer-responsible.
+    expect(policy.returnMethod).toBe('https://schema.org/ReturnByMail');
+    expect(policy.returnFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
     const sd = offer.shippingDetails as Record<string, unknown>;
     expect((sd.shippingDestination as Record<string, unknown>).addressCountry).toBe('US');
   });

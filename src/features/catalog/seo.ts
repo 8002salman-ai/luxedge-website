@@ -43,6 +43,12 @@ export function merchantOfferExtras(p: {
       returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
       merchantReturnDays: 30,
       merchantReturnLink: `${SITE_URL}/returns`,
+      // GSC merchant-listing subfields: returns are handled by mail (replacement-based
+      // policy — no free-return claim is advertised anywhere, so the customer is
+      // responsible for return shipping by default). Flip to FreeReturn only if
+      // prepaid labels ever become the real policy.
+      returnMethod: 'https://schema.org/ReturnByMail',
+      returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
     },
     shippingDetails: {
       '@type': 'OfferShippingDetails',
