@@ -117,6 +117,8 @@ describe('productJsonLd', () => {
     const policy = offers.hasMerchantReturnPolicy as Record<string, unknown>;
     expect(policy.applicableCountry).toBe('US');
     expect(policy.merchantReturnDays).toBe(30);
+    expect(policy.returnMethod).toBe('https://schema.org/ReturnByMail');
+    expect(policy.returnFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
     const sd = offers.shippingDetails as Record<string, any>;
     expect(sd.shippingDestination.addressCountry).toBe('US');
     expect(sd.shippingRate.value).toBe('0'); // free shipping is a real recorded value
