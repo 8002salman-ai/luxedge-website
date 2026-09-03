@@ -261,8 +261,10 @@ export default {
         });
       }
     }
-    // Google Video sitemap (media library) — real data only; 404 when the DB
-    // is unavailable so we never serve an empty/fabricated feed.
+    // Google Video sitemap (media library) — real data only. When the DB is
+    // unreachable / media_videos is not yet migrated (buildVideoSitemap
+    // returns null), serve an EMPTY but valid video sitemap — never the SPA
+    // shell, so robots.txt's reference can never hand Google HTML as XML.
     if (url.pathname === '/video-sitemap.xml') {
       const videoSitemap = await buildVideoSitemap();
       if (videoSitemap) {
@@ -274,6 +276,16 @@ export default {
           },
         });
       }
+      return new Response(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n</urlset>\n',
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/xml; charset=utf-8',
+            'cache-control': 'public, max-age=300',
+          },
+        },
+      );
     }
     // Google AdSense earnings API (server-side). Routed by path prefix
     // because it has multiple sub-routes (status/auth/oauth/sync/earnings).
