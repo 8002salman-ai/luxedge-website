@@ -35,6 +35,7 @@ import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
 import mediaGenerateHandler from '../api/media/generate';
 import mediaSyncHandler, { runMediaSync } from '../api/media/sync';
+import mediaStatusHandler from '../api/media/status';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import crmLeadHandler from '../api/crm/lead';
@@ -84,6 +85,7 @@ const ROUTES: Route[] = [
   { path: '/api/email/routes', handler: emailRoutesHandler },
   { path: '/api/media/generate', handler: mediaGenerateHandler },
   { path: '/api/media/sync', handler: mediaSyncHandler },
+  { path: '/api/media/status', handler: mediaStatusHandler },
   { path: '/api/crm/welcome', handler: crmWelcomeHandler },
   { path: '/api/crm/subscribe', handler: crmSubscribeHandler },
   { path: '/api/crm/lead', handler: crmLeadHandler },
@@ -441,7 +443,7 @@ export default {
   async scheduled(_event: unknown, env: Env): Promise<void> {
     populateProcessEnv(env);
     if (env.YOUTUBE_API_KEY) process.env.YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
-    const result = await runMediaSync();
+    const result = await runMediaSync('cron');
     if (!result.ok) {
       console.error(`[media-cron] sync skipped: ${result.error || 'unknown error'}`);
       return;

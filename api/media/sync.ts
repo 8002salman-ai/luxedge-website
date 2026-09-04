@@ -32,7 +32,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
-import { supabaseAdmin, supabaseHeaders } from '../_lib/supabase.js';
+import { supabaseAdmin, supabaseHeaders, upsertAppSetting } from '../_lib/supabase.js';
 
 const SYNC_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_RESULTS = 50;
@@ -126,13 +126,39 @@ export interface MediaSyncResult {
   note?: string;
 }
 
+/** Where a sync run came from — shown in the Admin Media Hub "Last synced" stamp. */
+export type SyncSource = 'manual' | 'cron';
+
+/**
+ * app_settings key holding the last COMPLETED sync run (only ok:true runs
+ * record it), read by GET /api/media/status for the Admin Media Hub header.
+ * Value: JSON { at, source, synced, created, updated }.
+ */
+export const MEDIA_LAST_SYNC_KEY = 'MEDIA_LAST_SYNC';
+
+async function recordLastSync(
+  source: SyncSource,
+  r: Pick<MediaSyncResult, 'synced' | 'created' | 'updated'>,
+): Promise<void> {
+  await upsertAppSetting(
+    MEDIA_LAST_SYNC_KEY,
+    JSON.stringify({
+      at: new Date().toISOString(),
+      source,
+      synced: r.synced ?? 0,
+      created: r.created ?? 0,
+      updated: r.updated ?? 0,
+    }),
+  );
+}
+
 /**
  * Shared sync core — runs the YouTube → media_videos import with no HTTP or
  * auth layer, so BOTH the admin endpoint (POST /api/media/sync) and the
  * Cloudflare scheduled cron (worker/index.ts) execute the same code. Every
  * failure path returns an honest structured result instead of throwing.
  */
-export async function runMediaSync(): Promise<MediaSyncResult> {
+export async function runMediaSync(source: SyncSource = 'manual'): Promise<MediaSyncResult> {
   const cfg = supabaseAdmin();
   if (!cfg) return { ok: false, status: 500, error: 'Supabase is not configured on the server.' };
 
@@ -165,6 +191,7 @@ export async function runMediaSync(): Promise<MediaSyncResult> {
   );
   const items = (list?.items || []).filter((i) => i?.snippet?.resourceId?.videoId);
   if (items.length === 0) {
+    await recordLastSync(source, { synced: 0, created: 0, updated: 0 });
     return { ok: true, synced: 0, created: 0, updated: 0, videos: [], note: 'No uploads found on this channel yet.' };
   }
 
@@ -264,6 +291,7 @@ export async function runMediaSync(): Promise<MediaSyncResult> {
     }
   }
 
+  await recordLastSync(source, { synced: videos.length, created, updated });
   return {
     ok: true,
     synced: videos.length,
