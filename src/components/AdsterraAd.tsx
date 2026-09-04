@@ -1,62 +1,31 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { getConsent } from '../lib/consent';
-import {
-  adsterraConfigured,
-  consumeAdBudget,
-  getEffectiveConfig,
-  isExcludedPath,
-  loadAdsterraScript,
-  resetPlacementCount,
-  MarketingConfig,
-} from '../lib/marketing';
+import { useEffect, useRef } from 'react';
+import { adsterraConfigured, loadAdsterraScript } from '../lib/marketing';
+import { useAdGate } from './useAdGate';
 
 /**
- * Adsterra native-banner ad unit (invoke.js + container div).
+ * Adsterra native-banner ad unit (invoke.js + container div). All gating
+ * (consent, route exclusions, the density cap it shares with AdSense) lives
+ * in useAdGate; this component only renders the container and loads the
+ * zone's invoke.js exactly once per mounted unit (deduped by src).
  *
- * Renders nothing when Adsterra is disabled/unconfigured, the route is
- * excluded (cart/checkout/auth/account — admin always excluded), consent is
- * not accepted, or the shared per-page density budget is spent — so Adsterra
- * and AdSense together never exceed the configured cap.
- *
- * Loads the zone's invoke.js exactly once per page (deduped by src). The
- * zone is mounted on ONE spot per route (blog article end, product detail
- * below info) — never twice on the same page. The homepage stays light
- * (AdSense Auto Ads only, no Adsterra there).
+ * Mounted on ONE spot per route (end of blog articles, product detail below
+ * info) — never twice on the same page. The homepage stays light (AdSense
+ * Auto Ads only, no Adsterra there).
  */
 export default function AdsterraAd({ className = '' }: { className?: string }) {
-  const loc = useLocation();
-  const [cfg, setCfg] = useState<MarketingConfig | null>(null);
-  const countedRef = useRef(false);
+  const { cfg, eligible } = useAdGate();
   const loadedRef = useRef(false);
+  const zoneUrl = cfg?.adsterraZoneUrl.trim() || '';
+  const show = eligible(cfg ? adsterraConfigured(cfg) : false);
 
+  // Load the zone script once the unit survived the gates.
   useEffect(() => {
-    let alive = true;
-    getEffectiveConfig().then(c => { if (alive) setCfg(c); });
-    return () => { alive = false; };
-  }, []);
-
-  // Shared manual-ad density counter resets on route change (like AdSenseAd).
-  useEffect(() => { resetPlacementCount(); countedRef.current = false; }, [loc.pathname]);
-
-  // Inject the zone script once consent is accepted and this unit survived the
-  // gates below. Runs on every render; refs keep it to a single load + push.
-  useEffect(() => {
-    if (!cfg) return;
-    if (!adsterraConfigured(cfg)) return;
-    if (getConsent() !== 'accepted') return;
-    if (isExcludedPath(loc.pathname, cfg)) return;
-    if (!consumeAdBudget(cfg, countedRef)) return;
-    if (loadedRef.current) return;
+    if (!show || loadedRef.current) return;
     loadedRef.current = true;
-    loadAdsterraScript(cfg.adsterraZoneUrl.trim());
-  }, [cfg, loc.pathname]);
+    loadAdsterraScript(zoneUrl);
+  }, [show, zoneUrl]);
 
-  if (!cfg) return null;
-  if (!adsterraConfigured(cfg)) return null;
-  if (getConsent() !== 'accepted') return null;
-  if (isExcludedPath(loc.pathname, cfg)) return null;
-  if (!consumeAdBudget(cfg, countedRef)) return null;
+  if (!cfg || !show) return null;
 
   return (
     <div className={`my-6 ${className}`}>

@@ -397,18 +397,10 @@ export function placementConfigured(c: MarketingConfig, key: PlacementKey): bool
 }
 
 /**
- * Idempotent per-instance-per-route consumption of the density budget.
- * `countedKey` is a ref the caller keeps (e.g. `${pathname}:${key}`), so a
- * StrictMode double render never double-counts.
- */
-export function consumePlacement(c: MarketingConfig, key: PlacementKey, _countedKey: string, countedRef: { current: boolean }): boolean {
-  if (!placementConfigured(c, key)) return false;
-  return consumeAdBudget(c, countedRef);
-}
-
-/**
- * Shared per-route manual-ad budget, consumed by AdSense units AND Adsterra so
- * the two networks together never exceed the density cap on one page.
+ * Shared per-route manual-ad budget, consumed by every Luxedge-managed unit
+ * (via useAdGate) so AdSense and Adsterra together never exceed the density
+ * cap on one page. `countedRef` makes consumption idempotent per instance so
+ * a StrictMode double render never double-counts.
  */
 export function consumeAdBudget(c: MarketingConfig, countedRef: { current: boolean }): boolean {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -421,10 +413,6 @@ export function consumeAdBudget(c: MarketingConfig, countedRef: { current: boole
 
   const cap = isMobile ? mobileDensityCap[c.mobileDensity] : densityCap[c.density];
   return placementCount <= cap;
-}
-
-export function shouldRenderPlacement(c: MarketingConfig, key: PlacementKey, countedKey: string, countedRef: { current: boolean }): boolean {
-  return consumePlacement(c, key, countedKey, countedRef);
 }
 
 // ---------------------------------------------------------------------------
