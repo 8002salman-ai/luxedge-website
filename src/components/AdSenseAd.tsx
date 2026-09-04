@@ -1,14 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { getConsent } from '../lib/consent';
-import {
-  getEffectiveConfig,
-  isExcludedPath,
-  MarketingConfig,
-  PlacementKey,
-  resetPlacementCount,
-  shouldRenderPlacement,
-} from '../lib/marketing';
+import { useEffect, useRef } from 'react';
+import { PlacementKey, placementConfigured } from '../lib/marketing';
+import { useAdGate } from './useAdGate';
 
 interface AdSenseAdProps {
   placement: PlacementKey;
@@ -16,34 +8,19 @@ interface AdSenseAdProps {
 }
 
 /**
- * Reusable manual AdSense ad unit.
- * - Renders nothing when AdSense/manual ads are disabled, the slot is missing,
- *   the route is excluded (cart/checkout/auth/account — admin always excluded),
- *   or the per-page density cap is reached.
- * - Initializes adsbygoogle exactly once per mounted unit.
- * - Never renders inside admin routes.
+ * Manual AdSense ad unit. All gating (consent, route exclusions, density
+ * cap) lives in useAdGate; this component only renders the <ins> element and
+ * pushes to adsbygoogle exactly once per mounted unit. Never renders inside
+ * admin routes.
  */
 export default function AdSenseAd({ placement, className = '' }: AdSenseAdProps) {
-  const loc = useLocation();
-  const [cfg, setCfg] = useState<MarketingConfig | null>(null);
+  const { cfg, eligible } = useAdGate();
   const pushed = useRef(false);
-  const shouldPush = useRef(false);
-  const countedRef = useRef(false);
+  const show = eligible(cfg ? placementConfigured(cfg, placement) : false);
 
+  // Push to adsbygoogle once the <ins> is committed to the DOM.
   useEffect(() => {
-    let alive = true;
-    getEffectiveConfig().then(c => { if (alive) setCfg(c); });
-    return () => { alive = false; };
-  }, []);
-
-  // Reset the shared density counter whenever the route changes
-  useEffect(() => { resetPlacementCount(); countedRef.current = false; }, [loc.pathname]);
-
-  // Push to adsbygoogle once the <ins> element is committed to the DOM.
-  // Runs unconditionally; the ref gates it to a single real push.
-  useEffect(() => {
-    if (!shouldPush.current) return;
-    if (pushed.current) return;
+    if (!show || pushed.current) return;
     pushed.current = true;
     const t = setTimeout(() => {
       try {
@@ -55,13 +32,9 @@ export default function AdSenseAd({ placement, className = '' }: AdSenseAdProps)
       }
     }, 50);
     return () => clearTimeout(t);
-  }, [cfg?.adsenseClientId, cfg?.placements?.[placement]?.slot]);
+  }, [show]);
 
-  if (!cfg) return null;
-  if (getConsent() !== 'accepted') return null;
-  if (isExcludedPath(loc.pathname, cfg)) return null;
-  if (!shouldRenderPlacement(cfg, placement, loc.pathname, countedRef)) return null;
-  shouldPush.current = true;
+  if (!cfg || !show) return null;
   const slot = cfg.placements[placement].slot.trim();
 
   return (
