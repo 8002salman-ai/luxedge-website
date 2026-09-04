@@ -42,6 +42,25 @@ const label = 'block text-[11px] font-bold uppercase tracking-wider text-gray-50
 const input =
   'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-luxe-gold/40 bg-white';
 
+interface LastSyncInfo {
+  at: string;
+  source: 'manual' | 'cron';
+  synced: number;
+  created: number;
+  updated: number;
+}
+
+/** Compact relative time for the "Last synced" stamp (e.g. "5 min ago"). */
+const timeAgo = (iso: string): string => {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h ago`;
+  return `${Math.floor(h / 24)} d ago`;
+};
+
 const emptyRow = (): CmsMediaRow => ({
   id: '', slug: '', youtube_video_id: null, title: '', summary: null, description: null,
   seo_title: null, meta_description: null, thumbnail_url: null, custom_thumbnail_url: null,
@@ -69,6 +88,18 @@ export default function MediaManager() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [confirm, setConfirm] = useState<CmsMediaRow | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [lastSync, setLastSync] = useState<LastSyncInfo | null>(null);
+
+  const loadStatus = async () => {
+    try {
+      const token = await getAccessToken();
+      const res = await fetch('/api/media/status', { headers: { Authorization: `Bearer ${token}` } });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; lastSync?: LastSyncInfo | null };
+      setLastSync(res.ok && data.ok ? (data.lastSync ?? null) : null);
+    } catch {
+      setLastSync(null);
+    }
+  };
 
   const load = async () => {
     try {
@@ -77,6 +108,7 @@ export default function MediaManager() {
     } catch (e) {
       setLoadError((e as Error).message || 'Could not load media.');
     }
+    void loadStatus();
   };
 
   useEffect(() => { void load(); }, []);
@@ -255,6 +287,21 @@ export default function MediaManager() {
             Videos live in the Supabase CMS — publishing takes effect immediately with no code/deploy. YouTube is the
             primary host; these pages embed official videos and link back to the channel.
           </p>
+          {lastSync ? (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-gray-500"
+              title={`Last full sync: ${new Date(lastSync.at).toLocaleString()}`}>
+              <span aria-hidden className={`inline-block h-1.5 w-1.5 rounded-full ${Date.now() - new Date(lastSync.at).getTime() < 90 * 60 * 1000 ? 'bg-green-500' : 'bg-amber-400'}`} />
+              Last synced {timeAgo(lastSync.at)}
+              {lastSync.created + lastSync.updated > 0
+                ? ` — ${lastSync.created} new, ${lastSync.updated} refreshed`
+                : ' — no changes'}
+              {lastSync.source === 'cron' ? ' · hourly cron' : ' · manual sync'}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              Never synced yet — new uploads auto-import hourly (or click Sync from YouTube).
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <button onClick={runSync} disabled={syncBusy}

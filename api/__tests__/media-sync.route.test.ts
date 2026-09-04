@@ -92,7 +92,7 @@ function stubEnv(withYouTube = true): void {
  * Supabase (no existing rows; inserts succeed). One video is a normal 6:43
  * documentary, the other a 45-second Short.
  */
-function stubHappyFetch(inserts: unknown[] = []): void {
+function stubHappyFetch(inserts: unknown[] = [], settings: unknown[] = []): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: unknown, init?: RequestInit) => {
@@ -135,6 +135,11 @@ function stubHappyFetch(inserts: unknown[] = []): void {
         }
         return json({ error: `unexpected youtube url ${url}` }, 500);
       }
+      if (url.includes('/rest/v1/app_settings')) {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        settings.push(body);
+        return json([{ ...body }]);
+      }
       if (url.includes('/rest/v1/media_videos')) {
         if (method === 'POST') {
           const body = init?.body ? JSON.parse(String(init.body)) : {};
@@ -146,6 +151,12 @@ function stubHappyFetch(inserts: unknown[] = []): void {
       return json({ error: `unexpected url ${url}` }, 500);
     }),
   );
+}
+
+function lastSyncMarker(settings: unknown[]): { source: string; created: number; updated: number; at: string } | null {
+  const marker = settings.find((s) => (s as { key?: string }).key === 'MEDIA_LAST_SYNC');
+  if (!marker) return null;
+  return JSON.parse((marker as { value: string }).value) as { source: string; created: number; updated: number; at: string };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -190,7 +201,8 @@ describe('runMediaSync() — the cron-shared core', () => {
   it('imports channel uploads end-to-end through the admin endpoint', async () => {
     stubEnv(true);
     const inserts: unknown[] = [];
-    stubHappyFetch(inserts);
+    const settings: unknown[] = [];
+    stubHappyFetch(inserts, settings);
 
     const r = makeRes();
     await handler(makeReq({}), r.server);
@@ -216,5 +228,26 @@ describe('runMediaSync() — the cron-shared core', () => {
     expect(b.youtube_video_id).toBe('v2');
     expect(b.is_short).toBe(true);
     expect(b.published_at).toBe('2026-09-04T10:00:00Z');
+
+    // A "Last synced" marker is recorded with the run outcome + source.
+    const marker = lastSyncMarker(settings);
+    expect(marker).not.toBeNull();
+    expect(marker!.source).toBe('manual');
+    expect(marker!.created).toBe(2);
+    expect(marker!.updated).toBe(0);
+    expect(new Date(marker!.at).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('records the run as cron when invoked by the scheduled handler', async () => {
+    stubEnv(true);
+    const settings: unknown[] = [];
+    stubHappyFetch([], settings);
+
+    const out = await runMediaSync('cron');
+    expect(out.ok).toBe(true);
+    const marker = lastSyncMarker(settings);
+    expect(marker).not.toBeNull();
+    expect(marker!.source).toBe('cron');
+    expect(marker!.created).toBe(2);
   });
 });

@@ -22,7 +22,10 @@ autoplay) and links back to the channel. Nothing here re-uploads video files.
    click** — within at most an hour of publishing. The YouTube Data API has
    no push feed for channels, so an hourly poll of the channel's own uploads
    is the practical minimum; each run is an idempotent upsert costing ~3 API
-   quota units (~72/day of the free 10,000).
+   quota units (~72/day of the free 10,000). Every completed run (cron or
+   manual) records a **Last synced** stamp — `MEDIA_LAST_SYNC` in
+   `app_settings` — shown in the Admin → Media Hub header via
+   `GET /api/media/status` (time, new/refreshed counts, cron vs manual).
 2. **Automatic on demand — POST /api/media/sync** (Admin → Media Hub → Sync
    from YouTube). Same `runMediaSync()` core — useful right after uploading a
    video rather than waiting for the cron. Pulls the official channel's
