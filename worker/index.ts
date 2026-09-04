@@ -431,7 +431,7 @@ export default {
   },
 
   /**
-   * Scheduled auto-sync (wrangler.toml [triggers], every 6 hours): pulls the
+   * Scheduled auto-sync (wrangler.toml [triggers], hourly): pulls the
    * official channel's uploads into media_videos so new videos appear on
    * /media without a manual Sync click. Shares runMediaSync() with the admin
    * endpoint (api/media/sync.ts) — idempotent upsert, ~3 YouTube Data API
