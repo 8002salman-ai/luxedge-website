@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
+import AdsterraAd from './components/AdsterraAd';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -1593,6 +1594,7 @@ function ProductDetailPage() {
 
           {/* Ad: Below Product Information */}
           <AdSenseAd placement="product_below_info" />
+          <AdsterraAd />
         </div>
       </div>
 
@@ -1858,7 +1860,7 @@ function HomePage() {
       </section>
 
       {/* â•â•â•â•â•â•â•â• Ad: After Hero â•â•â•â•â•â•â•â• */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /><AdsterraAd /></div>
 
       {/* â•â•â•â•â•â•â•â• SHOP BY PET — Circular Avatars â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-white">

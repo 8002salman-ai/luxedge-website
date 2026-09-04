@@ -28,7 +28,7 @@ import type {
   ProviderStatus, ProviderStatusMap,
 } from '../App';
 import {
-  activeModeLabel, AD_SLOT_RE, clearPreviewConfig, CLIENT_ID_RE, fetchGlobalConfig,
+  activeModeLabel, AD_SLOT_RE, adsterraConfigured, clearPreviewConfig, CLIENT_ID_RE, fetchGlobalConfig,
   getCachedPreview, hasPreviewConfig, PLACEMENT_KEYS, PLACEMENT_LABELS,
   savePreviewConfig, validateConfig, MarketingConfig, PlacementKey, DEFAULT_CONFIG,
 } from '../lib/marketing';
@@ -5346,6 +5346,7 @@ function AMarketingTraffic() {
     const bits: string[] = [];
     if (cfg.adsenseEnabled && clientOk) bits.push('AdSense script would load with ' + cfg.adsenseClientId);
     if (cfg.autoAdsEnabled) bits.push('Auto Ads on');
+    if (adsterraConfigured(cfg)) bits.push('Adsterra native banner on (' + cfg.adsterraContainerId + ')');
     if (adsTxtStatus === 'configured') bits.push('ads.txt present at /ads.txt');
     if (cfg.gaEnabled && cfg.ga4Id) bits.push('GA4 script would load for ' + cfg.ga4Id);
     setTestResult({ ok: true, msg: `OK — ${mode}. ${bits.join(' · ') || 'Nothing enabled yet.'} Note: this only confirms code config; it is NOT a Google approval.` });
@@ -5402,6 +5403,7 @@ function AMarketingTraffic() {
 
   const enabledPlacements = PLACEMENT_KEYS.filter(k => cfg.placements[k].enabled && AD_SLOT_RE.test(cfg.placements[k].slot.trim()));
   const adsenseOk = cfg.adsenseEnabled && CLIENT_ID_RE.test(cfg.adsenseClientId.trim());
+  const adsterraOk = adsterraConfigured(cfg);
 
   return (
     <div className="space-y-4 max-w-4xl">
@@ -5427,6 +5429,10 @@ function AMarketingTraffic() {
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Auto Ads</p>
             <p className="font-semibold">{adsenseOk && cfg.autoAdsEnabled ? 'Enabled' : 'Disabled'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">Adsterra (Native)</p>
+            <p className="font-semibold">{adsterraOk ? 'Enabled' : 'Off'}</p>
           </div>
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-1">ads.txt</p>
@@ -5486,6 +5492,40 @@ function AMarketingTraffic() {
           </div>
           <Toggle on={cfg.autoAdsEnabled} onChange={v => set({ autoAdsEnabled: v })} label="Enable Auto Ads" />
         </div>
+      </Card>
+
+      {/* Adsterra */}
+      <Card title="Adsterra (Native Banner)" icon={<Globe size={18} className="text-blue-600" />} badge={<StatusPill ok={adsterraOk} text={adsterraOk ? 'Enabled' : 'Off'} />}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Enable Adsterra native banner</p>
+            <p className="text-xs text-gray-400 mt-0.5">Second ad network beside Google AdSense (which stays on). Renders on the homepage + product pages and respects the same consent, page exclusions and density cap.</p>
+          </div>
+          <Toggle on={cfg.adsterraEnabled} onChange={v => set({ adsterraEnabled: v })} label="Enable Adsterra native banner" />
+        </div>
+
+        <div className="grid gap-4">
+          <div>
+            <label className={L}>Zone script URL</label>
+            <input className={I + (errors.adsterraZoneUrl ? ' border-red-300' : '')} value={cfg.adsterraZoneUrl}
+              onChange={e => set({ adsterraZoneUrl: e.target.value })} placeholder="https://pl….profitableratecpmnetwork.com/…/invoke.js" />
+            {errors.adsterraZoneUrl
+              ? <p className="text-red-500 text-xs mt-1">{errors.adsterraZoneUrl}</p>
+              : <p className="text-xs text-gray-400 mt-1">Copy the full script src from your Adsterra ad-unit code. Public — safe in site-config.json.</p>}
+          </div>
+          <div>
+            <label className={L}>Container id</label>
+            <input className={I + (errors.adsterraContainerId ? ' border-red-300' : '')} value={cfg.adsterraContainerId}
+              onChange={e => set({ adsterraContainerId: e.target.value })} placeholder="container-…" />
+            {errors.adsterraContainerId && <p className="text-red-500 text-xs mt-1">{errors.adsterraContainerId}</p>}
+          </div>
+        </div>
+
+        <p className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
+          Your Adsterra <strong>API token</strong> is for Adsterra reporting only — the zone script alone serves ads, so the token
+          is kept server-side (never in site-config.json). The <strong>Popunder</strong> unit on your account is deliberately
+          <strong> not</strong> enabled here: popunders on the same pages as Google AdSense risk an AdSense policy violation.
+        </p>
       </Card>
 
       {/* ads.txt */}
