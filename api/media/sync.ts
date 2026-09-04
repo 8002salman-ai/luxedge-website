@@ -18,7 +18,7 @@
 //     Sync clicks AND a Cloudflare cron trigger (wrangler.toml [triggers],
 //     handled by the `scheduled` export in worker/index.ts) so new uploads
 //     appear on /media automatically. The upsert is idempotent and the run
-//     costs ~3 YouTube Data API quota units, so the 6-hourly poll is cheap.
+//     costs ~3 YouTube Data API quota units, so the hourly poll is cheap.
 //   * Upsert keyed on youtube_video_id. Editorial fields (summary, description,
 //     chapters, faq, featured, related_*, custom thumbnail) are NEVER
 //     overwritten by sync — it only refreshes title/thumbnail/published_at/

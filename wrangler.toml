@@ -39,12 +39,12 @@ CLOUDFLARE_ZONE_ID = "33109dc6283b9e9cdafc2d1a0b05b6f8"
 YOUTUBE_CHANNEL_ID = "UCPvPDstYz61AebGhKzKS1lw"
 YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@TheAIWithSalman"
 
-# Auto-sync the official YouTube channel's uploads into /media every 6 hours
+# Auto-sync the official YouTube channel's uploads into /media hourly
 # (no manual Sync click needed). Handled by the `scheduled` export in
 # worker/index.ts, which calls the same idempotent runMediaSync() as the
 # manual endpoint — ~3 YouTube Data API quota units per run.
 [triggers]
-crons = ["0 */6 * * *"]
+crons = ["0 * * * *"]
 
 [env.staging]
 name = "luxedge-cloudflare-staging"
