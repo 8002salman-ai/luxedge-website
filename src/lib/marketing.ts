@@ -54,6 +54,9 @@ export interface MarketingConfig {
   publisherId: string;
   autoAdsEnabled: boolean;
   manualAdsEnabled: boolean;
+  adsterraEnabled: boolean;
+  adsterraZoneUrl: string;
+  adsterraContainerId: string;
   density: Density;
   showAdsOnMobile: boolean;
   mobileDensity: MobileDensity;
@@ -78,6 +81,9 @@ export const DEFAULT_CONFIG: MarketingConfig = {
   publisherId: 'pub-5473713135927706',
   autoAdsEnabled: true,
   manualAdsEnabled: false,
+  adsterraEnabled: false,
+  adsterraZoneUrl: '',
+  adsterraContainerId: '',
   density: 'balanced',
   showAdsOnMobile: true,
   mobileDensity: 'balanced',
@@ -213,6 +219,13 @@ export function validateConfig(c: MarketingConfig): Record<string, string> {
   if (c.gaEnabled && !GA4_ID_RE.test(c.ga4Id.trim())) {
     errs.ga4Id = 'GA4 Measurement ID must look like G-XXXXXXXXXX';
   }
+  if (c.adsterraEnabled) {
+    if (!/^https:\/\//.test(c.adsterraZoneUrl.trim())) {
+      errs.adsterraZoneUrl = 'Zone script URL must start with https:// (copy it from your Adsterra ad-unit code)';
+    } else if (!c.adsterraContainerId.trim()) {
+      errs.adsterraContainerId = 'Container id is required (the id=… in your Adsterra ad-unit code)';
+    }
+  }
   for (const k of PLACEMENT_KEYS) {
     const p = c.placements[k];
     if (p.enabled && !p.slot.trim()) {
@@ -264,6 +277,35 @@ export function removeGtag(): void {
   document.getElementById(GA_SCRIPT_ID)?.remove();
   const w = window as any;
   if (w.gtag) w.gtag = undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Adsterra (native banner) — loads independently of AdSense, same consent gate
+// ---------------------------------------------------------------------------
+
+export const ADSTERRA_ZONE_URL_RE = /^https:\/\//;
+
+/** True when the Adsterra native-banner zone is enabled and configured. */
+export function adsterraConfigured(c: MarketingConfig): boolean {
+  return c.adsterraEnabled && ADSTERRA_ZONE_URL_RE.test(c.adsterraZoneUrl.trim()) && !!c.adsterraContainerId.trim();
+}
+
+/** Load the zone's invoke.js once (deduped by its exact src). */
+export function loadAdsterraScript(zoneUrl: string): void {
+  if (!zoneUrl || typeof document === 'undefined') return;
+  if (document.querySelector(`script[src="${zoneUrl}"]`)) return;
+  const s = document.createElement('script');
+  s.async = true;
+  s.setAttribute('data-cfasync', 'false');
+  s.setAttribute('data-adsterra-zone', '1');
+  s.src = zoneUrl.trim();
+  document.body.appendChild(s);
+}
+
+/** Remove the loaded zone script (used when consent is revoked). */
+export function removeAdsterraScript(): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('script[data-adsterra-zone]').forEach(s => s.remove());
 }
 
 // ---------------------------------------------------------------------------
@@ -361,7 +403,14 @@ export function placementConfigured(c: MarketingConfig, key: PlacementKey): bool
  */
 export function consumePlacement(c: MarketingConfig, key: PlacementKey, _countedKey: string, countedRef: { current: boolean }): boolean {
   if (!placementConfigured(c, key)) return false;
+  return consumeAdBudget(c, countedRef);
+}
 
+/**
+ * Shared per-route manual-ad budget, consumed by AdSense units AND Adsterra so
+ * the two networks together never exceed the density cap on one page.
+ */
+export function consumeAdBudget(c: MarketingConfig, countedRef: { current: boolean }): boolean {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   if (isMobile && !c.showAdsOnMobile) return false;
 

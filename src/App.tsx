@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
+import AdsterraAd from './components/AdsterraAd';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -1593,6 +1594,7 @@ function ProductDetailPage() {
 
           {/* Ad: Below Product Information */}
           <AdSenseAd placement="product_below_info" />
+          <AdsterraAd />
         </div>
       </div>
 
@@ -3854,6 +3856,7 @@ function BlogDetailPage() {
 
           {/* Ad: End of Article */}
           <AdSenseAd placement="blog_after_article" />
+          <AdsterraAd />
 
           {/* Related Posts */}
           {relatedPosts.length > 0 && (
