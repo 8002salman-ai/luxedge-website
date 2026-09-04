@@ -1860,7 +1860,7 @@ function HomePage() {
       </section>
 
       {/* â•â•â•â•â•â•â•â• Ad: After Hero â•â•â•â•â•â•â•â• */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /><AdsterraAd /></div>
+      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
       {/* â•â•â•â•â•â•â•â• SHOP BY PET — Circular Avatars â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-white">
@@ -3856,6 +3856,7 @@ function BlogDetailPage() {
 
           {/* Ad: End of Article */}
           <AdSenseAd placement="blog_after_article" />
+          <AdsterraAd />
 
           {/* Related Posts */}
           {relatedPosts.length > 0 && (

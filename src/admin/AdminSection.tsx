@@ -5499,7 +5499,7 @@ function AMarketingTraffic() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold">Enable Adsterra native banner</p>
-            <p className="text-xs text-gray-400 mt-0.5">Second ad network beside Google AdSense (which stays on). Renders on the homepage + product pages and respects the same consent, page exclusions and density cap.</p>
+            <p className="text-xs text-gray-400 mt-0.5">Second ad network beside Google AdSense (which stays on). Renders at the end of blog articles + on product pages — the homepage stays light. Respects the same consent, page exclusions and density cap.</p>
           </div>
           <Toggle on={cfg.adsterraEnabled} onChange={v => set({ adsterraEnabled: v })} label="Enable Adsterra native banner" />
         </div>

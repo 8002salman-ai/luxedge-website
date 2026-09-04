@@ -20,8 +20,9 @@ import {
  * and AdSense together never exceed the configured cap.
  *
  * Loads the zone's invoke.js exactly once per page (deduped by src). The
- * zone is mounted on ONE spot per route (homepage after hero, product detail
- * below info) — never twice on the same page.
+ * zone is mounted on ONE spot per route (blog article end, product detail
+ * below info) — never twice on the same page. The homepage stays light
+ * (AdSense Auto Ads only, no Adsterra there).
  */
 export default function AdsterraAd({ className = '' }: { className?: string }) {
   const loc = useLocation();
