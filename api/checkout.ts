@@ -257,7 +257,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       currency: totals.currency,
       freeShippingApplied: totals.freeShippingApplied,
       couponCode: totals.couponCode,
-      taxHandledByProvider: totals.taxHandledByProvider,
     },
   });
 }
