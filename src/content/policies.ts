@@ -9,7 +9,7 @@
 export const CONTACT_INFO = [
   { label: 'Email', value: 'hello@luxedge.us', sub: 'We reply within 24hrs' },
   { label: 'Phone', value: '(440) 941-8002', sub: 'Mon-Fri, 9AM-6PM CT' },
-  { label: 'Address', value: 'Irving, TX 75038', sub: 'United States' },
+  { label: 'Address', value: '1500 N Grant St, Denver, CO 80203', sub: 'United States' },
   { label: 'Hours', value: 'Mon - Fri', sub: '9:00 AM - 6:00 PM CT' },
 ];
 
@@ -19,7 +19,7 @@ export interface PolicySection {
 }
 
 export const PRIVACY_SECTIONS: PolicySection[] = [
-  { title: 'Introduction', body: 'At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website.' },
+  { title: 'Introduction', body: 'At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
   { title: 'Information We Collect', body: 'Name, billing and shipping address, email address, phone number, payment and transaction information (Luxedge does not store complete card numbers), order history, messages and support details, IP address, browser type, device information, and website usage through cookies and analytics.' },
   { title: 'How We Use Your Information', body: 'To process and fulfill orders, communicate regarding orders and customer service, respond to inquiries, improve our website, prevent fraud, comply with legal obligations, and send promotional emails if you have opted in.' },
   { title: 'Cookies and Analytics', body: 'Our website uses essential browser storage for the cart, account sessions, and preferences. With your consent, we load analytics and advertising technologies to understand traffic and show relevant ads.' },
@@ -31,7 +31,7 @@ export const PRIVACY_SECTIONS: PolicySection[] = [
 ];
 
 export const TERMS_SECTIONS: PolicySection[] = [
-  { title: 'Using Luxedge', body: 'By using this website, you agree to these Terms of Service and our Privacy Policy.' },
+  { title: 'Using Luxedge', body: 'By using this website, you agree to these Terms of Service and our Privacy Policy. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
   { title: 'Products, Pricing, and Availability', body: 'Product availability, pricing, images, specifications, and descriptions may change. We work to keep details accurate, but occasional errors may occur.' },
   { title: 'Orders and Payment', body: 'Submitting checkout is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends a confirmation.' },
   { title: 'Shipping and Delivery', body: 'Shipping availability, cost, and estimated delivery windows are shown at checkout or on product pages. Estimates are not guarantees.' },
@@ -48,11 +48,11 @@ export const RETURNS_SECTIONS: PolicySection[] = [
   { title: 'Refunds and Legal Rights', body: 'Luxedge does not offer change-of-mind refunds or store credit as a standard policy. Eligible damaged, defective, or incorrect products are handled by replacement. Where applicable law requires a refund, that right is not limited.' },
   { title: 'Return Shipping', body: 'Customers are responsible for return shipping label, packaging, and all return shipping costs. We recommend using a trackable shipping service.' },
   { title: 'Damaged or Incorrect Orders', body: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging.' },
-  { title: 'Contact Us', body: 'Questions about returns? Email hello@luxedge.us or call (440) 941-8002.' },
+  { title: 'Contact Us', body: 'Questions about returns? Email hello@luxedge.us or call (440) 941-8002. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
 export const SHIPPING_SECTIONS: PolicySection[] = [
-  { title: 'Where We Ship', body: 'Luxedge offers shipping within the United States where the destination is supported by the product, supplier, and carrier. International shipping is not currently offered.' },
+  { title: 'Where We Ship', body: 'Luxedge offers shipping within the United States where the destination is supported by the product, supplier, and carrier. International shipping is not currently offered. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
   { title: 'Processing Time', body: 'Orders are generally prepared within 1-3 business days after successful payment confirmation, unless a different estimate is shown on the product page or at checkout.' },
   { title: 'Shipping Methods & Times', body: 'Shipping methods and estimated delivery are shown per product and at checkout. Delivery estimates are estimates, not guarantees. Express shipping is not currently offered unless shown at checkout.' },
   { title: 'Shipping Promotions', body: 'Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout.' },
