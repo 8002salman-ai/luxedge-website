@@ -1,4 +1,4 @@
-// POST /api/crm/assistant — storefront AI assistant (DeepSeek)
+// POST /api/crm/assistant — storefront AI assistant (OpenRouter → DeepSeek)
 //
 // Public, rate-limited chat for site visitors: answers questions about the
 // store, products, shipping, returns, pets. It is a sales/help assistant, NOT
@@ -6,11 +6,13 @@
 //
 //   { message: string, history?: [{role:'user'|'assistant', content:string}] }
 //
-// The DeepSeek key stays server-side. A hard cap on history + message length
-// prevents abuse. Falls back to a friendly canned reply if the provider fails
-// so the visitor never sees a broken widget.
+// Keys stay server-side. Primary: OpenRouter free pool (MiniMax M3) via the
+// owner-attached OPENROUTER_API_KEY; DeepSeek remains the fallback when its
+// key is configured. A hard cap on history + message length prevents abuse.
+// Falls back to a friendly canned reply if every provider fails so the
+// visitor never sees a broken widget.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readJsonBody, sendJson, rateLimited, clientIp, generateWithRetry, isConfigured } from '../_lib/providers.js';
+import { readJsonBody, sendJson, rateLimited, clientIp, generateWithFallback, isConfiguredFull } from '../_lib/providers.js';
 import { supabaseConfig, supabaseFetch, uid, isMissingTable } from './_lib.js';
 
 const SYSTEM = `You are Luxie, the friendly AI assistant for LUXEDGE (luxedge.us), a premium pet essentials store based in Irving, Texas, USA.
@@ -87,7 +89,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
   }
 
-  if (!isConfigured('deepseek')) {
+  // Free-first chain: OpenRouter (MiniMax M3 free) primary, DeepSeek fallback
+  // when its key is configured. Both keys stay server-side.
+  const openrouterReady = await isConfiguredFull('openrouter');
+  const deepseekReady = await isConfiguredFull('deepseek');
+  if (!openrouterReady && !deepseekReady) {
     sendJson(res, 200, {
       reply: 'Thanks for your message! Our team will get back to you shortly. For instant help, message us on WhatsApp (+1 440-941-8002) or email sales@luxedge.us.',
       provider: 'canned',
@@ -97,13 +103,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
-    const text = await generateWithRetry('deepseek', {
-      prompt: messages.map((m) => `${m.role === 'user' ? 'Customer' : 'Luxie'}: ${m.content}`).join('\n\n'),
-      model: 'deepseek-v4-flash',
-      system: SYSTEM,
-    });
-    const reply = (text || '').trim();
-    // DeepSeek occasionally returns empty content — never emit reply:""
+    const prompt = messages.map((m) => `${m.role === 'user' ? 'Customer' : 'Luxie'}: ${m.content}`).join('\n\n');
+    const result = await generateWithFallback(
+      openrouterReady ? 'openrouter' : 'deepseek',
+      openrouterReady && deepseekReady ? 'deepseek' : null,
+      {
+        prompt,
+        model: 'minimax/minimax-m3:free',
+        system: SYSTEM,
+      },
+    );
+    const reply = (result.text || '').trim();
+    // Models occasionally return empty content — never emit reply:""
     // (the client treats it as a broken response). Fall back to canned.
     if (!reply) {
       sendJson(res, 200, {
@@ -113,7 +124,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
       return;
     }
-    sendJson(res, 200, { reply, provider: 'deepseek', model: 'deepseek-v4-flash' });
+    sendJson(res, 200, { reply, provider: result.provider, model: result.model });
   } catch {
     sendJson(res, 200, {
       reply: 'I hit a small snag on my side. Please try again in a moment — or reach us instantly on WhatsApp (+1 440-941-8002) / sales@luxedge.us.',

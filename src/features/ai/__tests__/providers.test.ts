@@ -68,7 +68,7 @@ describe('loadAIProviders', () => {
   it('defaults to OpenRouter as the default provider (owner chain: openrouter only, no paid fallbacks)', () => {
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('openrouter');
     const or = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter');
-    expect(or?.defaultModel).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+    expect(or?.defaultModel).toBe('minimax/minimax-m3:free');
     expect(or?.enabled).toBe(true);
     // DeepSeek enabled by default (server-side key is commonly configured);
     // Codex is available on demand (still never the default).
