@@ -52,8 +52,13 @@ export function isStripeConfigured(): boolean {
 export async function probeStripeConfig(): Promise<boolean> {
   try {
     const res = await fetch('/api/checkout?probe=1', { headers: { Accept: 'application/json' } });
-    stripeConfiguredFlag = res.ok;
-    return res.ok;
+    if (!res.ok) { stripeConfiguredFlag = false; return false; }
+    // The server ALWAYS answers 200 for a probe; the configured flag lives in
+    // the body. Trusting res.ok alone would report configured even when the
+    // store has no keys.
+    const data = (await res.json().catch(() => null)) as { configured?: boolean } | null;
+    stripeConfiguredFlag = data?.configured === true;
+    return stripeConfiguredFlag;
   } catch {
     stripeConfiguredFlag = false;
     return false;
