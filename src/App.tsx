@@ -2672,7 +2672,7 @@ function clearPurchaseSnapshot(): void {
 /**
  * Fire the GA4 purchase for a verified paid checkout return. `order.total` is
  * stored in dollars while Stripe's `session.amountTotal` is in cents — both
- * are normalized to dollars for the event `value` (charged total incl. tax).
+ * are normalized to dollars for the event `value` (the final charged total).
  */
 function firePurchaseEvent(r: CheckoutSessionStatus): void {
   const snapshot = readPurchaseSnapshot(r.session?.id || '');
@@ -2706,8 +2706,8 @@ function CheckoutPage() {
   const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
   const discountedSub = Math.max(0, sub - couponDisc);
   const shipCost = freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99;
-  // NO hard-coded tax. Stripe automatic tax computes the real rate from the
-  // collected shipping address at checkout. This is the pre-tax total.
+  // No sales tax at launch (Stripe Tax add-on disabled) — this IS the final
+  // total charged: catalog prices + shipping, nothing hidden.
   const totalBeforeTax = +(discountedSub + shipCost).toFixed(2);
 
   useEffect(() => { if (cart.length === 0) nav('/shop'); }, [cart.length, nav]);
@@ -2868,13 +2868,12 @@ function CheckoutPage() {
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
                 {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">âˆ’${couponDisc.toFixed(2)}</span></div>}
                 <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Tax</span><span className="font-medium text-gray-400">calculated at checkout</span></div>
                 {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">ðŸ’¡ Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
                 <div className="flex justify-between pt-3 border-t">
-                  <span className="font-bold text-lg">Total before tax</span>
+                  <span className="font-bold text-lg">Total</span>
                   <div className="text-right">
                     <span className="font-bold text-xl text-gray-900">${totalBeforeTax.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-400">USD · tax added by Stripe at checkout</p>
+                    <p className="text-[10px] text-gray-400">USD · final price — no tax or hidden fees added at checkout</p>
                   </div>
                 </div>
               </div>

@@ -117,14 +117,17 @@ describe('/api/checkout', () => {
     expect(cap.status).toBe(200);
     const body = cap.body as { url: string; totals: { total: number; tax: number; taxHandledByProvider: boolean } };
     expect(body.url).toContain('checkout.stripe.com');
-    // 25 subtotal + 4.99 shipping (below $50). NO tax — Stripe automatic tax adds it at checkout.
+    // 25 subtotal + 4.99 shipping (below $50). NO tax — Stripe Tax add-on disabled at launch.
     expect(body.totals.total).toBe(29.99);
     expect(body.totals.tax).toBe(0);
-    expect(body.totals.taxHandledByProvider).toBe(true);
+    expect(body.totals.taxHandledByProvider).toBe(false);
     const stripeCall = calls.find((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST');
     expect(stripeCall).toBeTruthy();
     const stripeBody = String(stripeCall!.body);
-    expect(stripeBody).toContain('automatic_tax%5Benabled%5D=true');
+    expect(stripeBody).toContain('mode=payment'); // one-time purchase, never subscription
+    expect(stripeBody).not.toContain('subscription');
+    expect(stripeBody).not.toContain('recurring');
+    expect(stripeBody).not.toContain('automatic_tax');
     expect(stripeBody).toContain('shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US');
     // goods line = catalog price; shipping is a separate Stripe shipping option.
     expect(stripeBody).toContain('unit_amount%5D=2500');

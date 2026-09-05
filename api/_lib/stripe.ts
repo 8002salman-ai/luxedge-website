@@ -146,10 +146,10 @@ export interface CheckoutSessionResult {
 /**
  * Create a Stripe-hosted Checkout Session (server-trusted amounts only).
  *
- * TAX IS NOT COMPUTED BY LUXEDGE. `automatic_tax[enabled]=true` makes Stripe
- * collect the shipping address and calculate the applicable tax with Stripe
- * Tax. Luxedge only ever sets the pre-tax goods amounts and shipping; the
- * customer's final total (incl. tax) is decided by Stripe at checkout.
+ * Lowest-cost one-time purchase setup: no Stripe Billing, no subscriptions,
+ * no usage-based pricing and no Stripe Tax (a paid per-transaction add-on).
+ * The prices shown are the prices charged — goods amounts and shipping are
+ * set by Luxedge from the catalog; Stripe collects nothing extra.
  */
 export async function createCheckoutSession(params: {
   lineItems: { name: string; unitAmountCents: number; quantity: number; image?: string }[];
@@ -165,9 +165,10 @@ export async function createCheckoutSession(params: {
   parts.set('cancel_url', params.cancelUrl);
   if (params.customerEmail) parts.set('customer_email', params.customerEmail);
 
-  // Stripe computes tax (never a hard-coded store rate). Address is required
-  // for tax + shipping. USA-only for launch (expandable later).
-  parts.set('automatic_tax[enabled]', 'true');
+  // Stripe-hosted full-page checkout (default ui_mode for mode=payment).
+  // Address collection is for shipping only. No Stripe Tax: it is a paid
+  // per-transaction add-on and was not approved — checkout charges exactly the
+  // catalog prices + shipping shown on the page.
   parts.set('shipping_address_collection[allowed_countries][0]', 'US');
 
   // CARD-ONLY for launch: immediate payment methods only, so
@@ -176,7 +177,7 @@ export async function createCheckoutSession(params: {
   // async events defensively (they should not occur in card-only mode).
   parts.set('payment_method_types[0]', 'card');
 
-  // Shipping as a proper Stripe shipping option (taxed by Stripe Tax).
+  // Shipping as a proper Stripe shipping option at the rate shown on the page.
   parts.set('shipping_options[0][shipping_rate_data][type]', 'fixed_amount');
   parts.set('shipping_options[0][shipping_rate_data][fixed_amount][amount]', String(Math.max(0, Math.round(params.shippingCents))));
   parts.set('shipping_options[0][shipping_rate_data][fixed_amount][currency]', 'usd');
@@ -189,7 +190,6 @@ export async function createCheckoutSession(params: {
     parts.set(`line_items[${i}][quantity]`, String(li.quantity));
     parts.set(`line_items[${i}][price_data][currency]`, 'usd');
     parts.set(`line_items[${i}][price_data][unit_amount]`, String(Math.max(1, Math.round(li.unitAmountCents))));
-    parts.set(`line_items[${i}][price_data][tax_behavior]`, 'exclusive');
     parts.set(`line_items[${i}][price_data][product_data][name]`, li.name);
     if (li.image) parts.set(`line_items[${i}][price_data][product_data][images][0]`, li.image);
   });

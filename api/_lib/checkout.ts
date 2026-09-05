@@ -16,10 +16,10 @@ import type { IncomingMessage } from 'node:http';
 
 export const DEFAULT_SHIPPING_RATE = 4.99;
 
-// NO hard-coded sales tax. Luxedge never computes tax: Stripe automatic tax
-// (Stripe Tax) calculates the applicable rate at checkout from the collected
-// shipping address. Charging a fabricated universal rate (e.g. TX 8.25%) for
-// every US order would be wrong — tax is determined by Stripe, not here.
+// NO hard-coded sales tax and NO Stripe Tax (a paid per-transaction add-on,
+// not approved for launch). Luxedge charges exactly the catalog prices +
+// shipping shown on the checkout page — no tax is added on top, so the prices
+// displayed to the customer are the prices charged.
 
 export interface CheckoutItemInput {
   id: string;
@@ -75,11 +75,11 @@ export interface CheckoutTotals {
   discountedSubtotal: number;
   shipping: number;
   freeShippingApplied: boolean;
-  /** Always 0 — Luxedge never fabricates tax. Stripe automatic tax adds it at checkout. */
+  /** Always 0 — no sales tax is collected at launch (no Stripe Tax add-on). */
   tax: number;
-  /** Total BEFORE tax. The final charged total (incl. Stripe-computed tax) is decided by Stripe. */
+  /** Total charged to the customer — catalog prices + shipping, no hidden tax. */
   total: number;
-  taxHandledByProvider: true;
+  taxHandledByProvider: false;
   currency: 'USD';
 }
 
@@ -213,8 +213,8 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
   const freeShippingApplied = freeShippingEnabled && subtotal >= threshold;
   const shipping = freeShippingApplied ? 0 : DEFAULT_SHIPPING_RATE;
 
-  const tax = 0; // Stripe automatic tax computes the real rate at checkout.
-  const total = round2(discountedSubtotal + shipping); // pre-tax total
+  const tax = 0; // no sales tax collected at launch (no Stripe Tax add-on)
+  const total = round2(discountedSubtotal + shipping); // final charged total
   if (total <= 0) return { ok: false, status: 400, code: 'EMPTY_TOTAL', message: 'Order total must be greater than zero.' };
 
   return {
@@ -230,7 +230,7 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
       freeShippingApplied,
       tax,
       total,
-      taxHandledByProvider: true,
+      taxHandledByProvider: false,
       currency: 'USD',
     },
     products,
@@ -241,7 +241,7 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
  * Build the Stripe line items the server will actually charge. The coupon
  * discount is prorated across the goods lines (cents-exact: the LAST line
  * absorbs rounding) so the charged line sum == discountedSubtotal exactly.
- * Stripe then adds automatic tax on top. The browser never sees these amounts.
+ * No tax is added — line sum + shipping is the final charge.
  */
 export function buildStripeLineItems(totals: CheckoutTotals): { name: string; unitAmountCents: number; quantity: number; imageUrl: string | null }[] {
   const lines = totals.lines;
