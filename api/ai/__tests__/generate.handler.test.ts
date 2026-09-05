@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import handler from '../generate.js';
 import fetchPageHandler from '../../fetch-page.js';
+import { __resetDbKeysForTests } from '../../_lib/providers.js';
 
 const SECRET = '0123456789abcdef0123456789abcdef';
 const originalSecret = process.env.SUPABASE_JWT_SECRET;
@@ -88,11 +89,30 @@ describe('/api/ai/generate handler', () => {
     expect(statusOf(res)).toBe(503);
   });
 
-  it('allows an admin token through to provider validation (501 for unconfigured provider)', async () => {
-    const res = mockRes();
-    await handler(mockReq('POST', { authorization: `Bearer ${adminToken}` }, JSON.stringify({ provider: 'openai', prompt: 'hi' })), res);
-    expect(statusOf(res)).toBe(501);
-    expect(res._body).toContain('not configured');
+  it('allows an admin token through to provider validation (501 when no provider key exists)', async () => {
+    // Deterministic regardless of .env: temporarily clear every provider key
+    // and the DB-keys path (env vars always win; DB keys are the fallback), so
+    // with the chain routing the only possible outcome is 501 — auth passed,
+    // no provider configured.
+    const saved = new Map<string, string | undefined>();
+    for (const k of Object.keys(process.env)) {
+      if (/_API_KEY$/.test(k) || k === 'CHATGPT_OAUTH_TOKEN' || /SERVICE_ROLE/.test(k)) {
+        saved.set(k, process.env[k]);
+        delete process.env[k];
+      }
+    }
+    __resetDbKeysForTests();
+    try {
+      const res = mockRes();
+      await handler(mockReq('POST', { authorization: `Bearer ${adminToken}` }, JSON.stringify({ provider: 'openai', prompt: 'hi' })), res);
+      expect(statusOf(res)).toBe(501);
+      expect(res._body).toContain('not configured');
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 
   it('rejects malformed JSON with 400 even for admins', async () => {
