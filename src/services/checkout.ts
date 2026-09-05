@@ -27,7 +27,7 @@ export interface CheckoutTotals {
   discount: number;
   shipping: number;
   /** Always 0 — no sales tax collected at launch (no Stripe Tax add-on). */
-  tax: number;
+  tax: 0;
   /** Final total charged — catalog prices + shipping, nothing hidden. */
   total: number;
   currency: string;
