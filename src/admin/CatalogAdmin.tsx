@@ -9,9 +9,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye, ToggleRight, ToggleLeft,
+  Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
   GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, ArrowSquareOut,
+  DotsThreeVertical, Clock,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import { useApp } from '../App';
@@ -72,6 +73,29 @@ function ReadinessBadge({ readiness }: { readiness?: CommerceReadiness | null })
   return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${READINESS_BADGE[readiness] || BADGE.draft}`}>{COMMERCE_READINESS_LABELS[readiness] || readiness}</span>;
 }
 
+// eBay-style listing age from the genuine first-live date (published_at),
+// falling back to created_at only for products that were never published.
+function ageLabel(iso: string | undefined | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+function endsInLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  if (days < 0) return 'Ended';
+  return days === 0 ? 'Ends today' : `Ends in ${days}d`;
+}
+
 function useDbToken() {
   useEffect(() => {
     // Refresh first so a long-open admin session never writes with a stale
@@ -89,6 +113,7 @@ export function CatalogProductsPage() {
   const { notify } = useApp();
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [cats, setCats] = useState<CatalogCategory[]>([]);
+  const [offers, setOffers] = useState<StoreOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState('all');
@@ -98,6 +123,7 @@ export function CatalogProductsPage() {
   const [fSource, setFSource] = useState('all');
   const [fSpecies, setFSpecies] = useState('all');
   const [fImage, setFImage] = useState('all');
+  const [sort, setSort] = useState('name');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -105,47 +131,25 @@ export function CatalogProductsPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
   const [seoBulk, setSeoBulk] = useState<{ done: number; total: number; current: string; errors: number } | null>(null);
-
-  // One-click bulk SEO: generate + save for every listed product missing SEO,
-  // one at a time through the same AI path as the per-product SEO tab. Products
-  // that already have a title AND description are skipped — never overwritten.
-  const autoSeoBulk = async () => {
-    const targets = products.filter((p) => p.name.trim() && !(p.seoTitle && p.seoDescription));
-    if (targets.length === 0) { notify('All listed products already have SEO.', 'info'); return; }
-    if (!window.confirm(`Auto-generate and save SEO for ${targets.length} product(s) missing SEO? Existing SEO is skipped.`)) return;
-    setDbToken(await getFreshAccessToken());
-    setSeoBulk({ done: 0, total: targets.length, current: 'Starting…', errors: 0 });
-    let errors = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const p = targets[i];
-      setSeoBulk({ done: i, total: targets.length, current: p.name.slice(0, 60), errors });
-      try {
-        const category = cats.find((c) => c.id === p.categoryId)?.name || p.categoryName || '';
-        const parsed = await generateSeoJson(buildProductSeoPrompt(p, category));
-        const kw = Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.map(String).slice(0, 8) : [];
-        const slug = String(parsed.slug || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90);
-        await updateProduct(p.id, {
-          seoTitle: String(parsed.seoTitle || '').trim(),
-          seoDescription: String(parsed.metaDescription || '').trim(),
-          seoKeywords: kw,
-          ...(slug ? { canonicalSlug: slug } : {}),
-        });
-      } catch {
-        errors++;
-      }
-      setSeoBulk({ done: i + 1, total: targets.length, current: '', errors });
-    }
-    setSeoBulk(null);
-    notify(errors === 0 ? `Auto SEO done — ${targets.length} products updated.` : `Auto SEO done — ${targets.length - errors} updated, ${errors} failed.`, errors ? 'error' : 'success');
-    await load();
-  };
+  const [seoReport, setSeoReport] = useState<{ complete: number; updated: number; skipped: number; failed: number } | null>(null);
+  // First-party analytics: views + add-to-cart interest per product.
+  const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number; interest: number }> | null>(null);
+  const [statsNote, setStatsNote] = useState<string | null>(null);
+  // Per-row quick edits.
+  const [priceEdit, setPriceEdit] = useState<string | null>(null);
+  const [priceDraft, setPriceDraft] = useState('');
+  const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const [listingModal, setListingModal] = useState<CatalogProduct | null>(null);
+  const [promoOpen, setPromoOpen] = useState<string | null>(null);
+  const [priceBulk, setPriceBulk] = useState<{ open: boolean; mode: 'inc-pct' | 'dec-pct' | 'inc-fixed' | 'dec-fixed' | 'set'; value: string; busy: boolean }>({ open: false, mode: 'dec-pct', value: '', busy: false });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ps, cs] = await Promise.all([listProducts(), listCategories()]);
+      const [ps, cs, os] = await Promise.all([listProducts(), listCategories(), listOffers()]);
       setProducts(ps);
       setCats(cs);
+      setOffers(os);
     } catch (e) {
       notify(`Could not load catalog: ${(e as Error).message}`, 'error');
     } finally {
@@ -154,6 +158,95 @@ export function CatalogProductsPage() {
   }, [notify]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Real first-party views/interest from the server endpoint (one request,
+  // aggregated server-side — never N+1, never a raw analytics download).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getFreshAccessToken();
+        const r = await fetch('/api/admin/product-stats', { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = (await r.json()) as { stats?: Record<string, { views: number; views7d: number; views30d: number; interest: number }>; unavailable?: string };
+        if (!cancelled) { setStats(j.stats ?? null); setStatsNote(j.unavailable ?? null); }
+      } catch {
+        if (!cancelled) { setStats(null); setStatsNote('Analytics unavailable'); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Local patch after any quick edit — the row updates from the fresh DB row
+  // (margin recomputes, published_at refreshes) without a full reload.
+  const patchLocal = (upd: CatalogProduct | null) => {
+    if (!upd) return;
+    setProducts((prev) => prev.map((p) => (p.id === upd.id ? upd : p)));
+  };
+
+  // -------------------------------------------------------------------------
+  // AUTO SEO (fixed eligibility). The bug: rowToProduct falls back
+  // seo_title → name and seo_description → short_description for DISPLAY, so
+  // `p.seoTitle && p.seoDescription` was ALWAYS truthy and the bulk run
+  // reported "all listings already have SEO" even when the DB columns were
+  // NULL. Eligibility now reads the raw persisted columns only
+  // (seoTitleStored / seoDescriptionStored / seoKeywords).
+  // -------------------------------------------------------------------------
+  const seoStatus = (p: CatalogProduct): 'complete' | 'incomplete' | 'missing' => {
+    const title = !!p.seoTitleStored;
+    const desc = !!p.seoDescriptionStored;
+    const kw = (p.seoKeywords || []).length > 0;
+    if (title && desc && kw) return 'complete';
+    if (title || desc || kw) return 'incomplete';
+    return 'missing';
+  };
+
+  const generateAndSaveSeo = async (p: CatalogProduct) => {
+    const category = cats.find((c) => c.id === p.categoryId)?.name || p.categoryName || '';
+    const parsed = await generateSeoJson(buildProductSeoPrompt(p, category));
+    const kw = Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.map(String).slice(0, 8) : [];
+    const slug = String(parsed.slug || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90);
+    const upd = await updateProduct(p.id, {
+      seoTitle: String(parsed.seoTitle || '').trim(),
+      seoDescription: String(parsed.metaDescription || '').trim(),
+      seoKeywords: kw,
+      ...(slug ? { canonicalSlug: slug } : {}),
+    });
+    patchLocal(upd);
+  };
+
+  // Bulk Auto SEO for the given targets: processes Missing + Incomplete,
+  // NEVER overwrites Complete. Reports complete/updated/skipped/failed.
+  const runAutoSeo = async (targets: CatalogProduct[]) => {
+    const work = targets.filter((p) => p.name.trim() && seoStatus(p) !== 'complete');
+    if (work.length === 0) {
+      notify(`All ${targets.length} selected product(s) already have complete SEO.`, 'info');
+      return;
+    }
+    if (!window.confirm(`Auto-generate and save SEO for ${work.length} product(s)? Complete SEO is never overwritten.`)) return;
+    setDbToken(await getFreshAccessToken());
+    setSeoBulk({ done: 0, total: work.length, current: 'Starting…', errors: 0 });
+    let failed = 0;
+    for (let i = 0; i < work.length; i++) {
+      const p = work[i];
+      setSeoBulk({ done: i, total: work.length, current: p.name.slice(0, 60), errors: failed });
+      try {
+        await generateAndSaveSeo(p);
+      } catch {
+        failed++;
+      }
+      setSeoBulk({ done: i + 1, total: work.length, current: '', errors: failed });
+    }
+    setSeoBulk(null);
+    const skipped = targets.length - work.length;
+    setSeoReport({ complete: skipped, updated: work.length - failed, skipped, failed });
+    notify(failed === 0
+      ? `Auto SEO done — ${work.length} generated, ${skipped} already complete.`
+      : `Auto SEO done — ${work.length - failed} generated, ${failed} failed, ${skipped} already complete.`, failed ? 'error' : 'success');
+    await load();
+  };
+
+  const autoSeoBulk = () => void runAutoSeo(products);
 
   // "All statuses" hides archived rows — archive is a folder, not a status
   // you keep scrolling past. Archived products are only visible when the
@@ -191,14 +284,76 @@ export function CatalogProductsPage() {
     return true;
   }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, q]);
 
-  const toggleActive = async (p: CatalogProduct) => {
+  const sorted = useMemo(() => {
+    const rows = [...filtered];
+    const listDate = (p: CatalogProduct) => Date.parse(p.publishedAt || p.createdAt || '') || 0;
+    switch (sort) {
+      case 'newest': return rows.sort((a, b) => listDate(b) - listDate(a));
+      case 'oldest': return rows.sort((a, b) => listDate(a) - listDate(b));
+      case 'price-asc': return rows.sort((a, b) => a.price - b.price);
+      case 'price-desc': return rows.sort((a, b) => b.price - a.price);
+      case 'margin': return rows.sort((a, b) => (b.marginPercent ?? -1) - (a.marginPercent ?? -1));
+      case 'views': return rows.sort((a, b) => (stats?.[b.id]?.views ?? -1) - (stats?.[a.id]?.views ?? -1));
+      default: return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    }
+  }, [filtered, sort, stats]);
+
+  const archivedCount = useMemo(() => products.filter((p) => p.status === 'archived').length, [products]);
+
+  // -------------------------------------------------------------------------
+  // Selection
+  // -------------------------------------------------------------------------
+  const allVisibleSelected = sorted.length > 0 && sorted.every((p) => selectedIds.has(p.id));
+  const someVisibleSelected = sorted.some((p) => selectedIds.has(p.id));
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(sorted.map((p) => p.id)));
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // -------------------------------------------------------------------------
+  // Quick edits (no page reload — row patches from the fresh DB row)
+  // -------------------------------------------------------------------------
+  const quickCategory = async (p: CatalogProduct, catId: string) => {
     try {
-      const next = p.status === 'active' ? 'inactive' : 'active';
-      await setProductStatus(p.id, next);
-      notify(next === 'active' ? 'Product is now LIVE on the storefront' : 'Product set to Draft');
-      await load();
+      const upd = await updateProduct(p.id, { categoryId: catId || null });
+      patchLocal(upd);
+      notify(catId ? `Category saved` : 'Category cleared');
     } catch (e) {
-      notify(`Could not update: ${(e as Error).message}`, 'error');
+      notify(`Could not update category: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const quickStatus = async (p: CatalogProduct, status: CatalogProduct['status']) => {
+    try {
+      const upd = await setProductStatus(p.id, status);
+      patchLocal(upd);
+      notify(status === 'active' ? 'Product is now LIVE on the storefront' : `Status → ${status}`);
+    } catch (e) {
+      notify(`Could not update status: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const savePrice = async (p: CatalogProduct) => {
+    const v = Number(priceDraft);
+    if (priceDraft.trim() === '' || !Number.isFinite(v) || v <= 0) {
+      notify('Enter a valid price greater than 0', 'error');
+      return;
+    }
+    try {
+      const upd = await updateProduct(p.id, { price: Math.round(v * 100) / 100 });
+      patchLocal(upd);
+      notify('Price saved');
+      setPriceEdit(null);
+    } catch (e) {
+      notify(`Could not update price: ${(e as Error).message}`, 'error');
     }
   };
 
@@ -249,19 +404,69 @@ export function CatalogProductsPage() {
     }
   };
 
-  const nonActive = useMemo(() => filtered.filter((p) => p.status !== 'active'), [filtered]);
-  const archivedCount = useMemo(() => products.filter((p) => p.status === 'archived').length, [products]);
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  // -------------------------------------------------------------------------
+  // Bulk actions
+  // -------------------------------------------------------------------------
+  const runBulk = async (verb: string, fn: (p: CatalogProduct) => Promise<void>) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    let failed = 0;
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        const p = products.find((x) => x.id === ids[i]);
+        if (!p) continue;
+        try { await fn(p); } catch { failed++; }
+      }
+      notify(failed === 0 ? `${verb} — ${ids.length} product${ids.length === 1 ? '' : 's'} updated` : `${verb} — ${ids.length - failed} updated, ${failed} failed`, failed ? 'error' : 'success');
+      await load();
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
-  const selectAllNonActive = () => setSelectedIds(new Set(nonActive.map((p) => p.id)));
-  const clearSelection = () => setSelectedIds(new Set());
+  const onBulkStatus = (status: CatalogProduct['status']) => {
+    void runBulk(`Status → ${status}`, (p) => setProductStatus(p.id, status).then((u) => { if (u) patchLocal(u); }));
+  };
+  const onBulkCategory = (catId: string) => {
+    void runBulk('Category', (p) => updateProduct(p.id, { categoryId: catId || null }).then((u) => { if (u) patchLocal(u); }));
+  };
+  const onBulkPromote = (on: boolean) => {
+    void runBulk(on ? 'Promoted' : 'Promotion removed', (p) => updateProduct(p.id, on ? { promoted: true } : { promoted: false, saleEnabled: false }).then((u) => { if (u) patchLocal(u); }));
+  };
+
+  const applyBulkPrice = async () => {
+    const { mode, value } = priceBulk;
+    const v = Number(value);
+    if (value.trim() === '' || !Number.isFinite(v) || v <= 0) {
+      notify('Enter a valid positive amount/percent', 'error');
+      return;
+    }
+    const ids = [...selectedIds];
+    const targets = products.filter((p) => ids.includes(p.id));
+    // Preview all resulting prices first — never allow a negative/zero price.
+    const next = targets.map((p) => {
+      let np = p.price;
+      if (mode === 'inc-pct') np = p.price * (1 + v / 100);
+      else if (mode === 'dec-pct') np = p.price * (1 - v / 100);
+      else if (mode === 'inc-fixed') np = p.price + v;
+      else if (mode === 'dec-fixed') np = p.price - v;
+      else np = v; // set exact
+      return { p, np: Math.round(np * 100) / 100 };
+    });
+    if (next.some((x) => x.np <= 0)) {
+      notify('Result would produce a zero/negative price — nothing applied', 'error');
+      return;
+    }
+    setPriceBulk((s) => ({ ...s, busy: true }));
+    let failed = 0;
+    for (const x of next) {
+      try { const u = await updateProduct(x.p.id, { price: x.np }); if (u) patchLocal(u); } catch { failed++; }
+    }
+    setPriceBulk({ open: false, mode: 'dec-pct', value: '', busy: false });
+    setSelectedIds(new Set());
+    notify(failed === 0 ? `Prices updated — ${next.length} product${next.length === 1 ? '' : 's'}` : `${next.length - failed} updated, ${failed} failed`, failed ? 'error' : 'success');
+  };
 
   const onBulkHardDelete = async () => {
     setBulkBusy(true);
@@ -299,6 +504,28 @@ export function CatalogProductsPage() {
     }
   };
 
+  // Listing duration (optional expiry — display only, never auto-enforced).
+  const saveListingEnds = async (iso: string | null) => {
+    if (!listingModal) return;
+    try {
+      const upd = await updateProduct(listingModal.id, { listingEndsAt: iso });
+      patchLocal(upd);
+      notify(iso ? 'Listing end date saved' : 'Listing set to no expiry (Good ’Til Cancelled)');
+      setListingModal(null);
+    } catch (e) {
+      notify(`Could not save listing duration: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const offersFor = (p: CatalogProduct) => offers.filter((o) => o.isActive && (o.productIds.includes(p.id) || (p.categoryId ? o.categoryIds.includes(p.categoryId) : false)));
+  const promoLabel = (p: CatalogProduct) => {
+    if (p.saleEnabled && p.discountValue != null && p.discountValue > 0) {
+      return p.discountType === 'percent' ? `${p.discountValue}% Off` : `$${p.discountValue.toFixed(2)} Off`;
+    }
+    if (p.promoted) return 'Promoted';
+    return 'None';
+  };
+
   if (loading) return <div className="text-center py-20 text-gray-400">Loading catalog…</div>;
 
   return (
@@ -318,20 +545,7 @@ export function CatalogProductsPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {selectedIds.size > 0 ? (
-            <>
-              <span className="text-xs text-gray-500">{selectedIds.size} selected</span>
-              <button onClick={clearSelection} className="px-3 py-2 border text-sm rounded-lg">Clear</button>
-              <button onClick={() => setBulkOpen(true)} className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg flex items-center gap-2">
-                <Trash size={16} />Delete Selected
-              </button>
-            </>
-          ) : nonActive.length > 0 ? (
-            <button onClick={selectAllNonActive} title="Select every Draft / Inactive / Archived product currently in view" className="px-3 py-2 border text-sm rounded-lg text-gray-600 hover:bg-gray-50">
-              Select all Draft/Inactive ({nonActive.length})
-            </button>
-          ) : null}
-          <button onClick={autoSeoBulk} disabled={!!seoBulk} title="Auto-generate + save SEO for every listed product missing a title/description" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
+          <button onClick={autoSeoBulk} disabled={!!seoBulk} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
             <Sparkle size={16} />{seoBulk ? 'Auto SEO…' : 'Auto SEO'}
           </button>
           <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
@@ -358,9 +572,17 @@ export function CatalogProductsPage() {
           {seoBulk.errors > 0 && <p className="text-xs text-amber-600 mt-1">{seoBulk.errors} failed so far — continuing.</p>}
         </div>
       )}
+      {seoReport && !seoBulk && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2.5 text-xs text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
+          <span>SEO complete: <b>{seoReport.complete}</b></span>
+          <span>Generated/updated: <b>{seoReport.updated}</b></span>
+          <span>Skipped: <b>{seoReport.skipped}</b></span>
+          <span>Failed: <b>{seoReport.failed}</b></span>
+        </div>
+      )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
+      <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-2">
         <div className="relative lg:col-span-2">
           <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, SKU, tag…" className={`${I} pl-9`} aria-label="Search products" />
@@ -418,130 +640,342 @@ export function CatalogProductsPage() {
           <option value="has-image">Has image</option>
           <option value="single-image">Single image only</option>
         </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} className={I} aria-label="Sort products">
+          <option value="name">Sort: Name</option>
+          <option value="newest">Sort: Newest</option>
+          <option value="oldest">Sort: Oldest</option>
+          <option value="price-asc">Sort: Price (low → high)</option>
+          <option value="price-desc">Sort: Price (high → low)</option>
+          <option value="margin">Sort: Margin</option>
+          <option value="views">Sort: Most viewed</option>
+        </select>
       </div>
+
+      {/* Contextual bulk bar — only when products are selected */}
+      {selectedIds.size > 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-indigo-900">{selectedIds.size} selected</span>
+          <button onClick={clearSelection} className="px-2.5 py-1.5 border text-xs rounded-lg bg-white text-gray-600 hover:bg-gray-50">Clear</button>
+          <span className="w-px h-6 bg-indigo-200" />
+          <button onClick={() => void runAutoSeo(products.filter((p) => selectedIds.has(p.id)))} disabled={bulkBusy || !!seoBulk} className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-xs rounded-lg flex items-center gap-1.5">
+            <Sparkle size={13} />Auto SEO
+          </button>
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) { onBulkStatus(e.target.value as CatalogProduct['status']); e.target.value = ''; } }}
+            disabled={bulkBusy}
+            className="px-2 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white cursor-pointer disabled:opacity-50"
+            aria-label="Bulk change status"
+          >
+            <option value="">Status…</option>
+            <option value="active">Active</option>
+            <option value="ready">Ready</option>
+            <option value="draft">Draft</option>
+            <option value="inactive">Inactive</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select
+            value=""
+            onChange={(e) => { if (e.target.value) { onBulkCategory(e.target.value === '__none__' ? '' : e.target.value); e.target.value = ''; } }}
+            disabled={bulkBusy}
+            className="px-2 py-1.5 border border-indigo-200 rounded-lg text-xs bg-white cursor-pointer disabled:opacity-50"
+            aria-label="Bulk change category"
+          >
+            <option value="">Category…</option>
+            <option value="__none__">— Clear category —</option>
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={() => setPriceBulk((s) => ({ ...s, open: true }))} disabled={bulkBusy} className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs rounded-lg">Adjust Price…</button>
+          <button onClick={() => onBulkPromote(true)} disabled={bulkBusy} className="px-2.5 py-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-xs rounded-lg">Promote</button>
+          <button onClick={() => onBulkPromote(false)} disabled={bulkBusy} className="px-2.5 py-1.5 border text-xs rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50">Remove Promotion</button>
+          <button onClick={onBulkArchive} disabled={bulkBusy} className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs rounded-lg">Archive</button>
+          <button onClick={() => setBulkOpen(true)} disabled={bulkBusy} className="px-2.5 py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs rounded-lg flex items-center gap-1"><Trash size={12} />Delete</button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px]">
+          <table className="w-full min-w-[1240px]">
             <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
               <tr>
-                <th className="px-4 py-3 w-8"></th>
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all visible products"
+                    title={sorted.length ? `Select all ${sorted.length} visible products` : 'No products to select'}
+                  />
+                </th>
                 <th className="px-4 py-3 whitespace-nowrap">Product</th>
-                <th className="px-4 py-3 whitespace-nowrap">Species / Category</th>
-                <th className="px-4 py-3 whitespace-nowrap">Visible</th>
+                <th className="px-4 py-3 whitespace-nowrap">Category / Species</th>
+                <th className="px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="px-4 py-3 whitespace-nowrap">Price</th>
-                <th className="px-4 py-3 whitespace-nowrap">Cost</th>
                 <th className="px-4 py-3 whitespace-nowrap">Margin</th>
                 <th className="px-4 py-3 whitespace-nowrap">Stock</th>
+                <th className="px-4 py-3 whitespace-nowrap" title="Real first-party view_item events, last 90 days">Views</th>
+                <th className="px-4 py-3 whitespace-nowrap" title="Real add-to-cart intent — Luxedge has no wishlist/watchers system">Interest</th>
+                <th className="px-4 py-3 whitespace-nowrap" title="Time since first live (published_at), falling back to created_at">Listing Age</th>
+                <th className="px-4 py-3 whitespace-nowrap">Promotion</th>
                 <th className="px-4 py-3 whitespace-nowrap">Readiness</th>
-                <th className="px-4 py-3 whitespace-nowrap">Source</th>
-                <th className="px-4 py-3 whitespace-nowrap">Flags</th>
-                <th className="px-4 py-3 whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 whitespace-nowrap">Actions</th>
+                <th className="px-4 py-3 whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
-                <tr key={p.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
-                  </td>
-                  <td className="px-4 py-3 max-w-[280px]">
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
-                        <Package size={18} className="shrink-0" />
-                        {p.images[0]?.url?.trim() ? (
-                          <img src={p.images[0].url} alt="" loading="lazy"
-                            className="absolute inset-0 w-full h-full object-cover"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        ) : null}
+              {sorted.map((p) => {
+                const st = stats?.[p.id];
+                const ageIso = p.publishedAt || p.createdAt;
+                const endsIn = p.listingEndsAt ? endsInLabel(p.listingEndsAt) : null;
+                const myOffers = offersFor(p);
+                return (
+                  <tr key={p.id} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
+                    </td>
+                    <td className="px-4 py-3 max-w-[280px]">
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
+                          <Package size={18} className="shrink-0" />
+                          {p.images[0]?.url?.trim() ? (
+                            <img src={p.images[0].url} alt="" loading="lazy"
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => nav(`/admin/products/edit/${p.id}`)}
+                          title={`Edit ${p.name}`}
+                          className="min-w-0 text-left cursor-pointer group"
+                        >
+                          <p className="font-medium text-sm truncate group-hover:text-blue-600 group-hover:underline" title={p.name}>{p.name}</p>
+                          <p className="text-xs text-gray-400 truncate">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => nav(`/admin/products/edit/${p.id}`)}
-                        title={`Edit ${p.name}`}
-                        className="min-w-0 text-left cursor-pointer group"
-                      >
-                        <p className="font-medium text-sm truncate group-hover:text-blue-600 group-hover:underline" title={p.name}>{p.name}</p>
-                        <p className="text-xs text-gray-400 truncate">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">
-                    <span className="font-semibold text-gray-600">{speciesOf(p) ?? '—'}</span>
-                    <span className="text-gray-400"> · {p.categoryName || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY'
-                      ? <a href={productPath(p)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-600 hover:underline"><Eye size={12} /> LIVE</a>
-                      : <span className="text-[10px] text-gray-400" title={p.status !== 'active' ? 'Not active' : p.commerceReadiness === 'COMMERCE_READY' ? '' : 'Active but not commerce-ready'}>{p.status !== 'active' ? `not active` : `active · ${p.commerceReadiness || 'unclassified'}`}</span>}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="font-semibold text-sm">${p.price.toFixed(2)}</span>
-                    {p.compareAtPrice > p.price && <span className="text-xs text-gray-400 line-through ml-1">${p.compareAtPrice.toFixed(2)}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{p.costPrice > 0 ? `$${p.costPrice.toFixed(2)}` : '—'}</td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">
-                    {p.marginPercent != null
-                      ? <span className={p.marginPercent < 40 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>{p.marginPercent.toFixed(0)}%</span>
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">
-                    <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''}>{p.inventoryQty}</span>
-                    <span className="text-[10px] text-gray-400 ml-1">({INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']})</span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-gray-100 text-gray-600" title="Internal commerce readiness — only COMMERCE_READY listings appear on the storefront">{COMMERCE_READINESS_LABELS[p.commerceReadiness || 'DRAFT'] || 'Draft'}</span>
-                      <select
-                        value={p.status === 'active' ? 'live' : 'draft'}
-                        onChange={(e) => void setProductStatus(p.id, e.target.value === 'live' ? 'active' : 'draft').then(() => {
-                          notify(e.target.value === 'live' ? 'Product is now LIVE on the storefront' : 'Product set to Draft');
-                          return load();
-                        }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'))}
-                        title={p.status === 'active' ? 'Currently Live — choose Draft to unpublish' : 'Currently Draft — choose Live to publish'}
-                        className="text-[11px] font-semibold border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white"
-                        aria-label={`Set ${p.name} status`}
-                      >
-                        <option value="live">Live</option>
-                        <option value="draft">Draft</option>
-                      </select>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 max-w-[140px]">
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[11px] font-medium text-gray-600 truncate">{p.sourceType ? SOURCE_TYPE_LABELS[p.sourceType] : '—'}</span>
-                      {p.supplierSource && <span className="text-[10px] text-gray-400 truncate" title={p.supplierSource}>{p.supplierSource}</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 max-w-[160px]">
-                    <div className="flex flex-wrap gap-1">
-                      {p.featured && <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-semibold whitespace-nowrap">Featured</span>}
-                      {p.newArrival && <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold whitespace-nowrap">New</span>}
-                      {p.compareAtPrice > p.price && <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 text-[10px] font-semibold whitespace-nowrap">Sale</span>}
-                      {p.freeShipping && <span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-semibold whitespace-nowrap">Free ship</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={p.status} /></td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 whitespace-nowrap">
-                      {p.status === 'archived' ? (
-                        <button onClick={() => onRestore(p.id)} title="Restore to Draft" className="p-2 hover:bg-amber-50 rounded text-amber-600 shrink-0"><Copy size={16} /></button>
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5 min-w-[120px]">
+                        <select
+                          value={p.categoryId ?? ''}
+                          onChange={(e) => void quickCategory(p, e.target.value)}
+                          title="Quick-edit category"
+                          className="text-[11px] font-semibold text-gray-600 border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white max-w-[160px]"
+                          aria-label={`Set ${p.name} category`}
+                        >
+                          <option value="">—</option>
+                          {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <span className="text-[10px] text-gray-400">{speciesOf(p) ?? '—'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <select
+                          value={p.status === 'active' ? 'active' : p.status}
+                          onChange={(e) => void quickStatus(p, e.target.value as CatalogProduct['status'])}
+                          title="Quick-edit status"
+                          className="text-[11px] font-semibold border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white"
+                          aria-label={`Set ${p.name} status`}
+                        >
+                          <option value="active">Active</option>
+                          <option value="ready">Ready</option>
+                          <option value="draft">Draft</option>
+                          <option value="inactive">Inactive</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                        {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY' && (
+                          <a href={productPath(p)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 hover:underline"><Eye size={10} /> LIVE</a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {priceEdit === p.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            autoFocus
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={priceDraft}
+                            onChange={(e) => setPriceDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') void savePrice(p); if (e.key === 'Escape') setPriceEdit(null); }}
+                            className="w-20 px-1.5 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            aria-label={`Edit price for ${p.name}`}
+                          />
+                          <button onClick={() => void savePrice(p)} title="Save price" className="p-1 text-green-600 hover:bg-green-50 rounded"><FloppyDisk size={14} /></button>
+                          <button onClick={() => setPriceEdit(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X size={14} /></button>
+                        </div>
                       ) : (
-                        <button onClick={() => toggleActive(p)} title={p.status === 'active' ? 'Deactivate' : 'Activate'} className="p-2 hover:bg-gray-100 rounded shrink-0">
-                          {p.status === 'active' ? <ToggleRight size={17} className="text-green-500" /> : <ToggleLeft size={17} className="text-gray-400" />}
+                        <button
+                          type="button"
+                          onClick={() => { setPriceEdit(p.id); setPriceDraft(String(p.price)); }}
+                          title="Click to edit price"
+                          className="inline-flex items-center gap-1 group"
+                        >
+                          <span className="font-semibold text-sm">${p.price.toFixed(2)}</span>
+                          <PencilSimple size={12} className="text-gray-300 group-hover:text-blue-500" />
+                          {p.compareAtPrice > p.price && <span className="text-xs text-gray-400 line-through">${p.compareAtPrice.toFixed(2)}</span>}
                         </button>
                       )}
-                      <button onClick={() => nav(`/admin/products/edit/${p.id}`)} title="Edit" className="p-2 hover:bg-blue-50 rounded text-blue-600 shrink-0"><PencilSimple size={16} /></button>
-                      <button onClick={() => onDuplicate(p.id)} title="Duplicate" className="p-2 hover:bg-purple-50 rounded text-purple-600 shrink-0"><Copy size={16} /></button>
-                      <button onClick={() => nav(productPath(p))} title="Preview product page" className="p-2 hover:bg-green-50 rounded text-green-600 shrink-0"><Eye size={16} /></button>
-                      <a href={productPath(p)} target="_blank" rel="noreferrer" title="View live on storefront" className="p-2 hover:bg-sky-50 rounded text-sky-600 shrink-0"><ArrowSquareOut size={16} /></a>
-                      <button onClick={() => setDelId(p.id)} title="Archive/Delete" className="p-2 hover:bg-red-50 rounded text-red-500 shrink-0"><Trash size={16} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {p.costPrice > 0 ? (
+                        <span className="text-gray-500">${p.costPrice.toFixed(2)}</span>
+                      ) : <span className="text-gray-300">—</span>}
+                      {p.marginPercent != null && (
+                        <span className={`ml-1.5 font-semibold ${p.marginPercent < 40 ? 'text-red-600' : 'text-green-700'}`}>{p.marginPercent.toFixed(0)}%</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''} title={`${INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']} stock`}>
+                        {p.inventoryQty <= 0 ? 'Out of stock' : p.inventoryQty}
+                      </span>
+                      {p.inventoryQty > 0 && p.inventorySource === 'INTERNAL_STOCK' && <span className="text-[10px] text-gray-400 ml-1">internal</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {stats == null ? (
+                        <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
+                      ) : (
+                        <span className="relative inline-block group cursor-help">
+                          <span className="text-xs text-gray-600">{st?.views ?? 0}</span>
+                          <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                            <span className="block font-semibold text-gray-800">Product views (first-party)</span>
+                            <span className="block">Total (90d): {st?.views ?? 0}</span>
+                            <span className="block">Last 7 days: {st?.views7d ?? 0}</span>
+                            <span className="block">Last 30 days: {st?.views30d ?? 0}</span>
+                            {statsNote && <span className="block text-amber-600">{statsNote}</span>}
+                          </span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {stats == null ? (
+                        <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
+                      ) : (
+                        <span className="relative inline-block group cursor-help">
+                          <span className="text-xs text-gray-600">{st?.interest ?? 0}</span>
+                          <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                            <span className="block font-semibold text-gray-800">Interest (add-to-cart, 90d)</span>
+                            <span className="block">{st?.interest ?? 0} add-to-cart events</span>
+                            <span className="block text-gray-400">Luxedge has no wishlist/watchers — this is the real persisted interest signal.</span>
+                          </span>
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="relative inline-block group cursor-help">
+                        <span className="text-xs font-semibold text-gray-700">{ageLabel(ageIso)}</span>
+                        {endsIn && <span className="ml-1 text-[10px] text-amber-600">· {endsIn}</span>}
+                        <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                          <span className="block">Listed: {ageIso ? new Date(ageIso).toLocaleDateString() : '—'}</span>
+                          <span className="block">Age: {ageIso ? `${Math.max(0, Math.floor((Date.now() - new Date(ageIso).getTime()) / 86400000))} days` : '—'}</span>
+                          {p.publishedAt ? <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleDateString()}</span> : <span className="block text-gray-400">Never published — age from created date</span>}
+                          {p.listingEndsAt && <span className="block">Ends: {new Date(p.listingEndsAt).toLocaleDateString()}</span>}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={() => setPromoOpen(promoOpen === p.id ? null : p.id)}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap border ${p.saleEnabled || p.promoted ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
+                          title="Click to change promotion"
+                        >
+                          {promoLabel(p)}
+                        </button>
+                        {promoOpen === p.id && (
+                          <>
+                            <div className="fixed inset-0 z-20" onClick={() => setPromoOpen(null)} />
+                            <div className="absolute right-0 top-full mt-1 z-30 w-60 rounded-xl border border-gray-200 bg-white p-3 text-xs shadow-xl">
+                              <p className="font-semibold text-gray-800 mb-2">Promotion</p>
+                              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                                <input type="checkbox" checked={p.promoted} onChange={(e) => void updateProduct(p.id, { promoted: e.target.checked }).then((u) => { patchLocal(u); notify(e.target.checked ? 'Product promoted' : 'Promotion removed'); }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'))} className="w-4 h-4" />
+                                Promoted
+                              </label>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <input
+                                  type="number" min="0" step="0.01" defaultValue={p.saleEnabled && p.discountValue != null ? String(p.discountValue) : ''}
+                                  placeholder="% off"
+                                  className="w-20 px-1.5 py-1 border border-gray-200 rounded text-xs focus:outline-none"
+                                  aria-label="Quick percent-off sale"
+                                />
+                                <button
+                                  onClick={(e) => {
+                                    const v = Number((e.currentTarget.previousElementSibling as HTMLInputElement).value);
+                                    if (!Number.isFinite(v) || v <= 0 || v >= 100) { notify('Enter a valid percent between 1 and 99', 'error'); return; }
+                                    void updateProduct(p.id, { saleEnabled: true, discountType: 'percent', discountValue: Math.round(v * 10) / 10, compareAtPrice: p.compareAtPrice > p.price ? p.compareAtPrice : p.price }).then((u) => { patchLocal(u); notify(`${v}% sale applied`); setPromoOpen(null); }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'));
+                                  }}
+                                  className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-[11px]"
+                                >
+                                  Apply %
+                                </button>
+                              </div>
+                              <button onClick={() => void updateProduct(p.id, { saleEnabled: false, discountValue: undefined }).then((u) => { patchLocal(u); notify('Sale removed'); setPromoOpen(null); }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'))} className="text-[11px] text-gray-500 hover:underline mb-2">
+                                Remove sale
+                              </button>
+                              {myOffers.length > 0 && (
+                                <div className="border-t border-gray-100 pt-2 mt-1">
+                                  <p className="text-[10px] text-gray-400 mb-1">Active store offers covering this product:</p>
+                                  {myOffers.slice(0, 3).map((o) => <p key={o.id} className="text-[11px] text-purple-700">{o.name} — {o.offerType === 'percentage' ? `${o.value}%` : o.offerType === 'product_sale' ? `$${o.value?.toFixed(2)} off` : o.offerType.replace('_', ' ')}</p>)}
+                                </div>
+                              )}
+                              <a href="/admin/promotions" className="block mt-2 text-[11px] font-semibold text-blue-600 hover:underline">Open Promotions →</a>
+                            </div>
+                          </>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="relative inline-block group cursor-help">
+                        <ReadinessBadge readiness={p.commerceReadiness ?? null} />
+                        <span className="pointer-events-none absolute right-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                          {p.commerceReadiness === 'COMMERCE_READY' && <span>Storefront-eligible. Source, cost & fulfillment verified.</span>}
+                          {p.commerceReadiness === 'SOURCE_PENDING' && <span>No verified purchasing path (retail-ref only or unknown source).</span>}
+                          {p.commerceReadiness === 'ECONOMICS_PENDING' && <span>Supplier exists but cost/landed unknown.</span>}
+                          {p.commerceReadiness === 'FULFILLMENT_PENDING' && <span>Cost known but stock/shipping not verified.</span>}
+                          {p.commerceReadiness === 'RISK_REVIEW' && <span>Unresolved critical risk (battery/IP/regulatory).</span>}
+                          {!p.commerceReadiness && <span>Not classified yet.</span>}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={() => setRowMenu(rowMenu === p.id ? null : p.id)}
+                          className="p-2 hover:bg-gray-100 rounded text-gray-500"
+                          title="Row actions"
+                          aria-label={`Actions for ${p.name}`}
+                        >
+                          <DotsThreeVertical size={16} />
+                        </button>
+                        {rowMenu === p.id && (
+                          <>
+                            <div className="fixed inset-0 z-20" onClick={() => setRowMenu(null)} />
+                            <div className="absolute right-0 top-full mt-1 z-30 w-48 rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-xl">
+                              {p.status === 'archived' ? (
+                                <button onClick={() => { setRowMenu(null); void onRestore(p.id); }} className="w-full text-left px-3 py-2 hover:bg-amber-50 text-amber-600 flex items-center gap-2"><Copy size={14} />Restore to Draft</button>
+                              ) : (
+                                <>
+                                  <button onClick={() => { setRowMenu(null); nav(`/admin/products/edit/${p.id}`); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><PencilSimple size={14} />Edit</button>
+                                  <a href={productPath(p)} target="_blank" rel="noreferrer" onClick={() => setRowMenu(null)} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700"><ArrowSquareOut size={14} />View live</a>
+                                  <button onClick={() => { setRowMenu(null); void onDuplicate(p.id); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><Copy size={14} />Duplicate</button>
+                                  <button onClick={() => { setRowMenu(null); void runAutoSeo([p]); }} disabled={!!seoBulk} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-purple-700"><Sparkle size={14} />Auto SEO</button>
+                                  <button onClick={() => { setRowMenu(null); setListingModal(p); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><Clock size={14} />Listing duration…</button>
+                                  <button onClick={() => { setRowMenu(null); setDelId(p.id); }} className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><Trash size={14} />Archive / Delete</button>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {sorted.length === 0 && (
                 <tr><td colSpan={13} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
               )}
             </tbody>
@@ -573,6 +1007,103 @@ export function CatalogProductsPage() {
         </div>
       </Modal>
 
+      {/* Bulk price adjustment with preview */}
+      <Modal isOpen={priceBulk.open} onClose={() => !priceBulk.busy && setPriceBulk((s) => ({ ...s, open: false }))} title={`Adjust Price — ${selectedIds.size} Product${selectedIds.size === 1 ? '' : 's'}`}>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="pm" checked={priceBulk.mode === 'dec-pct'} onChange={() => setPriceBulk((s) => ({ ...s, mode: 'dec-pct' }))} />Decrease by %</label>
+            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="pm" checked={priceBulk.mode === 'inc-pct'} onChange={() => setPriceBulk((s) => ({ ...s, mode: 'inc-pct' }))} />Increase by %</label>
+            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="pm" checked={priceBulk.mode === 'dec-fixed'} onChange={() => setPriceBulk((s) => ({ ...s, mode: 'dec-fixed' }))} />Decrease by $</label>
+            <label className="flex items-center gap-2 text-sm text-gray-600"><input type="radio" name="pm" checked={priceBulk.mode === 'inc-fixed'} onChange={() => setPriceBulk((s) => ({ ...s, mode: 'inc-fixed' }))} />Increase by $</label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 col-span-2"><input type="radio" name="pm" checked={priceBulk.mode === 'set'} onChange={() => setPriceBulk((s) => ({ ...s, mode: 'set' }))} />Set exact price</label>
+          </div>
+          <input
+            type="number" min="0.01" step="0.01" value={priceBulk.value}
+            onChange={(e) => setPriceBulk((s) => ({ ...s, value: e.target.value }))}
+            placeholder={priceBulk.mode.includes('pct') ? 'Percent (e.g. 5)' : 'Amount in USD (e.g. 2.00)'}
+            className={I}
+            aria-label="Price adjustment value"
+          />
+          {(() => {
+            const v = Number(priceBulk.value);
+            const targets = products.filter((p) => selectedIds.has(p.id));
+            if (priceBulk.value.trim() === '' || !Number.isFinite(v) || v <= 0) return <p className="text-xs text-gray-400">Enter a valid positive value to preview.</p>;
+            const samples = targets.slice(0, 5).map((p) => {
+              let np = p.price;
+              if (priceBulk.mode === 'inc-pct') np = p.price * (1 + v / 100);
+              else if (priceBulk.mode === 'dec-pct') np = p.price * (1 - v / 100);
+              else if (priceBulk.mode === 'inc-fixed') np = p.price + v;
+              else if (priceBulk.mode === 'dec-fixed') np = p.price - v;
+              else np = v;
+              return { name: p.name.slice(0, 40), from: p.price, to: Math.round(np * 100) / 100 };
+            });
+            const anyInvalid = targets.some((p) => {
+              let np = p.price;
+              if (priceBulk.mode === 'inc-pct') np = p.price * (1 + v / 100);
+              else if (priceBulk.mode === 'dec-pct') np = p.price * (1 - v / 100);
+              else if (priceBulk.mode === 'inc-fixed') np = p.price + v;
+              else if (priceBulk.mode === 'dec-fixed') np = p.price - v;
+              else np = v;
+              return Math.round(np * 100) / 100 <= 0;
+            });
+            return (
+              <div className="bg-gray-50 rounded-lg p-3 text-xs">
+                <p className="font-semibold text-gray-800 mb-1">{selectedIds.size} products selected — {priceBulk.mode.replace('-', ' ').replace(/^(.)/, (m) => m.toUpperCase())} {v}{priceBulk.mode.includes('pct') ? '%' : '$'}</p>
+                {samples.map((s) => <p key={s.name} className="text-gray-500">${s.from.toFixed(2)} → <b>${s.to.toFixed(2)}</b> · {s.name}</p>)}
+                {targets.length > 5 && <p className="text-gray-400 mt-1">…and {targets.length - 5} more</p>}
+                {anyInvalid && <p className="text-red-600 font-semibold mt-1">This would produce a zero/negative price — nothing will be applied.</p>}
+              </div>
+            );
+          })()}
+          <div className="flex gap-3">
+            <button onClick={applyBulkPrice} disabled={priceBulk.busy} className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg font-medium">{priceBulk.busy ? 'Applying…' : 'Apply to selected'}</button>
+            <button onClick={() => setPriceBulk((s) => ({ ...s, open: false }))} disabled={priceBulk.busy} className="flex-1 py-2.5 border rounded-lg disabled:opacity-50">Cancel</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Listing duration (optional expiry — display only, never auto-enforced) */}
+      <Modal isOpen={!!listingModal} onClose={() => setListingModal(null)} title="Listing Duration">
+        {listingModal && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">Optional eBay-style listing end date. This is seller visibility only — Luxedge never auto-archives a product when the date passes; you decide what to do. Default is no expiry (Good ’Til Cancelled).</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ['No expiry', null],
+                ['7 days', '7'],
+                ['30 days', '30'],
+                ['60 days', '60'],
+                ['90 days', '90'],
+              ] as const).map(([label, days]) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    if (days === null) { void saveListingEnds(null); return; }
+                    const d = new Date(Date.now() + Number(days) * 86400000);
+                    void saveListingEnds(d.toISOString());
+                  }}
+                  className="py-2 border rounded-lg text-sm hover:bg-gray-50"
+                >
+                  {label}
+                </button>
+              ))}
+              <label className="flex flex-col justify-center items-center gap-1 py-2 border rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
+                Custom
+                <input
+                  type="date"
+                  className="text-xs border rounded px-1"
+                  onChange={(e) => { if (e.target.value) void saveListingEnds(new Date(e.target.value + 'T23:59:59').toISOString()); }}
+                />
+              </label>
+            </div>
+            {listingModal.listingEndsAt && (
+              <p className="text-xs text-amber-600">Currently ends {new Date(listingModal.listingEndsAt).toLocaleDateString()} ({endsInLabel(listingModal.listingEndsAt) || '—'}).</p>
+            )}
+            <button onClick={() => setListingModal(null)} className="w-full py-2.5 border rounded-lg">Close</button>
+          </div>
+        )}
+      </Modal>
+
       <CsvImportModal
         open={csvOpen}
         onClose={() => { if (!csvOpen) return; setCsvOpen(false); }}
@@ -584,7 +1115,6 @@ export function CatalogProductsPage() {
     </div>
   );
 }
-
 // ============================================================================
 // CSV BULK IMPORT MODAL (Zeedrop / supplier CSV → Luxedge drafts)
 //
@@ -938,7 +1468,7 @@ export function CatalogProductEditor() {
           sku: '', inventoryQty: 0, stockStatus: 'in_stock', lowStockThreshold: 0, shippingCost: 0,
           freeShipping: false, deliveryMinDays: null, deliveryMaxDays: null, usInventory: false,
           tags: [], featured: false, newArrival: false, trending: false, bestRated: false, bestSeller: false,
-          promoted: false, saleEnabled: false, seoTitle: '', seoDescription: '', seoKeywords: [],
+          promoted: false, saleEnabled: false, seoTitle: '', seoDescription: '', seoTitleStored: null, seoDescriptionStored: null, seoKeywords: [],
           commerceReadiness: null, sourceType: null, inventorySource: null, fulfillmentMethod: null,
           supplierUrl: null, supplierStockStatus: null, riskFlags: [],
           images: [], variants: [], createdAt: '', updatedAt: '', publishedAt: null,
