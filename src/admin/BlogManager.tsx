@@ -15,9 +15,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, FileText, Eye, Trash, PencilLine, Copy, Archive,
-  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle,
+  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle, Sparkle,
 } from '@phosphor-icons/react';
 import { useApp } from '../App';
+import { generateSeoJson } from '../features/ai/seo';
 import {
   adminListAll, adminCreate, adminUpdate, adminSetLifecycle, adminDelete,
   adminListRevisions, adminRestoreRevision,
@@ -32,6 +33,18 @@ const STATUS_META: Record<CmsBlogRow['status'], { label: string; cls: string }> 
 };
 
 const slugify = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+/** Factual blog SEO prompt shared by the per-post button and the bulk run. */
+function buildBlogSeoPrompt(title: string, excerpt: string, content: string): string {
+  return `Write premium, honest SEO for this blog article on Luxedge (a US pet store).
+Title: ${title}
+Excerpt: ${excerpt || 'none'}
+Content: ${content || 'none'}
+
+Return ONLY JSON with EXACTLY these keys:
+{"seoTitle": "<=60 chars, factual, no fake claims", "metaDescription": "<=160 chars, factual", "targetKeyword": "one primary keyword", "secondaryKeywords": ["3-5 keywords"], "searchIntent": "informational | buyer"}
+No other text.`;
+}
 
 const emptyDraft = (): Omit<CmsBlogRow, 'id'> => ({
   slug: '', title: '', excerpt: null, content: '', hero_image_url: null, hero_image_alt: null,
@@ -57,6 +70,9 @@ export default function BlogManager() {
   const [statusFilter, setStatusFilter] = useState<'all' | CmsBlogRow['status']>('all');
   const [automationOnly, setAutomationOnly] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [seoBusy, setSeoBusy] = useState(false);
+  const [bulkSeoBusy, setBulkSeoBusy] = useState(false);
+  const [bulkSeoProgress, setBulkSeoProgress] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ id: string; title: string; permanent: boolean } | null>(null);
   const [revisions, setRevisions] = useState<CmsBlogRevision[]>([]);
   const [showRevisionsFor, setShowRevisionsFor] = useState<string | null>(null);
@@ -202,6 +218,65 @@ export default function BlogManager() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // One-click AI SEO for the post being edited: generate from title + content,
+  // fill the SEO fields and (for an existing post) save immediately.
+  const generateBlogSeo = async () => {
+    if (!form.title.trim()) { notify('Title is required to generate SEO.', 'error'); return; }
+    if (!form.content?.trim()) { notify('Write some content first — SEO is generated from the article.', 'error'); return; }
+    setSeoBusy(true);
+    try {
+      const parsed = await generateSeoJson(buildBlogSeoPrompt(form.title, form.excerpt || '', (form.content || '').slice(0, 3000)));
+      const seoTitle = String(parsed.seoTitle || form.seo_title || '').trim().slice(0, 60) || null;
+      const meta = String(parsed.metaDescription || form.meta_description || '').trim().slice(0, 160) || null;
+      const kw = String(parsed.targetKeyword || form.target_keyword || '').trim() || null;
+      const sec = Array.isArray(parsed.secondaryKeywords) ? parsed.secondaryKeywords.map(String).slice(0, 5) : form.secondary_keywords || [];
+      setForm((f) => ({ ...f, seo_title: seoTitle, meta_description: meta, target_keyword: kw, secondary_keywords: sec }));
+      setKeywordsText(kw || '');
+      setSecondaryText(sec.join(', '));
+      if (editing) {
+        await adminUpdate(editing.id, { seo_title: seoTitle, meta_description: meta, target_keyword: kw, secondary_keywords: sec });
+        notify('SEO generated & saved.');
+        await reloadBlogs(true);
+        await load();
+      } else {
+        notify('SEO generated — click Save to persist the post.');
+      }
+    } catch (e) {
+      notify(`AI SEO failed: ${(e as Error).message}`, 'error');
+    } finally {
+      setSeoBusy(false);
+    }
+  };
+
+  // Bulk: generate + save SEO for every post missing a title, one at a time.
+  const autoSeoBlogs = async () => {
+    const targets = (rows || []).filter((r) => r.title && !r.seo_title);
+    if (targets.length === 0) { notify('All posts already have SEO titles.', 'info'); return; }
+    if (!window.confirm(`Auto-generate and save SEO for ${targets.length} post(s) missing a title? Existing SEO is skipped.`)) return;
+    setBulkSeoBusy(true);
+    let errors = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const r = targets[i];
+      setBulkSeoProgress(`${i + 1}/${targets.length} — ${r.title.slice(0, 50)}`);
+      try {
+        const parsed = await generateSeoJson(buildBlogSeoPrompt(r.title, r.excerpt || '', (r.content || '').slice(0, 3000)));
+        await adminUpdate(r.id, {
+          seo_title: String(parsed.seoTitle || r.seo_title || '').trim().slice(0, 60) || null,
+          meta_description: String(parsed.metaDescription || r.meta_description || '').trim().slice(0, 160) || null,
+          target_keyword: String(parsed.targetKeyword || r.target_keyword || '').trim() || null,
+          secondary_keywords: Array.isArray(parsed.secondaryKeywords) ? parsed.secondaryKeywords.map(String).slice(0, 5) : r.secondary_keywords || [],
+        });
+      } catch {
+        errors++;
+      }
+    }
+    setBulkSeoBusy(false);
+    setBulkSeoProgress(null);
+    notify(errors === 0 ? `Auto SEO done — ${targets.length} posts updated.` : `Auto SEO done — ${targets.length - errors} updated, ${errors} failed.`, errors ? 'error' : 'success');
+    await reloadBlogs(true);
+    await load();
   };
 
   const duplicate = async (r: CmsBlogRow) => {
@@ -388,6 +463,17 @@ export default function BlogManager() {
                 <label className={label}>Content (markdown: ## headings, [label](/path) links)</label>
                 <textarea className={`${input} font-mono`} rows={10} value={form.content ?? ''} onChange={(e) => setForm({ ...form, content: e.target.value })} />
               </div>
+              <div className="bg-indigo-50 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={14} />Auto SEO</p>
+                <button
+                  onClick={generateBlogSeo}
+                  disabled={seoBusy || !form.title.trim() || !form.content?.trim()}
+                  className="px-3 py-1.5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5"
+                >
+                  <Sparkle size={13} />{seoBusy ? 'Generating…' : 'Generate & Save'}
+                </button>
+                <p className="w-full text-[10px] text-indigo-600">Writes the SEO title, meta description, keywords and intent from the article — saved instantly for existing posts.</p>
+              </div>
               <div>
                 <label className={label}>SEO title (max 60)</label>
                 <input className={input} maxLength={60} value={form.seo_title || ''} onChange={(e) => setForm({ ...form, seo_title: e.target.value })} />
@@ -480,7 +566,16 @@ export default function BlogManager() {
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={automationOnly} onChange={(e) => setAutomationOnly(e.target.checked)} /> Automation only ({counts.automation})
             </label>
+            <button onClick={autoSeoBlogs} disabled={bulkSeoBusy} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg">
+              <Sparkle size={15} />{bulkSeoBusy ? 'Auto SEO…' : 'Auto SEO All'}
+            </button>
           </div>
+
+          {bulkSeoProgress && (
+            <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+              <Sparkle size={12} className="inline mr-1" />Auto SEO — {bulkSeoProgress}
+            </p>
+          )}
 
           {visible.length > 0 ? (
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">

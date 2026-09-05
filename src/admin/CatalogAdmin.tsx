@@ -36,8 +36,7 @@ import {
   COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
   type CommerceReadiness,
 } from '../features/catalog/commerceReadiness';
-import { callAIProvider } from '../features/ai/client';
-import { loadAIProviders, loadProviderSettings, resolveProviderChain } from '../features/ai/providers';
+import { generateSeoJson } from '../features/ai/seo';
 import { parseHtmlPage } from '../features/ai/importer';
 import { AIImportPanel } from './AIImportPanel';
 import {
@@ -105,6 +104,41 @@ export function CatalogProductsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [seoBulk, setSeoBulk] = useState<{ done: number; total: number; current: string; errors: number } | null>(null);
+
+  // One-click bulk SEO: generate + save for every listed product missing SEO,
+  // one at a time through the same AI path as the per-product SEO tab. Products
+  // that already have a title AND description are skipped — never overwritten.
+  const autoSeoBulk = async () => {
+    const targets = products.filter((p) => p.name.trim() && !(p.seoTitle && p.seoDescription));
+    if (targets.length === 0) { notify('All listed products already have SEO.', 'info'); return; }
+    if (!window.confirm(`Auto-generate and save SEO for ${targets.length} product(s) missing SEO? Existing SEO is skipped.`)) return;
+    setDbToken(await getFreshAccessToken());
+    setSeoBulk({ done: 0, total: targets.length, current: 'Starting…', errors: 0 });
+    let errors = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      setSeoBulk({ done: i, total: targets.length, current: p.name.slice(0, 60), errors });
+      try {
+        const category = cats.find((c) => c.id === p.categoryId)?.name || p.categoryName || '';
+        const parsed = await generateSeoJson(buildProductSeoPrompt(p, category));
+        const kw = Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.map(String).slice(0, 8) : [];
+        const slug = String(parsed.slug || p.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90);
+        await updateProduct(p.id, {
+          seoTitle: String(parsed.seoTitle || '').trim(),
+          seoDescription: String(parsed.metaDescription || '').trim(),
+          seoKeywords: kw,
+          ...(slug ? { canonicalSlug: slug } : {}),
+        });
+      } catch {
+        errors++;
+      }
+      setSeoBulk({ done: i + 1, total: targets.length, current: '', errors });
+    }
+    setSeoBulk(null);
+    notify(errors === 0 ? `Auto SEO done — ${targets.length} products updated.` : `Auto SEO done — ${targets.length - errors} updated, ${errors} failed.`, errors ? 'error' : 'success');
+    await load();
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -297,6 +331,9 @@ export function CatalogProductsPage() {
               Select all Draft/Inactive ({nonActive.length})
             </button>
           ) : null}
+          <button onClick={autoSeoBulk} disabled={!!seoBulk} title="Auto-generate + save SEO for every listed product missing a title/description" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
+            <Sparkle size={16} />{seoBulk ? 'Auto SEO…' : 'Auto SEO'}
+          </button>
           <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
             <UploadSimple size={16} />CSV Import
           </button>
@@ -305,6 +342,22 @@ export function CatalogProductsPage() {
           </button>
         </div>
       </div>
+
+      {/* Bulk Auto SEO progress */}
+      {seoBulk && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-purple-800 font-medium flex items-center gap-2">
+              <Sparkle size={14} />Auto SEO — {seoBulk.done}/{seoBulk.total}
+            </span>
+            <span className="text-xs text-purple-600 truncate">{seoBulk.current}</span>
+          </div>
+          <div className="mt-2 h-1.5 bg-purple-100 rounded-full overflow-hidden">
+            <div className="h-full bg-purple-500 transition-all" style={{ width: `${seoBulk.total ? Math.round((seoBulk.done / seoBulk.total) * 100) : 0}%` }} />
+          </div>
+          {seoBulk.errors > 0 && <p className="text-xs text-amber-600 mt-1">{seoBulk.errors} failed so far — continuing.</p>}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
@@ -1177,7 +1230,7 @@ export function CatalogProductEditor() {
         {tab === 'variants' && <VariantManager product={p} onProduct={(next) => setP(next)} />}
 
         {/* ── SEO ── */}
-        {tab === 'seo' && <SeoTab product={p} cats={cats} set={set} />}
+        {tab === 'seo' && <SeoTab product={p} cats={cats} set={set} onSave={handleSave} />}
 
         {/* ── COMMERCE / READINESS ── */}
         {tab === 'commerce' && (
@@ -1273,38 +1326,36 @@ export function CatalogProductEditor() {
 }
 
 // ============================================================================
-// SEO TAB (with one-click AI generation)
+// SEO TAB (with one-click AI generation + save)
 // ============================================================================
-function SeoTab({ product, cats, set }: { product: CatalogProduct; cats: CatalogCategory[]; set: <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => void }) {
+
+/** Factual SEO prompt shared by the per-product tab and the list bulk run. */
+function buildProductSeoPrompt(p: CatalogProduct, category: string): string {
+  return `Write premium, honest SEO for this pet product for Luxedge (a US pet store).
+Product name: ${p.name}
+Brand: ${p.brand || 'Luxedge'}
+Category: ${category || 'unknown'}
+Short description: ${p.shortDescription || ''}
+Long description: ${p.description || ''}
+
+Return ONLY JSON with EXACTLY these keys:
+{"seoTitle": "<=60 chars, factual, no fake claims", "metaDescription": "<=160 chars, factual", "focusKeyword": "one primary keyword", "seoKeywords": ["5-8 keywords"], "slug": "url-friendly-slug"}
+No other text.`;
+}
+
+function SeoTab({ product, cats, set, onSave }: { product: CatalogProduct; cats: CatalogCategory[]; set: <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => void; onSave?: () => Promise<void> }) {
   const { notify } = useApp();
   const [busy, setBusy] = useState(false);
 
   const addKeyword = (k: string) => { const v = k.trim(); if (v && !product.seoKeywords.includes(v)) set('seoKeywords', [...product.seoKeywords, v]); };
   const removeKeyword = (k: string) => set('seoKeywords', product.seoKeywords.filter((x) => x !== k));
 
-  const generateWithAI = async () => {
+  const generateWithAI = async (saveNow: boolean) => {
     if (!product.name.trim()) { notify('Enter the product name first', 'error'); return; }
     setBusy(true);
     try {
-      const providers = loadAIProviders();
-      const settings = loadProviderSettings();
-      const { primary } = resolveProviderChain(providers, settings);
-      if (!primary) throw new Error('No AI provider enabled — enable one in AI Hub.');
       const category = cats.find((c) => c.id === product.categoryId)?.name || product.categoryName || '';
-      const prompt = `Write premium, honest SEO for this pet product for Luxedge (a US pet store).
-Product name: ${product.name}
-Brand: ${product.brand || 'Luxedge'}
-Category: ${category || 'unknown'}
-Short description: ${product.shortDescription || ''}
-Long description: ${product.description || ''}
-
-Return ONLY JSON with EXACTLY these keys:
-{"seoTitle": "<=60 chars, factual, no fake claims", "metaDescription": "<=160 chars, factual", "focusKeyword": "one primary keyword", "seoKeywords": ["5-8 keywords"], "slug": "url-friendly-slug"}
-No other text.`;
-      const text = await callAIProvider(prompt, providers, undefined, 'You write honest, factual ecommerce SEO. Never invent claims, prices or reviews.');
-      const obj = text.match(/(\{[\s\S]*\})/);
-      const parsed = obj ? JSON.parse(obj[1]) : null;
-      if (!parsed) throw new Error('AI returned no usable SEO JSON');
+      const parsed = await generateSeoJson(buildProductSeoPrompt(product, category));
       const kw = Array.isArray(parsed.seoKeywords) ? parsed.seoKeywords.map(String).slice(0, 8) : [];
       const slug = String(parsed.slug || product.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90);
       set('seoTitle', String(parsed.seoTitle || '').trim());
@@ -1312,7 +1363,12 @@ No other text.`;
       set('seoKeywords', kw);
       if (slug) set('canonicalSlug', slug);
       if (parsed.focusKeyword) set('seoKeywords', kw.includes(String(parsed.focusKeyword)) ? kw : [String(parsed.focusKeyword), ...kw]);
-      notify('SEO generated — review before saving');
+      if (saveNow && onSave) {
+        await onSave();
+        notify('SEO generated and saved');
+      } else {
+        notify('SEO generated — review before saving');
+      }
     } catch (e) {
       notify(`AI SEO failed: ${(e as Error).message}`, 'error');
     } finally {
@@ -1328,11 +1384,18 @@ No other text.`;
       <div className="bg-indigo-50 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={15} />SEO & Meta — write nothing, let AI do it</p>
-          <p className="text-xs text-indigo-600 mt-0.5">One click generates a factual SEO title, meta description, keywords and slug from your product name (secure server-side — uses the first configured AI key). You can still edit everything.</p>
+          <p className="text-xs text-indigo-600 mt-0.5">One click generates a factual SEO title, meta description, keywords and slug from your product name AND saves the product (secure server-side — uses the first configured AI key). You can still edit everything.</p>
         </div>
-        <button onClick={generateWithAI} disabled={busy || !product.name.trim()} className="btn-glow px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
-          <Sparkle size={15} />{busy ? 'Generating…' : 'Generate SEO with AI'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => generateWithAI(true)} disabled={busy || !product.name.trim()} className="btn-glow px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5">
+            <Sparkle size={15} />{busy ? 'Working…' : 'Generate SEO & Save'}
+          </button>
+          {onSave && (
+            <button onClick={() => generateWithAI(false)} disabled={busy || !product.name.trim()} className="px-3 py-2 text-xs text-indigo-600 hover:underline disabled:opacity-50">
+              Generate only
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2"><label className={L}>SEO title</label><input value={product.seoTitle} onChange={(e) => set('seoTitle', e.target.value)} className={I} placeholder="Auto-generated or write your own" /></div>
