@@ -160,15 +160,28 @@ export async function createCheckoutSession(params: {
   metadata?: Record<string, string>;
 }): Promise<StripeResult<CheckoutSessionResult>> {
   const parts = new URLSearchParams();
-  parts.set('mode', 'payment');
+  parts.set('mode', 'payment'); // one-time purchases only — never subscription
   parts.set('success_url', params.successUrl);
   parts.set('cancel_url', params.cancelUrl);
   if (params.customerEmail) parts.set('customer_email', params.customerEmail);
 
-  // Stripe-hosted full-page checkout (default ui_mode for mode=payment).
-  // Address collection is for shipping only. No Stripe Tax: it is a paid
-  // per-transaction add-on and was not approved — checkout charges exactly the
-  // catalog prices + shipping shown on the page.
+  // Checkout Studio configuration (fixed_by_ui), in REST wire format. Note:
+  //  - `ui_mode` is `hosted` on the wire (the SDK enum is `hosted_page`).
+  //  - `automatic_tax` is intentionally NOT enabled: Stripe Tax is a paid
+  //    per-transaction add-on the owner has NOT approved — the price shown is
+  //    the price charged (see STRIPE_INTEGRATION_TODO.md).
+  //  - `payment_method_collection` is omitted: only valid for subscription mode.
+  //  - `integration_identifier`/`origin_context` are not Checkout Session REST
+  //    parameters (Studio bookkeeping only) and would be rejected by the API.
+  parts.set('ui_mode', 'hosted');
+  parts.set('billing_address_collection', 'auto');
+  parts.set('phone_number_collection[enabled]', 'true');
+  parts.set('allow_promotion_codes', 'true');
+  parts.set('submit_type', 'auto');
+  parts.set('payment_intent_data[setup_future_usage]', 'on_session');
+
+  // Shipping address collection (needed for the shipping rate below) — kept
+  // from the existing real configuration, like mode/success_url/line_items.
   parts.set('shipping_address_collection[allowed_countries][0]', 'US');
 
   // CARD-ONLY for launch: immediate payment methods only, so
