@@ -10,7 +10,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import AIAssistant from './components/AIAssistant';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
-import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken } from './services/supabase';
+import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken, getFreshAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { loadPublishedBlogBySlug, loadPublishedBlogs } from './services/blog';
 import { MediaHubPage, MediaVideoPage, MediaLatestSection } from './media/MediaHub';
@@ -18,7 +18,7 @@ import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, probeStripeConfig, type CheckoutSessionStatus } from './services/checkout';
-import { useWishlist, WishlistButton } from './features/wishlist/wishlist';
+import { useWishlist, WishlistButton, configureWishlistAccount } from './features/wishlist/wishlist';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -381,6 +381,20 @@ function loadSession(): AppUser | null {
 function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(loadSession);
   const [cart, setCart] = useState<CartItem[]>(loadCart);
+
+  // Bind the wishlist to the signed-in Supabase account (server persistence,
+  // RLS-scoped) or back to the device list on logout. Guests (no real Supabase
+  // identity) stay device-local. The module hydrates/merges on its own.
+  useEffect(() => {
+    if (user && !user.id.startsWith('guest-')) {
+      let cancelled = false;
+      void getFreshAccessToken().then((token) => {
+        if (!cancelled) configureWishlistAccount(token ? { userId: user.id, token } : null);
+      });
+      return () => { cancelled = true; };
+    }
+    configureWishlistAccount(null);
+  }, [user?.id]);
   // Phase 4E.1 — the storefront catalog starts EMPTY. Demo/fallback products
   // must NEVER appear when the database has no published products; only the
   // qualified/approved pipeline may populate the customer-facing catalog.

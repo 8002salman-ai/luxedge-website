@@ -13,10 +13,12 @@ vi.mock('../../../lib/marketing', () => ({
 }));
 
 import { trackEvent } from '../../../lib/marketing';
+import { __setSupabaseConfigForTests } from '../../../services/supabase';
 import {
   WISHLIST_STORAGE_KEY,
   toggleWishlist,
   clearWishlist,
+  configureWishlistAccount,
   __resetWishlistForTests,
 } from '../wishlist';
 
@@ -38,11 +40,13 @@ beforeEach(() => {
   storage = memoryStorage();
   vi.stubGlobal('localStorage', storage);
   vi.stubGlobal('window', { addEventListener: vi.fn() });
+  __setSupabaseConfigForTests({ url: 'https://project.supabase.co', anonKey: 'anon-key-123' });
   vi.mocked(trackEvent).mockClear();
   __resetWishlistForTests();
 });
 
 afterEach(() => {
+  __setSupabaseConfigForTests(undefined);
   vi.unstubAllGlobals();
 });
 
@@ -121,5 +125,114 @@ describe('clearWishlist', () => {
     toggleWishlist(catTunnel, true);
     clearWishlist();
     expect(persistedIds()).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Account-backed persistence (signed-in shoppers, wishlist_items table)
+// ---------------------------------------------------------------------------
+
+const ACC = { userId: 'user-abc', token: 'jwt-token' };
+const REQ: { method?: string; url?: string; body?: string }[] = [];
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+/** REST-style fetch mock for wishlist_items, recording every request. */
+function stubWishlistFetch(serverRows: string[]) {
+  REQ.length = 0;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method || 'GET').toUpperCase();
+    REQ.push({ method, url, body: init?.body ? String(init.body) : undefined });
+    if (method === 'GET') return jsonResponse(serverRows.map((product_id) => ({ product_id })));
+    if (method === 'POST') return jsonResponse({ id: 'row-' + Math.random() }, 201);
+    if (method === 'DELETE') return jsonResponse({}, 204);
+    return jsonResponse({}, 405);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+async function settle(): Promise<void> {
+  // Let the fire-and-forget hydrate/write promises finish.
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+const ACCOUNT_URL = 'https://project.supabase.co/rest/v1/wishlist_items';
+
+describe('account-backed wishlist', () => {
+  it('hydrates from the account and merges the device list once, then clears local', async () => {
+    toggleWishlist(dogBow, true); // device-local save while signed out
+    expect(persistedIds()).toEqual(['p1']);
+
+    const fetchMock = stubWishlistFetch([]);
+    configureWishlistAccount(ACC);
+    await settle();
+
+    // Merged device list was written to the account.
+    const post = REQ.find((r) => r.method === 'POST');
+    expect(post).toBeTruthy();
+    expect(post!.url!.startsWith(ACCOUNT_URL)).toBe(true);
+    expect(JSON.parse(post!.body || '{}')).toEqual({ user_id: 'user-abc', product_id: 'p1' });
+    // Device copy cleared after merge — no cross-account leakage on shared devices.
+    expect(persistedIds()).toEqual([]);
+    // UI state reflects the account list.
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('union-merges account rows with the device list', async () => {
+    toggleWishlist(dogBow, true); // p1 on device
+    stubWishlistFetch(['p2']); // account already has p2
+    configureWishlistAccount(ACC);
+    await settle();
+
+    const posted = REQ.filter((r) => r.method === 'POST').map((r) => JSON.parse(r.body || '').product_id);
+    expect(posted).toEqual(['p1']); // only the missing one is written
+    expect(persistedIds()).toEqual([]); // device cleared after merge
+  });
+
+  it('toggles write through to the account and still record the analytics event', async () => {
+    stubWishlistFetch([]);
+    configureWishlistAccount(ACC);
+    await settle();
+
+    toggleWishlist(dogBow, true);
+    await settle();
+    expect(REQ.some((r) => r.method === 'POST' && JSON.parse(r.body || '').product_id === 'p1')).toBe(true);
+    expect(trackEvent).toHaveBeenLastCalledWith('add_to_wishlist', expect.objectContaining({
+      items: [expect.objectContaining({ item_id: 'p1' })],
+    }));
+
+    toggleWishlist(dogBow, false);
+    await settle();
+    expect(REQ.some((r) => r.method === 'DELETE' && String(r.url || '').includes('product_id=eq.p1'))).toBe(true);
+    expect(trackEvent).toHaveBeenLastCalledWith('remove_from_wishlist', expect.objectContaining({
+      items: [expect.objectContaining({ item_id: 'p1' })],
+    }));
+  });
+
+  it('falls back to the device list on logout and persists there again', async () => {
+    stubWishlistFetch(['p1']);
+    configureWishlistAccount(ACC);
+    await settle();
+
+    configureWishlistAccount(null); // logout
+    expect(persistedIds()).toEqual([]); // device list was cleared after merge
+    toggleWishlist(catTunnel, true);
+    expect(persistedIds()).toEqual(['p2']); // device-local again while signed out
+  });
+
+  it('never writes while a duplicate save is a no-op', async () => {
+    stubWishlistFetch(['p1']);
+    configureWishlistAccount(ACC);
+    await settle();
+
+    const postsBefore = REQ.filter((r) => r.method === 'POST').length;
+    toggleWishlist(dogBow, true); // already saved on the account — no-op
+    await settle();
+    expect(REQ.filter((r) => r.method === 'POST').length).toBe(postsBefore);
+    expect(trackEvent).not.toHaveBeenCalled();
   });
 });
