@@ -23,7 +23,7 @@ const handler = (await import('../admin/payment-keys.js')).default;
 // Probe-only fixtures. Deliberately NOT realistic key material (push
 // protection would block a formatted live key); the handler only checks
 // length/masking, never key validity.
-const SECRET_ENV = 'sk_probe_test_secret';
+const SECRET_ENV = 'sk_live_probe_test_secret';
 const WH_ENV = 'whsec_probe_test_secret';
 
 function makeRes(): { captured: { status: number; body: unknown }; server: ServerResponse } {
@@ -152,6 +152,29 @@ describe('/api/admin/payment-keys', () => {
     expect(b.mode).toBe('live');
     expect(b.chargesEnabled).toBe(false);
     expect(b.masked).not.toContain(SECRET_ENV);
+  });
+
+  it('test infers live mode from the key prefix when livemode is absent on the account', async () => {
+    // Some standard-account responses omit livemode entirely.
+    stubFetch({ charges_enabled: false, payouts_enabled: false, id: 'acct_1234567890abcdef' });
+    process.env.STRIPE_SECRET_KEY = SECRET_ENV;
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'test' }), server);
+    expect(captured.status).toBe(200);
+    const b = captured.body as { ok: boolean; mode: string };
+    expect(b.ok).toBe(true);
+    expect(b.mode).toBe('live');
+  });
+
+  it('test reports test mode for an sk_test_ key', async () => {
+    stubFetch({ charges_enabled: true, payouts_enabled: false, id: 'acct_1234567890abcdef' });
+    process.env.STRIPE_SECRET_KEY = 'sk_test_probe_secret';
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'test' }), server);
+    expect(captured.status).toBe(200);
+    const b = captured.body as { ok: boolean; mode: string };
+    expect(b.ok).toBe(true);
+    expect(b.mode).toBe('test');
   });
 
   it('test reports failure when Stripe rejects the key', async () => {

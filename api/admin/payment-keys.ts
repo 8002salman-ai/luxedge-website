@@ -155,9 +155,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         });
         return;
       }
+      // livemode is absent on some standard account responses, so fall back to
+      // the key prefix — sk_live_ can only ever talk to the live API.
+      const mode =
+        typeof acct.livemode === 'boolean'
+          ? (acct.livemode ? 'live' : 'test')
+          : testKey.startsWith('sk_live_') || testKey.startsWith('rk_live_')
+            ? 'live'
+            : 'test';
       sendJson(res, 200, {
         ok: true,
-        mode: acct.livemode ? 'live' : 'test',
+        mode,
         chargesEnabled: acct.charges_enabled === true,
         payoutsEnabled: acct.payouts_enabled === true,
         accountId: acct.id ? mask(acct.id) : '',
