@@ -174,6 +174,15 @@ describe('/api/checkout', () => {
     expect((cap.body as { configured: boolean }).configured).toBe(true);
   });
 
+  it('probe always answers 200 with configured:false when no keys exist (client parses the body, not status)', async () => {
+    makeEnv();
+    delete process.env.STRIPE_SECRET_KEY;
+    const { server, cap } = res();
+    await handler(req('GET', undefined, '/api/checkout?probe=1'), server);
+    expect(cap.status).toBe(200);
+    expect((cap.body as { configured: boolean }).configured).toBe(false);
+  });
+
   it('GET session returns a safe summary — no secrets', async () => {
     const calls = makeEnv();
     const { server, cap } = res();
