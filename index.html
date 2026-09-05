@@ -17,6 +17,10 @@
     <link rel="canonical" href="https://luxedge.us" />
     <link rel="icon" type="image/png" href="/luxedge-mark.png" />
 
+    <!-- LCP hero image — preload so the above-the-fold hero doesn't wait on a
+         late image fetch on slow connections (mirrors src/App.tsx heroDogImage). -->
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&amp;h=1000&amp;fit=crop&amp;crop=faces&amp;auto=format&amp;q=88" />
+
     <!-- Open Graph -->
     <meta property="og:title" content="Luxedge — Premium Pet &amp; Animal Essentials" />
     <meta property="og:description" content="Handpicked pet essentials for quality, comfort, and value. Clear delivery options and return policies." />
