@@ -3,8 +3,9 @@
 //
 // Reads `site_events` (Supabase, migration 0023) as a signed-in admin and shows
 // real visitor traffic with charts: page views, visitors, sessions, funnel,
-// daily trend, top pages, traffic sources, devices, top products. This is
-// independent of Google — data is what this site itself records.
+// daily trend, wishlist saves, top pages, traffic sources, devices, top
+// products. This is independent of Google — data is what this site itself
+// records.
 // ============================================================================
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -72,6 +73,7 @@ export default function TrafficDashboard() {
     const checkout = rows.filter((r) => r.event === 'begin_checkout');
     const purchases = rows.filter((r) => r.event === 'purchase');
     const searches = rows.filter((r) => r.event === 'search');
+    const saves = rows.filter((r) => r.event === 'add_to_wishlist');
     const productClicks = rows.filter((r) => r.event === 'view_item' || r.event === 'select_item');
     const blogViews = views.filter((v) => v.path.startsWith('/blog'));
 
@@ -83,11 +85,12 @@ export default function TrafficDashboard() {
     const visitors = new Set(views.map((v) => v.visitor_id ?? '')).size;
     const sessions = new Set(views.map((v) => v.session_id ?? '')).size;
 
-    // Daily trend (page_view + unique sessions per day) for the last 14 days shown.
-    const byDay = new Map<string, { day: string; views: number; sessions: number }>();
+    // Daily trend (page_view + unique sessions + wishlist saves per day) for the
+    // whole selected window; the chart always shows every day (0-filled).
+    const byDay = new Map<string, { day: string; views: number; sessions: number; saved: number }>();
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(Date.now() - i * 86400000);
-      byDay.set(`${d.getMonth() + 1}/${d.getDate()}`, { day: dayKey(d.toISOString()), views: 0, sessions: 0 });
+      byDay.set(`${d.getMonth() + 1}/${d.getDate()}`, { day: dayKey(d.toISOString()), views: 0, sessions: 0, saved: 0 });
     }
     const sessionsOfDay = new Map<string, Set<string>>();
     for (const v of views) {
@@ -102,6 +105,11 @@ export default function TrafficDashboard() {
     for (const [k, s] of sessionsOfDay) {
       const row = byDay.get(k);
       if (row) row.sessions = s.size;
+    }
+    // Wishlist saves per day (add_to_wishlist only — removes are excluded).
+    for (const s of saves) {
+      const row = byDay.get(dayKey(s.occurred_at));
+      if (row) row.saved += 1;
     }
     const trend = Array.from(byDay.values());
 
@@ -165,6 +173,8 @@ export default function TrafficDashboard() {
       deviceData,
       topProducts,
       purchaseCount: purchases.length,
+      saves: saves.length,
+      savedVisitors: new Set(saves.map((s) => s.visitor_id ?? '')).size,
       productClicks: productClicks.length,
       blogViews: blogViews.length,
       blogShare: views.length ? Math.round((blogViews.length / views.length) * 100) : 0,
@@ -289,6 +299,32 @@ export default function TrafficDashboard() {
                   <Area type="monotone" dataKey="views" name="Page views" stroke="#2563eb" fill="#2563eb" fillOpacity={0.12} strokeWidth={2} />
                   <Area type="monotone" dataKey="sessions" name="Sessions" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.08} strokeWidth={2} />
                 </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Wishlist saves trend — real add_to_wishlist events from the
+              storefront hearts (site_events). Removes are excluded. */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div>
+                <p className="text-xs font-semibold text-gray-600">Wishlist Saves — last {days} days</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">add_to_wishlist events per day · remove events excluded</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-lg font-bold text-rose-600 leading-none">{fmt(stats.saves)}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{fmt(stats.savedVisitors)} unique visitors</p>
+              </div>
+            </div>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.trend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="saved" name="Wishlist saves" fill="#e11d48" radius={[6, 6, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
