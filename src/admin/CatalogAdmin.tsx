@@ -6,13 +6,13 @@
 // repository (admin JWT → Supabase RLS). No fake facts: UNKNOWN stays
 // UNKNOWN, merchandising flags are admin decisions, delete prefers archive.
 // ============================================================================
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, ArrowSquareOut,
-  DotsThreeVertical, Clock,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, CaretUp, ArrowSquareOut,
+  DotsThreeVertical, Clock, CheckCircle, DotsSixVertical,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
 import Popover from '../components/common/Popover';
@@ -39,6 +39,11 @@ import {
   type CommerceReadiness,
 } from '../features/catalog/commerceReadiness';
 import { generateSeoJson } from '../features/ai/seo';
+import { useSeoJobStore } from '../features/catalog/seoJobStore';
+import {
+  CATALOG_COLUMN_LABELS, loadCatalogColumns, saveCatalogColumns, moveColumn,
+  type CatalogColumnKey,
+} from '../features/catalog/tableColumns';
 import { parseHtmlPage } from '../features/ai/importer';
 import { AIImportPanel } from './AIImportPanel';
 import {
@@ -64,6 +69,34 @@ const READINESS_BADGE: Record<CommerceReadiness, string> = {
   RISK_REVIEW: 'bg-purple-100 text-purple-700',
   DRAFT: 'bg-gray-100 text-gray-600',
 };
+
+// Header-click sorting for the seller-hub table: which sort keys each column
+// toggles between (asc <-> desc), and the direction a first click uses.
+const HEADER_SORT: Partial<Record<CatalogColumnKey, { asc: string; desc: string; first: string }>> = {
+  product: { asc: 'name', desc: 'name-desc', first: 'name' },
+  price: { asc: 'price-asc', desc: 'price-desc', first: 'price-asc' },
+  margin: { asc: 'margin-asc', desc: 'margin', first: 'margin' },
+  stock: { asc: 'stock-asc', desc: 'stock-desc', first: 'stock-desc' },
+  views: { asc: 'views-asc', desc: 'views', first: 'views' },
+  interest: { asc: 'interest-asc', desc: 'interest', first: 'interest' },
+  age: { asc: 'oldest', desc: 'newest', first: 'newest' },
+};
+
+// Descriptive tooltips kept on the analytics/lifecycle headers.
+const COLUMN_TIPS: Partial<Record<CatalogColumnKey, string>> = {
+  views: 'Real first-party view_item events, last 90 days',
+  interest: 'Wishlist saves (distinct visitors, site_events) - add-to-cart shown when no saves yet',
+  age: 'Time since first live (published_at), falling back to created_at',
+};
+
+// Human explanation of what a row is missing for complete SEO.
+function seoExplain(p: CatalogProduct): string {
+  const missing: string[] = [];
+  if (!p.seoTitleStored) missing.push('title');
+  if (!p.seoDescriptionStored) missing.push('meta description');
+  if ((p.seoKeywords || []).length === 0) missing.push('keywords');
+  return missing.length === 0 ? 'SEO complete (title + meta + keywords)' : `Missing SEO: ${missing.join(', ')}`;
+}
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${BADGE[status] || BADGE.draft}`}>{status}</span>;
@@ -131,8 +164,16 @@ export function CatalogProductsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
-  const [seoBulk, setSeoBulk] = useState<{ done: number; total: number; current: string; errors: number } | null>(null);
-  const [seoReport, setSeoReport] = useState<{ complete: number; updated: number; skipped: number; failed: number } | null>(null);
+  // Background Auto-SEO job - lives in a module store so it survives navigation.
+  const seo = useSeoJobStore();
+  // Seller-chosen column order (drag column headers) - per-device, survives reloads.
+  const [colOrder, setColOrder] = useState<CatalogColumnKey[]>(() =>
+    loadCatalogColumns(typeof localStorage !== 'undefined' ? localStorage : null),
+  );
+  const [dragCol, setDragCol] = useState<CatalogColumnKey | null>(null);
+  // Guard for the store's onFinished callback: skip the reload if we've unmounted.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   // First-party analytics: views + add-to-cart interest + wishlist saves per product.
   const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number; interest: number; saved: number }> | null>(null);
   const [statsNote, setStatsNote] = useState<string | null>(null);
@@ -225,8 +266,10 @@ export function CatalogProductsPage() {
     patchLocal(upd);
   };
 
-  // Bulk Auto SEO for the given targets: processes Missing + Incomplete,
-  // NEVER overwrites Complete. Reports complete/updated/skipped/failed.
+  // Bulk Auto SEO - the actual loop lives in the module-level seoJobStore so it
+  // keeps running (and keeps reporting progress) while the user navigates to
+  // another admin page and back. Processes Missing + Incomplete only, NEVER
+  // overwrites Complete. The store reports complete/updated/skipped/failed.
   const runAutoSeo = async (targets: CatalogProduct[]) => {
     const work = targets.filter((p) => p.name.trim() && seoStatus(p) !== 'complete');
     if (work.length === 0) {
@@ -235,28 +278,36 @@ export function CatalogProductsPage() {
     }
     if (!window.confirm(`Auto-generate and save SEO for ${work.length} product(s)? Complete SEO is never overwritten.`)) return;
     setDbToken(await getFreshAccessToken());
-    setSeoBulk({ done: 0, total: work.length, current: 'Starting…', errors: 0 });
-    let failed = 0;
-    for (let i = 0; i < work.length; i++) {
-      const p = work[i];
-      setSeoBulk({ done: i, total: work.length, current: p.name.slice(0, 60), errors: failed });
-      try {
-        await generateAndSaveSeo(p);
-      } catch {
-        failed++;
-      }
-      setSeoBulk({ done: i + 1, total: work.length, current: '', errors: failed });
+    const started = await useSeoJobStore.getState().start({
+      targets,
+      statusOf: seoStatus,
+      runOne: generateAndSaveSeo,
+      onFinished: async () => {
+        if (mountedRef.current) await load();
+      },
+    });
+    if (started) {
+      const skipped = targets.length - work.length;
+      notify(`Auto SEO job started — ${work.length} to process, ${skipped} already complete. It keeps running in the background; progress shows here and on each row.`);
     }
-    setSeoBulk(null);
-    const skipped = targets.length - work.length;
-    setSeoReport({ complete: skipped, updated: work.length - failed, skipped, failed });
-    notify(failed === 0
-      ? `Auto SEO done — ${work.length} generated, ${skipped} already complete.`
-      : `Auto SEO done — ${work.length - failed} generated, ${failed} failed, ${skipped} already complete.`, failed ? 'error' : 'success');
-    await load();
   };
 
   const autoSeoBulk = () => void runAutoSeo(products);
+
+  // Column header click -> toggle asc/desc (first click uses the useful default).
+  const headerSort = (k: CatalogColumnKey) => {
+    const s = HEADER_SORT[k];
+    if (!s) return;
+    setSort((prev) => (prev === s.asc ? s.desc : prev === s.desc ? s.asc : s.first));
+  };
+
+  // Column header drag -> reorder, persisted per-device.
+  const reorderColumns = (from: CatalogColumnKey, to: CatalogColumnKey) => {
+    if (from === to) return;
+    const next = moveColumn(colOrder, from, to);
+    setColOrder(next);
+    saveCatalogColumns(next, typeof localStorage !== 'undefined' ? localStorage : null);
+  };
 
   // "All statuses" hides archived rows — archive is a folder, not a status
   // you keep scrolling past. Archived products are only visible when the
@@ -297,13 +348,25 @@ export function CatalogProductsPage() {
   const sorted = useMemo(() => {
     const rows = [...filtered];
     const listDate = (p: CatalogProduct) => Date.parse(p.publishedAt || p.createdAt || '') || 0;
+    // Interest sorts saved-count first (distinct savers), then add-to-cart events.
+    const interestScore = (p: CatalogProduct) => {
+      const s = stats?.[p.id];
+      return ((s?.saved ?? 0) * 100000) + (s?.interest ?? 0);
+    };
     switch (sort) {
       case 'newest': return rows.sort((a, b) => listDate(b) - listDate(a));
       case 'oldest': return rows.sort((a, b) => listDate(a) - listDate(b));
+      case 'name-desc': return rows.sort((a, b) => String(b.name || '').localeCompare(String(a.name || '')));
       case 'price-asc': return rows.sort((a, b) => a.price - b.price);
       case 'price-desc': return rows.sort((a, b) => b.price - a.price);
       case 'margin': return rows.sort((a, b) => (b.marginPercent ?? -1) - (a.marginPercent ?? -1));
+      case 'margin-asc': return rows.sort((a, b) => (a.marginPercent ?? -1) - (b.marginPercent ?? -1));
+      case 'stock-desc': return rows.sort((a, b) => (b.inventoryQty ?? -1) - (a.inventoryQty ?? -1));
+      case 'stock-asc': return rows.sort((a, b) => (a.inventoryQty ?? -1) - (b.inventoryQty ?? -1));
       case 'views': return rows.sort((a, b) => (stats?.[b.id]?.views ?? -1) - (stats?.[a.id]?.views ?? -1));
+      case 'views-asc': return rows.sort((a, b) => (stats?.[a.id]?.views ?? -1) - (stats?.[b.id]?.views ?? -1));
+      case 'interest': return rows.sort((a, b) => interestScore(b) - interestScore(a));
+      case 'interest-asc': return rows.sort((a, b) => interestScore(a) - interestScore(b));
       default: return rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
     }
   }, [filtered, sort, stats]);
@@ -555,8 +618,8 @@ export function CatalogProductsPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={autoSeoBulk} disabled={!!seoBulk} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten" className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
-            <Sparkle size={16} />{seoBulk ? 'Auto SEO…' : 'Auto SEO'}
+          <button onClick={autoSeoBulk} disabled={seo.running} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
+            <Sparkle size={16} />{seo.running ? `Auto SEO… ${seo.done}/${seo.total}` : 'Auto SEO'}
           </button>
           <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
             <UploadSimple size={16} />CSV Import
@@ -567,27 +630,29 @@ export function CatalogProductsPage() {
         </div>
       </div>
 
-      {/* Bulk Auto SEO progress */}
-      {seoBulk && (
+      {/* Bulk Auto SEO progress - from the background store, so it persists
+          across navigation and shows the live position when you come back. */}
+      {seo.running && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <span className="text-purple-800 font-medium flex items-center gap-2">
-              <Sparkle size={14} />Auto SEO — {seoBulk.done}/{seoBulk.total}
+              <Sparkle size={14} />Auto SEO — {seo.done}/{seo.total}
             </span>
-            <span className="text-xs text-purple-600 truncate">{seoBulk.current}</span>
+            <span className="text-xs text-purple-600 truncate">{seo.current}</span>
           </div>
           <div className="mt-2 h-1.5 bg-purple-100 rounded-full overflow-hidden">
-            <div className="h-full bg-purple-500 transition-all" style={{ width: `${seoBulk.total ? Math.round((seoBulk.done / seoBulk.total) * 100) : 0}%` }} />
+            <div className="h-full bg-purple-500 transition-all" style={{ width: `${seo.total ? Math.round((seo.done / seo.total) * 100) : 0}%` }} />
           </div>
-          {seoBulk.errors > 0 && <p className="text-xs text-amber-600 mt-1">{seoBulk.errors} failed so far — continuing.</p>}
+          {seo.errors > 0 && <p className="text-xs text-amber-600 mt-1">{seo.errors} failed so far — continuing.</p>}
+          <p className="text-[11px] text-purple-500 mt-1">Running in the background — switch pages and it keeps going.</p>
         </div>
       )}
-      {seoReport && !seoBulk && (
+      {seo.report && !seo.running && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2.5 text-xs text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
-          <span>SEO complete: <b>{seoReport.complete}</b></span>
-          <span>Generated/updated: <b>{seoReport.updated}</b></span>
-          <span>Skipped: <b>{seoReport.skipped}</b></span>
-          <span>Failed: <b>{seoReport.failed}</b></span>
+          <span>SEO complete: <b>{seo.report.complete}</b></span>
+          <span>Generated/updated: <b>{seo.report.updated}</b></span>
+          <span>Skipped: <b>{seo.report.skipped}</b></span>
+          <span>Failed: <b>{seo.report.failed}</b></span>
         </div>
       )}
 
@@ -652,12 +717,19 @@ export function CatalogProductsPage() {
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)} className={I} aria-label="Sort products">
           <option value="name">Sort: Name</option>
+          <option value="name-desc">Sort: Name (Z → A)</option>
           <option value="newest">Sort: Newest</option>
           <option value="oldest">Sort: Oldest</option>
           <option value="price-asc">Sort: Price (low → high)</option>
           <option value="price-desc">Sort: Price (high → low)</option>
-          <option value="margin">Sort: Margin</option>
+          <option value="margin">Sort: Margin (high → low)</option>
+          <option value="margin-asc">Sort: Margin (low → high)</option>
+          <option value="stock-desc">Sort: Stock (high → low)</option>
+          <option value="stock-asc">Sort: Stock (low → high)</option>
           <option value="views">Sort: Most viewed</option>
+          <option value="views-asc">Sort: Least viewed</option>
+          <option value="interest">Sort: Most interest</option>
+          <option value="interest-asc">Sort: Least interest</option>
         </select>
       </div>
 
@@ -667,7 +739,7 @@ export function CatalogProductsPage() {
           <span className="text-sm font-semibold text-indigo-900">{selectedIds.size} selected</span>
           <button onClick={clearSelection} className="px-2.5 py-1.5 border text-xs rounded-lg bg-white text-gray-600 hover:bg-gray-50">Clear</button>
           <span className="w-px h-6 bg-indigo-200" />
-          <button onClick={() => void runAutoSeo(products.filter((p) => selectedIds.has(p.id)))} disabled={bulkBusy || !!seoBulk} className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-xs rounded-lg flex items-center gap-1.5">
+          <button onClick={() => void runAutoSeo(products.filter((p) => selectedIds.has(p.id)))} disabled={bulkBusy || seo.running} className="px-2.5 py-1.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-xs rounded-lg flex items-center gap-1.5">
             <Sparkle size={13} />Auto SEO
           </button>
           <select
@@ -718,18 +790,31 @@ export function CatalogProductsPage() {
                     title={sorted.length ? `Select all ${sorted.length} visible products` : 'No products to select'}
                   />
                 </th>
-                <th className="px-4 py-3 whitespace-nowrap">Product</th>
-                <th className="px-4 py-3 whitespace-nowrap">Category / Species</th>
-                <th className="px-4 py-3 whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 whitespace-nowrap">Price</th>
-                <th className="px-4 py-3 whitespace-nowrap">Margin</th>
-                <th className="px-4 py-3 whitespace-nowrap">Stock</th>
-                <th className="px-4 py-3 whitespace-nowrap" title="Real first-party view_item events, last 90 days">Views</th>
-                <th className="px-4 py-3 whitespace-nowrap" title="Wishlist saves (distinct visitors, site_events) — add-to-cart shown when no saves yet">Interest</th>
-                <th className="px-4 py-3 whitespace-nowrap" title="Time since first live (published_at), falling back to created_at">Listing Age</th>
-                <th className="px-4 py-3 whitespace-nowrap">Promotion</th>
-                <th className="px-4 py-3 whitespace-nowrap">Readiness</th>
-                <th className="px-4 py-3 whitespace-nowrap"></th>
+                {colOrder.map((k) => {
+                  const s = HEADER_SORT[k];
+                  const active = s && (sort === s.asc || sort === s.desc) ? (sort === s.asc ? 'asc' : 'desc') : null;
+                  const label = CATALOG_COLUMN_LABELS[k];
+                  return (
+                    <th
+                      key={k}
+                      draggable
+                      onDragStart={(e) => { setDragCol(k); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch { /* Firefox requires setData */ } }}
+                      onDragOver={(e) => { if (dragCol && dragCol !== k) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+                      onDrop={(e) => { e.preventDefault(); if (dragCol) reorderColumns(dragCol, k); setDragCol(null); }}
+                      onDragEnd={() => setDragCol(null)}
+                      onClick={s ? () => headerSort(k) : undefined}
+                      className={`px-4 py-3 whitespace-nowrap select-none ${dragCol === k ? 'opacity-40' : ''} ${s ? 'cursor-pointer hover:text-gray-800' : ''}`}
+                      title={s ? `Click to sort by ${label} — drag to reorder columns` : (COLUMN_TIPS[k] ? `${COLUMN_TIPS[k]} — drag to reorder` : 'Drag to reorder columns')}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {s && active === 'asc' && <CaretUp size={10} weight="bold" />}
+                        {s && active === 'desc' && <CaretDown size={10} weight="bold" />}
+                        <span>{label}</span>
+                        <DotsSixVertical size={12} className="text-gray-300" />
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -738,11 +823,10 @@ export function CatalogProductsPage() {
                 const ageIso = p.publishedAt || p.createdAt;
                 const endsIn = p.listingEndsAt ? endsInLabel(p.listingEndsAt) : null;
                 const myOffers = offersFor(p);
-                return (
-                  <tr key={p.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
-                    </td>
+                const seoState = seoStatus(p);
+                const justSeoed = seo.running && seo.doneIds.includes(p.id);
+                const cells: Record<CatalogColumnKey, ReactNode> = {
+                  product: (
                     <td className="px-4 py-3 max-w-[280px]">
                       <div className="flex items-center gap-3">
                         <div className="relative w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
@@ -764,6 +848,8 @@ export function CatalogProductsPage() {
                         </button>
                       </div>
                     </td>
+                  ),
+                  category: (
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       <div className="flex flex-col gap-0.5 min-w-[120px]">
                         <select
@@ -779,6 +865,8 @@ export function CatalogProductsPage() {
                         <span className="text-[10px] text-gray-400">{speciesOf(p) ?? '—'}</span>
                       </div>
                     </td>
+                  ),
+                  status: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex flex-col gap-0.5">
                         <select
@@ -799,6 +887,8 @@ export function CatalogProductsPage() {
                         )}
                       </div>
                     </td>
+                  ),
+                  price: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       {priceEdit === p.id ? (
                         <div className="flex items-center gap-1">
@@ -829,6 +919,8 @@ export function CatalogProductsPage() {
                         </button>
                       )}
                     </td>
+                  ),
+                  margin: (
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       {p.costPrice > 0 ? (
                         <span className="text-gray-500">${p.costPrice.toFixed(2)}</span>
@@ -837,12 +929,16 @@ export function CatalogProductsPage() {
                         <span className={`ml-1.5 font-semibold ${p.marginPercent < 40 ? 'text-red-600' : 'text-green-700'}`}>{p.marginPercent.toFixed(0)}%</span>
                       )}
                     </td>
+                  ),
+                  stock: (
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''} title={`${INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']} stock`}>
                         {p.inventoryQty <= 0 ? 'Out of stock' : p.inventoryQty}
                       </span>
                       {p.inventoryQty > 0 && p.inventorySource === 'INTERNAL_STOCK' && <span className="text-[10px] text-gray-400 ml-1">internal</span>}
                     </td>
+                  ),
+                  views: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       {stats == null ? (
                         <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
@@ -859,6 +955,8 @@ export function CatalogProductsPage() {
                         </span>
                       )}
                     </td>
+                  ),
+                  interest: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       {stats == null ? (
                         <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
@@ -874,6 +972,8 @@ export function CatalogProductsPage() {
                         </span>
                       )}
                     </td>
+                  ),
+                  age: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="relative inline-block group cursor-help">
                         <span className="text-xs font-semibold text-gray-700">{ageLabel(ageIso)}</span>
@@ -886,6 +986,8 @@ export function CatalogProductsPage() {
                         </span>
                       </span>
                     </td>
+                  ),
+                  promotion: (
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="relative inline-block">
                         <button
@@ -935,19 +1037,34 @@ export function CatalogProductsPage() {
                         </Popover>
                       </span>
                     </td>
+                  ),
+                  readiness: (
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="relative inline-block group cursor-help">
-                        <ReadinessBadge readiness={p.commerceReadiness ?? null} />
-                        <span className="pointer-events-none absolute right-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
-                          {p.commerceReadiness === 'COMMERCE_READY' && <span>Storefront-eligible. Source, cost & fulfillment verified.</span>}
-                          {p.commerceReadiness === 'SOURCE_PENDING' && <span>No verified purchasing path (retail-ref only or unknown source).</span>}
-                          {p.commerceReadiness === 'ECONOMICS_PENDING' && <span>Supplier exists but cost/landed unknown.</span>}
-                          {p.commerceReadiness === 'FULFILLMENT_PENDING' && <span>Cost known but stock/shipping not verified.</span>}
-                          {p.commerceReadiness === 'RISK_REVIEW' && <span>Unresolved critical risk (battery/IP/regulatory).</span>}
-                          {!p.commerceReadiness && <span>Not classified yet.</span>}
+                      <div className="flex flex-col gap-1">
+                        <span className="relative inline-block group cursor-help">
+                          <ReadinessBadge readiness={p.commerceReadiness ?? null} />
+                          <span className="pointer-events-none absolute right-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                            {p.commerceReadiness === 'COMMERCE_READY' && <span>Storefront-eligible. Source, cost & fulfillment verified.</span>}
+                            {p.commerceReadiness === 'SOURCE_PENDING' && <span>No verified purchasing path (retail-ref only or unknown source).</span>}
+                            {p.commerceReadiness === 'ECONOMICS_PENDING' && <span>Supplier exists but cost/landed unknown.</span>}
+                            {p.commerceReadiness === 'FULFILLMENT_PENDING' && <span>Cost known but stock/shipping not verified.</span>}
+                            {p.commerceReadiness === 'RISK_REVIEW' && <span>Unresolved critical risk (battery/IP/regulatory).</span>}
+                            {!p.commerceReadiness && <span>Not classified yet.</span>}
+                          </span>
                         </span>
-                      </span>
+                        {justSeoed ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-green-700"><CheckCircle size={10} weight="bold" />SEO done</span>
+                        ) : seoState === 'complete' ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-green-600" title={seoExplain(p)}><CheckCircle size={10} />SEO</span>
+                        ) : seoState === 'incomplete' ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600" title={seoExplain(p)}><Warning size={10} />SEO ~</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-400" title="No SEO set — run Auto SEO"><Globe size={10} />SEO</span>
+                        )}
+                      </div>
                     </td>
+                  ),
+                  actions: (
                     <td className="px-4 py-3">
                       <span className="relative inline-block">
                         <button
@@ -968,7 +1085,7 @@ export function CatalogProductsPage() {
                                   <button onClick={() => { setRowMenu(null); nav(`/admin/products/edit/${p.id}`); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><PencilSimple size={14} />Edit</button>
                                   <a href={productPath(p)} target="_blank" rel="noreferrer" onClick={() => setRowMenu(null)} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-gray-700"><ArrowSquareOut size={14} />View live</a>
                                   <button onClick={() => { setRowMenu(null); void onDuplicate(p.id); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><Copy size={14} />Duplicate</button>
-                                  <button onClick={() => { setRowMenu(null); void runAutoSeo([p]); }} disabled={!!seoBulk} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-purple-700"><Sparkle size={14} />Auto SEO</button>
+                                  <button onClick={() => { setRowMenu(null); void runAutoSeo([p]); }} disabled={seo.running} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-purple-700"><Sparkle size={14} />Auto SEO</button>
                                   <button onClick={() => { setRowMenu(null); setListingModal(p); }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2"><Clock size={14} />Listing duration…</button>
                                   <button onClick={() => { setRowMenu(null); setDelId(p.id); }} className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><Trash size={14} />Archive / Delete</button>
                                 </>
@@ -977,6 +1094,14 @@ export function CatalogProductsPage() {
                         </Popover>
                       </span>
                     </td>
+                  ),
+                };
+                return (
+                  <tr key={p.id} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
+                    </td>
+                    {colOrder.map((k) => <Fragment key={k}>{cells[k]}</Fragment>)}
                   </tr>
                 );
               })}
