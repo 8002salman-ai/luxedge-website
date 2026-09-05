@@ -33,8 +33,6 @@ export interface CheckoutTotals {
   currency: string;
   freeShippingApplied: boolean;
   couponCode: string | null;
-  /** Always false — no Stripe Tax add-on: Luxedge charges no tax and delegates nothing to the payment provider. */
-  taxHandledByProvider?: boolean;
 }
 
 export interface CreateCheckoutResponse {

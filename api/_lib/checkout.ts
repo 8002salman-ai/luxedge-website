@@ -79,7 +79,6 @@ export interface CheckoutTotals {
   tax: number;
   /** Total charged to the customer — catalog prices + shipping, no hidden tax. */
   total: number;
-  taxHandledByProvider: false;
   currency: 'USD';
 }
 
@@ -230,7 +229,6 @@ export async function computeCheckoutTotals(loader: CheckoutDataLoader, request:
       freeShippingApplied,
       tax,
       total,
-      taxHandledByProvider: false,
       currency: 'USD',
     },
     products,

@@ -132,14 +132,13 @@ describe('computeCheckoutTotals — server prices are authoritative', () => {
     }
   });
 
-  it('NEVER computes tax — tax is 0 and nothing is delegated to the payment provider (no Stripe Tax add-on)', async () => {
+  it('NEVER computes tax — tax is always 0 (no Stripe Tax add-on)', async () => {
     const d = await computeCheckoutTotals(makeLoader([product({ price: 25 })]), { items: [{ id: PID, quantity: 1 }] });
     expect(d.ok).toBe(true);
     if (d.ok) {
       expect(d.totals.tax).toBe(0);
       // automatic_tax was removed (paid add-on): Luxedge never fabricates a rate
       // AND never asks the payment provider to calculate one.
-      expect(d.totals.taxHandledByProvider).toBe(false);
       expect(d.totals.total).toBe(29.99); // pre-tax: 25 + 4.99 shipping, rounded — never a fabricated tax
     }
   });

@@ -109,18 +109,17 @@ describe('/api/checkout', () => {
     if (original.stripe === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = original.stripe;
   });
 
-  it('creates a Stripe session charged at the SERVER-computed total (tampering rejected), tax delegated to Stripe', async () => {
+  it('creates a Stripe session charged at the SERVER-computed total (tampering rejected), tax is 0 (no Stripe Tax add-on)', async () => {
     const calls = makeEnv();
     const { server, cap } = res();
     // Client tries to send price 0.01 — the server must ignore it.
     await handler(req('POST', { items: [{ id: PRODUCT.id, quantity: 1, price: 0.01 }], customer: { email: 'a@b.com' } }), server);
     expect(cap.status).toBe(200);
-    const body = cap.body as { url: string; totals: { total: number; tax: number; taxHandledByProvider: boolean } };
+    const body = cap.body as { url: string; totals: { total: number; tax: number } };
     expect(body.url).toContain('checkout.stripe.com');
     // 25 subtotal + 4.99 shipping (below $50). NO tax — Stripe Tax add-on disabled at launch.
     expect(body.totals.total).toBe(29.99);
     expect(body.totals.tax).toBe(0);
-    expect(body.totals.taxHandledByProvider).toBe(false);
     const stripeCall = calls.find((c) => c.url.startsWith('https://api.stripe.com/v1/checkout/sessions') && c.method === 'POST');
     expect(stripeCall).toBeTruthy();
     const stripeBody = String(stripeCall!.body);
