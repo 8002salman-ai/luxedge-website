@@ -403,7 +403,20 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     const lastSeg = url.pathname.split('/').filter(Boolean).pop() || '';
     const isFileLike = lastSeg.includes('.');
     if (isFileLike) {
-      return env.ASSETS.fetch(request);
+      const assetRes = await env.ASSETS.fetch(request);
+      // Vite hashed subresources (/assets/*-hash.js|css) are immutable per
+      // build — long-cache them so repeat visits don't revalidate ~1MB of
+      // bundles on every page load. Unhashed public files keep ASSETS defaults.
+      if (url.pathname.startsWith('/assets/') && assetRes.ok) {
+        return new Response(assetRes.body, {
+          status: assetRes.status,
+          headers: {
+            ...Object.fromEntries(assetRes.headers.entries()),
+            'cache-control': 'public, max-age=31536000, immutable',
+          },
+        });
+      }
+      return assetRes;
     }
     const indexRes = await env.ASSETS.fetch(new Request(url.origin + '/', request));
     if (request.method === 'GET' && indexRes.ok) {
