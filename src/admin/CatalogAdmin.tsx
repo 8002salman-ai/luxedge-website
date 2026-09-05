@@ -133,8 +133,8 @@ export function CatalogProductsPage() {
   const [csvOpen, setCsvOpen] = useState(false);
   const [seoBulk, setSeoBulk] = useState<{ done: number; total: number; current: string; errors: number } | null>(null);
   const [seoReport, setSeoReport] = useState<{ complete: number; updated: number; skipped: number; failed: number } | null>(null);
-  // First-party analytics: views + add-to-cart interest per product.
-  const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number; interest: number }> | null>(null);
+  // First-party analytics: views + add-to-cart interest + wishlist saves per product.
+  const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number; interest: number; saved: number }> | null>(null);
   const [statsNote, setStatsNote] = useState<string | null>(null);
   // Per-row quick edits.
   const [priceEdit, setPriceEdit] = useState<string | null>(null);
@@ -178,7 +178,7 @@ export function CatalogProductsPage() {
         const token = await getFreshAccessToken();
         const r = await fetch('/api/admin/product-stats', { headers: { Authorization: `Bearer ${token}` } });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const j = (await r.json()) as { stats?: Record<string, { views: number; views7d: number; views30d: number; interest: number }>; unavailable?: string };
+        const j = (await r.json()) as { stats?: Record<string, { views: number; views7d: number; views30d: number; interest: number; saved: number }>; unavailable?: string };
         if (!cancelled) { setStats(j.stats ?? null); setStatsNote(j.unavailable ?? null); }
       } catch {
         if (!cancelled) { setStats(null); setStatsNote('Analytics unavailable'); }
@@ -725,7 +725,7 @@ export function CatalogProductsPage() {
                 <th className="px-4 py-3 whitespace-nowrap">Margin</th>
                 <th className="px-4 py-3 whitespace-nowrap">Stock</th>
                 <th className="px-4 py-3 whitespace-nowrap" title="Real first-party view_item events, last 90 days">Views</th>
-                <th className="px-4 py-3 whitespace-nowrap" title="Real add-to-cart intent — Luxedge has no wishlist/watchers system">Interest</th>
+                <th className="px-4 py-3 whitespace-nowrap" title="Wishlist saves (distinct visitors, site_events) — add-to-cart shown when no saves yet">Interest</th>
                 <th className="px-4 py-3 whitespace-nowrap" title="Time since first live (published_at), falling back to created_at">Listing Age</th>
                 <th className="px-4 py-3 whitespace-nowrap">Promotion</th>
                 <th className="px-4 py-3 whitespace-nowrap">Readiness</th>
@@ -864,11 +864,12 @@ export function CatalogProductsPage() {
                         <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
                       ) : (
                         <span className="relative inline-block group cursor-help">
-                          <span className="text-xs text-gray-600">{st?.interest ?? 0}</span>
+                          <span className="text-xs text-gray-600">{(st?.saved ?? 0) > 0 ? `${st?.saved} saved` : (st?.interest ?? 0)}</span>
                           <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
-                            <span className="block font-semibold text-gray-800">Interest (add-to-cart, 90d)</span>
-                            <span className="block">{st?.interest ?? 0} add-to-cart events</span>
-                            <span className="block text-gray-400">Luxedge has no wishlist/watchers — this is the real persisted interest signal.</span>
+                            <span className="block font-semibold text-gray-800">Interest (90d, first-party)</span>
+                            <span className="block">Saved: {st?.saved ?? 0} distinct visitors who saved and didn't remove</span>
+                            <span className="block">Add-to-cart: {st?.interest ?? 0} events</span>
+                            <span className="block text-gray-400">Saved counts come from the storefront wishlist hearts (site_events).</span>
                           </span>
                         </span>
                       )}

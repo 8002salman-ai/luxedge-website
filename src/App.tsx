@@ -18,6 +18,7 @@ import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { createCheckoutSession, fetchCheckoutSessionStatus, probeStripeConfig, type CheckoutSessionStatus } from './services/checkout';
+import { useWishlist, WishlistButton } from './features/wishlist/wishlist';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -26,7 +27,7 @@ import {
   ChevronDown, ChevronRight, ArrowLeft, Upload01,
   Globe01, Clock, Send01, Headphones01, Stars01,
   PencilLine, Calendar, Tag01, BookOpen01, EyeOff,
-  Sliders01, Feather,
+  Sliders01, Feather, Heart,
 } from '@untitledui/icons';
 import { YoutubeLogo } from '@phosphor-icons/react';
 
@@ -663,6 +664,7 @@ function Header() {
   const loc = useLocation();
   const goTo = useNavigate();
   const { user, cart, logout, openCart } = useApp();
+  const { ids: wishIds } = useWishlist();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
 
   // Rotate promo messages every 3.5 seconds
@@ -761,6 +763,10 @@ function Header() {
               <UserIcon strokeWidth={1.5} size={17} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
             </Link>
           )}
+          <Link to="/wishlist" className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open wishlist, ${wishIds.length} saved item${wishIds.length === 1 ? '' : 's'}`}>
+            <Heart strokeWidth={1.5} size={18} fill={wishIds.length > 0 ? 'currentColor' : 'none'} className={wishIds.length > 0 ? 'text-rose-500' : ''} />
+            {wishIds.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] font-bold">{wishIds.length}</span>}
+          </Link>
           <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
             <ShoppingBag01 strokeWidth={1.5} size={18} />
             {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
@@ -1031,7 +1037,7 @@ function productGridClass(count: number): string {
 }
 
 function PCard({ product }: { product: Product }) {
-  const { addToCart, reviews } = useApp();
+  const { addToCart, reviews, notify } = useApp();
   const { pathname } = useLocation();
   const selectProduct = () => trackEvent('select_item', { item_list_id: pathname || 'storefront', items: [{ item_id: product.id, item_name: product.name, price: product.price }], ...utmParams() });
   const image = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
@@ -1042,7 +1048,7 @@ function PCard({ product }: { product: Product }) {
   const verified = reviews.filter(r => r.productId === product.id && r.status === 'approved');
   const verifiedAvg = verified.length ? verified.reduce((s, r) => s + r.rating, 0) / verified.length : 0;
   return (
-    <article className="product-card group">        <Link to={productPath(product)} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
+    <article className="product-card group relative">        <Link to={productPath(product)} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
         <div className="product-card-media">
           <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
           {secondImage && (
@@ -1057,6 +1063,7 @@ function PCard({ product }: { product: Product }) {
           <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
         </div>
       </Link>
+      <WishlistButton product={product} notify={notify} className="absolute top-2 right-2 z-10 bg-white/90 shadow-md p-2" />
       <div className="product-card-info">
         <Link to={productPath(product)} className="block min-w-0">
           <p className="product-card-category">{product.category}</p>
@@ -1087,6 +1094,42 @@ function PCard({ product }: { product: Product }) {
 // Premium alias — one card component across the whole storefront
 function PCardPremium({ product }: { product: Product }) {
   return <PCard product={product} />;
+}
+
+function WishlistPage() {
+  const { products, notify } = useApp();
+  const { ids: savedIds, clear } = useWishlist();
+  const saved = products.filter((p) => p.isActive && savedIds.includes(p.id));
+
+  if (saved.length === 0) return (
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><Heart strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
+        <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your wishlist is empty</h2>
+        <p className="text-luxe-gray text-sm mb-6">Tap the heart on any product to save it here for later.</p>
+        <Link to="/shop" className="btn-glow inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="py-12 bg-luxe-cream min-h-screen">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="flex items-end justify-between flex-wrap gap-3 mb-8">
+          <div>
+            <p className="eyebrow mb-2">Saved for Later</p>
+            <h1 className="font-serif text-3xl font-bold text-luxe-black">Your Wishlist</h1>
+            <p className="text-luxe-gray text-sm mt-1">{saved.length} saved item{saved.length === 1 ? '' : 's'}</p>
+          </div>
+          <button onClick={() => { clear(); notify('Wishlist cleared'); }}
+            className="text-xs font-semibold text-luxe-gray hover:text-luxe-red transition-colors">Clear All</button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5">
+          {saved.map((p) => <PCard key={p.id} product={p} />)}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 
@@ -1133,6 +1176,7 @@ function RouteTitle() {
       set(p ? (p.seoTitle || p.name) : "Product");
       if (p) desc(p.seoDescription || p.shortDesc || p.description.slice(0, 155));
     }
+    else if (segs[0] === "wishlist") { set("My Wishlist"); desc("Products you have saved at Luxedge for later — your saved list stays on your device."); }
     else if (segs[0] === "cart") { set("Shopping Cart"); desc("Review your Luxedge cart — shipping options and any applicable promotions are shown before payment."); }
     else if (segs[0] === "checkout") { set("Checkout"); desc("Complete your Luxedge order."); }
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
@@ -1549,6 +1593,7 @@ function ProductDetailPage() {
 
           {/* Buttons */}
           <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
+            <WishlistButton product={product} size={20} notify={notify} className="px-4 bg-white border-2 border-gray-200 rounded-xl hover:border-rose-400" />
             <div className="flex items-center border-2 border-gray-200 rounded-xl">
               <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
               <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
@@ -4028,6 +4073,7 @@ export default function App() {
           <Route path="/shop" element={<SLayout><ShopPage /></SLayout>} />
           <Route path="/category/:slug" element={<SLayout><ShopPage /></SLayout>} />
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
+          <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
           <Route path="/checkout" element={<SLayout><CheckoutPage /></SLayout>} />
           <Route path="/checkout/success" element={<SLayout><CheckoutSuccessPage /></SLayout>} />

@@ -9,15 +9,18 @@
 // Data is REAL site_events analytics only:
 //   views    — count of `view_item` events whose item_ids include the product
 //   interest — count of `add_to_cart` events for the product (the strongest
-//              persisted interest signal Luxedge has today; there is no
-//              wishlist/favorites system, so this is deliberately NOT called
-//              "watchers" or "saved")
+//              persisted interest signal after wishlist saves)
+//   saved    — count of DISTINCT visitors who recorded `add_to_wishlist` for
+//              the product and never recorded `remove_from_wishlist` (the
+//              storefront wishlist system records these via trackEvent). Net
+//              event counts would double-count one visitor toggling on/off,
+//              so saves are attributed per visitor.
 // Window: last 90 days, capped at 50,000 events per pass (same cap as the
 // Traffic dashboard) — a larger catalog never inflates egress. Products with
 // no events simply have no entry (the UI shows "—").
 //
 // Response: { windowDays: 90, stats: { [productId]: { views, views7d,
-//            views30d, interest } }, unavailable?: string }
+//            views30d, interest, saved } }, unavailable?: string }
 // ============================================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson } from '../_lib/providers.js';
@@ -29,6 +32,7 @@ interface ProductStats {
   views7d: number;
   views30d: number;
   interest: number;
+  saved: number;
 }
 
 const WINDOW_DAYS = 90;
@@ -41,6 +45,8 @@ let cachedStats: { at: number; data: Record<string, ProductStats> } | null = nul
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface EventRow {
+  event?: string;
+  visitor_id?: unknown;
   item_ids?: unknown;
   occurred_at?: string | null;
 }
@@ -89,7 +95,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const cut30 = now - 30 * 86400000;
 
     const countEvent = (id: string, ts: number | null, isCart: boolean) => {
-      const entry = stats[id] ?? { views: 0, views7d: 0, views30d: 0, interest: 0 };
+      const entry = stats[id] ?? { views: 0, views7d: 0, views30d: 0, interest: 0, saved: 0 };
       if (isCart) {
         entry.interest += 1;
       } else {
@@ -133,6 +139,42 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!rows) break;
       for (const row of rows) for (const id of itemIds(row)) countEvent(id, null, true);
       if (rows.length < PAGE_SIZE) break;
+    }
+
+    // Pass 3: wishlist saves — distinct visitors who added and never removed.
+    const added = new Map<string, Set<string>>();
+    const removed = new Map<string, Set<string>>();
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const url =
+        `${cfg.url}/rest/v1/site_events` +
+        `?select=${encodeURIComponent('visitor_id,item_ids,event')}` +
+        `&event=in.(add_to_wishlist,remove_from_wishlist)` +
+        `&occurred_at=gte.${encodeURIComponent(since)}` +
+        `&order=occurred_at.desc&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`;
+      const rows = await fetchPass(cfg, url);
+      if (!rows) break;
+      for (const row of rows) {
+        const visitor = typeof row.visitor_id === 'string' && row.visitor_id ? row.visitor_id : null;
+        if (!visitor) continue; // unattributed (pre-visitor-id) events can't be counted
+        const map = row.event === 'remove_from_wishlist' ? removed : added;
+        for (const id of itemIds(row)) {
+          const set = map.get(id) ?? new Set<string>();
+          set.add(visitor);
+          map.set(id, set);
+        }
+      }
+      if (rows.length < PAGE_SIZE) break;
+    }
+    for (const [id, addSet] of added) {
+      const removeSet = removed.get(id);
+      const net = removeSet
+        ? [...addSet].filter((v) => !removeSet.has(v)).length
+        : addSet.size;
+      if (net > 0) {
+        const entry = stats[id] ?? { views: 0, views7d: 0, views30d: 0, interest: 0, saved: 0 };
+        entry.saved = net;
+        stats[id] = entry;
+      }
     }
 
     cachedStats = { at: Date.now(), data: stats };
