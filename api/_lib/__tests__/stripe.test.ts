@@ -93,9 +93,18 @@ describe('stripe helper', () => {
     expect(call.body).toContain('mode=payment'); // one-time purchase — never subscription
     expect(call.body).not.toContain('subscription');
     expect(call.body).not.toContain('recurring');
+    // Checkout Studio fixed params (wire format; ui_mode=hosted is the REST
+    // equivalent of the SDK's hosted_page).
+    expect(call.body).toContain('ui_mode=hosted');
+    expect(call.body).toContain('billing_address_collection=auto');
+    expect(call.body).toContain('phone_number_collection%5Benabled%5D=true');
+    expect(call.body).toContain('allow_promotion_codes=true');
+    expect(call.body).toContain('submit_type=auto');
+    expect(call.body).toContain('payment_intent_data%5Bsetup_future_usage%5D=on_session');
     // No Stripe Tax add-on at launch — catalog prices are the prices charged.
     expect(call.body).not.toContain('automatic_tax');
     expect(call.body).not.toContain('tax_behavior');
+    expect(call.body).not.toContain('payment_method_collection'); // payment mode: omitted by rule
     expect(call.body).toContain('shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US');
     expect(call.body).toContain('shipping_options%5B0%5D%5Bshipping_rate_data%5D%5Bfixed_amount%5D%5Bamount%5D=499');
     expect(call.body).toContain('payment_method_types%5B0%5D=card'); // card-only for launch
