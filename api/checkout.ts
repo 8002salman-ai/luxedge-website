@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, readJsonBody, rateLimited, clientIp } from './_lib/providers.js';
 import { requireAdmin } from './_lib/auth.js';
 import { computeCheckoutTotals, validateCheckoutRequest, buildStripeLineItems, appBaseUrl, type CheckoutDataLoader } from './_lib/checkout.js';
-import { stripeConfigured, createCheckoutSession, retrieveCheckoutSession, safeSessionSummary } from './_lib/stripe.js';
+import { stripeReady, createCheckoutSession, retrieveCheckoutSession, safeSessionSummary } from './_lib/stripe.js';
 
 interface ServerProductRow {
   id: string;
@@ -130,7 +130,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // GET — probe (server is the authority on whether payment is configured)
   // -------------------------------------------------------------------------
   if (req.method === 'GET' && url.searchParams.get('probe') === '1') {
-    sendJson(res, 200, { configured: stripeConfigured() });
+    sendJson(res, 200, { configured: await stripeReady() });
     return;
   }
 
@@ -152,7 +152,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === 'GET') {
     const sessionId = (url.searchParams.get('session_id') || '').trim();
     if (!sessionId) { sendJson(res, 400, { error: 'Missing session_id parameter.' }); return; }
-    if (!stripeConfigured()) { sendJson(res, 503, { error: 'Payment is not configured yet on this deployment.' }); return; }
+    if (!(await stripeReady())) { sendJson(res, 503, { error: 'Payment is not configured yet on this deployment.' }); return; }
     const session = await retrieveCheckoutSession(sessionId);
     if (!session.ok) { sendJson(res, session.status, { error: session.message }); return; }
     // Look up the persisted order for this session (service role) — real status.
@@ -171,7 +171,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // -------------------------------------------------------------------------
   // POST — create the Stripe Checkout Session
   // -------------------------------------------------------------------------
-  if (!stripeConfigured()) {
+  if (!(await stripeReady())) {
     sendJson(res, 503, { error: 'Payment is not configured yet on this deployment. The store owner needs to add Stripe keys.' });
     return;
   }

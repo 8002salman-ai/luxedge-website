@@ -338,7 +338,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const rawBody = await readRawBody(req).catch(() => '');
   const sig = req.headers['stripe-signature'] as string | undefined;
-  const verified = verifyWebhookSignature(rawBody, sig);
+  const verified = await verifyWebhookSignature(rawBody, sig);
   if (!verified.ok) {
     sendJson(res, 400, { error: verified.message });
     return;

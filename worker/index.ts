@@ -43,6 +43,7 @@ import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
+import paymentKeysHandler from '../api/admin/payment-keys';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
@@ -93,6 +94,7 @@ const ROUTES: Route[] = [
   { path: '/api/crm/list', handler: crmListHandler },
   { path: '/api/crm/assistant', handler: crmAssistantHandler },
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
+  { path: '/api/admin/payment-keys', handler: paymentKeysHandler },
   { path: '/api/admin/ai-keys', handler: aiKeysHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
@@ -207,6 +209,9 @@ export interface Env {
   CJ_API_KEY?: string;
   /** YouTube Data API key — a Cloudflare secret binding (wrangler secret put). */
   YOUTUBE_API_KEY?: string;
+  /** Stripe keys — Cloudflare secret bindings (wrangler secret put). Never client-side. */
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
   GOOGLE_ADSENSE_CLIENT_ID?: string;
   GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
@@ -231,9 +236,11 @@ function populateProcessEnv(env: Env): void {
 async function handleRequest(request: Request, env: Env): Promise<Response> {
     populateProcessEnv(env);
     // Secret bindings are not guaranteed to be enumerable in every Worker
-    // runtime. CJ's server handler reads process.env, so preserve this one
-    // explicitly instead of silently reporting a configured key as missing.
+    // runtime. CJ/Stripe server handlers read process.env, so preserve these
+    // explicitly instead of silently reporting configured keys as missing.
     if (env.CJ_API_KEY) process.env.CJ_API_KEY = env.CJ_API_KEY;
+    if (env.STRIPE_SECRET_KEY) process.env.STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
+    if (env.STRIPE_WEBHOOK_SECRET) process.env.STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
     const url = new URL(request.url);
     // Canonical host + scheme: www and HTTP must permanently redirect to the
     // non-www HTTPS apex, preserving the full path+query. Prevents a

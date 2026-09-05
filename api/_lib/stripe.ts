@@ -14,18 +14,75 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const API_BASE = 'https://api.stripe.com/v1';
 
-/** True when STRIPE_SECRET_KEY is configured (test or live). */
+// ----------------------------------------------------------------------------
+// Key resolution — env vars FIRST (tests / wrangler secrets), then the admin-
+// attached keys stored server-side in Supabase app_settings (`PAYMENT_STRIPE_*`)
+// so the owner can configure payments from Admin → Payments without a redeploy.
+// Cached for 60s like the CJ key; `resetStripeKeyCache()` invalidates after a
+// save/clear so the next call sees the change immediately.
+// ----------------------------------------------------------------------------
+const APP_SETTINGS = 'PAYMENT_STRIPE';
+const CACHE_TTL = 60_000;
+let cache: { secretKey: string; webhookSecret: string; ts: number } | null = null;
+
+/** Test-only / admin-save hook: forget the cached resolution. */
+export function resetStripeKeyCache(): void {
+  cache = null;
+}
+
+async function readAppSetting(suffix: string): Promise<string> {
+  const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!url || !serviceRole) return '';
+  try {
+    const res = await fetch(`${url}/rest/v1/app_settings?key=eq.${APP_SETTINGS}_${suffix}&select=value`, {
+      headers: { apikey: serviceRole, Authorization: `Bearer ${serviceRole}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return '';
+    const rows = (await res.json()) as Array<{ value?: string }>;
+    return rows[0]?.value?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+async function resolveKeys(): Promise<{ secretKey: string; webhookSecret: string }> {
+  const envKey = (process.env.STRIPE_SECRET_KEY || '').trim();
+  const envWh = (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+  if (envKey && envWh) return { secretKey: envKey, webhookSecret: envWh };
+  const now = Date.now();
+  if (cache && now - cache.ts < CACHE_TTL) return { secretKey: envKey || cache.secretKey, webhookSecret: envWh || cache.webhookSecret };
+  const dbSecret = envKey ? '' : await readAppSetting('SECRET_KEY');
+  const dbWh = envWh ? '' : await readAppSetting('WEBHOOK_SECRET');
+  cache = { secretKey: dbSecret, webhookSecret: dbWh, ts: now };
+  return { secretKey: envKey || dbSecret, webhookSecret: envWh || dbWh };
+}
+
+/** True when STRIPE_SECRET_KEY is configured via env (test or live). */
 export function stripeConfigured(): boolean {
   return !!((process.env.STRIPE_SECRET_KEY || '').trim());
 }
 
-function secretKey(): string {
-  return (process.env.STRIPE_SECRET_KEY || '').trim();
+/** True when a secret key is configured via env OR the admin-attached app_settings key. */
+export async function stripeReady(): Promise<boolean> {
+  if (stripeConfigured()) return true;
+  await resolveKeys();
+  return !!cache?.secretKey;
 }
 
-function webhookSecret(): string {
-  return (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+async function secretKey(): Promise<string> {
+  return (process.env.STRIPE_SECRET_KEY || '').trim() || (await resolveKeys()).secretKey;
 }
+
+async function webhookSecret(): Promise<string> {
+  return (process.env.STRIPE_WEBHOOK_SECRET || '').trim() || (await resolveKeys()).webhookSecret;
+}
+
+export const STRIPE_SETTING_KEYS = {
+  secretKey: `${APP_SETTINGS}_SECRET_KEY`,
+  webhookSecret: `${APP_SETTINGS}_WEBHOOK_SECRET`,
+} as const;
 
 /** application/x-www-form-urlencoded body for the Stripe REST API. */
 export function formEncode(params: Record<string, string | number | undefined>): string {
@@ -47,11 +104,12 @@ export interface StripeErrorResult {
 export type StripeResult<T> = { ok: true; data: T } | StripeErrorResult;
 
 async function stripeRequest<T>(path: string, init?: { method?: string; body?: string }): Promise<StripeResult<T>> {
+  const authKey = await secretKey();
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method: init?.method || 'GET',
       headers: {
-        Authorization: `Bearer ${secretKey()}`,
+        Authorization: `Bearer ${authKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Stripe-Version': '2024-06-20',
       },
@@ -185,8 +243,8 @@ export async function retrieveCheckoutSession(sessionId: string): Promise<Stripe
  * `${timestamp}.${rawBody}` with the webhook secret; constant-time compare).
  * Returns the parsed event payload or a safe failure.
  */
-export function verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): { ok: true; event: StripeWebhookEvent } | { ok: false; message: string } {
-  const secret = webhookSecret();
+export async function verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): Promise<{ ok: true; event: StripeWebhookEvent } | { ok: false; message: string }> {
+  const secret = await webhookSecret();
   if (!secret) return { ok: false, message: 'Stripe webhook is not configured on this deployment.' };
   if (!signatureHeader) return { ok: false, message: 'Missing stripe-signature header.' };
   const parts = signatureHeader.split(',').map((p) => p.trim());
