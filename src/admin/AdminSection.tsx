@@ -16,6 +16,7 @@ import { loadPricingRules, savePricingRules, computePricing, DEFAULT_PRICING_RUL
 import ProductScout from './ProductScout';
 import ProductResearch from './ProductResearch';
 import CJSetup from './CJSetup';
+import PaymentsSetup from './PaymentsSetup';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
@@ -42,7 +43,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
-  Receipt, CloudArrowUp, YoutubeLogo,
+  Receipt, CloudArrowUp, YoutubeLogo, CreditCard,
 } from '@phosphor-icons/react';
 
 // ADMIN PANEL - FULL WORKING SYSTEM
@@ -116,6 +117,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
       title: 'System',
       items: [
         { to: '/admin/cj-setup', icon: Package, label: 'CJ Supplier', g: 'linear-gradient(135deg,#10b981,#06b6d4)', dot: '#34d399' },
+        { to: '/admin/payments', icon: CreditCard, label: 'Payments', g: 'linear-gradient(135deg,#635bff,#8b5cf6)', dot: '#a78bfa' },
         { to: '/admin/settings', icon: GearSix, label: 'Settings', g: 'linear-gradient(135deg,#94a3b8,#64748b)', dot: '#cbd5e1' },
       ],
     },
@@ -5733,6 +5735,7 @@ export default function AdminSection() {
       <Route path="ai-control" element={<AdminLayout><AiControlCenter /></AdminLayout>} />
       <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
       <Route path="cj-setup" element={<AdminLayout><CJSetup /></AdminLayout>} />
+      <Route path="payments" element={<AdminLayout><PaymentsSetup /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />

@@ -17,7 +17,7 @@ import { MediaHubPage, MediaVideoPage, MediaLatestSection } from './media/MediaH
 import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
-import { createCheckoutSession, fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
+import { createCheckoutSession, fetchCheckoutSessionStatus, probeStripeConfig, type CheckoutSessionStatus } from './services/checkout';
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -2734,10 +2734,13 @@ function CheckoutPage() {
     setCouponInput('');
   };
 
-  // Payment provider state — a single isolated integration point. Nothing is
-  // charged until the owner configures a real provider (Stripe keys). Until
-  // then checkout uses a polished disabled state that never fakes an order.
-  const paymentsConfigured = !!(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY;
+  // Payment provider state — a single isolated integration point. The SERVER is
+  // the authority on whether Stripe is configured (it holds the keys); the
+  // browser never holds a secret, so we probe /api/checkout?probe=1 on mount.
+  // Until the server says configured, checkout stays disabled and never fakes
+  // an order.
+  const [paymentsConfigured, setPaymentsConfigured] = useState(false);
+  useEffect(() => { let live = true; void probeStripeConfig().then(ok => { if (live) setPaymentsConfigured(ok); }); return () => { live = false; }; }, []);
 
   const handleCheckout = async () => {
     if (!paymentsConfigured) return; // disabled state — never submit a fake order

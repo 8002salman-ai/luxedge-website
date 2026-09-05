@@ -7,7 +7,7 @@
 // ============================================================================
 import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { formEncode, createCheckoutSession, retrieveCheckoutSession, retrieveCheckoutSessionDetailed, verifyWebhookSignature, stripeConfigured } from '../stripe.js';
+import { formEncode, createCheckoutSession, retrieveCheckoutSession, retrieveCheckoutSessionDetailed, verifyWebhookSignature, stripeConfigured, stripeReady, resetStripeKeyCache } from '../stripe.js';
 
 const SECRET = 'sk_test_probe_secret';
 const WH = 'whsec_probe_webhook_secret';
@@ -37,6 +37,30 @@ describe('stripe helper', () => {
     expect(stripeConfigured()).toBe(true);
     delete process.env.STRIPE_SECRET_KEY;
     expect(stripeConfigured()).toBe(false);
+  });
+
+  it('stripeReady falls back to the admin-attached app_settings key when env is absent', async () => {
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    resetStripeKeyCache();
+    const originalDb = { url: process.env.VITE_SUPABASE_URL, role: process.env.SUPABASE_SERVICE_ROLE_KEY };
+    process.env.VITE_SUPABASE_URL = 'https://probe.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-probe';
+    try {
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        const value = url.includes('PAYMENT_STRIPE_SECRET_KEY') ? SECRET : url.includes('PAYMENT_STRIPE_WEBHOOK_SECRET') ? WH : '';
+        return new Response(JSON.stringify([{ value }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }));
+      expect(await stripeReady()).toBe(true);
+      // env still wins when both exist
+      process.env.STRIPE_SECRET_KEY = SECRET;
+      expect(await stripeReady()).toBe(true);
+    } finally {
+      resetStripeKeyCache();
+      if (originalDb.url === undefined) delete process.env.VITE_SUPABASE_URL; else process.env.VITE_SUPABASE_URL = originalDb.url;
+      if (originalDb.role === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = originalDb.role;
+    }
   });
 
   it('formEncode produces an x-www-form-urlencoded body', () => {
@@ -124,28 +148,28 @@ describe('stripe helper', () => {
   });
 
   describe('webhook signature verification', () => {
-    it('accepts a valid signature and returns the parsed event', () => {
+    it('accepts a valid signature and returns the parsed event', async () => {
       const body = webhookBody();
-      const v = verifyWebhookSignature(body, signWebhook(body));
+      const v = await verifyWebhookSignature(body, signWebhook(body));
       expect(v.ok).toBe(true);
       if (v.ok) expect(v.event.type).toBe('checkout.session.completed');
     });
 
-    it('rejects a wrong secret', () => {
+    it('rejects a wrong secret', async () => {
       const body = webhookBody();
-      const v = verifyWebhookSignature(body, signWebhook(body, 'whsec_wrong'));
+      const v = await verifyWebhookSignature(body, signWebhook(body, 'whsec_wrong'));
       expect(v.ok).toBe(false);
     });
 
-    it('rejects a missing or malformed signature header', () => {
-      expect(verifyWebhookSignature(webhookBody(), undefined).ok).toBe(false);
-      expect(verifyWebhookSignature(webhookBody(), 'garbage').ok).toBe(false);
+    it('rejects a missing or malformed signature header', async () => {
+      expect((await verifyWebhookSignature(webhookBody(), undefined)).ok).toBe(false);
+      expect((await verifyWebhookSignature(webhookBody(), 'garbage')).ok).toBe(false);
     });
 
-    it('rejects stale timestamps (replay protection)', () => {
+    it('rejects stale timestamps (replay protection)', async () => {
       const body = webhookBody();
       const old = Math.floor(Date.now() / 1000) - 3600;
-      const v = verifyWebhookSignature(body, signWebhook(body, WH, old));
+      const v = await verifyWebhookSignature(body, signWebhook(body, WH, old));
       expect(v.ok).toBe(false);
     });
   });
