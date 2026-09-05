@@ -15,7 +15,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readJsonBody, sendJson, rateLimited, clientIp, generateWithFallback, isConfiguredFull } from '../_lib/providers.js';
 import { supabaseConfig, supabaseFetch, uid, isMissingTable } from './_lib.js';
 
-const SYSTEM = `You are Luxie, the friendly AI assistant for LUXEDGE (luxedge.us), a premium pet essentials store based in Irving, Texas, USA.
+const SYSTEM = `You are Luxie, the friendly AI assistant for LUXEDGE (luxedge.us), a premium pet essentials store based in Denver, Colorado, USA and operated by Embani LLC.
 
 Help visitors with:
 - Store questions (products, categories, what's in stock)

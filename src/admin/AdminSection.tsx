@@ -769,7 +769,7 @@ function AOrders() {
   // Per-order invoice extras (shipping / tax rate / discount) — admin-recorded,
   // persisted locally like tracking. Defaults are honest: 0 = not recorded.
   const [orderExtras, setOrderExtras] = useState<Record<string, { shipping: number; taxRate: number; discount: number }>>({});
-  // ERP (Emabni LLC) sync config — webhook URL + optional token, stored locally.
+  // ERP (Embani LLC) sync config — webhook URL + optional token, stored locally.
   const [erpWebhook, setErpWebhook] = useState('');
   const [erpToken, setErpToken] = useState('');
   const [erpBusy, setErpBusy] = useState(false);
@@ -873,7 +873,7 @@ function AOrders() {
     setTimeout(() => { try { win.print(); } catch { /* user prints manually */ } }, 400);
   };
 
-  // ── CSV export (matches the Excel-based Emabni ERP workflow). ──
+  // ── CSV export (matches the Excel-based Embani ERP workflow). ──
   const downloadCsv = () => {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['order_number', 'date', 'customer_email', 'status', 'subtotal', 'shipping', 'tax', 'discount', 'total', 'items'];
@@ -887,10 +887,10 @@ function AOrders() {
     a.href = URL.createObjectURL(blob); a.download = `luxedge-orders-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(a.href);
-    notify('Orders CSV downloaded — import it into your Emabni ERP workbook');
+    notify('Orders CSV downloaded — import it into your Embani ERP workbook');
   };
 
-  // ── ERP push — sends orders to the Emabni ERP webhook when that repo is live. ──
+  // ── ERP push — sends orders to the Embani ERP webhook when that repo is live. ──
   const pushToErp = async (testOnly = false) => {
     if (!erpWebhook.trim()) { setErpResult({ ok: false, msg: 'Set the ERP webhook URL first.' }); return; }
     setErpBusy(true); setErpResult(null);
@@ -970,14 +970,14 @@ function AOrders() {
       <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-blue-600">{stats.shipped}</p><p className="text-xs text-gray-500">Shipped / delivered</p></div>
     </div>
 
-    {/* ERP sync — Emabni LLC link (webhook push + CSV for the Excel workbook) */}
+    {/* ERP sync — Embani LLC link (webhook push + CSV for the Excel workbook) */}
     <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <CloudArrowUp size={18} className="text-indigo-600" />
           <div>
-            <p className="text-sm font-semibold text-indigo-900">ERP Sync — Emabni LLC</p>
-            <p className="text-[11px] text-indigo-700/70">Push orders to your ERP webhook, or download CSV for the Emabni Excel workbook. Works with any ERP repo that exposes a POST webhook.</p>
+            <p className="text-sm font-semibold text-indigo-900">ERP Sync — Embani LLC</p>
+            <p className="text-[11px] text-indigo-700/70">Push orders to your ERP webhook, or download CSV for the Embani Excel workbook. Works with any ERP repo that exposes a POST webhook.</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -1592,7 +1592,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
             <div><label className={L}>Store Name</label><input defaultValue="Luxedge" className={I} /></div>
             <div><label className={L}>Contact Email</label><input defaultValue="hello@luxedge.us" className={I} /></div>
             <div><label className={L}>Phone</label><input defaultValue="(440) 941-8002" className={I} /></div>
-            <div><label className={L}>Address</label><input defaultValue="Irving, TX" className={I} /></div>
+            <div><label className={L}>Address</label><input defaultValue="1500 N Grant St, Denver, CO 80203" className={I} /></div>
             <div className="sm:col-span-2">
               <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
                 <FloppyDisk size={16} />FloppyDisk Store GearSix

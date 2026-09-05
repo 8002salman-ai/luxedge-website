@@ -53,7 +53,7 @@ export const useSettingsStore = create<SettingsStore>()(
         storeName: 'Luxedge',
         contactEmail: 'hello@luxedge.us',
         phone: '(440) 941-8002',
-        address: 'Irving, TX, USA',
+        address: '1500 N Grant St, Denver, CO 80203, USA',
         freeShippingThreshold: 50,
         shippingFee: 4.99,
       },

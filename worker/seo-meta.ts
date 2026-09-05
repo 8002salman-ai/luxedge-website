@@ -1014,6 +1014,27 @@ export async function maybeInjectSeo(
         '@type': 'WebSite',
         name: 'Luxedge',
         url: root,
+        publisher: {
+          '@type': 'Organization',
+          name: 'Embani LLC',
+          legalName: 'Embani LLC',
+          url: root,
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: '1500 N Grant St',
+            addressLocality: 'Denver',
+            addressRegion: 'CO',
+            postalCode: '80203',
+            addressCountry: 'US',
+          },
+          contactPoint: {
+            '@type': 'ContactPoint',
+            email: 'hello@luxedge.us',
+            telephone: '+1-440-941-8002',
+            contactType: 'customer service',
+            availableLanguage: 'English',
+          },
+        },
       },
     });
     // Pre-render the hero + category navigation so the initial HTML (and any
