@@ -989,7 +989,7 @@ export async function maybeInjectSeo(
 
   // Noindex utility/private routes so they never appear in search results.
   // Matches any depth: /admin, /admin/blogs, /checkout, /checkout/success, …
-  const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders'];
+  const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist'];
   if (segs.length > 0 && noIndexFirst.includes(segs[0])) {
     return {
       html: inject(html, {
