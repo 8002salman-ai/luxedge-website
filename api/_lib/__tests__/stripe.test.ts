@@ -90,14 +90,16 @@ describe('stripe helper', () => {
     expect(call.url).toBe('https://api.stripe.com/v1/checkout/sessions');
     expect(call.headers.Authorization).toBe(`Bearer ${SECRET}`);
     expect(call.headers['Stripe-Version']).toBeTruthy();
-    expect(call.body).toContain('mode=payment');
-    // Stripe computes tax — never a hard-coded Luxedge rate.
-    expect(call.body).toContain('automatic_tax%5Benabled%5D=true');
+    expect(call.body).toContain('mode=payment'); // one-time purchase — never subscription
+    expect(call.body).not.toContain('subscription');
+    expect(call.body).not.toContain('recurring');
+    // No Stripe Tax add-on at launch — catalog prices are the prices charged.
+    expect(call.body).not.toContain('automatic_tax');
+    expect(call.body).not.toContain('tax_behavior');
     expect(call.body).toContain('shipping_address_collection%5Ballowed_countries%5D%5B0%5D=US');
     expect(call.body).toContain('shipping_options%5B0%5D%5Bshipping_rate_data%5D%5Bfixed_amount%5D%5Bamount%5D=499');
     expect(call.body).toContain('payment_method_types%5B0%5D=card'); // card-only for launch
     expect(call.body).toContain('line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=2500');
-    expect(call.body).toContain('line_items%5B0%5D%5Bprice_data%5D%5Btax_behavior%5D=exclusive');
     expect(call.body).toContain('metadata%5Bids%5D=p1');
     if (r.ok) expect(r.data.id).toBe('cs_test_123');
   });

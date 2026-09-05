@@ -26,9 +26,9 @@ export interface CheckoutTotals {
   subtotal: number;
   discount: number;
   shipping: number;
-  /** Always 0 from Luxedge — Stripe automatic tax computes the real amount at checkout. */
+  /** Always 0 — no sales tax collected at launch (no Stripe Tax add-on). */
   tax: number;
-  /** Pre-tax total. The final charged total (incl. Stripe-computed tax) is decided by Stripe. */
+  /** Final total charged — catalog prices + shipping, nothing hidden. */
   total: number;
   currency: string;
   freeShippingApplied: boolean;

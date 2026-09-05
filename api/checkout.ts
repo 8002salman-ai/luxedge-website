@@ -252,8 +252,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       subtotal: totals.subtotal,
       discount: totals.discount,
       shipping: totals.shipping,
-      tax: totals.tax, // 0 — Stripe automatic tax computes the real amount at checkout
-      total: totals.total, // pre-tax total; Stripe adds tax on top
+      tax: totals.tax, // 0 — no sales tax collected at launch (no Stripe Tax add-on)
+      total: totals.total, // final charged total — prices + shipping, no hidden tax
       currency: totals.currency,
       freeShippingApplied: totals.freeShippingApplied,
       couponCode: totals.couponCode,
