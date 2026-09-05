@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plug, CheckCircle, XCircle, Warning, ArrowClockwise,
   ShieldCheck, CreditCard, FloppyDisk, Eye, EyeSlash, Trash,
-  ExclamationMark
+  ExclamationMark, Receipt
 } from '@phosphor-icons/react';
 import { getAccessToken } from '../services/supabase';
 
@@ -18,6 +18,7 @@ interface TestResult {
   masked?: string;
   message?: string;
 }
+interface SessionParam { key: string; value: string; note: string }
 
 const CARD = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
 const BTN = 'inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200';
@@ -29,6 +30,7 @@ export default function PaymentsSetup() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionConfig, setSessionConfig] = useState<SessionParam[] | null>(null);
 
   // Form state
   const [secretInput, setSecretInput] = useState('');
@@ -48,9 +50,10 @@ export default function PaymentsSetup() {
     try {
       const res = await fetch('/api/admin/payment-keys', { headers: authHeaders() });
       if (res.ok) {
-        const data = await res.json() as { secretKey: KeyStatus; webhookSecret: KeyStatus };
+        const data = await res.json() as { secretKey: KeyStatus; webhookSecret: KeyStatus; sessionConfig?: SessionParam[] };
         setSecretKey(data.secretKey);
         setWebhookSecret(data.webhookSecret);
+        setSessionConfig(data.sessionConfig || null);
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -190,6 +193,39 @@ export default function PaymentsSetup() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Checkout Session Configuration (read-only) ── */}
+      {sessionConfig && (
+        <div className={CARD}>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+              <Receipt size={16} className="text-white" />
+            </div>
+            <h2 className="font-bold text-gray-900">Checkout Session Configuration</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Read-only — exactly what the server sends to Stripe when a customer checks out. No paid add-ons.
+          </p>
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            {sessionConfig.map((p, i) => (
+              <div
+                key={p.key}
+                className={`flex items-center justify-between gap-4 px-4 py-2.5 text-sm ${i % 2 ? 'bg-gray-50/60' : ''}`}
+              >
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="font-mono text-xs text-gray-600 whitespace-nowrap">{p.key}</span>
+                  <span className="text-xs text-gray-400 truncate">{p.note}</span>
+                </div>
+                <span className="font-mono text-xs font-semibold text-green-700 whitespace-nowrap shrink-0">{p.value}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-3">
+            Lowest-cost standard Stripe Checkout — one-time purchases only. No subscriptions, no usage-based
+            billing, no monthly paid Stripe features.
+          </p>
         </div>
       )}
 
