@@ -1,7 +1,7 @@
 // ============================================================================
 // LUXEDGE — /api/crm/assistant empty-output contract
 //
-// DeepSeek occasionally returns empty content. Before this fix the endpoint
+// Models occasionally return empty content. Before this fix the endpoint
 // replied `{"reply":""}` and the storefront widget's `reply || fallback`
 // turned that into the alarming "Sorry, I could not respond right now"
 // message — exactly what a visitor hit in the live chat. A 200 must always
@@ -14,12 +14,12 @@ vi.mock('../_lib/providers.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../_lib/providers.js')>();
   return {
     ...actual,
-    generateWithRetry: vi.fn(async () => ''),
-    isConfigured: vi.fn(() => true),
+    generateWithFallback: vi.fn(async () => ({ text: '', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false })),
+    isConfiguredFull: vi.fn(async (p: string) => p === 'openrouter'),
   };
 });
 
-const { generateWithRetry } = await import('../_lib/providers.js');
+const { generateWithFallback } = await import('../_lib/providers.js');
 const assistantHandler = (await import('../crm/assistant.js')).default;
 
 function makeRes(): { captured: { status: number; body: unknown }; server: ServerResponse } {
@@ -51,15 +51,13 @@ function makeReq(message: string): IncomingMessage {
   return r;
 }
 
-describe('/api/crm/assistant — empty DeepSeek output', () => {
-  const original = { DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL };
+describe('/api/crm/assistant — empty model output', () => {
+  const original = { VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL };
   beforeEach(() => {
-    process.env.DEEPSEEK_API_KEY = 'test-key';
     delete process.env.VITE_SUPABASE_URL;
-    vi.mocked(generateWithRetry).mockResolvedValue('');
+    vi.mocked(generateWithFallback).mockResolvedValue({ text: '', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false });
   });
   afterEach(() => {
-    process.env.DEEPSEEK_API_KEY = original.DEEPSEEK_API_KEY;
     if (original.VITE_SUPABASE_URL === undefined) delete process.env.VITE_SUPABASE_URL;
     else process.env.VITE_SUPABASE_URL = original.VITE_SUPABASE_URL;
   });
@@ -74,11 +72,20 @@ describe('/api/crm/assistant — empty DeepSeek output', () => {
     expect(body.provider).toBe('canned');
   });
 
-  it('passes real model output through as provider=deepseek', async () => {
-    vi.mocked(generateWithRetry).mockResolvedValue('  Hi there! How can I help?  ');
+  it('passes real model output through with the serving provider', async () => {
+    vi.mocked(generateWithFallback).mockResolvedValue({ text: '  Hi there! How can I help?  ', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false });
     const { captured, server } = makeRes();
     await assistantHandler(makeReq('hi'), server);
     expect(captured.status).toBe(200);
-    expect(captured.body).toMatchObject({ reply: 'Hi there! How can I help?', provider: 'deepseek' });
+    expect(captured.body).toMatchObject({ reply: 'Hi there! How can I help?', provider: 'openrouter', model: 'minimax/minimax-m3:free' });
+  });
+
+  it('falls back to DeepSeek when OpenRouter is not configured but DeepSeek is', async () => {
+    vi.mocked(generateWithFallback).mockResolvedValue({ text: 'Hello!', provider: 'deepseek', model: 'deepseek-v4-flash', fallbackUsed: true });
+    vi.mocked(await import('../_lib/providers.js')).isConfiguredFull.mockImplementation(async (p: string) => p === 'deepseek');
+    const { captured, server } = makeRes();
+    await assistantHandler(makeReq('hi'), server);
+    expect(captured.status).toBe(200);
+    expect(captured.body).toMatchObject({ reply: 'Hello!', provider: 'deepseek' });
   });
 });

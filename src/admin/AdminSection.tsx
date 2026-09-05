@@ -176,6 +176,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="h-screen bg-gray-100 flex overflow-hidden">
+
       <Sidebar />
       {mobSide && <div className="fixed inset-0 z-50 lg:hidden"><div className="absolute inset-0 bg-black/50" onClick={() => setMobSide(false)} /><div className="absolute left-0 top-0 h-full w-64"><Sidebar mobile /></div></div>}
       <div className="flex-1 flex flex-col min-w-0">
@@ -4727,7 +4728,7 @@ const providerIcons: Record<string, string> = {
               </div>
               {provider.id === 'openrouter' && (
                 <p className="text-xs text-gray-400 mt-2">
-                  Free models: nvidia/nemotron-3-super-120b-a12b:free, openrouter/free, cohere/north-mini-code:free (Google/GLM free pools are often rate-limited)
+                  Free models: minimax/minimax-m3:free (default — 1M context, fast), nvidia/nemotron-3-super-120b-a12b:free, openrouter/free, cohere/north-mini-code:free (Google/GLM free pools are often rate-limited)
                   <br />Paid models require credits. <a href="https://openrouter.ai/docs" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Docs</a>
                 </p>
               )}
