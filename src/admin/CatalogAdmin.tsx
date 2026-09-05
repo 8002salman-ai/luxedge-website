@@ -142,6 +142,13 @@ export function CatalogProductsPage() {
   const [listingModal, setListingModal] = useState<CatalogProduct | null>(null);
   const [promoOpen, setPromoOpen] = useState<string | null>(null);
   const [priceBulk, setPriceBulk] = useState<{ open: boolean; mode: 'inc-pct' | 'dec-pct' | 'inc-fixed' | 'dec-fixed' | 'set'; value: string; busy: boolean }>({ open: false, mode: 'dec-pct', value: '', busy: false });
+  const PRICE_MODE_LABEL: Record<string, string> = {
+    'inc-pct': 'Increase by',
+    'dec-pct': 'Decrease by',
+    'inc-fixed': 'Increase by',
+    'dec-fixed': 'Decrease by',
+    set: 'Set exact price to',
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1048,7 +1055,7 @@ export function CatalogProductsPage() {
             });
             return (
               <div className="bg-gray-50 rounded-lg p-3 text-xs">
-                <p className="font-semibold text-gray-800 mb-1">{selectedIds.size} products selected — {priceBulk.mode.replace('-', ' ').replace(/^(.)/, (m) => m.toUpperCase())} {v}{priceBulk.mode.includes('pct') ? '%' : '$'}</p>
+                <p className="font-semibold text-gray-800 mb-1">{selectedIds.size} products selected — {PRICE_MODE_LABEL[priceBulk.mode]} {v}{priceBulk.mode.includes('pct') ? '%' : '$'}</p>
                 {samples.map((s) => <p key={s.name} className="text-gray-500">${s.from.toFixed(2)} → <b>${s.to.toFixed(2)}</b> · {s.name}</p>)}
                 {targets.length > 5 && <p className="text-gray-400 mt-1">…and {targets.length - 5} more</p>}
                 {anyInvalid && <p className="text-red-600 font-semibold mt-1">This would produce a zero/negative price — nothing will be applied.</p>}
