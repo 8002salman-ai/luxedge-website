@@ -83,6 +83,45 @@ describe('catalog repository (local adapter)', () => {
     expect(p.seoKeywords).toEqual(['curry comb', 'body brush']);
   });
 
+  it('keeps raw persisted SEO truth separate from display fallbacks (Auto-SEO eligibility)', () => {
+    // Regression for the "All listings already SEO" bug: rowToProduct falls
+    // back seo_title → name and seo_description → short_description for
+    // DISPLAY, so `p.seoTitle && p.seoDescription` was always truthy and the
+    // bulk Auto-SEO run skipped products whose DB columns were NULL. The raw
+    // stored fields must expose the real column values (null = needs SEO).
+    const noSeo = {
+      id: 'p1', slug: 'p1', name: 'Massage Brush', short_description: 'A brush.',
+      status: 'active', price: 15, seo_title: null, seo_description: null,
+    } as unknown as Parameters<typeof rowToProduct>[0];
+    const missing = rowToProduct(noSeo, [], [], []);
+    expect(missing.seoTitle).toBe('Massage Brush'); // display fallback preserved
+    expect(missing.seoDescription).toBe('A brush.');
+    expect(missing.seoTitleStored).toBeNull(); // raw column truth
+    expect(missing.seoDescriptionStored).toBeNull();
+    // The exact eligibility check the bulk Auto-SEO run performs.
+    expect(Boolean(missing.seoTitleStored && missing.seoDescriptionStored) && missing.seoKeywords.length > 0).toBe(false);
+
+    const withSeo = {
+      id: 'p2', slug: 'p2', name: 'Massage Brush', short_description: 'A brush.',
+      status: 'active', price: 15, seo_title: 'Custom SEO Title', seo_description: 'Custom SEO description',
+      seo_keywords: ['brush'],
+    } as unknown as Parameters<typeof rowToProduct>[0];
+    const complete = rowToProduct(withSeo, [], [], []);
+    expect(complete.seoTitleStored).toBe('Custom SEO Title');
+    expect(complete.seoDescriptionStored).toBe('Custom SEO description');
+    expect(Boolean(complete.seoTitleStored && complete.seoDescriptionStored) && complete.seoKeywords.length > 0).toBe(true);
+  });
+
+  it('maps optional listing end date through create/update (null = no expiry)', async () => {
+    const p = await createProduct({ ...base });
+    expect(p.listingEndsAt).toBeNull();
+    const ends = new Date(Date.now() + 30 * 86400000).toISOString();
+    const updated = await updateProduct(p.id, { listingEndsAt: ends });
+    expect(updated!.listingEndsAt).toBe(ends);
+    const cleared = await updateProduct(p.id, { listingEndsAt: null });
+    expect(cleared!.listingEndsAt).toBeNull();
+  });
+
   it('sets status, archives (not delete), and lists all', async () => {
     const p = await createProduct({ ...base });
     await setProductStatus(p.id, 'active');
@@ -276,6 +315,7 @@ describe('seo + feed', () => {
     lowStockThreshold: 0, shippingCost: 4.99, freeShipping: false, deliveryMinDays: null, deliveryMaxDays: null,
     usInventory: false, tags: ['toy'], featured: false, newArrival: true, trending: false, bestRated: false,
     bestSeller: false, promoted: false, saleEnabled: false, seoTitle: 'SEO Toy Title', seoDescription: 'SEO desc.',
+    seoTitleStored: 'SEO Toy Title', seoDescriptionStored: 'SEO desc.',
     seoKeywords: ['toy'], images: [
       { id: 'i1', productId: 'p1', url: 'https://img/1.jpg', altText: '', kind: 'product', isPrimary: true, sortOrder: 0 },
     ], variants: [], categoryId: 'cat-toys', categoryName: 'Pet Toys', brand: 'Luxedge',

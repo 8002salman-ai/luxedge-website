@@ -91,7 +91,7 @@ const PRODUCT_PROBE_COLUMNS: readonly string[] = [
   'risk_flags', 'tags', 'featured', 'new_arrival', 'trending', 'best_rated',
   'best_seller', 'promoted', 'sale_enabled', 'discount_type', 'discount_value',
   'seo_title', 'seo_description', 'seo_keywords', 'canonical_slug', 'og_image',
-  'owner_notes', 'evidence_notes', 'sort_order',
+  'owner_notes', 'evidence_notes', 'sort_order', 'listing_ends_at',
 ];
 const IMAGE_PROBE_COLUMNS: readonly string[] = ['storage_path', 'public_url', 'created_at'];
 const VARIANT_PROBE_COLUMNS: readonly string[] = ['title', 'price_amount', 'option_values', 'created_at', 'updated_at'];
@@ -224,6 +224,7 @@ interface ProductRow {
   owner_notes?: string | null;
   evidence_notes?: string | null;
   sort_order?: number | null;
+  listing_ends_at?: string | null;
   published_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -402,6 +403,11 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     discountValue: row.discount_value != null ? num(row.discount_value) : undefined,
     seoTitle: row.seo_title || row.name,
     seoDescription: row.seo_description || row.short_description || '',
+    // Raw column truth — used by Auto-SEO eligibility. The display fallbacks
+    // above (name/short_description) must NEVER drive "does this product have
+    // SEO" decisions, or everything looks optimized.
+    seoTitleStored: row.seo_title?.trim() ? row.seo_title : null,
+    seoDescriptionStored: row.seo_description?.trim() ? row.seo_description : null,
     seoKeywords: parseTagList(row.seo_keywords),
     canonicalSlug: row.canonical_slug || undefined,
     ogImage: row.og_image || undefined,
@@ -410,6 +416,7 @@ export function rowToProduct(row: ProductRow, categories: CategoryRow[], images:
     createdAt: row.created_at || '',
     updatedAt: row.updated_at || row.created_at || '',
     publishedAt: row.published_at || null,
+    listingEndsAt: row.listing_ends_at || null,
     ownerNotes: row.owner_notes || undefined,
     evidenceNotes: row.evidence_notes || undefined,
   };
@@ -587,6 +594,8 @@ export interface ProductInput {
   ownerNotes?: string;
   evidenceNotes?: string;
   sortOrder?: number;
+  /** Optional listing end (null = no expiry / Good 'Til Cancelled). */
+  listingEndsAt?: string | null;
 }
 
 export function productToRow(input: ProductInput): Record<string, unknown> {
@@ -650,6 +659,7 @@ export function productToRow(input: ProductInput): Record<string, unknown> {
     owner_notes: input.ownerNotes ?? null,
     evidence_notes: input.evidenceNotes ?? null,
     sort_order: input.sortOrder ?? 0,
+    listing_ends_at: input.listingEndsAt ?? null,
   };
   return row;
 }
@@ -731,6 +741,7 @@ const INPUT_FIELD_TO_COLUMNS: Record<keyof ProductInput, string[]> = {
   ownerNotes: ['owner_notes'],
   evidenceNotes: ['evidence_notes'],
   sortOrder: ['sort_order'],
+  listingEndsAt: ['listing_ends_at'],
 };
 
 export async function updateProduct(id: string, input: Partial<ProductInput>): Promise<CatalogProduct | null> {

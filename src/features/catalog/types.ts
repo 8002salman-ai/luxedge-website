@@ -121,6 +121,11 @@ export interface CatalogProduct {
   discountValue?: number;
   seoTitle: string;
   seoDescription: string;
+  /** Raw persisted seo_title column (no display fallback) — the truth used
+   *  by Auto-SEO eligibility. null = never generated. */
+  seoTitleStored: string | null;
+  /** Raw persisted seo_description column (no display fallback). */
+  seoDescriptionStored: string | null;
   seoKeywords: string[];
   canonicalSlug?: string;
   ogImage?: string;
@@ -129,6 +134,10 @@ export interface CatalogProduct {
   createdAt: string;
   updatedAt: string;
   publishedAt?: string | null;
+  /** Optional listing end (eBay-style). null = Good 'Til Cancelled (no expiry).
+   *  Display-only: no automatic archiving exists, and this never expires a
+   *  product on its own — it is a seller visibility aid. */
+  listingEndsAt?: string | null;
   ownerNotes?: string;
   evidenceNotes?: string;
 }
