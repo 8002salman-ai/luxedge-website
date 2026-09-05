@@ -198,6 +198,40 @@ describe('fetchSiteEvents', () => {
     expect(rows[0].value).toBeNull();
   });
 
+  it('recovers when a concurrent call flips the schema flag mid-flight (no raw 400 on the loser)', async () => {
+    stubAdminSession();
+    // First FULL select resolves immediately; the second FULL select is gated so
+    // it lands AFTER the first call already flipped the module flag to false —
+    // the exact race that made the loser throw the raw 400.
+    let releaseSecond!: (r: Response) => void;
+    const secondGate = new Promise<Response>((res) => { releaseSecond = res; });
+    const fetchMock = vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('value')) {
+        const fullCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('value')).length;
+        if (fullCalls === 1) return Promise.resolve(jsonResponse({ code: '42703', message: 'column site_events.value does not exist' }, 400));
+        return secondGate;
+      }
+      return Promise.resolve(jsonResponse([{ event: 'page_view', path: '/', value: null, currency: null }]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Start BOTH calls in the same tick while the module flag is still null, so
+    // each computes a FULL select. The first full fetch resolves immediately and
+    // flips the flag during its fallback; the second full fetch is gated to land
+    // only AFTER that flip — the loser that must still recover.
+    const p1 = fetchSiteEvents(30);
+    const p2 = fetchSiteEvents(30);
+    await new Promise((r) => setTimeout(r, 0)); // p1 completes fallback, flag = false
+    releaseSecond(jsonResponse({ code: '42703', message: 'column site_events.value does not exist' }, 400));
+
+    const [rows1, rows2] = await Promise.all([p1, p2]);
+    expect(rows1.length).toBe(1);
+    expect(rows2.length).toBe(1); // both recover — the loser must NOT throw
+    const baseCalls = fetchMock.mock.calls.filter((c) => !String(c[0]).includes('value'));
+    expect(baseCalls.length).toBeGreaterThanOrEqual(2); // each call retried with the base select
+  });
+
   it('throws an honest error when Supabase is unconfigured instead of returning []', async () => {
     __setSupabaseConfigForTests(null);
     stubAdminSession();

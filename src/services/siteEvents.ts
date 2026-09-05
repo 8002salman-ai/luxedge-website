@@ -210,11 +210,16 @@ export async function fetchSiteEvents(days = 30): Promise<SiteEventRow[]> {
     fetch(u, { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } });
 
   let res = await read(url);
-  if (res.status === 400 && supportsRevenue !== false) {
+  // Migration 0024 not applied yet — every missing-column 400 falls back to the
+  // base select so the dashboard still works (revenue shows as unavailable).
+  // Deliberately NOT gated on `supportsRevenue !== false`: under concurrent
+  // calls (day-range switches, remounts) one call can flip the module flag to
+  // false while another in-flight FULL select is still pending; gating the
+  // retry on the flag then makes that loser throw the raw 400. A 400 that is
+  // a missing-column error must always recover.
+  if (res.status === 400) {
     const missing = await isMissingColumnResponse(res);
     if (missing) {
-      // Migration 0024 not applied yet — fall back to the base select so the
-      // dashboard still works (revenue shows as unavailable).
       supportsRevenue = false;
       const baseSelect = 'event,path,referrer,visitor_id,session_id,device,utm_source,utm_medium,utm_campaign,item_ids,occurred_at';
       res = await read(
