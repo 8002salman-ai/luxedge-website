@@ -387,9 +387,9 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
       'How Luxedge ships pet essentials — expected delivery windows, processing time, and free shipping details, based on verified supplier estimates.',
   },
   '/returns': {
-    title: 'Returns Policy | Luxedge',
+    title: 'Returns & Replacement Policy | Luxedge',
     description:
-      'Luxedge returns policy — how to request a return or exchange for your pet essentials order.',
+      'How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it.',
   },
   '/privacy': {
     title: 'Privacy Policy | Luxedge',
@@ -399,9 +399,62 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
   '/terms': {
     title: 'Terms of Service | Luxedge',
     description:
-      'The terms that govern your use of the Luxedge storefront and services.',
+      'The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language.',
   },
 };
+
+// ---------------------------------------------------------------------------
+// Security headers (single source of truth — applied by worker/index.ts to
+// every response it builds; static assets get them via the ASSETS pass-through
+// wrapper). CSP ships as Report-Only first: it logs violations without
+// blocking, so the enforcing flip can happen later from real report data.
+// ---------------------------------------------------------------------------
+
+/** Directives every page needs regardless of route. Derived from the origins
+ * the production site actually loads/calls (audited 2026-09): the SPA bundle,
+ * AdSense + Adsterra scripts, GA4 via googletagmanager, Supabase REST/storage
+ * + auth, YouTube embeds/thumbnails, the ad networks' creative/pixel hosts,
+ * and Wikimedia/Pexels/Unsplash editorial + product imagery. */
+const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  // 'unsafe-inline' is required by the Adsterra invoke.js and the AdSense
+  // loader; blob:/data: cover media workers and inline previews.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.profitableratecpmnetwork.com https://www.googletagmanager.com https://*.supabase.co",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob: https://img.cjdropshipping.com https://images.pexels.com https://images.unsplash.com https://upload.wikimedia.org https://i.ytimg.com https://*.supabase.co https://www.google.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://*.profitableratecpmnetwork.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://*.profitableratecpmnetwork.com https://pagead2.googlesyndication.com",
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://googleads.g.doubleclick.net",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "upgrade-insecure-requests",
+].join('; ');
+
+/** Header map merged into every response the Worker returns. HSTS starts
+ * conservative (1 day, includeSubDomains) — raise to max-age=31536000 only
+ * after every subdomain is confirmed permanently HTTPS; never preload. */
+export const SECURITY_HEADERS: Record<string, string> = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'SAMEORIGIN',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  // The site uses no camera/mic/geo/payment APIs; deny the high-value ones.
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'strict-transport-security': 'max-age=86400; includeSubDomains',
+  'content-security-policy-report-only': CSP_REPORT_ONLY,
+};
+
+/** Copy a response, adding the security headers without clobbering the ones
+ * the original already set (first writer wins, so handlers can override). */
+export function withSecurityHeaders(res: Response): Response {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
+    if (!out.headers.has(k)) out.headers.set(k, v);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // JSON-LD builders
@@ -952,7 +1005,7 @@ export async function maybeInjectSeo(
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
     let out = inject(html, {
-      title: 'Luxedge — Premium Pet Essentials | Better Products for Happier Pets',
+      title: 'Luxedge — Premium Pet & Animal Essentials',
       description:
         'Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge.',
       canonical: root,
@@ -1025,7 +1078,7 @@ export async function maybeInjectSeo(
     let out = inject(html, {
       title: 'Pet Care Blog — Guides, Tips & Buying Advice | Luxedge',
       description:
-        'Practical pet care guides from Luxedge — puppy essentials, cat enrichment, bird care, horse grooming, cattle basics, and honest buying advice.',
+        'Practical buying guides and care tips for dogs, cats, birds, horses, and cattle — sizing, placement, grooming, and product picks from the Luxedge editorial team.',
       canonical: `${root}/blog`,
     });
     out = await injectBlogIndexBody(out, origin, env);
@@ -1158,7 +1211,9 @@ export async function maybeInjectSeo(
     const canonical = `${root}/category/${slug}`;
     let out = inject(html, {
       title: `${cat.name} — Pet Essentials | Luxedge`,
-      description: `Shop ${cat.name} at Luxedge — curated, supplier-verified essentials for you and your pets.`,
+      description: CATEGORY_DESC[slug]
+        ? `Shop ${cat.name} at Luxedge — ${CATEGORY_DESC[slug].toLowerCase()}. Supplier-verified items with clear delivery estimates.`
+        : `Shop ${cat.name} at Luxedge — curated, supplier-verified essentials for you and your pets.`,
       canonical,
       jsonLd: {
         '@context': 'https://schema.org',

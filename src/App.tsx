@@ -1120,7 +1120,7 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
-    if (segs.length === 0) { full("Luxedge — Premium Pet Essentials | Better Products for Happier Pets"); desc("Handpicked premium pet essentials — feeding, comfort, play and grooming."); }
+    if (segs.length === 0) { full("Luxedge — Premium Pet & Animal Essentials"); desc("Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
@@ -1137,9 +1137,7 @@ function RouteTitle() {
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
     else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
     else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
-    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }
-    else if (segs[0] === "terms") { set("Terms of Service"); desc("Luxedge terms of service."); }
-    else if (segs[0] === "returns") { set("Return Policy"); desc("Luxedge 30-day easy return policy."); }
+    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }      else if (segs[0] === "terms") { set("Terms of Service"); desc("The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language."); }      else if (segs[0] === "returns") { set("Returns & Replacement Policy"); desc("How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it."); }
     else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — delivery estimates, shipping costs, and applicable promotions."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }

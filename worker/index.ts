@@ -38,6 +38,7 @@ import mediaSyncHandler, { runMediaSync } from '../api/media/sync';
 import mediaStatusHandler from '../api/media/status';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
+import { withSecurityHeaders } from './seo-meta';
 import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
@@ -225,8 +226,9 @@ function populateProcessEnv(env: Env): void {
   }
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+/** All routing logic — the exported fetch wraps this so every response
+ * passes through withSecurityHeaders exactly once. */
+async function handleRequest(request: Request, env: Env): Promise<Response> {
     populateProcessEnv(env);
     // Secret bindings are not guaranteed to be enumerable in every Worker
     // runtime. CJ's server handler reads process.env, so preserve this one
@@ -430,6 +432,20 @@ export default {
       });
     }
     return indexRes;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const res = await handleRequest(request, env);
+    // Single security-header owner: every response this Worker returns —
+    // HTML shell, JSON APIs, sitemaps, redirects — gets the same header set
+    // exactly once. Response.redirect objects are immutable, so wrap in a
+    // try/catch: header-added redirects would throw; pass them through.
+    try {
+      return withSecurityHeaders(res);
+    } catch {
+      return res;
+    }
   },
 
   /**
