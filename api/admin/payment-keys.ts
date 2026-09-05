@@ -18,7 +18,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson, readJsonBody, rateLimited, clientIp } from '../_lib/providers.js';
 import { upsertAppSetting, deleteAppSetting } from '../_lib/supabase.js';
 import { requireAdmin } from '../_lib/auth.js';
-import { STRIPE_SETTING_KEYS, resetStripeKeyCache } from '../_lib/stripe.js';
+import { STRIPE_SETTING_KEYS, resetStripeKeyCache, CHECKOUT_SESSION_PARAMS } from '../_lib/stripe.js';
 
 function mask(key: string): string {
   if (!key) return '';
@@ -66,6 +66,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, {
       secretKey: envOrDb(envSecret, dbSecret || ''),
       webhookSecret: envOrDb(envWh, dbWh || ''),
+      // Read-only checkout config for the Admin → Payments summary card.
+      sessionConfig: CHECKOUT_SESSION_PARAMS,
     });
     return;
   }

@@ -102,10 +102,15 @@ describe('/api/admin/payment-keys', () => {
     const { captured, server } = makeRes();
     await handler(makeReq('GET', {}), server);
     expect(captured.status).toBe(200);
-    expect(captured.body).toEqual({
-      secretKey: { configured: false, masked: '', source: 'none' },
-      webhookSecret: { configured: false, masked: '', source: 'none' },
-    });
+    const b = captured.body as { secretKey: { configured: boolean; masked: string; source: string }; webhookSecret: { configured: boolean; masked: string; source: string }; sessionConfig: { key: string; value: string; note: string }[] };
+    expect(b.secretKey).toEqual({ configured: false, masked: '', source: 'none' });
+    expect(b.webhookSecret).toEqual({ configured: false, masked: '', source: 'none' });
+    // Read-only checkout summary: one-time payment, no tax, no subscription.
+    expect(b.sessionConfig).toEqual(expect.arrayContaining([
+      { key: 'mode', value: 'payment', note: expect.any(String) },
+      { key: 'automatic_tax', value: 'off', note: expect.any(String) },
+      { key: 'subscription / recurring', value: 'none', note: expect.any(String) },
+    ]));
   });
 
   it('GET reports env keys as configured with source env and masks them', async () => {

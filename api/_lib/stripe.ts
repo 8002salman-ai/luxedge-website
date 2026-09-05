@@ -210,6 +210,22 @@ export async function createCheckoutSession(params: {
   return r;
 }
 
+/**
+ * Read-only summary of the Checkout Session params above — single source of
+ * truth for the Admin → Payments panel card. Keep in sync with
+ * createCheckoutSession: if a param above changes, update it here too.
+ */
+export const CHECKOUT_SESSION_PARAMS: { key: string; value: string; note: string }[] = [
+  { key: 'mode', value: 'payment', note: 'one-time purchases only — never subscription' },
+  { key: 'ui_mode', value: 'hosted', note: 'full-page Stripe-hosted checkout' },
+  { key: 'automatic_tax', value: 'off', note: 'no Stripe Tax add-on — the price shown is the price charged' },
+  { key: 'subscription / recurring', value: 'none', note: 'no Stripe Billing, no usage-based pricing' },
+  { key: 'payment_method_collection', value: 'omitted', note: 'subscription-only parameter' },
+  { key: 'payment_method_types', value: 'card', note: 'immediate payment methods' },
+  { key: 'shipping_address_collection', value: 'US', note: 'domestic US shipping' },
+  { key: 'line_items', value: 'server-computed', note: 'catalog prices + shipping — the browser cannot set amounts' },
+];
+
 export interface DetailedLineItem {
   id: string;
   description: string | null;
