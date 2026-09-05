@@ -15,6 +15,7 @@ import {
   DotsThreeVertical, Clock,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
+import Popover from '../components/common/Popover';
 import { useApp } from '../App';
 import { getAccessToken, getFreshAccessToken } from '../services/supabase';
 import {
@@ -139,8 +140,10 @@ export function CatalogProductsPage() {
   const [priceEdit, setPriceEdit] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState('');
   const [rowMenu, setRowMenu] = useState<string | null>(null);
+  const [rowAnchor, setRowAnchor] = useState<HTMLElement | null>(null);
   const [listingModal, setListingModal] = useState<CatalogProduct | null>(null);
   const [promoOpen, setPromoOpen] = useState<string | null>(null);
+  const [promoAnchor, setPromoAnchor] = useState<HTMLElement | null>(null);
   const [priceBulk, setPriceBulk] = useState<{ open: boolean; mode: 'inc-pct' | 'dec-pct' | 'inc-fixed' | 'dec-fixed' | 'set'; value: string; busy: boolean }>({ open: false, mode: 'dec-pct', value: '', busy: false });
   const PRICE_MODE_LABEL: Record<string, string> = {
     'inc-pct': 'Increase by',
@@ -886,16 +889,14 @@ export function CatalogProductsPage() {
                       <span className="relative inline-block">
                         <button
                           type="button"
-                          onClick={() => setPromoOpen(promoOpen === p.id ? null : p.id)}
+                          onClick={(e) => { if (promoOpen === p.id) { setPromoOpen(null); setPromoAnchor(null); } else { setPromoOpen(p.id); setPromoAnchor(e.currentTarget); } }}
                           className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap border ${p.saleEnabled || p.promoted ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
                           title="Click to change promotion"
                         >
                           {promoLabel(p)}
                         </button>
-                        {promoOpen === p.id && (
-                          <>
-                            <div className="fixed inset-0 z-20" onClick={() => setPromoOpen(null)} />
-                            <div className="absolute right-0 top-full mt-1 z-30 w-60 rounded-xl border border-gray-200 bg-white p-3 text-xs shadow-xl">
+                        <Popover anchor={promoAnchor} open={promoOpen === p.id} onClose={() => setPromoOpen(null)} width={240}>
+                          <div className="p-3 text-xs">
                               <p className="font-semibold text-gray-800 mb-2">Promotion</p>
                               <label className="flex items-center gap-2 mb-2 cursor-pointer">
                                 <input type="checkbox" checked={p.promoted} onChange={(e) => void updateProduct(p.id, { promoted: e.target.checked }).then((u) => { patchLocal(u); notify(e.target.checked ? 'Product promoted' : 'Promotion removed'); }).catch((err) => notify(`Could not update: ${(err as Error).message}`, 'error'))} className="w-4 h-4" />
@@ -929,9 +930,8 @@ export function CatalogProductsPage() {
                                 </div>
                               )}
                               <a href="/admin/promotions" className="block mt-2 text-[11px] font-semibold text-blue-600 hover:underline">Open Promotions →</a>
-                            </div>
-                          </>
-                        )}
+                          </div>
+                        </Popover>
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -951,17 +951,15 @@ export function CatalogProductsPage() {
                       <span className="relative inline-block">
                         <button
                           type="button"
-                          onClick={() => setRowMenu(rowMenu === p.id ? null : p.id)}
+                          onClick={(e) => { if (rowMenu === p.id) { setRowMenu(null); setRowAnchor(null); } else { setRowMenu(p.id); setRowAnchor(e.currentTarget); } }}
                           className="p-2 hover:bg-gray-100 rounded text-gray-500"
                           title="Row actions"
                           aria-label={`Actions for ${p.name}`}
                         >
                           <DotsThreeVertical size={16} />
                         </button>
-                        {rowMenu === p.id && (
-                          <>
-                            <div className="fixed inset-0 z-20" onClick={() => setRowMenu(null)} />
-                            <div className="absolute right-0 top-full mt-1 z-30 w-48 rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-xl">
+                        <Popover anchor={rowAnchor} open={rowMenu === p.id} onClose={() => setRowMenu(null)} width={192}>
+                          <div className="py-1 text-sm">
                               {p.status === 'archived' ? (
                                 <button onClick={() => { setRowMenu(null); void onRestore(p.id); }} className="w-full text-left px-3 py-2 hover:bg-amber-50 text-amber-600 flex items-center gap-2"><Copy size={14} />Restore to Draft</button>
                               ) : (
@@ -974,9 +972,8 @@ export function CatalogProductsPage() {
                                   <button onClick={() => { setRowMenu(null); setDelId(p.id); }} className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"><Trash size={14} />Archive / Delete</button>
                                 </>
                               )}
-                            </div>
-                          </>
-                        )}
+                          </div>
+                        </Popover>
                       </span>
                     </td>
                   </tr>
