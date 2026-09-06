@@ -618,7 +618,7 @@ async function injectMediaIndexBody(html: string): Promise<string> {
     `<h2>Latest Videos</h2>`,
     `<ul>${items}</ul>`,
   ];
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders a /media/:slug video page with its real editorial substance. */
@@ -642,15 +642,39 @@ async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
   if (v.transcript) {
     parts.push(`<h2>Transcript</h2>`, `<p>${esc(v.transcript).replace(/\n+/g, '</p><p>')}</p>`);
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 // ---------------------------------------------------------------------------
 // Head injection
 // ---------------------------------------------------------------------------
 
+/**
+ * Crawlable sitewide footer navigation, server-rendered into #root on every
+ * route (the React footer is client-side only, so without this the utility
+ * pages — /blog, /media, /about, /contact, legal — have zero SSR inbound
+ * links and are reachable only via the sitemap). Lives INSIDE #root so React
+ * replaces it with the real footer on hydration: no duplication, no hidden
+ * text. Plain inline styling — Tailwind does not scan this file.
+ */
+const FOOTER_NAV =
+  '<nav aria-label="Site" style="margin-top:2rem;padding:1rem 0;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.8">' +
+  [
+    ['Shop All', '/shop'], ['Blog', '/blog'], ['Media', '/media'],
+    ['About', '/about'], ['Contact', '/contact'], ['FAQ', '/faq'],
+    ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
+    ['Privacy Policy', '/privacy'], ['Terms of Service', '/terms'],
+  ].map(([label, to]) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
+  '</nav>';
+
 function inject(html: string, meta: RouteMeta): string {
   let out = html;
+  // Pre-fill #root with the footer nav and a nested mount point; route-body
+  // injectors then fill #ssr-body (see the replace targets below).
+  out = out.replace(
+    '<div id="root"></div>',
+    `<div id="root"><div id="ssr-body"></div>${FOOTER_NAV}</div>`,
+  );
   out = out.replace(/<title>[^<]*<\/title>/, `<title>${esc(meta.title)}</title>`);
   out = out.replace(
     /<meta name="description" content="[^"]*" \/>/,
@@ -728,7 +752,7 @@ function injectArticleBody(html: string, post: BlogEntry): string {
     : '';
   const body = renderArticleBody(post.content || post.excerpt || '');
   const article = `<article><h1>${esc(post.title)}</h1>${byline}${editorialNote}${image}${body}</article>`;
-  return html.replace('<div id="root"></div>', `<div id="root">${article}</div>`);
+  return html.replace('<div id="ssr-body"></div>', `${article}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -790,7 +814,7 @@ function injectProductBody(html: string, p: ProductRow): string {
   }
   links.push('<a href="/shop">Shop all pet essentials</a>');
   parts.push(`<p>${links.join(' · ')}</p>`);
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the category intro into the SPA shell: the category name, the
@@ -813,7 +837,7 @@ function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow
       .join('');
     parts.push(`<ul>${items}</ul>`);
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the homepage hero + category navigation into the SPA shell.
@@ -846,7 +870,7 @@ function injectHomeBody(html: string): string {
       `<li><a href="/category/bird-supplies">Bird supplies</a></li>` +
       `</ul>`,
   ];
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the /about copy (shared with the client AboutPage) so the
@@ -856,7 +880,7 @@ function injectAboutBody(html: string): string {
   for (const s of ABOUT_SECTIONS) {
     parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the /contact page with contact info and intro. */
@@ -868,7 +892,7 @@ function injectContactBody(html: string): string {
     `<ul>${cards}</ul>`,
     `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Phone: (440) 941-8002 | Hours: Mon-Fri, 9AM-6PM CT</p>`,
   ];
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders a legal/policy page from shared section data. */
@@ -877,7 +901,7 @@ function injectLegalBody(html: string, title: string, sections: { title: string;
   for (const s of sections) {
     parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the /faq page with categories and questions. */
@@ -889,7 +913,7 @@ function injectFaqBody(html: string): string {
       parts.push(`<h3>${esc(item.q)}</h3>`, `<p>${esc(item.a)}</p>`);
     }
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the /shop page: category navigation plus direct links to the
@@ -918,7 +942,7 @@ async function injectShopBody(html: string): Promise<string> {
       parts.push(`<h2>All Products</h2>`, `<ul>${items}</ul>`);
     }
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** Pre-renders the /blog index with recent post links from the CMS. */
@@ -948,7 +972,7 @@ function injectCareersBody(html: string): string {
     `<p>Send your resume and a brief note about why you'd be a great fit to <a href="mailto:careers@luxedge.us">careers@luxedge.us</a>. Include the role you're interested in as the subject line. We review all applications and aim to respond within one week.</p>`,
     `<p><a href="/contact">Get in Touch</a></p>`,
   ];
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): Promise<string> {
@@ -961,7 +985,7 @@ async function injectBlogIndexBody(html: string, origin: string, env: SeoEnv): P
     const items = posts.slice(0, 15).map((p) => `<li><a href="/blog/${esc(p.slug)}">${esc(p.title)}</a> — ${esc(p.excerpt || '').slice(0, 100)}</li>`).join('');
     parts.push(`<h2>Latest articles</h2>`, `<ul>${items}</ul>`);
   }
-  return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
+  return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
 /** UUID-shaped product param (case-insensitive) — the URL shape the
