@@ -46,6 +46,7 @@ import cjKeyHandler from '../api/admin/cj-key';
 import paymentKeysHandler from '../api/admin/payment-keys';
 import productStatsHandler from '../api/admin/product-stats';
 import blogStatsHandler from '../api/admin/blog-stats';
+import mediaStatsHandler from '../api/admin/media-stats';
 import autoListHandler from '../api/admin/auto-list';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
@@ -101,6 +102,7 @@ const ROUTES: Route[] = [
   { path: '/api/admin/product-stats', handler: productStatsHandler },
   { path: '/api/admin/ai-keys', handler: aiKeysHandler },
   { path: '/api/admin/blog-stats', handler: blogStatsHandler },
+  { path: '/api/admin/media-stats', handler: mediaStatsHandler },
   { path: '/api/admin/auto-list', handler: autoListHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
