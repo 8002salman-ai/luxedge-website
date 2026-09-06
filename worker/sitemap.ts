@@ -1,5 +1,5 @@
 import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_SELECT, SITEMAP_MEDIA_SELECT } from './selects';
-import { isHeldProduct } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds';
 
 // ============================================================================
 // LUXEDGE — dynamic /sitemap.xml (worker side)
@@ -112,7 +112,11 @@ export async function buildSitemap(): Promise<string | null> {
   const urls: string[] = [...STATIC_ROUTES];
   for (const c of cats) urls.push(`/category/${xmlEscape(c.slug)}`);
   for (const b of blogs) urls.push(`/blog/${xmlEscape(b.slug)}`);
-  // The current imported media library is noindex pending editorial review.
+  // /media hub + reviewed video pages (editorial holds stay out of Google).
+  urls.push('/media');
+  for (const m of media) {
+    if (!isHeldMedia(m.slug)) urls.push(`/media/${xmlEscape(m.slug)}`);
+  }
   for (const p of prods) {
     if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) {
       urls.push(`/product/${xmlEscape(p.slug || p.id)}`);
@@ -166,12 +170,6 @@ function isoDurationToSeconds(iso: string | null | undefined): string {
  * the DB is unavailable so the caller can 404/fallback honestly.
  */
 export async function buildVideoSitemap(): Promise<string | null> {
-  // Noindex video pages must not be submitted to Google as indexable videos.
-  return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" />\n';
-}
-
-/** Retained for use once editorial review releases the media library. */
-export async function buildReviewedVideoSitemap(): Promise<string | null> {
   const rows = await fetchRows<MediaRow[]>(
     `media_videos?select=${SITEMAP_MEDIA_SELECT},title,summary,description,youtube_video_id,thumbnail_url,custom_thumbnail_url,published_at,duration&status=eq.published&limit=500`,
   );
@@ -179,6 +177,7 @@ export async function buildReviewedVideoSitemap(): Promise<string | null> {
 
   const entries = rows
     .filter((m) => m && m.youtube_video_id && (m.custom_thumbnail_url || m.thumbnail_url) && (m.summary || m.description))
+    .filter((m) => !isHeldMedia(m.slug)) // editorial holds stay out of Google
     .map((m) => {
       const thumb = xmlEscape(m.custom_thumbnail_url || m.thumbnail_url || '');
       const title = xmlEscape(m.title || m.slug);
