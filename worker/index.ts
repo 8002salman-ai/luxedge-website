@@ -45,6 +45,7 @@ import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
 import paymentKeysHandler from '../api/admin/payment-keys';
 import productStatsHandler from '../api/admin/product-stats';
+import blogStatsHandler from '../api/admin/blog-stats';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
@@ -98,6 +99,7 @@ const ROUTES: Route[] = [
   { path: '/api/admin/payment-keys', handler: paymentKeysHandler },
   { path: '/api/admin/product-stats', handler: productStatsHandler },
   { path: '/api/admin/ai-keys', handler: aiKeysHandler },
+  { path: '/api/admin/blog-stats', handler: blogStatsHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },
