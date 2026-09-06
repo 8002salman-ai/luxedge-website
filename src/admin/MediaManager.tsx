@@ -113,6 +113,24 @@ export default function MediaManager() {
 
   useEffect(() => { void load(); }, []);
 
+  // First-party per-video view counts (same pattern as the Blog Manager).
+  const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number }> | null>(null);
+  const [statsNote, setStatsNote] = useState('');
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getAccessToken();
+        const res = await fetch('/api/admin/media-stats', { headers: { Authorization: `Bearer ${token}` } });
+        const data = (await res.json().catch(() => ({}))) as { stats?: Record<string, { views: number; views7d: number; views30d: number }>; unavailable?: string };
+        if (!alive) return;
+        if (res.ok && data.stats) { setStats(data.stats); setStatsNote(data.unavailable || ''); }
+        else setStatsNote('Analytics unavailable.');
+      } catch { if (alive) setStatsNote('Analytics unavailable.'); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const counts = useMemo(() => {
     const c = { published: 0, draft: 0, archived: 0 };
     for (const r of rows || []) c[r.status] += 1;
@@ -498,6 +516,22 @@ export default function MediaManager() {
                       /media/{r.slug}{r.youtube_video_id ? ` · youtube: ${r.youtube_video_id}` : ''}
                     </p>
                   </div>
+                  <span className="relative inline-block group cursor-help whitespace-nowrap">
+                    {stats == null ? (
+                      <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-gray-600">{stats[r.slug]?.views ?? 0}</span>
+                        <span className="pointer-events-none absolute right-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                          <span className="block font-semibold text-gray-800">Video views (first-party)</span>
+                          <span className="block">Total (90d): {stats[r.slug]?.views ?? 0}</span>
+                          <span className="block">Last 7 days: {stats[r.slug]?.views7d ?? 0}</span>
+                          <span className="block">Last 30 days: {stats[r.slug]?.views30d ?? 0}</span>
+                          {statsNote && <span className="block text-amber-600">{statsNote}</span>}
+                        </span>
+                      </>
+                    )}
+                  </span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_META[r.status].cls}`}>{STATUS_META[r.status].label}</span>
                   <div className="flex items-center gap-1">
                     {r.youtube_video_id && (
