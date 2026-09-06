@@ -2556,7 +2556,7 @@ function ShopPage() {
             <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
           </div>
           <div className="hidden lg:block">
-            <AdsterraAd className="my-0" />
+            <AdsterraAd className="my-0" compact />
           </div>
         </div>
       </section>
