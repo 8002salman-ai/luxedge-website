@@ -1,4 +1,5 @@
 import { recordSiteEvent } from '../services/siteEvents';
+import { isHeldProduct } from '../content/reviewHolds';
 
 // ============================================================================
 // MARKETING & TRAFFIC — shared config, script loading, GA4 events
@@ -421,6 +422,12 @@ export function consumeAdBudget(c: MarketingConfig, countedRef: { current: boole
 
 /** True when the current path is excluded from manual ads by config. */
 export function isExcludedPath(pathname: string, c: MarketingConfig): boolean {
+  if (pathname === '/blog/write') return true;
+  if (pathname.startsWith('/product/') && isHeldProduct(pathname.split('/')[2])) return true;
+  // Apply the same mandatory safety boundary to Auto Ads and manual units.
+  // Only article/product detail routes and the homepage are candidates;
+  // utility, search, category and unreviewed media pages are not ad inventory.
+  if (!(pathname === '/' || /^\/(blog|product)\/[^/]+\/?$/.test(pathname))) return true;
   if (pathname.startsWith('/admin')) return true; // ads NEVER in admin
   if (c.exclusions.login && (pathname === '/login' || pathname === '/signup')) return true;
   if (c.exclusions.cart && pathname === '/cart') return true;

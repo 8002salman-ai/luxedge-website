@@ -396,8 +396,18 @@ describe('seo + feed', () => {
   });
 
   it('setDbToken is safe on any adapter', () => {
-    setDbToken('jwt');
-    expect((getDb() as DbAdapter & { getAccessToken?: () => string | null }).getAccessToken?.()).toBe('jwt');
+    resetDbForTests();
+    __setDbConfigForTests({ url: 'https://test.supabase.co', anonKey: 'test-anon' });
+    try {
+      setDbToken('jwt');
+      expect((getDb() as DbAdapter & { getAccessToken?: () => string | null }).getAccessToken?.()).toBe('jwt');
+      resetDbForTests();
+      __setDbConfigForTests(null);
+      expect(() => setDbToken('jwt')).not.toThrow();
+    } finally {
+      resetDbForTests();
+      __setDbConfigForTests(undefined);
+    }
   });
 
   it('uid generates unique ids', () => {

@@ -4,6 +4,7 @@ import { getConsent } from '../lib/consent';
 import {
   captureUtm,
   getEffectiveConfig,
+  isExcludedPath,
   loadAdSenseScript,
   loadGtag,
   MarketingConfig,
@@ -33,7 +34,8 @@ export default function MarketingManager() {
       getEffectiveConfig().then((c: MarketingConfig) => {
         if (!alive) return;
         const okToLoad = getConsent() === 'accepted';
-        if (okToLoad && c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
+        const pageIsNoindex = document.querySelector('meta[name="robots"]')?.getAttribute('content')?.includes('noindex');
+        if (okToLoad && !pageIsNoindex && !isExcludedPath(loc.pathname, c) && c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
           loadAdSenseScript(c.adsenseClientId);
         } else {
           removeAdSenseScript();

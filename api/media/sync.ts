@@ -24,8 +24,8 @@
 //     overwritten by sync — it only refreshes title/thumbnail/published_at/
 //     duration/tags, and preserves an existing editorial slug.
 //   * is_short derives from the real duration (<= 60s = YouTube's definition).
-//   * Imported rows are published immediately (they are already public on the
-//     channel) with published_at = the video's real upload date.
+//   * New imports remain drafts until an editor reviews relevance and adds
+//     useful context. Existing publication decisions are preserved.
 //   * Slug collisions get a -2, -3… suffix (mirrors product slug dedupe).
 //   * Capped at the 50 most recent uploads per run.
 // ============================================================================
@@ -277,7 +277,7 @@ export async function runMediaSync(source: SyncSource = 'manual'): Promise<Media
       related_article_slugs: [],
       related_video_slugs: [],
       faq: [],
-      status: 'published',
+      status: 'draft',
       source_notes: { channel_id: channelId, synced_at: new Date().toISOString() },
     };
     const inserted = await rest<MediaRow[]>(cfg, 'media_videos', {
@@ -298,7 +298,7 @@ export async function runMediaSync(source: SyncSource = 'manual'): Promise<Media
     created,
     updated,
     videos,
-    note: 'Imported videos are published immediately. Edit titles, summaries, chapters and related content from Admin → Media.',
+    note: 'New videos are saved as drafts. Review relevance, summaries, chapters and related content in Admin → Media before publishing.',
   };
 }
 

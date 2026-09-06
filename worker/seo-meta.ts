@@ -25,6 +25,7 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
+import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds';
 import {
   CONTACT_INFO,
   CONTACT_INTRO,
@@ -272,7 +273,7 @@ interface MediaCmsRow {
 }
 
 function mapCmsToMediaEntry(r: MediaCmsRow): MediaEntry | null {
-  if (!r || !r.slug) return null;
+  if (!r || !r.slug || isHeldMedia(r.slug)) return null;
   return {
     slug: r.slug,
     title: r.title || r.slug,
@@ -982,6 +983,10 @@ export async function maybeInjectSeo(
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
+  if (segs.length === 2 && ((segs[0] === 'product' && isHeldProduct(segs[1])) || (segs[0] === 'media' && isHeldMedia(segs[1])))) {
+    return { html: inject(html, { title: 'Page unavailable | Luxedge', description: 'This page is currently unavailable.', canonical: `${root}/${segs.join('/')}`, noindex: true }), status: 404 };
+  }
+
   // Metadata and content are UA-independent: every indexable route receives the
   // same head (title/desc/canonical/og/robots/JSON-LD), and blog articles also
   // receive their pre-rendered body with real internal links. React replaces
@@ -1050,6 +1055,7 @@ export async function maybeInjectSeo(
       description:
         'Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories, embedded from the official YouTube channel.',
       canonical: `${root}/media`,
+      noindex: true, // current media library awaits editorial review
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -1088,6 +1094,7 @@ export async function maybeInjectSeo(
       title,
       description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
       canonical,
+      noindex: true, // video availability is not evidence of editorial review
       jsonLd: mediaJsonLd(v, canonical),
     });
     out = await injectMediaBody(out, v);
@@ -1147,7 +1154,7 @@ export async function maybeInjectSeo(
     if (products === null) {
       return { html: injectCanonical(html, `${root}/product/${slug}`), status: 200 }; // DB unavailable — keep canonical correct
     }
-    const p = products.find((x) => x.slug === slug);
+    const p = products.find((x) => x.slug === slug && !isHeldProduct(x.slug));
     if (!p) {
       // Legacy UUID product URLs (pre-PR #35 storefront links) — 301 to the
       // canonical slug so the duplicate collapses instead of soft-404ing.

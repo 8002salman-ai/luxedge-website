@@ -1,4 +1,5 @@
 import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_SELECT, SITEMAP_MEDIA_SELECT } from './selects';
+import { isHeldProduct } from '../src/content/reviewHolds';
 
 // ============================================================================
 // LUXEDGE — dynamic /sitemap.xml (worker side)
@@ -21,7 +22,7 @@ import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_
 const root = 'https://luxedge.us';
 
 const STATIC_ROUTES = [
-  '/', '/shop', '/media', '/blog', '/about', '/contact',
+  '/', '/shop', '/blog', '/about', '/contact',
   '/privacy', '/terms', '/returns', '/shipping-policy', '/faq',
 ];
 
@@ -111,16 +112,17 @@ export async function buildSitemap(): Promise<string | null> {
   const urls: string[] = [...STATIC_ROUTES];
   for (const c of cats) urls.push(`/category/${xmlEscape(c.slug)}`);
   for (const b of blogs) urls.push(`/blog/${xmlEscape(b.slug)}`);
-  for (const m of media) urls.push(`/media/${xmlEscape(m.slug)}`);
+  // The current imported media library is noindex pending editorial review.
   for (const p of prods) {
-    if ((p.status === 'active' || p.status === 'published') && commerceReady(p)) {
+    if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) {
       urls.push(`/product/${xmlEscape(p.slug || p.id)}`);
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   const body = urls
-    .map((u) => `  <url><loc>${root}${u}</loc><lastmod>${today}</lastmod></url>`)
+    // A request timestamp is not a content modification date. Omit lastmod
+    // until the query includes a trustworthy per-record update timestamp.
+    .map((u) => `  <url><loc>${root}${u}</loc></url>`)
     .join('\n');
 
   return (
@@ -136,6 +138,8 @@ export async function buildSitemap(): Promise<string | null> {
 interface MediaRow {
   slug: string;
   title: string;
+  summary?: string | null;
+  description?: string | null;
   youtube_video_id?: string | null;
   thumbnail_url?: string | null;
   custom_thumbnail_url?: string | null;
@@ -162,13 +166,19 @@ function isoDurationToSeconds(iso: string | null | undefined): string {
  * the DB is unavailable so the caller can 404/fallback honestly.
  */
 export async function buildVideoSitemap(): Promise<string | null> {
+  // Noindex video pages must not be submitted to Google as indexable videos.
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" />\n';
+}
+
+/** Retained for use once editorial review releases the media library. */
+export async function buildReviewedVideoSitemap(): Promise<string | null> {
   const rows = await fetchRows<MediaRow[]>(
-    `media_videos?select=${SITEMAP_MEDIA_SELECT},title,youtube_video_id,thumbnail_url,custom_thumbnail_url,published_at,duration&status=eq.published&limit=500`,
+    `media_videos?select=${SITEMAP_MEDIA_SELECT},title,summary,description,youtube_video_id,thumbnail_url,custom_thumbnail_url,published_at,duration&status=eq.published&limit=500`,
   );
   if (!rows) return null;
 
   const entries = rows
-    .filter((m) => m && m.youtube_video_id && (m.custom_thumbnail_url || m.thumbnail_url))
+    .filter((m) => m && m.youtube_video_id && (m.custom_thumbnail_url || m.thumbnail_url) && (m.summary || m.description))
     .map((m) => {
       const thumb = xmlEscape(m.custom_thumbnail_url || m.thumbnail_url || '');
       const title = xmlEscape(m.title || m.slug);
@@ -177,13 +187,14 @@ export async function buildVideoSitemap(): Promise<string | null> {
       return (
         `  <url>` +
         `<loc>${root}/media/${xmlEscape(m.slug)}</loc>` +
+        `<video:video>` +
         (pub ? `<video:publication_date>${pub}</video:publication_date>` : '') +
         `<video:title>${title}</video:title>` +
+        `<video:description>${xmlEscape((m.summary || m.description || '').slice(0, 2048))}</video:description>` +
         `<video:thumbnail_loc>${thumb}</video:thumbnail_loc>` +
-        `<video:content_loc>https://www.youtube.com/watch?v=${xmlEscape(m.youtube_video_id || '')}</video:content_loc>` +
         `<video:player_loc allow_embed="yes">https://www.youtube.com/embed/${xmlEscape(m.youtube_video_id || '')}?rel=0</video:player_loc>` +
         (dur ? `<video:duration>${dur}</video:duration>` : '') +
-        `</url>`
+        `</video:video></url>`
       );
     })
     .join('\n');

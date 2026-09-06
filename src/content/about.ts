@@ -31,17 +31,19 @@ export const ABOUT_SECTIONS: AboutSection[] = [
   {
     title: 'How we source and curate',
     body:
-      'Every listing is reviewed before it goes live. We work with verified supplier sources, check the ' +
-      'details that matter (sizes, pack quantities, materials, delivery estimates), and keep only items that ' +
-      'are practical, safe to use as described, and reasonably priced. Where a product is animal food or feed, ' +
-      'the listing says so clearly and directs you to check the label and intended species before use.',
+      'Product listings use information supplied by manufacturers and suppliers. A listing is not a claim ' +
+      'that Luxedge has independently tested or certified the product. Check the selected size, materials, ' +
+      'pack quantity and delivery information before ordering. For animal feed or supplements, verify the ' +
+      'label and intended species with the supplier and your animal-care professional.',
   },
   {
     title: 'Our buying guides',
     body:
-      'The Luxedge blog contains practical buyer guides — how to choose a horse halter, how long a salt lick ' +
-      'lasts, how to fit a no-pull harness, and more. Guides are researched and reviewed by the Luxedge editorial ' +
-      'team using factual product information. Always follow the relevant product label and instructions.',
+      'Our guides explain product choices, fit and everyday care. Luxedge Editorial Team is the site’s ' +
+      'publishing byline, not a claim of professional credentials or independent laboratory testing. ' +
+      'Luxedge sells products linked from its guides and may earn advertising revenue. Product links are ' +
+      'commercial recommendations, not proof of test results. For a correction or a source question, ' +
+      'email hello@luxedge.us with the page URL and the passage concerned.',
   },
   {
     title: 'Customer support',

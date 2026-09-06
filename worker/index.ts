@@ -263,7 +263,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     }
     // Dynamic sitemap from the LIVE database (CMS blogs + products + categories
     // + media videos) so publishing updates sitemap.xml without a redeploy.
-    // Falls back to the static file when the DB is unreachable / not migrated.
+    // A database outage must not resurrect stale/deleted URLs from a snapshot.
     if (url.pathname === '/sitemap.xml') {
       const sitemap = await buildSitemap();
       if (sitemap) {
@@ -275,6 +275,10 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
           },
         });
       }
+      return new Response('Sitemap temporarily unavailable. Please retry.', {
+        status: 503,
+        headers: { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '300', 'cache-control': 'no-store' },
+      });
     }
     // Google Video sitemap (media library) — real data only. When the DB is
     // unreachable / media_videos is not yet migrated (buildVideoSitemap
