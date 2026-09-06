@@ -11,7 +11,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, CaretUp, ArrowSquareOut,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, CaretUp, ArrowSquareOut, Rocket,
   DotsThreeVertical, Clock, CheckCircle, DotsSixVertical,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
@@ -39,6 +39,7 @@ import {
   type CommerceReadiness,
 } from '../features/catalog/commerceReadiness';
 import { SUPPLIER_SOURCE_PRESETS, supplierSearchUrl } from '../features/catalog/supplierSource';
+import { getAutoPublishEnabled, setAutoPublishEnabled } from '../features/catalog/autoPublish';
 import { generateSeoJson } from '../features/ai/seo';
 import { useSeoJobStore } from '../features/catalog/seoJobStore';
 import {
@@ -170,6 +171,10 @@ export function CatalogProductsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  // Auto-publish toggle (persisted server-side, shared across devices).
+  const [autoPublish, setAutoPublish] = useState<boolean | null>(null);
+  const [autoPublishConfirm, setAutoPublishConfirm] = useState(false);
+  const [autoPublishBusy, setAutoPublishBusy] = useState(false);
   // Background Auto-SEO job - lives in a module store so it survives navigation.
   const seo = useSeoJobStore();
   // Seller-chosen column order (drag column headers) - per-device, survives reloads.
@@ -177,6 +182,11 @@ export function CatalogProductsPage() {
     loadCatalogColumns(typeof localStorage !== 'undefined' ? localStorage : null),
   );
   const [dragCol, setDragCol] = useState<CatalogColumnKey | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getAutoPublishEnabled().then((v) => { if (!cancelled) setAutoPublish(v); });
+    return () => { cancelled = true; };
+  }, []);
   // Guard for the store's onFinished callback: skip the reload if we've unmounted.
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
@@ -299,6 +309,16 @@ export function CatalogProductsPage() {
   };
 
   const autoSeoBulk = () => void runAutoSeo(products);
+
+  const toggleAutoPublish = async (on: boolean) => {
+    setAutoPublishBusy(true);
+    try {
+      const next = await setAutoPublishEnabled(on);
+      if (next === null) { notify('Could not save the auto-list setting — try again.', 'error'); return; }
+      setAutoPublish(next);
+      notify(next ? 'Auto-list enabled — products that become commerce-ready will publish on save.' : 'Auto-list disabled — drafts stay drafts.');
+    } finally { setAutoPublishBusy(false); setAutoPublishConfirm(false); }
+  };
 
   // A run killed by a full page reload restores its checkpoint from localStorage
   // (`interrupted`). Resume resolves those ids back to the rows currently loaded;
@@ -660,6 +680,14 @@ export function CatalogProductsPage() {
         <div className="flex items-center gap-2">
           <button onClick={autoSeoBulk} disabled={seo.running} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
             <Sparkle size={16} />{seo.running ? `Auto SEO… ${seo.done}/${seo.total}` : 'Auto SEO'}
+          </button>
+          <button
+            onClick={() => { if (autoPublish === null) return; if (autoPublish) void toggleAutoPublish(false); else setAutoPublishConfirm(true); }}
+            disabled={autoPublish === null || autoPublishBusy}
+            title={autoPublish ? 'Auto-publish is ON — a saved product that becomes commerce-ready is published automatically. Click to turn off.' : 'When ON, a product saved as commerce-ready is automatically published (status → Active). You will confirm before enabling.'}
+            className={`px-4 py-2 text-white text-sm rounded-lg flex items-center gap-2 disabled:opacity-50 ${autoPublish ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-500 hover:bg-gray-600'}`}
+          >
+            <Rocket size={16} />{autoPublish === null ? 'Auto-list…' : autoPublish ? 'Auto-list: ON' : 'Auto-list: OFF'}
           </button>
           <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
             <UploadSimple size={16} />CSV Import
@@ -1056,7 +1084,9 @@ export function CatalogProductsPage() {
                         <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
                           <span className="block">Listed: {ageIso ? new Date(ageIso).toLocaleDateString() : '—'}</span>
                           <span className="block">Age: {ageIso ? `${Math.max(0, Math.floor((Date.now() - new Date(ageIso).getTime()) / 86400000))} days` : '—'}</span>
-                          {p.publishedAt ? <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleDateString()}</span> : <span className="block text-gray-400">Never published — age from created date</span>}
+                          {p.publishedAt && <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleDateString()}</span>}
+                          {p.publishedAt && p.createdAt && p.createdAt !== p.publishedAt && <span className="block text-gray-400">Created: {new Date(p.createdAt).toLocaleDateString()}</span>}
+                          {!p.publishedAt && <span className="block text-gray-400">Never published — age from created date ({p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'})</span>}
                           {p.listingEndsAt && <span className="block">Ends: {new Date(p.listingEndsAt).toLocaleDateString()}</span>}
                         </span>
                       </span>
@@ -1308,6 +1338,26 @@ export function CatalogProductsPage() {
           </div>
         )}
       </Modal>
+
+      {autoPublishConfirm && (
+        <Modal isOpen onClose={() => setAutoPublishConfirm(false)}>
+          <div className="p-5 space-y-4 w-[440px] max-w-[92vw]">
+            <h3 className="text-lg font-bold">Enable auto-listing?</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              When ON, any product you save that is <b>commerce-ready</b> (full source, cost, stock
+              &amp; shipping verified) is automatically published — status becomes <b>Active</b> and
+              it appears on the storefront immediately. Drafts that are not yet commerce-ready stay
+              drafts. You can turn this off any time.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setAutoPublishConfirm(false)} className="px-4 py-2 rounded-lg border text-sm">Cancel</button>
+              <button onClick={() => void toggleAutoPublish(true)} disabled={autoPublishBusy} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-50">
+                {autoPublishBusy ? 'Enabling…' : 'Enable auto-list'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <CsvImportModal
         open={csvOpen}
@@ -1776,6 +1826,14 @@ export function CatalogProductEditor() {
         status: v.status,
         lowStockThreshold: v.lowStockThreshold,
       })));
+      // Auto-list: if enabled and this save made the product commerce-ready
+      // while it was still a draft, publish it (status → active) so it shows
+      // on the storefront without a second manual step.
+      const wasDraft = saved.status !== 'active';
+      if (wasDraft && saved.commerceReadiness === 'COMMERCE_READY' && (await getAutoPublishEnabled())) {
+        const published = await updateProduct(saved.id, { status: 'active' });
+        if (published) notify('Auto-published — product is commerce-ready.');
+      }
       notify(isNew ? 'Product created' : 'Product saved');
       nav('/admin/products');
     } catch (e) {

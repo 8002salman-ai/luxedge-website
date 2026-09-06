@@ -69,8 +69,13 @@ export default defineConfig(({ mode }) => {
     rollupOptions: {
       output: {
         manualChunks: {
+          // React/router stay in one cached chunk. Phosphor icons are NOT
+          // force-split here: @phosphor-icons/react is sideEffects-free, so
+          // tree-shaking keeps only the handful of icons the storefront uses
+          // in the main bundle while the admin's dozens land in the lazy
+          // AdminSection chunk — previously the whole 300KB package was
+          // preloaded on every storefront page because App.tsx used 1 icon.
           react: ["react", "react-dom", "react-router-dom"],
-          icons: ["@phosphor-icons/react"],
           storefrontIcons: ["@untitledui/icons"],
         },
       },
