@@ -13,7 +13,7 @@ export default function CookieConsent() {
   };
 
   return (
-    <div role="region" aria-label="Cookie consent" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 sm:max-w-md z-[120]">
+    <div role="region" aria-label="Cookie consent" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 sm:max-w-md z-[130]">
       <div className="bg-luxe-black/95 backdrop-blur border border-luxe-white/10 rounded-2xl shadow-2xl p-5 text-luxe-white">
         <p className="text-sm leading-relaxed text-luxe-white/85">
           We use optional cookies for analytics and personalized advertising only after you accept.
