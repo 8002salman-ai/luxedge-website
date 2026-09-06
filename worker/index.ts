@@ -35,6 +35,7 @@ import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
 import mediaGenerateHandler from '../api/media/generate';
 import mediaSyncHandler, { runMediaSync } from '../api/media/sync';
+import { runSitemapHealth } from './sitemap-health';
 import mediaStatusHandler from '../api/media/status';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
@@ -225,6 +226,8 @@ export interface Env {
   SEND_MAIL?: {
     send: (msg: { from: string; to: string; subject: string; html?: string; text?: string; reply_to?: string }) => Promise<void>;
   };
+  /** Alert recipient for the nightly sitemap health check (defaults to hello@luxedge.us). */
+  SITEMAP_ALERT_EMAIL?: string;
 }
 
 /**
@@ -481,16 +484,33 @@ export default {
   },
 
   /**
-   * Scheduled auto-sync (wrangler.toml [triggers], hourly): pulls the
-   * official channel's uploads into media_videos so new videos appear on
-   * /media without a manual Sync click. Shares runMediaSync() with the admin
-   * endpoint (api/media/sync.ts) — idempotent upsert, ~3 YouTube Data API
-   * quota units per run. Clean no-op (logged) when not configured; the cron
-   * trigger itself is not externally invokable.
+   * Scheduled tasks (wrangler.toml [triggers]):
+   *   * `0 * * * *`   hourly — pull the official channel's uploads into
+   *     media_videos so new videos appear on /media without a manual Sync
+   *     click. Shares runMediaSync() with the admin endpoint — idempotent
+   *     upsert, ~3 YouTube Data API quota units per run.
+   *   * `0 3 * * *`   nightly — run the sitemap health check (crawl every
+   *     sitemap URL, alert only if any returns non-200). See
+   *     worker/sitemap-health.ts.
+   * The two crons are disambiguated by the ScheduledEvent.cron expression.
+   * The cron trigger itself is not externally invokable.
    */
-  async scheduled(_event: unknown, env: Env): Promise<void> {
+  async scheduled(event: unknown, env: Env): Promise<void> {
     populateProcessEnv(env);
     if (env.YOUTUBE_API_KEY) process.env.YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
+
+    const cron = (event as { cron?: string } | null)?.cron || '';
+    if (cron === '0 3 * * *') {
+      const h = await runSitemapHealth(env);
+      if (!h.ok && h.broken.length) {
+        console.error(`[sitemap-health] ${h.broken.length}/${h.checked} URLs broken`);
+        for (const b of h.broken) console.error(`[sitemap-health]   ${b.status}  ${b.url}`);
+      } else {
+        console.log(`[sitemap-health] ok: ${h.checked} URLs checked, none broken`);
+      }
+      return;
+    }
+
     const result = await runMediaSync('cron');
     if (!result.ok) {
       console.error(`[media-cron] sync skipped: ${result.error || 'unknown error'}`);
