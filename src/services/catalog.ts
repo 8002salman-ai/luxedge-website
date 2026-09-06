@@ -32,6 +32,7 @@
 import { getDb, getDbMode } from './db';
 import { deriveCommerceReadiness, deriveInventorySource, deriveSourceType, type CommerceReadiness } from '../features/catalog/commerceReadiness';
 import { parseTagList } from '../features/catalog/tags';
+import { isHeldProduct } from '../content/reviewHolds';
 
 export interface CatalogProduct {
   id: string;
@@ -272,7 +273,7 @@ function centsToDollars(cents: unknown): number {
 export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null> {
   if (getDbMode() !== 'supabase') return null;
   const cached = readPublicCache<StorefrontCatalog>('luxedge:storefront-catalog:v1');
-  if (cached) return cached;
+  if (cached) return { ...cached, products: cached.products.filter(p => !isHeldProduct(p.slug)) };
   const db = getDb();
 
   try {
@@ -301,7 +302,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       .filter((p) => p && typeof p.id === 'string' && (p.status === 'published' || p.status === 'active') && isStorefrontReady(p));
 
     // Products without any price info are not ready for the storefront.
-    const usable = published.filter((p) => num(p.price) > 0 || num(p.price_amount) > 0);
+    const usable = published.filter((p) => !isHeldProduct(p.slug) && (num(p.price) > 0 || num(p.price_amount) > 0));
     // Phase 4E.2 — a reachable DB with ZERO published products is a valid
     // EMPTY REAL CATALOG, not an error. Never signal "use demo fallback".
     if (usable.length === 0) {

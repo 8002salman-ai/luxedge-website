@@ -218,11 +218,12 @@ describe('runMediaSync() — the cron-shared core', () => {
     expect(slugs).toContain('how-pakistan-s-himalayan-pink-salt-products-are-made-mine-to-factory');
     expect(slugs).toContain('salt-lamp-short');
 
-    // Rows are upserted (published) with real YouTube facts; v2 is a Short.
+    // New uploads require editorial publication; YouTube facts remain intact.
     expect(inserts).toHaveLength(2);
     const [a, b] = inserts as Array<{ youtube_video_id: string; status: string; is_short: boolean; duration: string; published_at: string }>;
     expect(a.youtube_video_id).toBe('v1');
-    expect(a.status).toBe('published');
+    expect(a.status).toBe('draft');
+    expect(b.status).toBe('draft');
     expect(a.is_short).toBe(false);
     expect(a.duration).toBe('PT6M43S');
     expect(b.youtube_video_id).toBe('v2');

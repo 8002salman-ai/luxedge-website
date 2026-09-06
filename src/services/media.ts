@@ -16,6 +16,7 @@
 // ============================================================================
 
 import { getDb } from './db';
+import { isHeldMedia } from '../content/reviewHolds';
 import type { DbAdapter } from './db';
 import { getFreshAccessToken } from './supabase';
 
@@ -225,7 +226,7 @@ async function asAnon<T>(fn: (db: DbAdapter) => Promise<T>): Promise<T> {
 export async function loadPublishedMedia(opts: { forceFresh?: boolean } = {}): Promise<MediaVideo[] | null> {
   if (!opts.forceFresh) {
     const cached = readMediaCache();
-    if (cached) return cached;
+    if (cached) return cached.filter(v => !isHeldMedia(v.slug));
   }
   try {
     const rows = await asAnon((db) =>
@@ -236,7 +237,7 @@ export async function loadPublishedMedia(opts: { forceFresh?: boolean } = {}): P
       }),
     );
     if (!Array.isArray(rows)) return null;
-    const videos = rows.map(mapRowToMediaVideo);
+    const videos = rows.filter(r => !isHeldMedia(r.slug)).map(mapRowToMediaVideo);
     writeMediaCache(videos);
     return videos;
   } catch {
@@ -245,6 +246,7 @@ export async function loadPublishedMedia(opts: { forceFresh?: boolean } = {}): P
 }
 
 export async function loadPublishedMediaBySlug(slug: string): Promise<MediaVideo | null> {
+  if (isHeldMedia(slug)) return null;
   try {
     const rows = await asAnon((db) =>
       db.list<CmsMediaRow>('media_videos', {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { X, Gift, ShieldCheck, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { useLocation } from 'react-router-dom';
 
 const STORE_KEY = 'luxedge-welcome-shown-v1';
-// Welcome popup: appears once per visitor and trades an email for a real
-// 10% welcome coupon created server-side (api/crm/welcome). Never auto-opens
-// again after dismissal.
+// The coupon is offered in normal page flow and opens only on request.
+// Informational and account pages must never be covered by a timed promotion.
 export default function WelcomePopup() {
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
@@ -14,13 +15,11 @@ export default function WelcomePopup() {
   const [marketingOptIn, setMarketingOptIn] = useState(false);
 
   useEffect(() => {
-    if (localStorage.getItem(STORE_KEY) === '1') return;
-    const t = window.setTimeout(() => setOpen(true), 2200);
-    return () => window.clearTimeout(t);
-  }, []);
+    setOpen(false);
+  }, [pathname]);
 
   const dismiss = () => {
-    localStorage.setItem(STORE_KEY, '1');
+    try { localStorage.setItem(STORE_KEY, '1'); } catch { /* storage is optional */ }
     setOpen(false);
   };
 
@@ -43,7 +42,7 @@ export default function WelcomePopup() {
         setCoupon(j.couponCode);
         // A successful claim is a completed first-visit interaction.
         // Prevent the popup from reopening after a refresh.
-        localStorage.setItem(STORE_KEY, '1');
+        try { localStorage.setItem(STORE_KEY, '1'); } catch { /* storage is optional */ }
         setState('done');
       } else {
         setState('error');
@@ -55,7 +54,13 @@ export default function WelcomePopup() {
     }
   };
 
-  if (!open) return null;
+  if (!open) return pathname === '/' || pathname === '/shop' ? (
+    <div className="px-4 py-4 text-center bg-white border-t border-gray-100">
+      <button type="button" onClick={() => setOpen(true)} className="text-sm text-blue-700 underline underline-offset-4">
+        Get a first-order discount code
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Welcome to Luxedge"

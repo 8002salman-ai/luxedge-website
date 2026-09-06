@@ -1178,6 +1178,12 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
+    const privateRoutes = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist', 'profile'];
+    if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write') {
+      setMeta('robots', 'noindex, nofollow');
+    } else if (['', 'shop', 'category', 'product', 'blog', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'faq'].includes(segs[0] || '')) {
+      setMeta('robots', 'index, follow');
+    }
     if (segs.length === 0) { full("Luxedge — Premium Pet & Animal Essentials"); desc("Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
