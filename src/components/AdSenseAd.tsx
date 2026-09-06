@@ -41,10 +41,10 @@ export default function AdSenseAd({ placement, className = '' }: AdSenseAdProps)
     <div className={`my-6 ${className}`}>
       <div className="text-center">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Advertisement</p>
-        <div className="bg-gray-50 border border-gray-200 rounded-xl min-h-[90px] flex items-center justify-center overflow-hidden">
+        <div className="bg-gray-50 border border-gray-200 rounded-xl min-h-[90px] max-h-[250px] flex items-center justify-center overflow-hidden">
           <ins
             className="adsbygoogle"
-            style={{ display: 'block' }}
+            style={{ display: 'block', maxHeight: 250 }}
             data-ad-client={cfg.adsenseClientId.trim()}
             data-ad-slot={slot}
             data-ad-format="auto"
