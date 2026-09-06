@@ -1349,6 +1349,16 @@ export function CatalogProductsPage() {
               it appears on the storefront immediately. Drafts that are not yet commerce-ready stay
               drafts. You can turn this off any time.
             </p>
+            <p className="text-sm bg-luxe-gold-soft border border-luxe-gold/30 rounded-xl px-4 py-3 text-luxe-gold-dark">
+              {(() => {
+                const readyDrafts = products.filter((p) =>
+                  p.status !== 'active' && p.commerceReadiness === 'COMMERCE_READY'
+                ).length;
+                return readyDrafts > 0
+                  ? <b>{readyDrafts} draft{readyDrafts === 1 ? '' : 's'} currently commerce-ready</b>
+                  : <span>No drafts are commerce-ready right now — the next save that completes a draft will publish it.</span>;
+              })()}
+            </p>
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setAutoPublishConfirm(false)} className="px-4 py-2 rounded-lg border text-sm">Cancel</button>
               <button onClick={() => void toggleAutoPublish(true)} disabled={autoPublishBusy} className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm disabled:opacity-50">
