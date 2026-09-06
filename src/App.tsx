@@ -2547,12 +2547,17 @@ function ShopPage() {
 
   return (
     <div>
-      {/* Page Header */}
+      {/* Page Header — title left, Adsterra native banner fills the right side */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
-        <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12">
-          <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
-          <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
+        <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12 grid lg:grid-cols-[1fr_minmax(300px,420px)] gap-6 items-center">
+          <div>
+            <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
+            <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
+            <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
+          </div>
+          <div className="hidden lg:block">
+            <AdsterraAd className="my-0" />
+          </div>
         </div>
       </section>
 
@@ -2755,7 +2760,11 @@ function CartDrawer() {
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200">
                           <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={12} /></button>
-                          <span className="text-xs font-semibold w-6 text-center">{item.quantity}</span>
+                          <input type="text" inputMode="numeric" defaultValue={item.quantity} key={item.quantity}
+                            onBlur={(e) => { const v = parseInt(e.target.value, 10); if (Number.isNaN(v)) { e.target.value = String(item.quantity); return; } const max = Math.max(1, item.product.stock || 99); updateQty(item.product.id, Math.min(max, Math.max(1, v))); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            aria-label="Quantity — type a number"
+                            className="w-8 text-center text-xs font-semibold bg-transparent border-x border-gray-200 py-1 focus:outline-none focus:ring-1 focus:ring-luxe-gold/40" />
                           <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={12} /></button>
                         </div>
                         <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={14} /></button>
@@ -2825,7 +2834,11 @@ function CartPage() {
                   <div className="flex items-center gap-3 mt-3">
                     <div className="flex items-center gap-1 bg-luxe-cream border border-luxe-silver rounded-lg">
                       <button onClick={() => updateQty(i.product.id, i.quantity - 1)} aria-label="Decrease quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={13} /></button>
-                      <span className="text-xs font-semibold w-7 text-center">{i.quantity}</span>
+                      <input type="text" inputMode="numeric" defaultValue={i.quantity} key={i.quantity}
+                        onBlur={(e) => { const v = parseInt(e.target.value, 10); if (Number.isNaN(v)) { e.target.value = String(i.quantity); return; } const max = Math.max(1, i.product.stock || 99); updateQty(i.product.id, Math.min(max, Math.max(1, v))); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        aria-label="Quantity — type a number"
+                        className="w-9 text-center text-xs font-semibold bg-transparent border-x border-luxe-silver py-1.5 focus:outline-none focus:ring-1 focus:ring-luxe-gold/40" />
                       <button onClick={() => updateQty(i.product.id, i.quantity + 1)} aria-label="Increase quantity" className="p-1.5 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={13} /></button>
                     </div>
                     <button onClick={() => removeFromCart(i.product.id)} aria-label="Remove item" className="p-1.5 text-luxe-gray hover:text-luxe-red transition-colors"><Trash01 strokeWidth={1.5} size={15} /></button>

@@ -23,9 +23,12 @@ describe('editorial release boundaries', () => {
     }
   });
   it('excludes utility, nested checkout, search and media routes from both ad modes', () => {
-    for (const path of ['/admin', '/checkout/success', '/cart', '/account', '/wishlist', '/blog/write', '/shop', '/category/horse', '/media/example', '/404']) {
+    for (const path of ['/admin', '/checkout/success', '/cart', '/account', '/wishlist', '/blog/write', '/media/example', '/404']) {
       expect(isExcludedPath(path, DEFAULT_CONFIG), path).toBe(true);
     }
+    // Shop/category listing pages are owner-approved ad inventory.
+    expect(isExcludedPath('/shop', DEFAULT_CONFIG)).toBe(false);
+    expect(isExcludedPath('/category/horse', DEFAULT_CONFIG)).toBe(false);
     expect(isExcludedPath('/blog/how-to-choose-a-cat-tunnel', DEFAULT_CONFIG)).toBe(false);
   });
   it('submits reviewed media but never held products/videos, or invents modification dates', async () => {
