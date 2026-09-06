@@ -2938,7 +2938,7 @@ function firePurchaseEvent(r: CheckoutSessionStatus): void {
 }
 
 function CheckoutPage() {
-  const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify } = useApp();
+  const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify, updateQty, removeFromCart } = useApp();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const cancelled = searchParams.get('cancelled') === '1';
@@ -3088,6 +3088,18 @@ function CheckoutPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.product.name}</p>
                       <p className="text-xs text-gray-500">{item.product.category}</p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg">
+                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={11} /></button>
+                          <input type="text" inputMode="numeric" defaultValue={item.quantity} key={item.quantity}
+                            onBlur={(e) => { const v = parseInt(e.target.value, 10); if (Number.isNaN(v)) { e.target.value = String(item.quantity); return; } const max = Math.max(1, item.product.stock || 99); updateQty(item.product.id, Math.min(max, Math.max(1, v))); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            aria-label="Quantity — type a number"
+                            className="w-7 text-center text-xs font-semibold bg-transparent py-0.5 focus:outline-none focus:ring-1 focus:ring-luxe-gold/40" />
+                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={11} /></button>
+                        </div>
+                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={13} /></button>
+                      </div>
                     </div>
                     <p className="text-sm font-semibold shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
                   </div>
