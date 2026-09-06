@@ -11,11 +11,11 @@
 // Revisions are appended on each create/edit/lifecycle change so Salman can
 // recover any earlier version.
 // ============================================================================
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Plus, FileText, Eye, Trash, PencilLine, Copy, Archive,
-  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle, Sparkle,
+  ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle, Sparkle, Warning,
 } from '@phosphor-icons/react';
 import { useApp } from '../App';
 import { generateSeoJson } from '../features/ai/seo';
@@ -24,6 +24,7 @@ import {
   adminListRevisions, adminRestoreRevision,
   type CmsBlogRow, type CmsBlogRevision,
 } from '../services/blog';
+import { useBlogJobStore } from '../features/blog/blogJobStore';
 
 const STATUS_META: Record<CmsBlogRow['status'], { label: string; cls: string }> = {
   published: { label: 'Published', cls: 'bg-green-100 text-green-700' },
@@ -71,8 +72,12 @@ export default function BlogManager() {
   const [automationOnly, setAutomationOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [seoBusy, setSeoBusy] = useState(false);
-  const [bulkSeoBusy, setBulkSeoBusy] = useState(false);
-  const [bulkSeoProgress, setBulkSeoProgress] = useState<string | null>(null);
+  // Background Auto-SEO job - lives in a module store so it survives SPA
+  // navigation AND full page reloads (localStorage checkpoint + resume offer).
+  const seo = useBlogJobStore();
+  // Skip the store's onFinished reload once this component has unmounted.
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const [confirm, setConfirm] = useState<{ id: string; title: string; permanent: boolean } | null>(null);
   const [revisions, setRevisions] = useState<CmsBlogRevision[]>([]);
   const [showRevisionsFor, setShowRevisionsFor] = useState<string | null>(null);
@@ -250,33 +255,95 @@ export default function BlogManager() {
     }
   };
 
-  // Bulk: generate + save SEO for every post missing a title, one at a time.
+  // Eligibility reads the RAW persisted SEO columns (never display fallbacks),
+  // matching the products page: a post is complete only when it has a real
+  // SEO title, meta description AND target keyword. Complete SEO is never
+  // re-run by the bulk loop or a resume.
+  const blogSeoStatus = (r: CmsBlogRow): 'complete' | 'incomplete' | 'missing' => {
+    const t = !!r.seo_title;
+    const d = !!r.meta_description;
+    const k = !!r.target_keyword;
+    if (t && d && k) return 'complete';
+    if (t || d || k) return 'incomplete';
+    return 'missing';
+  };
+
+  // Generate + save SEO for one post (title/meta/keywords/secondary derived
+  // from the article). Throws → the job store counts it as failed and continues.
+  const generateAndSaveBlogSeo = async (r: CmsBlogRow) => {
+    const parsed = await generateSeoJson(buildBlogSeoPrompt(r.title, r.excerpt || '', (r.content || '').slice(0, 3000)));
+    await adminUpdate(r.id, {
+      seo_title: String(parsed.seoTitle || r.seo_title || '').trim().slice(0, 60) || null,
+      meta_description: String(parsed.metaDescription || r.meta_description || '').trim().slice(0, 160) || null,
+      target_keyword: String(parsed.targetKeyword || r.target_keyword || '').trim() || null,
+      secondary_keywords: Array.isArray(parsed.secondaryKeywords) ? parsed.secondaryKeywords.map(String).slice(0, 5) : r.secondary_keywords || [],
+    });
+  };
+
+  // Bulk Auto SEO - the loop lives in the module-level blog job store so it
+  // keeps running (and keeps reporting progress) while the user navigates to
+  // another admin page and back; a full page reload offers to resume the rest.
+  // Processes Missing + Incomplete only, NEVER overwrites Complete.
   const autoSeoBlogs = async () => {
-    const targets = (rows || []).filter((r) => r.title && !r.seo_title);
-    if (targets.length === 0) { notify('All posts already have SEO titles.', 'info'); return; }
-    if (!window.confirm(`Auto-generate and save SEO for ${targets.length} post(s) missing a title? Existing SEO is skipped.`)) return;
-    setBulkSeoBusy(true);
-    let errors = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const r = targets[i];
-      setBulkSeoProgress(`${i + 1}/${targets.length} — ${r.title.slice(0, 50)}`);
-      try {
-        const parsed = await generateSeoJson(buildBlogSeoPrompt(r.title, r.excerpt || '', (r.content || '').slice(0, 3000)));
-        await adminUpdate(r.id, {
-          seo_title: String(parsed.seoTitle || r.seo_title || '').trim().slice(0, 60) || null,
-          meta_description: String(parsed.metaDescription || r.meta_description || '').trim().slice(0, 160) || null,
-          target_keyword: String(parsed.targetKeyword || r.target_keyword || '').trim() || null,
-          secondary_keywords: Array.isArray(parsed.secondaryKeywords) ? parsed.secondaryKeywords.map(String).slice(0, 5) : r.secondary_keywords || [],
-        });
-      } catch {
-        errors++;
-      }
+    const targets = (rows || []).filter((r) => r.title);
+    const work = targets.filter((r) => blogSeoStatus(r) !== 'complete');
+    if (work.length === 0) {
+      notify(`All ${targets.length} post(s) already have complete SEO.`, 'info');
+      return;
     }
-    setBulkSeoBusy(false);
-    setBulkSeoProgress(null);
-    notify(errors === 0 ? `Auto SEO done — ${targets.length} posts updated.` : `Auto SEO done — ${targets.length - errors} updated, ${errors} failed.`, errors ? 'error' : 'success');
-    await reloadBlogs(true);
-    await load();
+    if (!window.confirm(`Auto-generate and save SEO for ${work.length} post(s) missing or incomplete SEO? Complete SEO is never overwritten.`)) return;
+    const started = await useBlogJobStore.getState().start({
+      targets,
+      statusOf: blogSeoStatus,
+      runOne: generateAndSaveBlogSeo,
+      label: (r) => r.title,
+      onFinished: async () => {
+        if (mountedRef.current) {
+          await reloadBlogs(true);
+          await load();
+        }
+      },
+    });
+    if (started) {
+      const skipped = targets.length - work.length;
+      notify(`Auto SEO job started — ${work.length} to process, ${skipped} already complete. It keeps running in the background; progress shows here.`);
+    }
+  };
+
+  // A run killed by a full page reload restores its checkpoint from localStorage
+  // (`interrupted`). Resume resolves those ids back to the rows currently
+  // loaded; posts that actually saved before the reload are now 'complete' and
+  // get skipped by the same eligibility check, so nothing is regenerated.
+  const resumeInterruptedBlogSeo = async () => {
+    const inter = useBlogJobStore.getState().interrupted;
+    if (!inter) return;
+    const byId = new Map((rows || []).map((r) => [r.id, r]));
+    const targets = inter.ids.map((id) => byId.get(id)).filter((r): r is CmsBlogRow => Boolean(r));
+    if (targets.length === 0) {
+      notify('The posts from the interrupted SEO run are gone — cleared.', 'info');
+      useBlogJobStore.getState().dismissInterrupted();
+      return;
+    }
+    const work = targets.filter((r) => r.title && blogSeoStatus(r) !== 'complete');
+    if (work.length === 0) {
+      notify('The remaining posts from the interrupted SEO run already have complete SEO.', 'info');
+      useBlogJobStore.getState().dismissInterrupted();
+      return;
+    }
+    if (!window.confirm(`Resume Auto SEO for the ${work.length} post(s) left from the interrupted run? Complete SEO is never overwritten.`)) return;
+    const started = await useBlogJobStore.getState().resume({
+      targets,
+      statusOf: blogSeoStatus,
+      runOne: generateAndSaveBlogSeo,
+      label: (r) => r.title,
+      onFinished: async () => {
+        if (mountedRef.current) {
+          await reloadBlogs(true);
+          await load();
+        }
+      },
+    });
+    if (started) notify(`Auto SEO resumed — ${work.length} to process. It keeps running in the background.`);
   };
 
   const duplicate = async (r: CmsBlogRow) => {
@@ -566,15 +633,64 @@ export default function BlogManager() {
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={automationOnly} onChange={(e) => setAutomationOnly(e.target.checked)} /> Automation only ({counts.automation})
             </label>
-            <button onClick={autoSeoBlogs} disabled={bulkSeoBusy} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg">
-              <Sparkle size={15} />{bulkSeoBusy ? 'Auto SEO…' : 'Auto SEO All'}
+            <button onClick={autoSeoBlogs} disabled={seo.running || !rows} title="Auto-generate + save SEO for every post missing or incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg">
+              <Sparkle size={15} />{seo.running ? `Auto SEO… ${seo.done}/${seo.total}` : 'Auto SEO All'}
             </button>
           </div>
 
-          {bulkSeoProgress && (
-            <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
-              <Sparkle size={12} className="inline mr-1" />Auto SEO — {bulkSeoProgress}
-            </p>
+          {/* Bulk Auto SEO progress - from the background blog job store, so it
+              persists across navigation and shows the live position when you
+              come back; a full reload offers to resume the rest below. */}
+          {seo.running && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-purple-800 font-medium flex items-center gap-2">
+                  <Sparkle size={14} />Auto SEO — {seo.done}/{seo.total}
+                </span>
+                <span className="text-xs text-purple-600 truncate">{seo.current}</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-purple-100 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-500 transition-all" style={{ width: `${seo.total ? Math.round((seo.done / seo.total) * 100) : 0}%` }} />
+              </div>
+              {seo.errors > 0 && <p className="text-xs text-amber-600 mt-1">{seo.errors} failed so far — continuing.</p>}
+              <p className="text-[11px] text-purple-500 mt-1">Running in the background — switch pages and it keeps going.</p>
+            </div>
+          )}
+          {seo.report && !seo.running && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2.5 text-xs text-purple-800 flex flex-wrap gap-x-4 gap-y-1">
+              <span>SEO complete: <b>{seo.report.complete}</b></span>
+              <span>Generated/updated: <b>{seo.report.updated}</b></span>
+              <span>Skipped: <b>{seo.report.skipped}</b></span>
+              <span>Failed: <b>{seo.report.failed}</b></span>
+            </div>
+          )}
+          {/* Interrupted-run offer - a full page reload killed a running Auto SEO
+              job; the store restored its checkpoint from localStorage, so the
+              remaining posts can be resumed instead of lost. */}
+          {seo.interrupted && !seo.running && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="text-amber-900 font-semibold flex items-center gap-2">
+                <Warning size={16} />Auto SEO was interrupted
+              </span>
+              <span className="text-xs text-amber-700">
+                {seo.interrupted.processed} of {seo.interrupted.ids.length} posts were processed before the page reloaded.
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => void resumeInterruptedBlogSeo()}
+                  disabled={!rows || seo.running}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg"
+                >
+                  Resume remaining
+                </button>
+                <button
+                  onClick={() => useBlogJobStore.getState().dismissInterrupted()}
+                  className="px-3 py-1.5 border border-amber-300 hover:bg-amber-100 text-amber-800 text-xs font-medium rounded-lg"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
           )}
 
           {visible.length > 0 ? (

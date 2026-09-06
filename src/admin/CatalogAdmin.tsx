@@ -70,6 +70,12 @@ const READINESS_BADGE: Record<CommerceReadiness, string> = {
   DRAFT: 'bg-gray-100 text-gray-600',
 };
 
+// "Supplier source" presets for Quick Add — real marketplaces/sourcing
+// channels. Written into supplierSource (the free-text field the filters and
+// deriveSourceType key off): CJ derives to CJ_DROPSHIPPING, the marketplaces
+// to OTHER_VERIFIED (a verified purchasing path).
+const SUPPLIER_SOURCE_PRESETS = ['AliExpress', 'Amazon', 'Alibaba', 'CJ', 'eBay', 'Walmart'] as const;
+
 // Header-click sorting for the seller-hub table: which sort keys each column
 // toggles between (asc <-> desc), and the direction a first click uses.
 const HEADER_SORT: Partial<Record<CatalogColumnKey, { asc: string; desc: string; first: string }>> = {
@@ -157,6 +163,7 @@ export function CatalogProductsPage() {
   const [fSource, setFSource] = useState('all');
   const [fSpecies, setFSpecies] = useState('all');
   const [fImage, setFImage] = useState('all');
+  const [fSeo, setFSeo] = useState('all');
   const [sort, setSort] = useState('name');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -294,6 +301,39 @@ export function CatalogProductsPage() {
 
   const autoSeoBulk = () => void runAutoSeo(products);
 
+  // A run killed by a full page reload restores its checkpoint from localStorage
+  // (`interrupted`). Resume resolves those ids back to the rows currently loaded;
+  // products that actually saved before the reload are now 'complete' and get
+  // skipped by the same eligibility check, so nothing is regenerated or overwritten.
+  const resumeInterruptedSeo = async () => {
+    const inter = useSeoJobStore.getState().interrupted;
+    if (!inter) return;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const targets = inter.ids.map((id) => byId.get(id)).filter((p): p is CatalogProduct => Boolean(p));
+    if (targets.length === 0) {
+      notify('The products from the interrupted SEO run are gone from the catalog — cleared.', 'info');
+      useSeoJobStore.getState().dismissInterrupted();
+      return;
+    }
+    const work = targets.filter((p) => p.name.trim() && seoStatus(p) !== 'complete');
+    if (work.length === 0) {
+      notify('The remaining products from the interrupted SEO run already have complete SEO.', 'info');
+      useSeoJobStore.getState().dismissInterrupted();
+      return;
+    }
+    if (!window.confirm(`Resume Auto SEO for the ${work.length} product(s) left from the interrupted run? Complete SEO is never overwritten.`)) return;
+    setDbToken(await getFreshAccessToken());
+    const started = await useSeoJobStore.getState().resume({
+      targets,
+      statusOf: seoStatus,
+      runOne: generateAndSaveSeo,
+      onFinished: async () => {
+        if (mountedRef.current) await load();
+      },
+    });
+    if (started) notify(`Auto SEO resumed — ${work.length} to process. It keeps running in the background.`);
+  };
+
   // Column header click -> toggle asc/desc (first click uses the useful default).
   const headerSort = (k: CatalogColumnKey) => {
     const s = HEADER_SORT[k];
@@ -338,12 +378,13 @@ export function CatalogProductsPage() {
     if (fImage === 'no-image' && p.images.length > 0) return false;
     if (fImage === 'has-image' && p.images.length === 0) return false;
     if (fImage === 'single-image' && p.images.length <= 1) return false;
+    if (fSeo !== 'all' && seoStatus(p) !== fSeo) return false;
     if (q) {
       const needle = q.toLowerCase();
       return [p.name, p.brand, p.sku, p.categoryName, ...p.tags].join(' ').toLowerCase().includes(needle);
     }
     return true;
-  }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, q]);
+  }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, fSeo, q]);
 
   const sorted = useMemo(() => {
     const rows = [...filtered];
@@ -656,6 +697,35 @@ export function CatalogProductsPage() {
         </div>
       )}
 
+      {/* Interrupted-run offer - a full page reload killed a running Auto SEO
+          job; the store restored its checkpoint from localStorage, so the
+          remaining products can be resumed instead of lost. */}
+      {seo.interrupted && !seo.running && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-amber-900 font-semibold flex items-center gap-2">
+            <Warning size={16} />Auto SEO was interrupted
+          </span>
+          <span className="text-xs text-amber-700">
+            {seo.interrupted.processed} of {seo.interrupted.ids.length} products were processed before the page reloaded.
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => void resumeInterruptedSeo()}
+              disabled={loading || seo.running}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg"
+            >
+              Resume remaining
+            </button>
+            <button
+              onClick={() => useSeoJobStore.getState().dismissInterrupted()}
+              className="px-3 py-1.5 border border-amber-300 hover:bg-amber-100 text-amber-800 text-xs font-medium rounded-lg"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-2">
         <div className="relative lg:col-span-2">
@@ -691,6 +761,12 @@ export function CatalogProductsPage() {
           <option value="RISK_REVIEW">Risk Review</option>
           <option value="DRAFT">Draft</option>
           <option value="none">Unclassified</option>
+        </select>
+        <select value={fSeo} onChange={(e) => setFSeo(e.target.value)} className={I} aria-label="Filter by SEO state">
+          <option value="all">All SEO states</option>
+          <option value="complete">SEO complete</option>
+          <option value="incomplete">SEO incomplete</option>
+          <option value="missing">SEO missing</option>
         </select>
         <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={I} aria-label="Filter by source / economics">
           <option value="all">All sources</option>
@@ -2167,6 +2243,36 @@ function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends k
 // ============================================================================
 // QUICK ADD FORM (compact one-screen product creation)
 // ============================================================================
+function SupplierSourceSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const preset = SUPPLIER_SOURCE_PRESETS.find((x) => x.toLowerCase() === value.trim().toLowerCase());
+  const [custom, setCustom] = useState(!preset && value.trim() !== '');
+  return (
+    <>
+      <select
+        value={preset ? preset : custom ? '__other' : ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === '__other') { setCustom(true); onChange(''); }
+          else { setCustom(false); onChange(v); }
+        }}
+        className={I}
+      >
+        <option value="">— Select —</option>
+        {SUPPLIER_SOURCE_PRESETS.map((s) => <option key={s} value={s}>{s}</option>)}
+        <option value="__other">Other / Custom…</option>
+      </select>
+      {custom && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${I} mt-1.5`}
+          placeholder="e.g. Himalayan Koh (own brand)"
+        />
+      )}
+    </>
+  );
+}
+
 function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void; onAddCategory?: (name: string) => Promise<CatalogCategory | null> }) {
   const set = <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => onChange({ ...product, [k]: v });
   const [newCatOpen, setNewCatOpen] = useState(false);
@@ -2223,6 +2329,10 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
         <div>
           <label className={L}>Stock quantity</label>
           <input type="number" min="0" value={product.inventoryQty} onChange={(e) => set('inventoryQty', +e.target.value)} className={I} placeholder="0" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Supplier source <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+          <SupplierSourceSelect value={product.supplierSource || ''} onChange={(v) => set('supplierSource', v)} />
         </div>
         <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-700 pb-2"><input type="checkbox" checked={product.freeShipping} onChange={(e) => set('freeShipping', e.target.checked)} className="w-4 h-4" />Free shipping on this product</label></div>
