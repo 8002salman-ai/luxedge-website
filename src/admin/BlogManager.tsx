@@ -738,7 +738,7 @@ export default function BlogManager() {
                       </td>
                       <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_META[r.status].cls}`}>{STATUS_META[r.status].label}</span></td>
                       <td className="px-6 py-4 text-xs text-gray-500">{r.generated_by || 'manual'}</td>
-                      <td className="px-6 py-4 text-xs text-gray-500">{new Date(r.updated_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-xs text-gray-500 whitespace-nowrap">{new Date(r.updated_at).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {stats == null ? (
                           <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>

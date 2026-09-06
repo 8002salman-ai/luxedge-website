@@ -115,6 +115,15 @@ function ReadinessBadge({ readiness }: { readiness?: CommerceReadiness | null })
 
 // eBay-style listing age from the genuine first-live date (published_at),
 // falling back to created_at only for products that were never published.
+// Time of day (e.g. "2:14 PM") — shown beside listing age so sellers see the
+// exact clock time a listing went live, not just how many days ago.
+function timeLabel(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 function ageLabel(iso: string | undefined | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -1080,14 +1089,15 @@ export function CatalogProductsPage() {
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="relative inline-block group cursor-help">
                         <span className="text-xs font-semibold text-gray-700">{ageLabel(ageIso)}</span>
+                        {ageIso && <span className="ml-1 text-[10px] text-gray-400">{timeLabel(ageIso)}</span>}
                         {endsIn && <span className="ml-1 text-[10px] text-amber-600">· {endsIn}</span>}
                         <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
-                          <span className="block">Listed: {ageIso ? new Date(ageIso).toLocaleDateString() : '—'}</span>
-                          <span className="block">Age: {ageIso ? `${Math.max(0, Math.floor((Date.now() - new Date(ageIso).getTime()) / 86400000))} days` : '—'}</span>
-                          {p.publishedAt && <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleDateString()}</span>}
-                          {p.publishedAt && p.createdAt && p.createdAt !== p.publishedAt && <span className="block text-gray-400">Created: {new Date(p.createdAt).toLocaleDateString()}</span>}
-                          {!p.publishedAt && <span className="block text-gray-400">Never published — age from created date ({p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'})</span>}
-                          {p.listingEndsAt && <span className="block">Ends: {new Date(p.listingEndsAt).toLocaleDateString()}</span>}
+                          <span className="block">Listed: {ageIso ? new Date(ageIso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</span>
+                          <span className="block">Age: {ageIso ? `${Math.max(0, Math.floor((Date.now() - new Date(ageIso).getTime()) / 86400000))} days · ${timeLabel(ageIso)}` : '—'}</span>
+                          {p.publishedAt && <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
+                          {p.publishedAt && p.createdAt && p.createdAt !== p.publishedAt && <span className="block text-gray-400">Created: {new Date(p.createdAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
+                          {!p.publishedAt && <span className="block text-gray-400">Never published — age from created date ({p.createdAt ? new Date(p.createdAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'})</span>}
+                          {p.listingEndsAt && <span className="block">Ends: {new Date(p.listingEndsAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
                         </span>
                       </span>
                     </td>
@@ -1332,7 +1342,7 @@ export function CatalogProductsPage() {
               </label>
             </div>
             {listingModal.listingEndsAt && (
-              <p className="text-xs text-amber-600">Currently ends {new Date(listingModal.listingEndsAt).toLocaleDateString()} ({endsInLabel(listingModal.listingEndsAt) || '—'}).</p>
+              <p className="text-xs text-amber-600">Currently ends {new Date(listingModal.listingEndsAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })} ({endsInLabel(listingModal.listingEndsAt) || '—'}).</p>
             )}
             <button onClick={() => setListingModal(null)} className="w-full py-2.5 border rounded-lg">Close</button>
           </div>
