@@ -38,6 +38,7 @@ import {
   COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
   type CommerceReadiness,
 } from '../features/catalog/commerceReadiness';
+import { SUPPLIER_SOURCE_PRESETS, supplierSearchUrl } from '../features/catalog/supplierSource';
 import { generateSeoJson } from '../features/ai/seo';
 import { useSeoJobStore } from '../features/catalog/seoJobStore';
 import {
@@ -70,11 +71,9 @@ const READINESS_BADGE: Record<CommerceReadiness, string> = {
   DRAFT: 'bg-gray-100 text-gray-600',
 };
 
-// "Supplier source" presets for Quick Add — real marketplaces/sourcing
-// channels. Written into supplierSource (the free-text field the filters and
-// deriveSourceType key off): CJ derives to CJ_DROPSHIPPING, the marketplaces
-// to OTHER_VERIFIED (a verified purchasing path).
-const SUPPLIER_SOURCE_PRESETS = ['AliExpress', 'Amazon', 'Alibaba', 'CJ', 'eBay', 'Walmart'] as const;
+// "Supplier source" presets + marketplace search-link builder live in
+// features/catalog/supplierSource (one shared home for the Quick Add and
+// Detail Add dropdowns and the URL prefill below).
 
 // Header-click sorting for the seller-hub table: which sort keys each column
 // toggles between (asc <-> desc), and the direction a first click uses.
@@ -2332,7 +2331,25 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
         </div>
         <div className="sm:col-span-2">
           <label className={L}>Supplier source <span className="normal-case font-normal text-gray-400">(optional)</span></label>
-          <SupplierSourceSelect value={product.supplierSource || ''} onChange={(v) => set('supplierSource', v)} />
+          <SupplierSourceSelect
+            value={product.supplierSource || ''}
+            onChange={(v) => {
+              const prevSearch = supplierSearchUrl(product.supplierSource || '', product.name);
+              const currentUrl = (product.supplierUrl || '').trim();
+              // Prefill a marketplace search page for this product's name when
+              // the field is empty, or when it still holds the previous source's
+              // auto search URL (switching AliExpress -> Amazon updates it).
+              // A URL the seller typed by hand is never overwritten.
+              const next = { ...product, supplierSource: v };
+              const search = supplierSearchUrl(v, product.name);
+              if (search && (!currentUrl || currentUrl === prevSearch)) next.supplierUrl = search;
+              onChange(next);
+            }}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Supplier URL <span className="normal-case font-normal text-gray-400">(marketplace search — replace with the real listing page)</span></label>
+          <input value={product.supplierUrl || ''} onChange={(e) => set('supplierUrl', e.target.value)} className={I} placeholder="https://… (picking a source above auto-fills its search for this product)" />
         </div>
         <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-700 pb-2"><input type="checkbox" checked={product.freeShipping} onChange={(e) => set('freeShipping', e.target.checked)} className="w-4 h-4" />Free shipping on this product</label></div>
