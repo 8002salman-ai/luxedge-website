@@ -1,44 +1,34 @@
-// Regenerate public/sitemap.xml from the live catalog — ACTIVE + COMMERCE_READY
-// products only (never DRAFT/INACTIVE/SOURCE_PENDING URLs). Mirrors the
-// storefront visibility gate (src/services/catalog.ts isStorefrontReady).
-// Static pages + categories + commerce-ready products.
+// Regenerate public/sitemap.xml from the LIVE database — the same URL set the
+// worker's dynamic sitemap serves (worker/sitemap.ts). This static file is the
+// FALLBACK when the DB is unreachable at request time, so it must never carry
+// stale/archived/deleted URLs: GSC keeps re-crawling what it last saw here.
+//
+// Included (mirrors buildSitemap exactly):
+//   * static routes
+//   * active storefront categories (is_active)
+//   * published CMS blog posts (status=published — the RLS-visible set)
+//   * commerce-ready active products, minus editorial holds
+//   * /media hub + published, non-held media pages
 import fs from 'fs';
+import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds.ts';
+
 const env = {};
 for (const line of fs.readFileSync('.env', 'utf8').split('\n')) {
   const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
   if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
 }
-const URL = (env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+const URL_BASE = (env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL || !KEY) { console.error('env missing'); process.exit(1); }
+if (!URL_BASE || !KEY) { console.error('env missing VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY'); process.exit(1); }
 
-const today = new Date().toISOString().slice(0, 10);
 const HEAD = { apikey: KEY, Authorization: `Bearer ${KEY}` };
-
-// The 0016 commerce_readiness column exists on production; select it always
-// (the OpenAPI schema probe is unreliable on some Supabase versions). The
-// stored value mirrors the storefront gate exactly, so it is authoritative
-// when present.
-const sel = 'id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness';
-const prods = await (await fetch(
-  `${URL}/rest/v1/products?select=${sel}&status=in.(active,published)&limit=500`,
-  { headers: HEAD },
-)).json();
-const cats = await (await fetch(`${URL}/rest/v1/categories?select=slug&is_active=eq.true&limit=50`, { headers: HEAD })).json();
-
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 /** Mirror of the storefront commerce-ready gate (services/catalog.ts). */
 function commerceReady(p) {
-  // Stored COMMERCE_READY is authoritative (same rule as isStorefrontReady).
   if (typeof p.commerce_readiness === 'string' && p.commerce_readiness) {
     return p.commerce_readiness === 'COMMERCE_READY';
   }
-  // Fallback mirrors the app's authoritative deriveCommerceReadiness
-  // (src/features/catalog/commerceReadiness.ts): any verified supplier source
-  // (OTHER_VERIFIED, e.g. AliExpress) with a real cost basis and USA
-  // fulfillment evidence qualifies — NOT only CJ. This keeps the sitemap in
-  // sync with the products actually purchasable on the storefront.
   const src = String(p.supplier_source || '').toLowerCase();
   const isUnverified = !src || /kong|official manufacturer|manufacturer page/i.test(src);
   if (isUnverified) return false;
@@ -47,32 +37,34 @@ function commerceReady(p) {
   return hasCost && hasFulfillment;
 }
 
-const visible = (Array.isArray(prods) ? prods : []).filter((p) => (p.status === 'active' || p.status === 'published') && commerceReady(p));
+const get = async (path) => {
+  const res = await fetch(`${URL_BASE}/rest/v1/${path}`, { headers: HEAD });
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+};
 
-// Blog posts are authored in the app (src/App.tsx BLOGS array); keep their URLs
-// stable here so sitemap and storefront stay in sync.
-const blogSlugs = [
-  'essential-supplies-new-puppy', 'cozy-corner-for-your-cat', 'grooming-routine-long-haired-pets',
-  'best-gifts-under-50-for-pets', 'interactive-toys-pet-enrichment', 'get-pet-to-drink-more-water',
-  'traveling-with-pets-tips', 'slow-feeding-explained', 'online-pet-shopping-safety-tips',
-  'holiday-pet-gift-guide', 'summer-pet-safety-checklist', 'senior-dog-comfort-guide',
-  'indoor-cat-enrichment-ideas', 'dog-training-basics-beginners', 'cat-health-wellness-tips',
-  'pet-travel-essentials-guide', 'bird-care-beginners-guide', 'equestrian-essentials-horse-care',
-  'best-bird-feeder-buyers-guide', 'horse-grooming-kit-buyers-guide', 'dog-car-safety-seat-belt-guide',
-  'dog-cooling-mat-buyers-guide', 'automatic-pet-feeder-buyers-guide', 'cat-window-perch-buyers-guide',
-  'horse-salt-lick-buyers-guide', 'horse-halter-lead-rope-buyers-guide',
-  'horse-fly-mask-buyers-guide', 'horse-salt-lick-placement-guide',
-];
+const [prods, cats, blogs, media] = await Promise.all([
+  get('products?select=id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness&status=in.(active,published)&limit=500'),
+  get('categories?select=slug&is_active=eq.true&limit=200'),
+  get('blog_posts?select=slug&status=eq.published&limit=500'),
+  get('media_videos?select=slug&status=eq.published&limit=500'),
+]);
 
 const urls = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
 for (const c of cats) urls.push(`/category/${c.slug}`);
-for (const s of blogSlugs) urls.push(`/blog/${s}`);
-for (const p of visible) urls.push(`/product/${p.slug || p.id}`);
+for (const b of blogs) urls.push(`/blog/${b.slug}`);
+urls.push('/media');
+for (const m of media) { if (!isHeldMedia(m.slug)) urls.push(`/media/${m.slug}`); }
+for (const p of prods) {
+  if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) {
+    urls.push(`/product/${p.slug || p.id}`);
+  }
+}
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map(u => `  <url><loc>https://luxedge.us${u}</loc><lastmod>${today}</lastmod></url>`).join('\n')}
+${urls.map(u => `  <url><loc>https://luxedge.us${u}</loc></url>`).join('\n')}
 </urlset>
 `;
 fs.writeFileSync('public/sitemap.xml', xml);
-console.log(`sitemap: ${urls.length} URLs (${visible.length} commerce-ready active products, ${(Array.isArray(cats) ? cats : []).length} categories)`);
+console.log(`sitemap: ${urls.length} URLs (${blogs.length} published blogs, ${cats.length} categories, ${media.length} published videos, ${prods.filter(p => commerceReady(p) && !isHeldProduct(p.slug)).length} commerce-ready products)`);

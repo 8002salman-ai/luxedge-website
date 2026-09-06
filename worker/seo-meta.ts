@@ -892,8 +892,10 @@ function injectFaqBody(html: string): string {
   return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
-/** Pre-renders the /shop page with category navigation. */
-function injectShopBody(html: string): string {
+/** Pre-renders the /shop page: category navigation plus direct links to the
+ * commerce-ready products (crawlers reach every product from the hub page
+ * without depending on per-category JS rendering). Mirrors injectCategoryBody. */
+async function injectShopBody(html: string): Promise<string> {
   const cats = [
     ['Dog Supplies', '/category/dog-supplies'], ['Cat Supplies', '/category/cat-supplies'],
     ['Pet Beds', '/category/pet-beds'], ['Pet Toys', '/category/pet-toys'],
@@ -908,6 +910,14 @@ function injectShopBody(html: string): string {
     `<h2>Categories</h2>`,
     `<ul>${links}</ul>`,
   ];
+  const products = await getProducts();
+  if (products) {
+    const ready = products.filter((p) => p.slug && !isHeldProduct(p.slug)).slice(0, 60);
+    if (ready.length > 0) {
+      const items = ready.map((p) => `<li><a href="/product/${esc(p.slug!)}">${esc(p.name)}</a></li>`).join('');
+      parts.push(`<h2>All Products</h2>`, `<ul>${items}</ul>`);
+    }
+  }
   return html.replace('<div id="root"></div>', `<div id="root"><article>${parts.join('\n')}</article></div>`);
 }
 
@@ -1119,7 +1129,7 @@ export async function maybeInjectSeo(
         'Browse the Luxedge curated collection — dog beds and leashes, cat toys and fountains, bird feeders, horse grooming and livestock essentials, all sourced and ready to ship.',
       canonical: `${root}/shop`,
     });
-    out = injectShopBody(out);
+    out = await injectShopBody(out);
     return { html: out, status: 200 };
   }
 
