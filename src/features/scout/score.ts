@@ -33,7 +33,16 @@ export const SCORE_WEIGHTS: Record<string, number> = {
   returnRisk: 5,
 };
 
-export const SHORTLIST_THRESHOLD = 75;
+/**
+ * Shortlist bar for PRODUCT_SHORTLISTED. Calibrated to what a WELL-EVIDENCED
+ * CJ candidate can actually score: CJ supplies no rating/review evidence
+ * (ratings 0) and supplier reliability caps at 10 (platform, not manufacturer),
+ * so a strong record (pet title 20 + supplier 10 + fast delivery 15 + verified
+ * margin 15 + images 8-10 + competition/upsell 2-7 + risk 1-3) lands ~65-78.
+ * 75 rejected almost the entire catalog; 60 admits strong evidence while
+ * thin records (no price/images/margin) still fall far below.
+ */
+export const SHORTLIST_THRESHOLD = 60;
 
 export interface ScoreInput {
   title: string;
