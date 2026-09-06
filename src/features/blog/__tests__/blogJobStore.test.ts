@@ -3,6 +3,7 @@
 // own queue, so a pending Products run never offers itself on the Blog page
 // (and vice versa), and the two can never block each other.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CmsBlogRow } from '../../../services/blog';
 
 class FakeStorage implements Storage {
   private map = new Map<string, string>();
@@ -61,10 +62,11 @@ describe('blog job store isolation', () => {
       const { useBlogJobStore } = await import('../blogJobStore');
       let release!: () => void;
       const gate = new Promise<void>((res) => { release = res; });
-      const runOne = vi.fn(async (p: { id: string }) => { if (p.id === 'post-a') await gate; });
+      const runOne = vi.fn(async (p: CmsBlogRow) => { if (p.id === 'post-a') await gate; });
+      const post = (id: string, title: string) => ({ id, title } as unknown as CmsBlogRow);
 
       const started = useBlogJobStore.getState().start({
-        targets: [{ id: 'post-a', title: 'A' }, { id: 'post-b', title: 'B' }] as { id: string }[],
+        targets: [post('post-a', 'A'), post('post-b', 'B')],
         statusOf: () => 'missing' as const,
         runOne,
         label: (p) => p.id,

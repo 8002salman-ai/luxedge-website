@@ -157,6 +157,7 @@ export function CatalogProductsPage() {
   const [fSource, setFSource] = useState('all');
   const [fSpecies, setFSpecies] = useState('all');
   const [fImage, setFImage] = useState('all');
+  const [fSeo, setFSeo] = useState('all');
   const [sort, setSort] = useState('name');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -371,12 +372,13 @@ export function CatalogProductsPage() {
     if (fImage === 'no-image' && p.images.length > 0) return false;
     if (fImage === 'has-image' && p.images.length === 0) return false;
     if (fImage === 'single-image' && p.images.length <= 1) return false;
+    if (fSeo !== 'all' && seoStatus(p) !== fSeo) return false;
     if (q) {
       const needle = q.toLowerCase();
       return [p.name, p.brand, p.sku, p.categoryName, ...p.tags].join(' ').toLowerCase().includes(needle);
     }
     return true;
-  }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, q]);
+  }), [products, fStatus, fCat, fFlag, fReady, fSource, fSpecies, fImage, fSeo, q]);
 
   const sorted = useMemo(() => {
     const rows = [...filtered];
@@ -753,6 +755,12 @@ export function CatalogProductsPage() {
           <option value="RISK_REVIEW">Risk Review</option>
           <option value="DRAFT">Draft</option>
           <option value="none">Unclassified</option>
+        </select>
+        <select value={fSeo} onChange={(e) => setFSeo(e.target.value)} className={I} aria-label="Filter by SEO state">
+          <option value="all">All SEO states</option>
+          <option value="complete">SEO complete</option>
+          <option value="incomplete">SEO incomplete</option>
+          <option value="missing">SEO missing</option>
         </select>
         <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={I} aria-label="Filter by source / economics">
           <option value="all">All sources</option>
