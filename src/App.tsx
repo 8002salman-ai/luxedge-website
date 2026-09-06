@@ -20,7 +20,7 @@ import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/car
 import { createCheckoutSession, fetchCheckoutSessionStatus, probeStripeConfig, type CheckoutSessionStatus } from './services/checkout';
 import { useWishlist, WishlistButton, configureWishlistAccount } from './features/wishlist/wishlist';
 import {
-  ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package,
+  ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package, Building01,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
   MarkerPin01,  Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
   LayoutGrid01, AlertTriangle, Eye,
@@ -1443,6 +1443,12 @@ function ProductDetailPage() {
   }
 
   const reviews = allReviews.filter(r => r.productId === product.id && r.status === 'approved');
+  // AliExpress-style review rating breakdown — computed ONLY from verified
+  // user reviews, never invented. Distribution bars sum to the real count.
+  const reviewDist = [5, 4, 3, 2, 1].map(star => ({
+    star,
+    count: reviews.filter(r => r.rating === star).length,
+  }));
   const activePrice = selVariant ? selVariant.salePrice : product.price;
   const activeOriginal = selVariant ? selVariant.price : product.originalPrice;
   const activeStock = selVariant ? selVariant.stock : product.stock;
@@ -1645,7 +1651,7 @@ function ProductDetailPage() {
             </button>
           </div>
 
-          {/* Trust */}
+          {/* Trust / commitments */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { icon: Truck01, t: 'Shipping shown at checkout' },
@@ -1658,6 +1664,35 @@ function ProductDetailPage() {
                 <span className="text-[10px] sm:text-[11px] text-luxe-gray font-medium leading-tight">{b.t}</span>
               </div>
             ))}
+          </div>
+
+          {/* Sold-by / store card — AliExpress-style, real Luxedge info only */}
+          <div className="mt-4 rounded-2xl border border-luxe-silver/70 bg-white shadow-sm p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 shrink-0 rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center">
+                <Building01 strokeWidth={1.5} size={20} className="text-luxe-gold-dark" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Sold by</p>
+                <p className="text-sm font-bold text-luxe-black">{product.brand || 'Luxedge Store'}</p>
+                <p className="text-[11px] text-luxe-gray truncate">Curated pet essentials · Embani LLC</p>
+              </div>
+              <Link to="/contact" className="ml-auto shrink-0 px-3 py-2 text-[11px] font-bold text-luxe-gold border border-luxe-gold/40 rounded-lg hover:bg-luxe-gold-soft transition-colors">
+                Message
+              </Link>
+            </div>
+            {/* Review score from verified user reviews (never invented) */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-luxe-gray">
+              {reviews.length > 0 ? (
+                <span className="flex items-center gap-1">
+                  <span className="font-bold text-gray-900">{avgRating.toFixed(1)}</span>
+                  <span className="text-star">★</span> Positive feedback from {reviews.length} verified review{reviews.length !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                <span>No verified reviews yet — feedback builds as customers shop</span>
+              )}
+              <span className="flex items-center gap-1"><RefreshCcw01 strokeWidth={1.5} size={12} className="text-luxe-gold" /> Returns within 30 days</span>
+            </div>
           </div>
 
           {product.deliveryMinDays != null && product.deliveryMaxDays != null && (
@@ -1718,14 +1753,35 @@ function ProductDetailPage() {
         </table>
       )}
 
-      {/* Reviews */}
+      {/* Reviews — AliExpress-style: big score + star distribution bars */}
       {tab === 'reviews' && (
         <div className="max-w-3xl">
           {reviews.length > 0 && (
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-2xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
-              <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={16} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-200'} />)}</div>
-              <span className="text-xs text-gray-500">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</span>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-4 mb-5 rounded-2xl border border-luxe-silver/70 bg-luxe-cream/50 p-5">
+              {/* Big average score */}
+              <div className="text-center">
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-4xl font-bold text-gray-900">{avgRating.toFixed(1)}</span>
+                  <span className="text-lg text-gray-400">/5</span>
+                </div>
+                <div className="flex gap-0.5 justify-center mt-1">{[...Array(5)].map((_, i) => <Star01 strokeWidth={1.5} key={i} size={15} fill={i < Math.round(avgRating) ? 'currentColor' : 'none'} className={i < Math.round(avgRating) ? 'text-star' : 'text-gray-300'} />)}</div>
+                <p className="text-[11px] text-gray-500 mt-1">{reviews.length} verified review{reviews.length !== 1 ? 's' : ''}</p>
+              </div>
+              {/* Star distribution bars */}
+              <div className="flex-1 min-w-[220px] space-y-1.5">
+                {reviewDist.map(({ star, count }) => {
+                  const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0;
+                  return (
+                    <div key={star} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-6 text-gray-500 font-medium shrink-0">{star} star</span>
+                      <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-luxe-gold transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-8 text-right text-gray-400 shrink-0">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
