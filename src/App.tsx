@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, lazy, Suspense, Fragment } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, useMemo, lazy, Suspense, Fragment } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -1812,6 +1812,184 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
   );
 }
 
+// --------------------------------------------------------------------------
+// HOMEPAGE PRODUCT BROWSER — a compact shop-style section: Sort By dropdown
+// plus real-data facet filters (category / species / brand / price /
+// availability), each with honest counts from the live catalog. No invented
+// facets: a facet only appears when at least one active product has it.
+// --------------------------------------------------------------------------
+const HOME_PRICE_BUCKETS = [
+  { id: 25, label: 'Under $25' },
+  { id: 50, label: '$25 – $50' },
+  { id: 100, label: '$50 – $100' },
+  { id: 1000, label: 'Over $100' },
+] as const;
+
+function speciesOf(p: Product): string {
+  const s = (p.intendedSpecies || '').toUpperCase();
+  if (s === 'DOG' || s === 'CAT' || s === 'BOTH') return s === 'DOG' ? 'Dog' : s === 'CAT' ? 'Cat' : 'Dog & Cat';
+  if (p.category === 'Bird Supplies') return 'Birds';
+  if (p.category === 'Horse') return 'Horse';
+  if (p.category === 'Cattle') return 'Cattle';
+  return 'Other';
+}
+
+function HomeBrowseSection({ products }: { products: Product[] }) {
+  const { reviews } = useApp();
+  const [sort, setSort] = useState('featured');
+  const [cat, setCat] = useState('All');
+  const [species, setSpecies] = useState('All');
+  const [brand, setBrand] = useState('All');
+  const [maxPrice, setMaxPrice] = useState(0);
+  const [onlyInStock, setOnlyInStock] = useState(false);
+  const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(false);
+
+  // Verified-review scores (real user reviews only — same source as PCard).
+  const scoreMap = useMemo(() => {
+    const map = new Map<string, { sum: number; count: number }>();
+    for (const r of reviews) {
+      if (r.status !== 'approved') continue;
+      const cur = map.get(r.productId) || { sum: 0, count: 0 };
+      cur.sum += r.rating; cur.count += 1;
+      map.set(r.productId, cur);
+    }
+    return new Map([...map].map(([id, v]) => [id, { avg: v.sum / v.count, count: v.count }]));
+  }, [reviews]);
+
+  // Facet options derived from the live catalog — only real values with counts.
+  const facets = useMemo(() => {
+    const catCounts = new Map<string, number>();
+    const speciesCounts = new Map<string, number>();
+    const brandCounts = new Map<string, number>();
+    for (const p of products) {
+      const c = p.category || 'Pet Supplies';
+      catCounts.set(c, (catCounts.get(c) || 0) + 1);
+      const s = speciesOf(p);
+      speciesCounts.set(s, (speciesCounts.get(s) || 0) + 1);
+      const b = p.brand || 'Luxedge';
+      brandCounts.set(b, (brandCounts.get(b) || 0) + 1);
+    }
+    return {
+      cats: [...catCounts].sort((a, b) => b[1] - a[1]),
+      species: [...speciesCounts].sort((a, b) => b[1] - a[1]),
+      brands: [...brandCounts].sort((a, b) => b[1] - a[1]),
+    };
+  }, [products]);
+
+  const activeFilters = (cat !== 'All' ? 1 : 0) + (species !== 'All' ? 1 : 0) + (brand !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
+
+  const clearAll = () => { setCat('All'); setSpecies('All'); setBrand('All'); setMaxPrice(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); };
+
+  const f = products
+    .filter(p => cat === 'All' || p.category === cat)
+    .filter(p => species === 'All' || speciesOf(p) === species)
+    .filter(p => brand === 'All' || (p.brand || 'Luxedge') === brand)
+    .filter(p => maxPrice === 0 || p.price <= maxPrice)
+    .filter(p => !onlyInStock || p.stock > 0)
+    .filter(p => !onlyFreeShipping || p.freeShipping)
+    .filter(p => !onlyNew || p.newArrival)
+    .sort((a, b) => {
+      if (sort === 'price-low') return a.price - b.price;
+      if (sort === 'price-high') return b.price - a.price;
+      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+      if (sort === 'rated') return (scoreMap.get(b.id)?.avg || 0) - (scoreMap.get(a.id)?.avg || 0);
+      if (sort === 'reviewed') return (scoreMap.get(b.id)?.count || 0) - (scoreMap.get(a.id)?.count || 0);
+      return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+    });
+
+  const chipBase = 'px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors whitespace-nowrap';
+  const chipOff = 'border-luxe-silver/80 text-luxe-gray hover:border-luxe-gold/60 hover:text-luxe-gold bg-white';
+  const chipOn = 'border-luxe-gold bg-luxe-gold-soft text-luxe-gold-dark';
+  const FacetRow = ({ label, options, value, onPick }: {
+    label: string; options: [string, number][]; value: string;
+    onPick: (v: string) => void;
+  }) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">{label}</span>
+      <button onClick={() => onPick('All')} className={`${chipBase} ${value === 'All' ? chipOn : chipOff}`}>All</button>
+      {options.map(([opt, count]) => (
+        <button key={opt} onClick={() => onPick(value === opt ? 'All' : opt)} className={`${chipBase} ${value === opt ? chipOn : chipOff}`}>
+          {opt} <span className="opacity-60">({count})</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <section className="section-compact bg-white">
+      <div className="max-w-7xl mx-auto px-4">
+        <Reveal>
+          <SectionHeader eyebrow="Collection" title="Browse the Collection" to="/shop" linkLabel="View all in Shop" />
+        </Reveal>
+
+        <Reveal delay={60}>
+          <div className="space-y-3">
+            {/* Toolbar: result count + Sort By */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[12px] text-luxe-gray">{f.length} product{f.length !== 1 ? 's' : ''}</p>
+              <label className="flex items-center gap-2 text-[12px] font-semibold text-luxe-gray">
+                Sort By
+                <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort products"
+                  className="text-[12px] px-3 py-1.5 border border-luxe-silver rounded-lg bg-white focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 font-medium text-luxe-black">
+                  <option value="featured">Featured</option>
+                  <option value="newest">Newest</option>
+                  <option value="rated">Highest Rated</option>
+                  <option value="reviewed">Most Reviewed</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                </select>
+              </label>
+            </div>
+
+            {/* Facet chips with real counts */}
+            <FacetRow label="Category" options={facets.cats} value={cat} onPick={setCat} />
+            <FacetRow label="Species" options={facets.species} value={species} onPick={setSpecies} />
+            <FacetRow label="Brand" options={facets.brands} value={brand} onPick={setBrand} />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">Price</span>
+              <button onClick={() => setMaxPrice(0)} className={`${chipBase} ${maxPrice === 0 ? chipOn : chipOff}`}>Any</button>
+              {HOME_PRICE_BUCKETS.map(b => {
+                const count = products.filter(p => b.id === 1000 ? p.price > 100 : p.price <= b.id).length;
+                return (
+                  <button key={b.id} onClick={() => setMaxPrice(maxPrice === b.id ? 0 : b.id)} className={`${chipBase} ${maxPrice === b.id ? chipOn : chipOff}`}>
+                    {b.label} <span className="opacity-60">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">Availability</span>
+              {([['In stock', onlyInStock, setOnlyInStock], ['Free shipping', onlyFreeShipping, setOnlyFreeShipping], ['New arrivals', onlyNew, setOnlyNew]] as const).map(([label, active, setter]) => (
+                <button key={label} onClick={() => setter(!active)} className={`${chipBase} ${active ? chipOn : chipOff}`}>{label}</button>
+              ))}
+            </div>
+
+            {activeFilters > 0 && (
+              <button onClick={clearAll} className="text-[12px] font-semibold text-luxe-gold hover:text-luxe-gold-dark hover:underline">
+                Clear all filters ({activeFilters})
+              </button>
+            )}
+          </div>
+        </Reveal>
+
+        <Reveal delay={90}>
+          {f.length > 0 ? (
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
+              {f.slice(0, 10).map(p => <PCard key={`browse-${p.id}`} product={p} />)}
+            </div>
+          ) : (
+            <div className="mt-5 text-center py-14">
+              <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products match these filters</p>
+              <button onClick={clearAll} className="mt-3 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
+            </div>
+          )}
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 function HomePage() {
   const { products, freeShippingEnabled } = useApp();
   const [nlEmail, setNlEmail] = useState('');
@@ -2157,19 +2335,8 @@ function HomePage() {
             </section>
           )}
 
-          {/* All Products — full catalog browsing */}
-          {featured.length > 0 && (
-            <section className="section-compact bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Collection" title="Shop All Products" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(homepageVisualProducts.length, 20))}>
-                    {homepageVisualProducts.slice(0, 20).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
+          {/* All Products — browsable collection (Sort By + facet filters with counts) */}
+          {featured.length > 0 && <HomeBrowseSection products={homepageVisualProducts} />}
         </>
       )}
 
