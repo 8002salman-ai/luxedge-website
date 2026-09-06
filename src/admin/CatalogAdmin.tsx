@@ -1955,7 +1955,7 @@ export function CatalogProductEditor() {
             <div><label className={L}>Delivery min days</label><input type="number" min="0" value={p.deliveryMinDays ?? ''} onChange={(e) => set('deliveryMinDays', e.target.value ? +e.target.value : null)} className={I} /></div>
             <div><label className={L}>Delivery max days</label><input type="number" min="0" value={p.deliveryMaxDays ?? ''} onChange={(e) => set('deliveryMaxDays', e.target.value ? +e.target.value : null)} className={I} /></div>
             <div className="sm:col-span-2"><label className={L}>Shipping note (truthful)</label><input value={p.shippingNote || ''} onChange={(e) => set('shippingNote', e.target.value)} className={I} placeholder="e.g. Ships from a US warehouse via tracked carrier." /></div>
-            <div className="sm:col-span-2"><label className={L}>Supplier / source reference</label><input value={p.supplierSource || ''} onChange={(e) => set('supplierSource', e.target.value)} className={I} placeholder="e.g. CJ — product id" /></div>
+            <div className="sm:col-span-2"><label className={L}>Supplier / source reference</label><SupplierSourceSelect value={p.supplierSource || ''} onChange={(v) => set('supplierSource', v)} /></div>
           </div>
         )}
 
@@ -1988,7 +1988,7 @@ export function CatalogProductEditor() {
             </div>
 
             <div className="grid sm:grid-cols-2 gap-3">
-              <div><label className={L}>Supplier / source</label><input value={p.supplierSource || ''} onChange={(e) => set('supplierSource', e.target.value)} className={I} placeholder="e.g. CJ / Authorized wholesaler" /></div>
+              <div><label className={L}>Supplier / source</label><SupplierSourceSelect value={p.supplierSource || ''} onChange={(v) => set('supplierSource', v)} /></div>
               <div><label className={L}>Supplier product ref / SKU</label><input value={p.supplierProductRef || ''} onChange={(e) => set('supplierProductRef', e.target.value)} className={I} placeholder="e.g. CJ PID" /></div>
               <div><label className={L}>Supplier URL</label><input value={p.supplierUrl || ''} onChange={(e) => set('supplierUrl', e.target.value)} className={I} placeholder="https://… (verified supplier page)" /></div>
               <div><label className={L}>Fulfillment method</label><input value={p.fulfillmentMethod || ''} onChange={(e) => set('fulfillmentMethod', e.target.value)} className={I} placeholder="e.g. CJ US warehouse dropship" /></div>
