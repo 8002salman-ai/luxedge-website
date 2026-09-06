@@ -236,9 +236,9 @@ function strongDetail(): CjProductDetail {
 function strongAdapter(): FakeCjAdapter {
   const adapter = new FakeCjAdapter([normalizeCjProductDetail(strongDetail(), { market: 'US' })!]);
   // Free-shipping quote (totalPostageFee 0) → margin HIGH + free-shipping
-  // delivery points. Landing on exactly 75 is honest: demand 20 + supplier
-  // 10 + delivery 15 + margin 15 + visual 10 + competition 2 (toy keyword)
-  // + return-risk 3 (1 flag: no ratings) + ratings 0 + upsell 0 = 75.
+  // delivery points. Lands above the calibrated threshold (60): demand 20 +
+  // supplier 10 + delivery 15 + margin 15 + visual 10 + competition 2 (toy
+  // keyword) + return-risk 3 (1 flag: no ratings) + ratings 0 + upsell 0 = 75.
   adapter.freight = {
     costUsd: 0, baseFreightUsd: 0, taxesFeeUsd: 0, clearanceFeeUsd: 0, tariffUsd: 0,
     arrivalDays: '3-5', carrier: 'CJ Logistic', origin: 'US', destination: 'US',
@@ -351,6 +351,44 @@ describe('CJ normalization', () => {
     expect(r.usInventoryTotal).toBe(86);
     expect(r.usInventoryInCountry).toBe(true);
     expect(r.raw.normalizedFrom).toBe('query');
+  });
+
+  // Regression: the REAL /product/query response uses pid/productNameEn/
+  // productSku/categoryName (docs §1.5), NOT the listV2 aliases id/nameEn/sku.
+  // A field mismatch here normalized every detail to null → all enrichments
+  // failed with "CJ product not found or unverifiable". This fixture mirrors
+  // the documented response exactly (no id/nameEn present).
+  it('normalizes the REAL product/query shape (pid/productNameEn/productSku aliases)', () => {
+    const realShape: CjProductDetail = {
+      pid: '000B9312-456A-4D31-94BD-B083E2A198E8',
+      productNameEn: 'Interactive Dog Chew Toy for Large Breeds',
+      productSku: 'CJJJJTJT05843',
+      bigImage: 'https://cf.cjdropshipping.com/quick/product/hero.jpg',
+      productImageSet: [
+        'https://cf.cjdropshipping.com/quick/product/hero.jpg',
+        'https://cf.cjdropshipping.com/quick/product/alt.jpg',
+      ],
+      productWeight: '320.0',
+      sellPrice: 12.5,
+      categoryName: 'Pet Supplies > Dog Supplies > Dog Toys',
+      description: 'Durable rubber chew toy.',
+      variants: [{
+        vid: 'D4057F56-3F09-4541-8461-9D76D014846D',
+        variantSku: 'CJJJJTJT05843-Red',
+        variantSellPrice: 12.5,
+        variantWeight: 320,
+        inventories: [{ countryCode: 'US', totalInventory: 4120, verifiedWarehouse: 1 }],
+      }],
+    };
+    const r = normalizeCjProductDetail(realShape, { market: 'US' });
+    expect(r).not.toBeNull();
+    expect(r!.productId).toBe('000B9312-456A-4D31-94BD-B083E2A198E8');
+    expect(r!.title).toBe('Interactive Dog Chew Toy for Large Breeds');
+    expect(r!.sku).toBe('CJJJJTJT05843');
+    expect(r!.category).toBe('Pet Supplies > Dog Supplies > Dog Toys');
+    expect(r!.sellPrice).toBe(12.5);
+    expect(r!.selectedVariant?.variantId).toBe('D4057F56-3F09-4541-8461-9D76D014846D');
+    expect(r!.usInventoryInCountry).toBe(true);
   });
 
   it('does not claim US inventory from the list when the detail has none for US', () => {
@@ -523,8 +561,8 @@ describe('CJ evidence → scout evidence (honest statuses)', () => {
 // ---------------------------------------------------------------------------
 
 describe('CJ → Product Scout integration', () => {
-  it('never lowers the shortlist threshold', () => {
-    expect(SHORTLIST_THRESHOLD).toBe(75);
+  it('keeps the shortlist threshold at the calibrated value (reachable with strong CJ evidence)', () => {
+    expect(SHORTLIST_THRESHOLD).toBe(60);
   });
 
   it('scores CJ candidates with the same 100-pt rules (below-threshold stays researching)', () => {

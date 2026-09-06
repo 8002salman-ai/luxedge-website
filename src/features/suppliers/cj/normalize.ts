@@ -23,12 +23,25 @@ import { curateSupplierImageSet } from '../images';
 export const CJ_API_BASE = 'https://developers.cjdropshipping.com/api2.0/v1';
 export const CJ_PRODUCT_PAGE = 'https://www.cjdropshipping.com/product';
 
-/** CJ listV2 product object (subset of the official DTO we consume). */
+/** CJ listV2 product object (subset of the official DTO we consume).
+ *
+ * FIELD-ALIAS CONTRACT (verified against the official CJ docs, §1.2 vs §1.5):
+ * /product/listV2 returns id/nameEn/sku while /product/query (detail) returns
+ * pid/productNameEn/productSku for the same concepts. The detail normalizer
+ * feeds its response through normalizeCjListProduct, so BOTH alias sets must
+ * be accepted — a mismatch here silently nulls every detail enrichment.
+ */
 export interface CjListProduct {
   id?: string;
+  /** product/query alias for `id`. */
+  pid?: string;
   nameEn?: string;
+  /** product/query alias for `nameEn`. */
+  productNameEn?: string;
   sku?: string;
   spu?: string;
+  /** product/query alias for `sku`. */
+  productSku?: string;
   bigImage?: string;
   sellPrice?: string | number;
   nowPrice?: string | number;
@@ -37,6 +50,8 @@ export interface CjListProduct {
   threeCategoryName?: string;
   twoCategoryName?: string;
   oneCategoryName?: string;
+  /** product/query: full category path ("A > B > C") instead of split fields. */
+  categoryName?: string;
   addMarkStatus?: number; // 1 = free shipping
   deliveryCycle?: string;
   warehouseInventoryNum?: number;
@@ -217,10 +232,13 @@ export function normalizeCjListProduct(
   p: CjListProduct,
   opts: { market?: string; observedAt?: string } = {}
 ): SupplierProductRecord | null {
-  const productId = str(p.id);
+  // Accept BOTH CJ response shapes: listV2 (id/nameEn/sku) and the detail
+  // query's aliases (pid/productNameEn/productSku). Missing id+pid is the
+  // only hard-null: without it we cannot reference the product anywhere.
+  const productId = str(p.id) ?? str(p.pid);
   if (!productId) return null;
-  const sku = str(p.sku || p.spu);
-  const title = str(p.nameEn);
+  const sku = str(p.sku || p.spu || p.productSku);
+  const title = str(p.nameEn) ?? str(p.productNameEn);
   if (!title) return null;
 
   const country = normalizeCountryCode(opts.market);
@@ -231,7 +249,8 @@ export function normalizeCjListProduct(
   const categoryParts = [p.oneCategoryName, p.twoCategoryName, p.threeCategoryName]
     .map((c) => str(c))
     .filter((c): c is string => !!c);
-  const category = categoryParts.join(' / ') || null;
+  // Detail responses carry one pre-joined path instead of the split fields.
+  const category = categoryParts.join(' / ') || str(p.categoryName);
 
   const usVerified = p.totalVerifiedInventory ?? null;
   const usTotal = p.warehouseInventoryNum ?? null;
