@@ -8,29 +8,29 @@ import { useAdGate } from './useAdGate';
  * in useAdGate; this component only renders the container and loads the
  * zone's invoke.js exactly once per mounted unit (deduped by src).
  *
- * `compact` renders a smaller unit for spots that share a row with page
- * content — e.g. the shop/category header next to the H1. The default stays
- * a mid-size banner for article/product placements.
+ * FRAME HEIGHT — 250px everywhere. The zone's native banner needs ~250px to
+ * render its image+text cards; shorter frames crop the cards down to
+ * text-only fragments (observed on the category header). 250px is also the
+ * cap for every other placement, so one constant governs all units.
  *
  * CLAMP GUARANTEE: the zone script injects its own markup/iframe that can
  * exceed any max-height we put on the container it targets, so the visible
  * box is wrapped in a hard-clipped frame (fixed height + overflow-hidden +
  * box-content isolation) that the ad script never touches. Whatever Adsterra
  * renders, it is physically cropped to the frame — the unit can never push
- * the page or dwarf the heading beside it.
+ * the page or dwarf the content beside it.
  *
- * Mounted on ONE spot per route (end of blog articles, product detail below
- * info, category header) — never twice on the same page. The homepage stays
- * light (AdSense Auto Ads only, no Adsterra there).
+ * Mounted on ONE spot per route (the zone script fills a single container
+ * per page): end of blog articles, product detail below info, shop/category
+ * header right. The homepage stays light (AdSense Auto Ads only).
  */
-const CLIP = { compact: 120, default: 250 } as const;
+const FRAME_H = 250;
 
-export default function AdsterraAd({ className = '', compact = false }: { className?: string; compact?: boolean }) {
+export default function AdsterraAd({ className = '' }: { className?: string }) {
   const { cfg, eligible } = useAdGate();
   const loadedRef = useRef(false);
   const zoneUrl = cfg?.adsterraZoneUrl.trim() || '';
   const show = eligible(cfg ? adsterraConfigured(cfg) : false);
-  const frameH = compact ? CLIP.compact : CLIP.default;
 
   // Load the zone script once the unit survived the gates.
   useEffect(() => {
@@ -48,12 +48,12 @@ export default function AdsterraAd({ className = '', compact = false }: { classN
         {/* Hard clip frame: fixed height the ad script cannot change. */}
         <div
           className="w-full mx-auto bg-gray-50 border border-gray-200 rounded-xl overflow-hidden"
-          style={{ height: frameH, maxHeight: frameH, overflow: 'hidden', position: 'relative' }}
+          style={{ height: FRAME_H, maxHeight: FRAME_H, overflow: 'hidden', position: 'relative' }}
         >
           <div
             id={cfg.adsterraContainerId.trim()}
             className="w-full flex items-center justify-center"
-            style={{ maxHeight: frameH, overflow: 'hidden' }}
+            style={{ maxHeight: FRAME_H, overflow: 'hidden' }}
           />
         </div>
       </div>

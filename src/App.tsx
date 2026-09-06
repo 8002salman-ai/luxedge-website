@@ -2555,8 +2555,10 @@ function ShopPage() {
             <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black tracking-tight">{pageTitle}</h1>
             <p className="text-luxe-gray text-xs sm:text-sm max-w-xl mt-2">{pageDesc}</p>
           </div>
+          {/* Header-right native unit: full 250px frame so the native cards
+              render image+text instead of cropping to text-only. */}
           <div className="hidden lg:block">
-            <AdsterraAd className="my-0" compact />
+            <AdsterraAd className="my-0" />
           </div>
         </div>
       </section>
