@@ -170,7 +170,7 @@ async function getProducts(): Promise<ProductRow[] | null> {
   );
 }
 
-interface CategoryRow {
+export interface CategoryRow {
   slug: string;
   name: string;
 }
@@ -820,7 +820,23 @@ function injectProductBody(html: string, p: ProductRow): string {
 /** Pre-renders the category intro into the SPA shell: the category name, the
  * same descriptive line the client header shows, and links to the real
  * products in the category (the client renders these same products as cards). */
-function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
+// Category pet hero images — mirror of CAT_HERO_IMAGES in src/App.tsx so the
+// server-rendered category header shows the same pet image the hydrated page
+// does. Keep the two maps in sync.
+const CAT_HERO_IMAGES: Record<string, string> = {
+  'Dog Supplies': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Cat Supplies': 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Bird Supplies': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Horse': 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Cattle': 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Pet Beds': 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Pet Toys': 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Feeding & Water': 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Grooming': 'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Pet Accessories': 'https://images.unsplash.com/photo-1541599540903-216a46ca1dc0?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+};
+
+export function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
   const inCategory = products.filter(
     (p) => p.slug && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
   );
@@ -829,7 +845,10 @@ function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow
   // the hydrated page show the same line. The DB description column is ignored
   // here because the client does not render it. Keep CATEGORY_DESC in sync.
   const desc = CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
-  const parts: string[] = [`<h1>${esc(cat.name)}</h1>`, `<p>${esc(desc)}</p>`];
+  const hero = CAT_HERO_IMAGES[cat.name] || '';
+  const parts: string[] = [];
+  if (hero) parts.push(`<img src="${esc(hero)}" alt="${esc(cat.name)} essentials" />`);
+  parts.push(`<h1>${esc(cat.name)}</h1>`, `<p>${esc(desc)}</p>`);
   if (inCategory.length > 0) {
     const items = inCategory
       .slice(0, 12)
