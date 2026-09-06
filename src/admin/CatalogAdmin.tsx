@@ -70,6 +70,12 @@ const READINESS_BADGE: Record<CommerceReadiness, string> = {
   DRAFT: 'bg-gray-100 text-gray-600',
 };
 
+// "Supplier source" presets for Quick Add — real marketplaces/sourcing
+// channels. Written into supplierSource (the free-text field the filters and
+// deriveSourceType key off): CJ derives to CJ_DROPSHIPPING, the marketplaces
+// to OTHER_VERIFIED (a verified purchasing path).
+const SUPPLIER_SOURCE_PRESETS = ['AliExpress', 'Amazon', 'Alibaba', 'CJ', 'eBay', 'Walmart'] as const;
+
 // Header-click sorting for the seller-hub table: which sort keys each column
 // toggles between (asc <-> desc), and the direction a first click uses.
 const HEADER_SORT: Partial<Record<CatalogColumnKey, { asc: string; desc: string; first: string }>> = {
@@ -2237,6 +2243,36 @@ function PromoTab({ product, set }: { product: CatalogProduct; set: <K extends k
 // ============================================================================
 // QUICK ADD FORM (compact one-screen product creation)
 // ============================================================================
+function SupplierSourceSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const preset = SUPPLIER_SOURCE_PRESETS.find((x) => x.toLowerCase() === value.trim().toLowerCase());
+  const [custom, setCustom] = useState(!preset && value.trim() !== '');
+  return (
+    <>
+      <select
+        value={preset ? preset : custom ? '__other' : ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === '__other') { setCustom(true); onChange(''); }
+          else { setCustom(false); onChange(v); }
+        }}
+        className={I}
+      >
+        <option value="">— Select —</option>
+        {SUPPLIER_SOURCE_PRESETS.map((s) => <option key={s} value={s}>{s}</option>)}
+        <option value="__other">Other / Custom…</option>
+      </select>
+      {custom && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${I} mt-1.5`}
+          placeholder="e.g. Himalayan Koh (own brand)"
+        />
+      )}
+    </>
+  );
+}
+
 function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: CatalogProduct; cats: CatalogCategory[]; onChange: (p: CatalogProduct) => void; onAddCategory?: (name: string) => Promise<CatalogCategory | null> }) {
   const set = <K extends keyof CatalogProduct>(k: K, v: CatalogProduct[K]) => onChange({ ...product, [k]: v });
   const [newCatOpen, setNewCatOpen] = useState(false);
@@ -2293,6 +2329,10 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
         <div>
           <label className={L}>Stock quantity</label>
           <input type="number" min="0" value={product.inventoryQty} onChange={(e) => set('inventoryQty', +e.target.value)} className={I} placeholder="0" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Supplier source <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+          <SupplierSourceSelect value={product.supplierSource || ''} onChange={(v) => set('supplierSource', v)} />
         </div>
         <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-700 pb-2"><input type="checkbox" checked={product.freeShipping} onChange={(e) => set('freeShipping', e.target.checked)} className="w-4 h-4" />Free shipping on this product</label></div>

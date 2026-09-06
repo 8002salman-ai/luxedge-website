@@ -14,6 +14,12 @@ describe('deriveSourceType', () => {
     expect(deriveSourceType({ supplierSource: 'KONG Company (official manufacturer)' })).toBe('RETAIL_REFERENCE_ONLY');
     expect(deriveSourceType({})).toBe('UNKNOWN');
   });
+
+  it('classifies real marketplaces (Quick Add presets) as OTHER_VERIFIED', () => {
+    for (const market of ['AliExpress', 'Amazon', 'Alibaba', 'eBay', 'Walmart']) {
+      expect(deriveSourceType({ supplierSource: market })).toBe('OTHER_VERIFIED');
+    }
+  });
 });
 
 describe('deriveInventorySource', () => {
