@@ -18,6 +18,7 @@ import {
   ArrowCounterClockwise, MagnifyingGlass, FloppyDisk, CalendarPlus, CheckCircle, Sparkle, Warning,
 } from '@phosphor-icons/react';
 import { useApp } from '../App';
+import { getFreshAccessToken } from '../services/supabase';
 import { generateSeoJson } from '../features/ai/seo';
 import {
   adminListAll, adminCreate, adminUpdate, adminSetLifecycle, adminDelete,
@@ -91,6 +92,26 @@ export default function BlogManager() {
     }
   };
   useEffect(() => { void load(); }, []);
+
+  // First-party post views (page_view events per /blog/<slug>) from the
+  // server endpoint — one request, aggregated server-side, never N+1.
+  const [stats, setStats] = useState<Record<string, { views: number; views7d: number; views30d: number }> | null>(null);
+  const [statsNote, setStatsNote] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getFreshAccessToken();
+        const r = await fetch('/api/admin/blog-stats', { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = (await r.json()) as { stats?: Record<string, { views: number; views7d: number; views30d: number }>; unavailable?: string };
+        if (!cancelled) { setStats(j.stats ?? null); setStatsNote(j.unavailable ?? null); }
+      } catch {
+        if (!cancelled) { setStats(null); setStatsNote('Analytics unavailable'); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const startCreate = () => {
     setCreating(true);
@@ -697,7 +718,7 @@ export default function BlogManager() {
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <table className="w-full">
                 <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr>
-                  <th className="px-6 py-4">Post</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Generated</th><th className="px-6 py-4">Updated</th><th className="px-6 py-4">Actions</th>
+                  <th className="px-6 py-4">Post</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Generated</th><th className="px-6 py-4">Updated</th><th className="px-6 py-4">Views</th><th className="px-6 py-4">Actions</th>
                 </tr></thead>
                 <tbody>
                   {visible.map((r) => (
@@ -718,6 +739,22 @@ export default function BlogManager() {
                       <td className="px-6 py-4"><span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_META[r.status].cls}`}>{STATUS_META[r.status].label}</span></td>
                       <td className="px-6 py-4 text-xs text-gray-500">{r.generated_by || 'manual'}</td>
                       <td className="px-6 py-4 text-xs text-gray-500">{new Date(r.updated_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {stats == null ? (
+                          <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
+                        ) : (
+                          <span className="relative inline-block group cursor-help">
+                            <span className="text-xs text-gray-600">{stats[r.slug]?.views ?? 0}</span>
+                            <span className="pointer-events-none absolute left-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
+                              <span className="block font-semibold text-gray-800">Post views (first-party)</span>
+                              <span className="block">Total (90d): {stats[r.slug]?.views ?? 0}</span>
+                              <span className="block">Last 7 days: {stats[r.slug]?.views7d ?? 0}</span>
+                              <span className="block">Last 30 days: {stats[r.slug]?.views30d ?? 0}</span>
+                              {statsNote && <span className="block text-amber-600">{statsNote}</span>}
+                            </span>
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-1">
                           <button title="Edit" onClick={() => startEdit(r)} className="p-2 hover:bg-luxe-gold-soft rounded text-luxe-gold"><PencilLine size={16} /></button>
