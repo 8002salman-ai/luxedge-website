@@ -294,6 +294,39 @@ export function CatalogProductsPage() {
 
   const autoSeoBulk = () => void runAutoSeo(products);
 
+  // A run killed by a full page reload restores its checkpoint from localStorage
+  // (`interrupted`). Resume resolves those ids back to the rows currently loaded;
+  // products that actually saved before the reload are now 'complete' and get
+  // skipped by the same eligibility check, so nothing is regenerated or overwritten.
+  const resumeInterruptedSeo = async () => {
+    const inter = useSeoJobStore.getState().interrupted;
+    if (!inter) return;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const targets = inter.ids.map((id) => byId.get(id)).filter((p): p is CatalogProduct => Boolean(p));
+    if (targets.length === 0) {
+      notify('The products from the interrupted SEO run are gone from the catalog — cleared.', 'info');
+      useSeoJobStore.getState().dismissInterrupted();
+      return;
+    }
+    const work = targets.filter((p) => p.name.trim() && seoStatus(p) !== 'complete');
+    if (work.length === 0) {
+      notify('The remaining products from the interrupted SEO run already have complete SEO.', 'info');
+      useSeoJobStore.getState().dismissInterrupted();
+      return;
+    }
+    if (!window.confirm(`Resume Auto SEO for the ${work.length} product(s) left from the interrupted run? Complete SEO is never overwritten.`)) return;
+    setDbToken(await getFreshAccessToken());
+    const started = await useSeoJobStore.getState().resume({
+      targets,
+      statusOf: seoStatus,
+      runOne: generateAndSaveSeo,
+      onFinished: async () => {
+        if (mountedRef.current) await load();
+      },
+    });
+    if (started) notify(`Auto SEO resumed — ${work.length} to process. It keeps running in the background.`);
+  };
+
   // Column header click -> toggle asc/desc (first click uses the useful default).
   const headerSort = (k: CatalogColumnKey) => {
     const s = HEADER_SORT[k];
@@ -653,6 +686,35 @@ export function CatalogProductsPage() {
           <span>Generated/updated: <b>{seo.report.updated}</b></span>
           <span>Skipped: <b>{seo.report.skipped}</b></span>
           <span>Failed: <b>{seo.report.failed}</b></span>
+        </div>
+      )}
+
+      {/* Interrupted-run offer - a full page reload killed a running Auto SEO
+          job; the store restored its checkpoint from localStorage, so the
+          remaining products can be resumed instead of lost. */}
+      {seo.interrupted && !seo.running && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-amber-900 font-semibold flex items-center gap-2">
+            <Warning size={16} />Auto SEO was interrupted
+          </span>
+          <span className="text-xs text-amber-700">
+            {seo.interrupted.processed} of {seo.interrupted.ids.length} products were processed before the page reloaded.
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => void resumeInterruptedSeo()}
+              disabled={loading || seo.running}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg"
+            >
+              Resume remaining
+            </button>
+            <button
+              onClick={() => useSeoJobStore.getState().dismissInterrupted()}
+              className="px-3 py-1.5 border border-amber-300 hover:bg-amber-100 text-amber-800 text-xs font-medium rounded-lg"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
