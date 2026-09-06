@@ -1055,7 +1055,6 @@ export async function maybeInjectSeo(
       description:
         'Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories, embedded from the official YouTube channel.',
       canonical: `${root}/media`,
-      noindex: true, // current media library awaits editorial review
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -1094,7 +1093,6 @@ export async function maybeInjectSeo(
       title,
       description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
       canonical,
-      noindex: true, // video availability is not evidence of editorial review
       jsonLd: mediaJsonLd(v, canonical),
     });
     out = await injectMediaBody(out, v);
