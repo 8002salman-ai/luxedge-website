@@ -19,6 +19,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // allow the fake ERP host used by the auto-forward tests below.
 vi.mock('../_lib/ssrf.js', () => ({ validateFetchTarget: vi.fn(async () => null) }));
 import handler from '../webhook.js';
+// Force the app_settings ledger storage mode (the migration-0029 columns are
+// not applied in this suite's fake schema); ERP module tests cover column mode.
+import { __setErpColumnsModeForTests, __resetErpColumnsProbeForTests } from '../admin/erp.js';
 
 const SUPABASE_URL = 'https://test-project.supabase.co';
 const SR = 'service-role-key';
@@ -84,6 +87,8 @@ function makeEnv() {
     erpCalls: [] as Array<{ event?: string; orders?: unknown[] } | null>,
     erpStatus: 200 as number,
   };
+  // Per-row ERP sync PATCHes (migration-0029 column mode) are captured here.
+  const patches: Array<{ url: string; body: unknown }> = [];
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, method: init?.method || 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined });
@@ -118,7 +123,11 @@ function makeEnv() {
         return new Response(JSON.stringify([{ id: 'ord_1', ...JSON.parse(String(init.body)) }]), { status: 201, headers: { 'Content-Type': 'application/json' } });
       }
       if (init?.method === 'PATCH') {
-        state.orderStatus = (JSON.parse(String(init.body)) as { status: string }).status;
+        const b = JSON.parse(String(init.body)) as { status?: string };
+        // Only order-lifecycle PATCHes carry a status; per-row ERP sync PATCHes
+        // (erp_sync_*) must not disturb the webhook's replay/order state.
+        if (typeof b.status === 'string') state.orderStatus = b.status;
+        patches.push({ url, body: JSON.parse(String(init.body)) });
         return new Response(JSON.stringify([{ id: 'ord_1', ...JSON.parse(String(init.body)) }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       // GET (existence check)
@@ -178,8 +187,10 @@ describe('/api/webhook', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = SR;
     process.env.STRIPE_WEBHOOK_SECRET = WH;
     process.env.STRIPE_SECRET_KEY = STRIPE;
+    __setErpColumnsModeForTests(false);
   });
   afterEach(() => {
+    __resetErpColumnsProbeForTests();
     vi.unstubAllGlobals();
     for (const [k, v] of Object.entries(original)) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;

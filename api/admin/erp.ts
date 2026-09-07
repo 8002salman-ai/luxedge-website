@@ -4,8 +4,11 @@
 // The admin browser NEVER talks to the ERP webhook directly. This endpoint is
 // the only component that holds the webhook URL + API token (env vars win,
 // app_settings as the owner-attachable fallback), calls Embani ERP, and
-// records a sync ledger so we always know which Luxedge orders were
-// transmitted.
+// records each order's sync state so we always know which Luxedge orders were
+// transmitted. State lives on the luxedge_orders row (erp_sync_status /
+// erp_synced_at / erp_sync_error — migration 0029) once those columns exist,
+// with an automatic fallback to the ERP_SYNC_STATUS app_settings doc before
+// the migration is applied (auto-detected, 5-min probe cache).
 //
 //   GET /api/admin/erp
 //       → { webhook: { configured, masked, source }, token: {...},
@@ -16,8 +19,7 @@
 //       { action: 'set',   field: 'webhook'|'token', value }  → store server-side
 //       { action: 'clear', field: 'webhook'|'token' }         → remove attached value
 //       { action: 'test' }                                    → harmless ERP probe
-//       { action: 'push', orderNumbers?: string[] }           → sync real orders (or a subset for retry)
-//       { action: 'clear-failed' }                            → remove failed entries from the sync ledger
+//       { action: 'push', orderNumbers?: string[] }           → sync real orders (or a subset for retry)//   { action: 'clear-failed' }                            → clear failed sync state
 //
 // PUSH CONTRACT (Luxedge → Embani ERP webhook):
 //   POST <webhook>  Authorization: Bearer <token>
@@ -60,7 +62,7 @@ type SyncStatus = 'created' | 'updated' | 'sent' | 'failed';
 
 interface SyncEntry {
   status: SyncStatus;
-  synced_at: string;
+  synced_at?: string;
   error?: string;
 }
 
@@ -122,8 +124,58 @@ async function effectiveConfig(): Promise<{ webhook: string; token: string; webh
   };
 }
 
-async function readSyncLedger(): Promise<Record<string, SyncEntry>> {
-  const raw = await readSetting(ERP_SYNC_LEDGER_KEY);
+// ============================================================================
+// SYNC-STATE STORAGE — per-row columns (migration 0029) vs app_settings ledger
+//
+// The endpoint auto-detects the erp_sync_* columns on luxedge_orders (5-minute
+// probe cache) and stores each order's ERP state ON its own row when present —
+// state can never be lost by concurrent paid orders again. Until migration
+// 0029 is applied it transparently falls back to the single ERP_SYNC_STATUS
+// app_settings doc, so the two modes never mix and NO deploy is required when
+// the owner applies the migration.
+// ============================================================================
+const ERP_SYNC_COLUMNS = ['erp_sync_status', 'erp_synced_at', 'erp_sync_error'];
+let erpColumnsProbeAt = 0;
+let erpColumnsProbe = false;
+/** Test seam — force a storage mode without probing the live schema. */
+let erpColumnsOverride: boolean | null = null;
+export function __setErpColumnsModeForTests(mode: boolean | null): void {
+  erpColumnsOverride = mode;
+}
+export function __resetErpColumnsProbeForTests(): void {
+  erpColumnsOverride = null;
+  erpColumnsProbeAt = 0;
+}
+
+function supabaseCfg(): { url: string; serviceRole: string } | null {
+  const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  return url && serviceRole ? { url, serviceRole } : null;
+}
+
+/** True when luxedge_orders carries the erp_sync_* columns (migration 0029). */
+async function erpColumnsAvailable(): Promise<boolean> {
+  if (erpColumnsOverride !== null) return erpColumnsOverride;
+  const now = Date.now();
+  if (now - erpColumnsProbeAt < 5 * 60_000) return erpColumnsProbe;
+  const cfg = supabaseCfg();
+  erpColumnsProbe = false;
+  if (cfg) {
+    try {
+      const res = await fetch(`${cfg.url}/rest/v1/luxedge_orders?select=order_number,${ERP_SYNC_COLUMNS.join(',')}&limit=1`, {
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        signal: AbortSignal.timeout(6_000),
+      });
+      erpColumnsProbe = res.status === 200;
+    } catch {
+      erpColumnsProbe = false;
+    }
+  }
+  erpColumnsProbeAt = now;
+  return erpColumnsProbe;
+}
+
+function parseLedgerDoc(raw: string | null): Record<string, SyncEntry> {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -133,8 +185,98 @@ async function readSyncLedger(): Promise<Record<string, SyncEntry>> {
   }
 }
 
-async function writeSyncLedger(ledger: Record<string, SyncEntry>): Promise<boolean> {
+/** Read the sync-state map keyed by order_number (columns when available, else ledger). */
+async function readErpSync(): Promise<Record<string, SyncEntry>> {
+  if (await erpColumnsAvailable()) {
+    const cfg = supabaseCfg();
+    if (!cfg) return {};
+    try {
+      const res = await fetch(`${cfg.url}/rest/v1/luxedge_orders?erp_sync_status=not.is.null&select=order_number,${ERP_SYNC_COLUMNS.join(',')}`, {
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return {};
+      const rows = (await res.json()) as Array<Record<string, unknown>>;
+      const map: Record<string, SyncEntry> = {};
+      for (const r of rows) {
+        const orderNumber = String(r.order_number || '');
+        const status = String(r.erp_sync_status || '');
+        if (!orderNumber || !status) continue;
+        map[orderNumber] = {
+          status: status as SyncStatus,
+          synced_at: r.erp_synced_at ? String(r.erp_synced_at) : undefined,
+          error: r.erp_sync_error ? String(r.erp_sync_error) : undefined,
+        };
+      }
+      return map;
+    } catch {
+      return {};
+    }
+  }
+  return parseLedgerDoc(await readSetting(ERP_SYNC_LEDGER_KEY));
+}
+
+/** Write sync entries for the given order numbers (one PATCH per row in column mode). */
+async function writeErpSyncEntries(entries: Record<string, SyncEntry>): Promise<boolean> {
+  const keys = Object.keys(entries);
+  if (!keys.length) return true;
+  if (await erpColumnsAvailable()) {
+    const cfg = supabaseCfg();
+    if (!cfg) return false;
+    try {
+      const jsonHeaders = { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, 'Content-Type': 'application/json' };
+      await Promise.all(keys.map(async (orderNumber) => {
+        const e = entries[orderNumber];
+        await fetch(`${cfg.url}/rest/v1/luxedge_orders?order_number=eq.${encodeURIComponent(orderNumber)}`, {
+          method: 'PATCH',
+          headers: { ...jsonHeaders, Prefer: 'return=minimal' },
+          body: JSON.stringify({ erp_sync_status: e.status, erp_synced_at: e.synced_at ?? null, erp_sync_error: e.error ?? null }),
+          signal: AbortSignal.timeout(10_000),
+        });
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  // Ledger fallback — merge into the doc so untouched orders keep their state.
+  const ledger = parseLedgerDoc(await readSetting(ERP_SYNC_LEDGER_KEY));
+  for (const k of keys) ledger[k] = entries[k];
   return upsertAppSetting(ERP_SYNC_LEDGER_KEY, JSON.stringify(ledger));
+}
+
+/** Clear every failed sync entry; returns how many were cleared. */
+async function clearErpFailed(): Promise<number> {
+  if (await erpColumnsAvailable()) {
+    const cfg = supabaseCfg();
+    if (!cfg) return 0;
+    try {
+      const list = await fetch(`${cfg.url}/rest/v1/luxedge_orders?erp_sync_status=eq.failed&select=id`, {
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!list.ok) return 0;
+      const rows = (await list.json()) as Array<{ id?: string }>;
+      const ids = rows.map((r) => r.id).filter((x): x is string => Boolean(x));
+      if (!ids.length) return 0;
+      // ids come from the uuid column — plain (unquoted) values keep the URL
+      // valid for fetch; PostgREST parses id=in.(a,b,c) natively.
+      const patch = await fetch(`${cfg.url}/rest/v1/luxedge_orders?id=in.(${ids.join(',')})`, {
+        method: 'PATCH',
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ erp_sync_status: null, erp_synced_at: null, erp_sync_error: null }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      return patch.ok ? ids.length : 0;
+    } catch {
+      return 0;
+    }
+  }
+  const ledger = parseLedgerDoc(await readSetting(ERP_SYNC_LEDGER_KEY));
+  const failed = Object.entries(ledger).filter(([, e]) => e.status === 'failed');
+  if (!failed.length) return 0;
+  for (const [number] of failed) delete ledger[number];
+  return (await upsertAppSetting(ERP_SYNC_LEDGER_KEY, JSON.stringify(ledger))) ? failed.length : 0;
 }
 
 /** Make one ERP call (default 12s timeout); sanitized on failure. */
@@ -340,22 +482,19 @@ export async function autoForwardPaidOrder(row: OrderRow): Promise<AutoForwardRe
       orders,
     }, 8_000); // bounded — auto-forward runs inside the Stripe webhook response
 
-    const ledger = await readSyncLedger();
     const now = new Date().toISOString();
     if (r.ok) {
       const parsed = parseErpResponse(r.body);
       const failedEntry = parsed.failed.find((f) => f.order_number === row.order_number);
       if (failedEntry) {
-        ledger[row.order_number] = { status: 'failed', synced_at: now, error: failedEntry.reason || 'ERP rejected order' };
-        await writeSyncLedger(ledger);
+        await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: failedEntry.reason || 'ERP rejected order' } });
         return { attempted: true, ok: false, status: 'failed', reason: failedEntry.reason };
       }
       const status: SyncStatus =
         parsed.created !== null ? 'created'
         : parsed.updated !== null ? 'updated'
         : 'sent';
-      ledger[row.order_number] = { status, synced_at: now };
-      await writeSyncLedger(ledger);
+      await writeErpSyncEntries({ [row.order_number]: { status, synced_at: now } });
       return { attempted: true, ok: true, status };
     }
 
@@ -363,8 +502,7 @@ export async function autoForwardPaidOrder(row: OrderRow): Promise<AutoForwardRe
     if (r.status === 401 || r.status === 403) reason = 'ERP rejected request — HTTP ' + r.status + ' (unauthorized). Check the API token.';
     else if (r.status === 0) reason = 'ERP request failed — ' + (r.error || 'unreachable');
     else if (r.status >= 400 && r.status < 600) reason = 'ERP returned HTTP ' + r.status;
-    ledger[row.order_number] = { status: 'failed', synced_at: now, error: reason };
-    await writeSyncLedger(ledger);
+    await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: reason } });
     return { attempted: true, ok: false, status: 'failed', reason };
   } catch {
     // Never let ERP forwarding break the payment webhook.
@@ -380,7 +518,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (!(await requireAdmin(req, res))) return;
 
   if (req.method === 'GET') {
-    const [cfg, sync] = await Promise.all([effectiveConfig(), readSyncLedger()]);
+    const [cfg, sync] = await Promise.all([effectiveConfig(), readErpSync()]);
     sendJson(res, 200, {
       webhook: statusOf(!!cfg.webhook, maskWebhook(cfg.webhook), cfg.webhookSource),
       token: statusOf(!!cfg.token, maskToken(cfg.token), cfg.tokenSource),
@@ -549,8 +687,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     });
     const latencyMs = Date.now() - started;
 
-    const ledger = await readSyncLedger();
     const failedByNumber: Record<string, string> = {};
+    const syncEntries: Record<string, SyncEntry> = {};
     if (r.ok) {
       const parsed = parseErpResponse(r.body);
       for (const f of parsed.failed) {
@@ -558,18 +696,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
       const now = new Date().toISOString();
       for (const o of realOrders) {
-        if (failedByNumber[o.order_number]) {
-          ledger[o.order_number] = { status: 'failed', synced_at: now, error: failedByNumber[o.order_number] };
-        } else {
-          const status: SyncStatus =
-            parsed.created !== null && parsed.updated !== null ? (parsed.created > 0 ? 'created' : 'updated')
-            : parsed.created !== null ? 'created'
-            : parsed.updated !== null ? 'updated'
-            : 'sent';
-          ledger[o.order_number] = { status, synced_at: now };
-        }
+        syncEntries[o.order_number] = failedByNumber[o.order_number]
+          ? { status: 'failed', synced_at: now, error: failedByNumber[o.order_number] }
+          : (() => {
+              const status: SyncStatus =
+                parsed.created !== null && parsed.updated !== null ? (parsed.created > 0 ? 'created' : 'updated')
+                : parsed.created !== null ? 'created'
+                : parsed.updated !== null ? 'updated'
+                : 'sent';
+              return { status, synced_at: now };
+            })();
       }
-      await writeSyncLedger(ledger);
+      await writeErpSyncEntries(syncEntries);
 
       const created = parsed.created;
       const updated = parsed.updated;
@@ -598,10 +736,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (r.status === 401 || r.status === 403) reason = `ERP rejected request — HTTP ${r.status} (unauthorized). Check the API token.`;
     else if (r.status === 0) reason = `ERP request failed — ${r.error}`;
     else if (r.status >= 400 && r.status < 600) reason = `ERP returned HTTP ${r.status}`;
+    const failedEntries: Record<string, SyncEntry> = {};
     for (const o of realOrders) {
-      ledger[o.order_number] = { status: 'failed', synced_at: now, error: reason };
+      failedEntries[o.order_number] = { status: 'failed', synced_at: now, error: reason };
     }
-    await writeSyncLedger(ledger);
+    await writeErpSyncEntries(failedEntries);
     sendJson(res, 200, {
       ok: false,
       sent: realOrders.length,
@@ -614,23 +753,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // ── CLEAR-FAILED — remove failed entries from the sync ledger (errors that
-  //    were fixed outside the ERP push, e.g. an order cancelled in Luxedge).
-  //    Successfully-synced entries are never touched. ──
+  // ── CLEAR-FAILED — remove failed sync state (errors that were fixed outside
+  //    the ERP push, e.g. an order cancelled in Luxedge). Synced orders are
+  //    never touched. ──
   if (action === 'clear-failed') {
-    const ledger = await readSyncLedger();
-    const cleared = Object.entries(ledger).filter(([, e]) => e.status === 'failed');
-    if (cleared.length === 0) {
+    const cleared = await clearErpFailed();
+    if (cleared === 0) {
       sendJson(res, 200, { ok: true, cleared: 0, message: 'No failed ERP syncs to clear.' });
       return;
     }
-    for (const [number] of cleared) delete ledger[number];
-    const ok = await writeSyncLedger(ledger);
-    if (!ok) {
-      sendJson(res, 502, { error: 'Could not update the sync ledger (app_settings unavailable).' });
-      return;
-    }
-    sendJson(res, 200, { ok: true, cleared: cleared.length, message: `Cleared ${cleared.length} failed ERP sync${cleared.length === 1 ? '' : 's'} from the ledger.` });
+    sendJson(res, 200, { ok: true, cleared, message: `Cleared ${cleared} failed ERP sync${cleared === 1 ? '' : 's'}.` });
     return;
   }
 
