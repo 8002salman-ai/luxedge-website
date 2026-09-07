@@ -344,3 +344,117 @@ describe('POST /api/admin/gift-drop', () => {
     expect(String((captured.body as { error: string }).error)).toContain('Cannot move');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Address validation on the gift claim — a clearly-invalid US address must be
+// blocked BEFORE the claim/order is created (Shippo rejects it) and a Shippo
+// outage must fail CLOSED for US claims (never consume a real gift while
+// pretending the address was verified).
+// ---------------------------------------------------------------------------
+describe('POST /api/gift-drop/claim — address validation', () => {
+  const GIFT_KEY = 'shippo_test_gift';
+  const originalShippo = process.env.SHIPPO_API_KEY;
+
+  function giftReq(): IncomingMessage {
+    // No testKey: the claim must pass through the real gate (test key is
+    // never configured on production deployments).
+    return makeReq('POST', { ...validClaim, formSeconds: 30 });
+  }
+
+  /** Shippo stub + PostgREST stub that records order inserts. */
+  function stubGiftEnv(opts: { invalid?: boolean; shippoDown?: boolean } = {}) {
+    const inserted: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith('https://api.goshippo.com/addresses/')) {
+          if (opts.shippoDown) throw new Error('network down');
+          if (opts.invalid) {
+            return new Response(JSON.stringify({
+              street1: '999 NOPE ST', city: 'NOWHERE', state: 'ZZ', zip: '99999',
+              validation_results: { is_valid: false, messages: [{ text: 'Street not found.' }] },
+            }), { status: 200 });
+          }
+          return new Response(JSON.stringify({
+            street1: '12 WOOF LANE', city: 'AUSTIN', state: 'TX', zip: '78701',
+            validation_results: { is_valid: true, messages: [] },
+          }), { status: 200 });
+        }
+        if (url.includes('/rest/v1/app_settings')) {
+          return new Response(JSON.stringify([{ value: JSON.stringify(campaignDoc) }]), { status: 200 });
+        }
+        if (url.includes('/rest/v1/luxedge_orders')) {
+          if ((init?.method || 'GET') === 'POST') {
+            const row = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+            inserted.push(row);
+            // return=representation → full row incl. id + deterministic order number.
+            return new Response(JSON.stringify([{ id: '11111111-1111-1111-1111-111111111111', order_number: row.order_number, ...row }]), { status: 201 });
+          }
+          if ((init?.method || 'GET') === 'PATCH') return new Response('[]', { status: 200 });
+          if ((init?.headers as Record<string, string>)?.Prefer === 'count=exact') {
+            return new Response('[]', { status: 200, headers: { 'content-range': '0-0/49' } });
+          }
+          // Household scan: return our inserted row so the claim is verified.
+          return new Response(JSON.stringify(inserted.length ? [{ id: '11111111-1111-1111-1111-111111111111', order_number: 'GIFT-AAAAAAAA', shipping_address: inserted[0].shipping_address }] : []), { status: 200 });
+        }
+        return new Response('[]', { status: 200 });
+      }),
+    );
+    return { inserted };
+  }
+
+  beforeEach(() => {
+    process.env.SHIPPO_API_KEY = GIFT_KEY;
+    process.env.VITE_SUPABASE_URL = HOST;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = KEY;
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (originalShippo === undefined) delete process.env.SHIPPO_API_KEY; else process.env.SHIPPO_API_KEY = originalShippo;
+    delete process.env.VITE_SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+  });
+
+  it('blocks a clearly-invalid US address BEFORE creating the claim (no inventory consumed)', async () => {
+    const { inserted } = stubGiftEnv({ invalid: true });
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(giftReq(), server);
+    expect(captured.status).toBe(400);
+    expect(String((captured.body as { error: string }).error)).toMatch(/not found|verify|double-check/i);
+    expect(inserted.length).toBe(0);
+  });
+
+  it('fails CLOSED with an honest retry when Shippo is unreachable (never ships blind)', async () => {
+    const { inserted } = stubGiftEnv({ shippoDown: true });
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(giftReq(), server);
+    expect(captured.status).toBe(503);
+    expect(String((captured.body as { error: string }).error)).toMatch(/try again/i);
+    expect(inserted.length).toBe(0);
+  });
+
+  it('blocks a format-invalid US address even when Shippo is NOT configured (basic gate always runs)', async () => {
+    delete process.env.SHIPPO_API_KEY;
+    const { inserted } = stubGiftEnv();
+    const bad = makeReq('POST', { ...validClaim, formSeconds: 30, address: { ...validClaim.address, zip: '12' } });
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(bad, server);
+    expect(captured.status).toBe(400);
+    expect(String((captured.body as { error: string }).error)).toMatch(/ZIP/i);
+    expect(inserted.length).toBe(0);
+  });
+
+  it('normalizes the address and allows the claim when Shippo validates it', async () => {
+    const { inserted } = stubGiftEnv();
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(giftReq(), server);
+    expect(captured.status).toBe(200);
+    expect(inserted.length).toBe(1);
+    expect((inserted[0].shipping_address as { line1: string }).line1).toContain('WOOF');
+  });
+});

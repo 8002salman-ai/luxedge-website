@@ -22,7 +22,9 @@ import aiCreditsHandler from '../api/ai/openrouter-credits';
 import importImagesHandler from '../api/import-images';
 import uploadImageHandler from '../api/upload-image';
 import checkoutHandler from '../api/checkout';
+import checkoutOnsiteHandler, { verifyHandler as checkoutVerifyHandler } from '../api/checkout-onsite';
 import webhookHandler from '../api/webhook';
+import shippoHandler from '../api/shippo';
 import salmanOsHandler from '../api/salman-os';
 import cjHandler from '../api/suppliers/cj';
 import adminProductsHandler from '../api/admin/products';
@@ -92,7 +94,10 @@ const ROUTES: Route[] = [
   { path: '/api/import-images', handler: importImagesHandler },
   { path: '/api/upload-image', handler: uploadImageHandler },
   { path: '/api/checkout', handler: checkoutHandler },
+  { path: '/api/checkout/onsite', handler: checkoutOnsiteHandler },
+  { path: '/api/checkout/verify', handler: checkoutVerifyHandler },
   { path: '/api/webhook', handler: webhookHandler },
+  { path: '/api/shippo', handler: shippoHandler },
   { path: '/api/salman-os', handler: salmanOsHandler },
   { path: '/api/suppliers/cj', handler: cjHandler },
   { path: '/api/hermes/ingest', handler: hermesIngestHandler },
@@ -242,6 +247,16 @@ export interface Env {
   /** Stripe keys — Cloudflare secret bindings (wrangler secret put). Never client-side. */
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  /** Public Stripe publishable key (pk_…) — safe for the browser; needed by
+   *  the on-site PaymentElement checkout. Cloudflare var, not a secret. */
+  STRIPE_PUBLISHABLE_KEY?: string;
+  /** Shippo token (server-only) + ship-from address for live rates. */
+  SHIPPO_API_KEY?: string;
+  SHIPPO_FROM_NAME?: string;
+  SHIPPO_FROM_ADDRESS?: string;
+  SHIPPO_FROM_CITY?: string;
+  SHIPPO_FROM_STATE?: string;
+  SHIPPO_FROM_ZIP?: string;
   GOOGLE_ADSENSE_CLIENT_ID?: string;
   GOOGLE_ADSENSE_CLIENT_SECRET?: string;
   SEND_MAIL?: {
@@ -273,6 +288,13 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (env.CJ_API_KEY) process.env.CJ_API_KEY = env.CJ_API_KEY;
     if (env.STRIPE_SECRET_KEY) process.env.STRIPE_SECRET_KEY = env.STRIPE_SECRET_KEY;
     if (env.STRIPE_WEBHOOK_SECRET) process.env.STRIPE_WEBHOOK_SECRET = env.STRIPE_WEBHOOK_SECRET;
+    if (env.STRIPE_PUBLISHABLE_KEY) process.env.STRIPE_PUBLISHABLE_KEY = env.STRIPE_PUBLISHABLE_KEY;
+    if (env.SHIPPO_API_KEY) process.env.SHIPPO_API_KEY = env.SHIPPO_API_KEY;
+    if (env.SHIPPO_FROM_NAME) process.env.SHIPPO_FROM_NAME = env.SHIPPO_FROM_NAME;
+    if (env.SHIPPO_FROM_ADDRESS) process.env.SHIPPO_FROM_ADDRESS = env.SHIPPO_FROM_ADDRESS;
+    if (env.SHIPPO_FROM_CITY) process.env.SHIPPO_FROM_CITY = env.SHIPPO_FROM_CITY;
+    if (env.SHIPPO_FROM_STATE) process.env.SHIPPO_FROM_STATE = env.SHIPPO_FROM_STATE;
+    if (env.SHIPPO_FROM_ZIP) process.env.SHIPPO_FROM_ZIP = env.SHIPPO_FROM_ZIP;
     const url = new URL(request.url);
     // Canonical host + scheme: www and HTTP must permanently redirect to the
     // non-www HTTPS apex, preserving the full path+query. Prevents a

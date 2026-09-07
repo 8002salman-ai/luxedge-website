@@ -329,3 +329,82 @@ export function safeSessionSummary(r: CheckoutSessionResult): Record<string, unk
     customerEmail: r.customer_email,
   };
 }
+
+// ---------------------------------------------------------------------------
+// On-site (PaymentElement) flow — PaymentIntent + publishable-key support.
+// The legacy Stripe-hosted Checkout session flow above remains fully intact
+// and keeps driving the current /api/checkout endpoint + its webhook path.
+// ---------------------------------------------------------------------------
+
+/** Resolve the PUBLIC publishable key (safe to send to the browser). */
+export async function resolvePublishableKey(): Promise<string> {
+  const envKey = (process.env.STRIPE_PUBLISHABLE_KEY || '').trim();
+  if (envKey) return envKey;
+  // Admin-attached key stored server-side (Admin → Payments), same pattern as
+  // the secret key. Never in git, never in the client bundle.
+  const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!url || !serviceRole) return '';
+  try {
+    const res = await fetch(`${url}/rest/v1/app_settings?key=eq.${APP_SETTINGS}_PUBLISHABLE_KEY&select=value`, {
+      headers: { apikey: serviceRole, Authorization: `Bearer ${serviceRole}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return '';
+    const rows = (await res.json()) as Array<{ value?: string }>;
+    return rows[0]?.value?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
+/** True when a publishable key is configured (env or admin app_settings). */
+export async function publishableKeyReady(): Promise<boolean> {
+  return !!(await resolvePublishableKey());
+}
+
+/** Which key mode the configured secret belongs to — for safe UI hints only. */
+export async function stripeMode(): Promise<'test' | 'live'> {
+  const sk = await secretKey();
+  return sk.startsWith('sk_live_') ? 'live' : 'test';
+}
+
+export interface PaymentIntentResult {
+  id: string;
+  client_secret: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+}
+
+/**
+ * Create a PaymentIntent for the on-site flow. Amount is ALWAYS the
+ * server-computed total (cents); the browser never sends a price. Metadata
+ * carries the bounded snapshot ids/qtys + coupon + reservation so the webhook
+ * can rebuild the purchase when the intent event fires.
+ */
+export async function createPaymentIntent(params: {
+  amountCents: number;
+  currency: string;
+  receiptEmail?: string;
+  metadata: Record<string, string>;
+}): Promise<StripeResult<PaymentIntentResult>> {
+  const parts = new URLSearchParams();
+  parts.set('amount', String(Math.max(50, Math.round(params.amountCents)))); // Stripe minimum 50¢
+  parts.set('currency', params.currency || 'usd');
+  parts.set('automatic_payment_methods[enabled]', 'true');
+  if (params.receiptEmail) parts.set('receipt_email', params.receiptEmail);
+  for (const [k, v] of Object.entries(params.metadata || {})) {
+    if (k && v) parts.set(`metadata[${k}]`, v);
+  }
+  const r = await stripeRequest<PaymentIntentResult>('/payment_intents', { method: 'POST', body: parts.toString() });
+  return r;
+}
+
+/** Retrieve a PaymentIntent (webhook / verify). Never leaks secrets. */
+export async function retrievePaymentIntent(intentId: string): Promise<StripeResult<PaymentIntentResult & { metadata?: Record<string, string> | null }>> {
+  if (!/^pi_[A-Za-z0-9_]+$/.test(intentId)) {
+    return { ok: false, status: 400, code: 'invalid_payment_intent', message: 'Invalid payment intent id.' };
+  }
+  return stripeRequest<PaymentIntentResult & { metadata?: Record<string, string> | null }>(`/payment_intents/${encodeURIComponent(intentId)}`);
+}

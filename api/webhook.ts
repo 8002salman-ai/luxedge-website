@@ -53,6 +53,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson } from './_lib/providers.js';
 import { verifyWebhookSignature, retrieveCheckoutSessionDetailed } from './_lib/stripe.js';
 import { autoForwardPaidOrder, type OrderRow } from './admin/erp.js';
+import { promotePaidIntent } from './checkout-onsite.js';
 
 function serviceRole(): string {
   return (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -269,6 +270,36 @@ async function fulfillPaidOrder(session: CompletedSessionShape): Promise<{ statu
   return { status: 200, body: { received: true, orderNumber: row.order_number as string } };
 }
 
+/**
+ * On-site PaymentIntent flow — the order row was persisted as `pending` when
+ * the PaymentIntent was created (keyed by stripe_payment_intent). This
+ * handler promotes that row to paid exactly once and consumes the
+ * reservation. Delegates to the shared promotePaidIntent (same logic the
+ * client /api/checkout/verify endpoint uses) so the two paths can never
+ * diverge; the unique partial index (migration 0030) + status-guarded
+ * consume make replays / verify races harmless.
+ */
+async function promoteIntentPaid(intentId: string): Promise<{ status: number; body: Record<string, unknown> }> {
+  const result = await promotePaidIntent(intentId);
+  if (result.paid) {
+    return { status: 200, body: { received: true, duplicate: result.duplicate === true, promoted: result.duplicate !== true } };
+  }
+  if (!result.ok) {
+    if (result.status === 402) {
+      // Non-succeeded intent → ack; Stripe re-fires on real success.
+      return { status: 200, body: { received: true, ignored: 'payment intent not succeeded yet' } };
+    }
+    if (result.status === 404) {
+      return { status: 200, body: { received: true, ignored: 'no matching pending order' } };
+    }
+    if (result.status === 409) {
+      return { status: 200, body: { received: true, ignored: 'order not payable' } };
+    }
+    return { status: result.status || 500, body: { error: result.error || 'could not promote order' } };
+  }
+  return { status: 200, body: { received: true, promoted: true } };
+}
+
 /** Legacy fallback: no reservation group exists → atomic decrement per line. */
 async function decrementFallback(session: CompletedSessionShape): Promise<void> {
   const { ids, qtys } = sessionIdsAndQtys(session);
@@ -400,6 +431,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (event.type === 'charge.refunded') {
     const result = await syncRefund(obj as RefundEventShape);
+    sendJson(res, result.status, result.body);
+    return;
+  }
+
+  if (event.type === 'payment_intent.succeeded') {
+    const intentId = obj.id;
+    if (!/^pi_[A-Za-z0-9_]+$/.test(intentId)) { sendJson(res, 400, { error: 'Malformed payment intent id.' }); return; }
+    const result = await promoteIntentPaid(intentId);
     sendJson(res, result.status, result.body);
     return;
   }
