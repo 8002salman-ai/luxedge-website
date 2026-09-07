@@ -2,9 +2,14 @@
 // LUXEDGE — CATALOG TABLE COLUMN ORDER
 //
 // The Products listing lets the seller drag columns to reorder them. The
-// order is stored per-device in localStorage (admin-only surface). Helpers
-// take a Storage-like object so they are unit-testable without a browser.
+// order is persisted server-side (per admin, shared across devices) via
+// /api/admin/table-columns, with localStorage as the offline/first-paint
+// fallback. Helpers take a Storage-like object so they are unit-testable
+// without a browser.
 // ============================================================================
+import { getFreshAccessToken } from '../../services/supabase';
+
+const SERVER_URL = '/api/admin/table-columns';
 
 export const CATALOG_COLUMN_KEYS = [
   'product',
@@ -91,4 +96,52 @@ export function moveColumn(order: CatalogColumnKey[], from: string, to: string):
   next.splice(fromIdx, 1);
   next.splice(toIdx, 0, from as CatalogColumnKey);
   return next;
+}
+
+/**
+ * Load the column order saved for THIS admin on the server (shared across
+ * devices). Returns null when the server has never saved an order for this
+ * admin, and returns the DEFAULT order on any failure so the table never
+ * blocks on the network.
+ */
+export async function loadServerColumns(): Promise<CatalogColumnKey[] | null> {
+  try {
+    const token = await getFreshAccessToken();
+    const r = await fetch(SERVER_URL, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { columns?: unknown };
+    if (!Array.isArray(j.columns)) return null;
+    // Sanitize exactly like the local loader (drop unknown/dupes, append missing).
+    const known = new Set<string>(CATALOG_COLUMN_KEYS);
+    const ordered: CatalogColumnKey[] = [];
+    const seen = new Set<string>();
+    for (const k of j.columns) {
+      if (typeof k === 'string' && known.has(k) && !seen.has(k)) {
+        seen.add(k);
+        ordered.push(k as CatalogColumnKey);
+      }
+    }
+    for (const k of CATALOG_COLUMN_KEYS) {
+      if (!seen.has(k)) ordered.push(k);
+    }
+    return ordered;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the column order to the server for this admin (fire-and-forget,
+ *  non-fatal). Returns true on success. */
+export async function saveServerColumns(order: CatalogColumnKey[]): Promise<boolean> {
+  try {
+    const token = await getFreshAccessToken();
+    const r = await fetch(SERVER_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ columns: order }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
