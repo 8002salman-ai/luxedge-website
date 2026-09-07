@@ -38,11 +38,21 @@
 //     STRIPE_WEBHOOK_SECRET. Invalid signatures → 400 with NO database write.
 //   - The browser can NEVER mark an order paid; only this endpoint (called by
 //     Stripe with a valid signature) can.
+//
+// ERP AUTO-FORWARD:
+//   The moment an order BECOMES paid (fresh paid insert, or an awaiting_payment
+//   row promoted by async_payment_succeeded), it is forwarded to the configured
+//   Embani ERP webhook via autoForwardPaidOrder (api/admin/erp.ts) — same
+//   normalization, stable order_number and ERP_SYNC_STATUS ledger as the manual
+//   Push in Admin → Orders. Replays (already-paid duplicates) never re-forward.
+//   Forwarding is best-effort with an 8s bound and never fails the webhook:
+//   failures land in the ledger as failed entries the owner can Retry.
 //   - No card data is stored. Amounts come from Stripe's own session/charge
 //     objects, which were created from server-verified totals.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { sendJson } from './_lib/providers.js';
 import { verifyWebhookSignature, retrieveCheckoutSessionDetailed } from './_lib/stripe.js';
+import { autoForwardPaidOrder, type OrderRow } from './admin/erp.js';
 
 function serviceRole(): string {
   return (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -150,7 +160,7 @@ function sessionIdsAndQtys(session: CompletedSessionShape): { ids: string[]; qty
 }
 
 /** Build the purchase snapshot row from Stripe's authoritative session data. */
-function buildOrderRow(session: CompletedSessionShape, status: string): Record<string, unknown> {
+function buildOrderRow(session: CompletedSessionShape, status: string): OrderRow {
   const sessionId = session.id;
   const { ids, qtys } = sessionIdsAndQtys(session);
   const lineData = session.line_items?.data || [];
@@ -229,6 +239,8 @@ async function fulfillPaidOrder(session: CompletedSessionShape): Promise<{ statu
     if (!up.ok) return { status: up.status, body: { error: 'database update rejected', detail: up.status } };
     const { consumed, groupSize } = reservationId ? await consumeReservation(reservationId) : { consumed: -1, groupSize: -1 };
     if (consumed === 0 && groupSize === 0) await decrementFallback(session);
+    // Payment confirmed (async path) → forward the now-paid order to ERP.
+    await autoForwardPaidOrder({ ...buildOrderRow(session, 'paid'), id: row.id }).catch(() => null);
     return { status: 200, body: { received: true, promoted: true } };
   }
 
@@ -248,6 +260,11 @@ async function fulfillPaidOrder(session: CompletedSessionShape): Promise<{ statu
   // Legacy sessions carry no reservation (or the group is gone entirely) →
   // atomic decrement fallback (0014). Already-consumed → no-op.
   if (!reservationId || (consumed === 0 && groupSize === 0)) await decrementFallback(session);
+
+  // Payment confirmed → forward the fresh paid order to the ERP webhook
+  // (best-effort; recorded in the sync ledger, never fails the webhook).
+  const insertedRow = (Array.isArray(inserted.data) ? inserted.data[0] : null) as { id?: string } | null;
+  await autoForwardPaidOrder({ ...row, id: insertedRow?.id || null }).catch(() => null);
 
   return { status: 200, body: { received: true, orderNumber: row.order_number as string } };
 }
