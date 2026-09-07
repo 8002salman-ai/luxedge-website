@@ -48,6 +48,7 @@ import crmAssistantHandler from '../api/crm/assistant';
 import cjKeyHandler from '../api/admin/cj-key';
 import paymentKeysHandler from '../api/admin/payment-keys';
 import erpHandler from '../api/admin/erp';
+import paymentsHandler from '../api/admin/payments';
 import productStatsHandler from '../api/admin/product-stats';
 import blogStatsHandler from '../api/admin/blog-stats';
 import mediaStatsHandler from '../api/admin/media-stats';
@@ -117,6 +118,7 @@ const ROUTES: Route[] = [
   { path: '/api/admin/cj-key', handler: cjKeyHandler },
   { path: '/api/admin/payment-keys', handler: paymentKeysHandler },
   { path: '/api/admin/erp', handler: erpHandler },
+  { path: '/api/admin/payments', handler: paymentsHandler },
   { path: '/api/admin/product-stats', handler: productStatsHandler },
   { path: '/api/admin/ai-keys', handler: aiKeysHandler },
   { path: '/api/admin/blog-stats', handler: blogStatsHandler },
