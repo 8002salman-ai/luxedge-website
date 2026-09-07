@@ -15,6 +15,9 @@
 import { createHmac } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// autoForwardPaidOrder (api/admin/erp.ts) SSRF-guards the configured ERP URL;
+// allow the fake ERP host used by the auto-forward tests below.
+vi.mock('../_lib/ssrf.js', () => ({ validateFetchTarget: vi.fn(async () => null) }));
 import handler from '../webhook.js';
 
 const SUPABASE_URL = 'https://test-project.supabase.co';
@@ -27,6 +30,8 @@ const original = {
   sr: process.env.SUPABASE_SERVICE_ROLE_KEY,
   wh: process.env.STRIPE_WEBHOOK_SECRET,
   stripe: process.env.STRIPE_SECRET_KEY,
+  erpWebhook: process.env.EMBANI_ERP_WEBHOOK_URL,
+  erpToken: process.env.EMBANI_ERP_API_TOKEN,
 };
 
 const SESSION = {
@@ -75,6 +80,9 @@ function makeEnv() {
     // The webhook uses the RETRIEVED session's payment_status/metadata, so
     // tests override the Stripe GET response to mirror the event.
     sessionOverride: {} as Record<string, unknown>,
+    // ERP auto-forward capture (only when EMBANI_ERP_WEBHOOK_URL is set).
+    erpCalls: [] as Array<{ event?: string; orders?: unknown[] } | null>,
+    erpStatus: 200 as number,
   };
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
@@ -115,6 +123,20 @@ function makeEnv() {
       }
       // GET (existence check)
       return new Response(JSON.stringify(state.orderStatus ? [{ id: 'ord_1', status: state.orderStatus }] : []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // ERP config reads + ledger writes (empty app_settings → env fallback).
+    if (url.includes('/rest/v1/app_settings')) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Embani ERP webhook — exercised only when EMBANI_ERP_WEBHOOK_URL is set.
+    if (url.startsWith('https://erp.embani.example.com/')) {
+      state.erpCalls.push(init?.body ? JSON.parse(String(init.body)) : null);
+      if (state.erpStatus !== 200) {
+        return new Response('Internal error', { status: state.erpStatus });
+      }
+      return new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -324,5 +346,68 @@ describe('/api/webhook', () => {
     const { server, cap } = res();
     await handler(req(body, sign(body)), server);
     expect(cap.status).toBe(400);
+  });
+
+  // ── ERP auto-forward — every order that BECOMES paid is forwarded to the
+  //    configured Embani ERP webhook (stable order number, once only). ──
+
+  it('auto-forwards a newly paid order to the ERP exactly once — replays never re-forward', async () => {
+    process.env.EMBANI_ERP_WEBHOOK_URL = 'https://erp.embani.example.com/hook';
+    const env = makeEnv();
+    const body = sessionEvent();
+    const sig = sign(body);
+    const a = res();
+    await handler(req(body, sig), a.server);
+    expect(a.cap.status).toBe(200);
+    expect(env.state.erpCalls.length).toBe(1);
+    const p = env.state.erpCalls[0] as { event: string; orders: Array<{ order_number: string; total: number; payment_status: string }> };
+    expect(p.event).toBe('orders.sync');
+    expect(p.orders.length).toBe(1);
+    expect(p.orders[0].order_number).toMatch(/^LX-/);
+    expect(p.orders[0].total).toBe(33);
+    expect(p.orders[0].payment_status).toBe('paid');
+
+    // Replayed paid event → duplicate ack, NO second ERP forward.
+    const b = res();
+    await handler(req(body, sig), b.server);
+    expect((b.cap.body as { duplicate: boolean }).duplicate).toBe(true);
+    expect(env.state.erpCalls.length).toBe(1);
+  });
+
+  it('does not forward while awaiting payment, but forwards once the order is promoted to paid', async () => {
+    process.env.EMBANI_ERP_WEBHOOK_URL = 'https://erp.embani.example.com/hook';
+    const env = makeEnv();
+
+    // 1) completed + payment_status != paid → awaiting_payment only, no ERP.
+    env.state.sessionOverride = { payment_status: 'unpaid' };
+    const b1 = sessionEvent('checkout.session.completed', { payment_status: 'unpaid' });
+    const r1 = res();
+    await handler(req(b1, sign(b1)), r1.server);
+    expect(r1.cap.status).toBe(200);
+    expect((r1.cap.body as { awaitingPayment: boolean }).awaitingPayment).toBe(true);
+    expect(env.state.erpCalls.length).toBe(0);
+
+    // 2) async_payment_succeeded → promoted to paid → exactly one forward.
+    env.state.orderStatus = 'awaiting_payment';
+    env.state.sessionOverride = {};
+    const b2 = sessionEvent('checkout.session.async_payment_succeeded');
+    const r2 = res();
+    await handler(req(b2, sign(b2)), r2.server);
+    expect((r2.cap.body as { promoted: boolean }).promoted).toBe(true);
+    expect(env.state.erpCalls.length).toBe(1);
+  });
+
+  it('never fails the payment webhook when the ERP is unreachable (recorded for retry)', async () => {
+    process.env.EMBANI_ERP_WEBHOOK_URL = 'https://erp.embani.example.com/hook';
+    const env = makeEnv();
+    env.state.erpStatus = 500;
+    const body = sessionEvent();
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    // Payment confirmation is unaffected by an ERP outage.
+    expect(cap.status).toBe(200);
+    expect((cap.body as { received: boolean }).received).toBe(true);
+    // The ERP was attempted — the failed ledger entry powers the Retry UI.
+    expect(env.state.erpCalls.length).toBe(1);
   });
 });

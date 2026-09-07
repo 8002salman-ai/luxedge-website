@@ -137,8 +137,8 @@ async function writeSyncLedger(ledger: Record<string, SyncEntry>): Promise<boole
   return upsertAppSetting(ERP_SYNC_LEDGER_KEY, JSON.stringify(ledger));
 }
 
-/** Make one ERP call with a 12s timeout; sanitized on failure. */
-async function callErp(webhook: string, token: string, body: Record<string, unknown>): Promise<{ ok: boolean; status: number; body: string; error?: string }> {
+/** Make one ERP call (default 12s timeout); sanitized on failure. */
+async function callErp(webhook: string, token: string, body: Record<string, unknown>, timeoutMs: number = ERP_TIMEOUT_MS): Promise<{ ok: boolean; status: number; body: string; error?: string }> {
   try {
     const res = await fetch(webhook, {
       method: 'POST',
@@ -147,7 +147,7 @@ async function callErp(webhook: string, token: string, body: Record<string, unkn
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(ERP_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const text = await res.text();
     return { ok: res.ok, status: res.status, body: text };
@@ -167,8 +167,8 @@ function derivePaymentStatus(status: string): string {
   return s || 'unknown';
 }
 
-interface OrderRow {
-  id: string;
+export interface OrderRow {
+  id?: string | null;
   order_number: string;
   customer_email?: string | null;
   customer_name?: string | null;
@@ -208,7 +208,7 @@ function normalizeOrder(row: OrderRow): Record<string, unknown> {
   });
   return {
     source: 'luxedge',
-    order_id: row.id,
+    order_id: row.id ?? null,
     order_number: row.order_number, // STABLE — preserved across retries for ERP reconciliation
     stripe_session_id: row.stripe_session_id || null,
     stripe_payment_intent: row.stripe_payment_intent || null,
@@ -298,6 +298,77 @@ async function fetchRealOrders(): Promise<{ ok: boolean; status: number; orders:
     return { ok: true, status: res.status, orders: Array.isArray(data) ? (data as OrderRow[]) : [] };
   } catch {
     return { ok: false, status: 502, orders: [], error: 'Database is unreachable right now.' };
+  }
+}
+
+/**
+ * Auto-forward ONE just-paid order to the configured ERP webhook — called by
+ * /api/webhook the moment a Stripe payment is confirmed (fresh insert or
+ * awaiting_payment → paid promotion). Same normalization, payload contract,
+ * idempotency (stable order_number) and ERP_SYNC_STATUS ledger as the manual
+ * Push. Best-effort and NEVER throws: when ERP is not configured the order is
+ * skipped silently; when the ERP call fails the order lands in the ledger as
+ * failed, where Admin → Orders lists it with a Retry button.
+ */
+export interface AutoForwardResult {
+  attempted: boolean;
+  ok: boolean;
+  status: SyncStatus | 'skipped';
+  reason?: string;
+}
+
+export async function autoForwardPaidOrder(row: OrderRow): Promise<AutoForwardResult> {
+  try {
+    // Defensive: never forward gift-drop $0 claims or the demo order.
+    if (row.coupon_code === 'PET-GIFT-DROP' || row.order_number === 'LX-1001') {
+      return { attempted: false, ok: true, status: 'skipped', reason: 'not a paid Luxedge sale' };
+    }
+    const cfg = await effectiveConfig();
+    if (!cfg.webhook) {
+      return { attempted: false, ok: true, status: 'skipped', reason: 'ERP webhook not configured' };
+    }
+    const guard = await validateFetchTarget(cfg.webhook).catch(() => null);
+    if (guard) {
+      return { attempted: true, ok: false, status: 'failed', reason: `Webhook URL rejected: ${guard}` };
+    }
+
+    const orders = [normalizeOrder(row)];
+    const r = await callErp(cfg.webhook, cfg.token, {
+      app: 'luxedge',
+      event: 'orders.sync',
+      sent_at: new Date().toISOString(),
+      orders,
+    }, 8_000); // bounded — auto-forward runs inside the Stripe webhook response
+
+    const ledger = await readSyncLedger();
+    const now = new Date().toISOString();
+    if (r.ok) {
+      const parsed = parseErpResponse(r.body);
+      const failedEntry = parsed.failed.find((f) => f.order_number === row.order_number);
+      if (failedEntry) {
+        ledger[row.order_number] = { status: 'failed', synced_at: now, error: failedEntry.reason || 'ERP rejected order' };
+        await writeSyncLedger(ledger);
+        return { attempted: true, ok: false, status: 'failed', reason: failedEntry.reason };
+      }
+      const status: SyncStatus =
+        parsed.created !== null ? 'created'
+        : parsed.updated !== null ? 'updated'
+        : 'sent';
+      ledger[row.order_number] = { status, synced_at: now };
+      await writeSyncLedger(ledger);
+      return { attempted: true, ok: true, status };
+    }
+
+    let reason = 'ERP request failed';
+    if (r.status === 401 || r.status === 403) reason = 'ERP rejected request — HTTP ' + r.status + ' (unauthorized). Check the API token.';
+    else if (r.status === 0) reason = 'ERP request failed — ' + (r.error || 'unreachable');
+    else if (r.status >= 400 && r.status < 600) reason = 'ERP returned HTTP ' + r.status;
+    ledger[row.order_number] = { status: 'failed', synced_at: now, error: reason };
+    await writeSyncLedger(ledger);
+    return { attempted: true, ok: false, status: 'failed', reason };
+  } catch {
+    // Never let ERP forwarding break the payment webhook.
+    return { attempted: true, ok: false, status: 'failed', reason: 'ERP auto-forward error' };
   }
 }
 

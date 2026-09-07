@@ -18,7 +18,9 @@ vi.mock('../_lib/ssrf.js', () => ({ validateFetchTarget: vi.fn(async () => null)
 
 const { requireAdmin } = await import('../_lib/auth.js');
 const { upsertAppSetting, deleteAppSetting } = await import('../_lib/supabase.js');
-const handler = (await import('../admin/erp.js')).default;
+const erpModule = await import('../admin/erp.js');
+const handler = erpModule.default;
+const { autoForwardPaidOrder } = erpModule;
 
 const WEBHOOK_ENV = 'https://erp.embani.example.com/api/luxedge/orders';
 const TOKEN_ENV = 'erp_probe_test_token_1234';
@@ -507,6 +509,90 @@ describe('/api/admin/erp', () => {
     await handler(makeReq('POST', { action: 'push', orderNumbers: 'LX-ABCD1234' }), server);
     expect(captured.status).toBe(400);
     expect((captured.body as { error: string }).error).toContain('orderNumbers');
+  });
+
+  // ── autoForwardPaidOrder (invoked by /api/webhook when an order is paid) ──
+
+  it('auto-forward skips silently when the ERP webhook is not configured', async () => {
+    let erpHit = false;
+    stubFetch({
+      erp: () => {
+        erpHit = true;
+        return new Response('{}', { status: 200 });
+      },
+    });
+    const result = await autoForwardPaidOrder(realOrder() as never);
+    expect(erpHit).toBe(false);
+    expect(result.attempted).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('skipped');
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
+  });
+
+  it('auto-forward sends the paid order with the stable order number and records it as created', async () => {
+    let erpPayload: unknown = null;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      erp: (_url, init) => {
+        erpPayload = init?.body ? JSON.parse(String(init.body)) : null;
+        return new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    const result = await autoForwardPaidOrder(realOrder() as never);
+    expect(result.attempted).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('created');
+    const payload = erpPayload as { event: string; orders: Array<{ order_number: string; total: number }> };
+    expect(payload.event).toBe('orders.sync');
+    expect(payload.orders.length).toBe(1);
+    expect(payload.orders[0].order_number).toBe('LX-ABCD1234');
+    const ledgerWrite = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
+    expect(JSON.parse(String(ledgerWrite![1]))['LX-ABCD1234'].status).toBe('created');
+  });
+
+  it('auto-forward records a failed ledger entry when the ERP is down, without throwing', async () => {
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      erp: () => ({ throw: new Error('fetch failed') }),
+    });
+    const result = await autoForwardPaidOrder(realOrder() as never);
+    expect(result.attempted).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('Could not reach the ERP server');
+    const ledgerWrite = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
+    const entry = JSON.parse(String(ledgerWrite![1]))['LX-ABCD1234'];
+    expect(entry.status).toBe('failed');
+    expect(entry.error).toContain('Could not reach');
+  });
+
+  it('auto-forward never sends gift-drop claims or the demo order', async () => {
+    let erpHit = false;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      erp: () => {
+        erpHit = true;
+        return new Response('{}', { status: 200 });
+      },
+    });
+    const gift = await autoForwardPaidOrder(realOrder({ coupon_code: 'PET-GIFT-DROP', total: 0 }) as never);
+    const demo = await autoForwardPaidOrder(realOrder({ order_number: 'LX-1001' }) as never);
+    expect(gift.status).toBe('skipped');
+    expect(demo.status).toBe('skipped');
+    expect(erpHit).toBe(false);
+  });
+
+  it('auto-forward honors per-order failures reported by the ERP', async () => {
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      erp: () => new Response(JSON.stringify({ failed: [{ order_number: 'LX-ABCD1234', reason: 'duplicate sku' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    const result = await autoForwardPaidOrder(realOrder() as never);
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('duplicate sku');
+    const ledgerWrite = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
+    expect(JSON.parse(String(ledgerWrite![1]))['LX-ABCD1234'].status).toBe('failed');
   });
 
   it('browser code never holds ERP secrets or calls the ERP webhook directly', () => {
