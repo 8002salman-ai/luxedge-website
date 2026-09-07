@@ -879,3 +879,17 @@ input[type="number"] { -moz-appearance: textfield; }
   .pet-avatar-item:hover .pet-avatar-circle { transform: none; box-shadow: none; }
   .category-pill:hover { transform: none; box-shadow: none; }
 }
+
+/* ============================================================
+   Category hero — per-category mood tints (CategoryHero.tsx)
+   Subtle band backgrounds that keep the premium, editorial feel
+   while letting each pet's mood come through. All tints stay
+   low-saturation so the gold accent + serif headline lead.
+   ============================================================ */
+.category-tint { border: 1px solid var(--color-luxe-silver); }
+.category-tint-dog      { background: linear-gradient(135deg, #fdf3e3 0%, #ffffff 62%); } /* warm, friendly   */
+.category-tint-cat      { background: linear-gradient(135deg, #f3eefb 0%, #ffffff 62%); } /* soft, elegant    */
+.category-tint-horse    { background: linear-gradient(135deg, #e9eef7 0%, #ffffff 62%); } /* refined, premium */
+.category-tint-bird     { background: linear-gradient(135deg, #edf6ee 0%, #ffffff 62%); } /* fresh, natural   */
+.category-tint-cattle   { background: linear-gradient(135deg, #f5efdf 0%, #ffffff 62%); } /* sturdy, grounded */
+.category-tint-neutral  { background: linear-gradient(135deg, #f2f3f5 0%, #ffffff 62%); }

@@ -4,6 +4,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import AdsterraAd from './components/AdsterraAd';
+import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -308,22 +309,6 @@ const CAT_META: Record<string, { desc: string }> = {
   'Bird Supplies': { desc: 'Seed, feed & care essentials for feathered friends' },
   'Horse': { desc: 'Practical care and stable essentials for horses' },
   'Cattle': { desc: 'Useful feeding and care essentials for cattle and livestock' },
-};
-
-// Pet hero image per category — fills the empty middle of the category header
-// (text left, pet image center, ad right). Same editorial pet imagery the
-// homepage category tiles already use, so the site reads visually consistent.
-const CAT_HERO_IMAGES: Record<string, string> = {
-  'Dog Supplies': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Cat Supplies': 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Bird Supplies': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Horse': 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Cattle': 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Pet Beds': 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Pet Toys': 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Feeding & Water': 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Grooming': 'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Pet Accessories': 'https://images.unsplash.com/photo-1541599540903-216a46ca1dc0?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
 };
 
 function firstUsableImage(product: Product | undefined): string | undefined {
@@ -2619,37 +2604,34 @@ function ShopPage() {
 
   return (
     <div>
-      {/* Page Header — title left, pet hero image center (fills the empty
-          middle), Adsterra native banner right. The image is the editorial pet
-          shot for this category (CAT_HERO_IMAGES), hidden on small screens so
-          the header stays compact on mobile. */}
+      {/* Page Header — premium CategoryHero (breadcrumb → headline → desc →
+          CTA → chips + pet image) on category pages, with the Adsterra native
+          unit on the right. General/All/Deals pages keep the simpler branded
+          header but still the ad. Same reusable structure across categories;
+          only image, copy, and accent mood vary (CategoryHero config). */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
-        <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(300px,420px)] gap-6 lg:gap-8 items-center">
-          <div className="max-w-xl">
-            <p className="eyebrow mb-2">{isDeals ? 'Savings' : (cat === 'All' ? 'Our Collection' : cat)}</p>
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-luxe-black tracking-tight leading-[1.05]">{pageTitle}</h1>
-            <div className="h-1 w-14 bg-luxe-gold rounded-full mt-3" aria-hidden="true" />
-            <p className="text-luxe-gray text-xs sm:text-sm mt-3">{pageDesc}</p>
-          </div>
-          {/* Center: category pet hero image (rounded, softly framed) */}
-          {!isDeals && cat !== 'All' && CAT_HERO_IMAGES[cat] && (
-            <div className="hidden md:block w-52 sm:w-60 lg:w-64 shrink-0">
-              <img
-                src={CAT_HERO_IMAGES[cat]}
-                alt={`${cat} essentials`}
-                loading="eager"
-                fetchPriority="high"
-                decoding="async"
-                className="w-full aspect-[5/6] object-cover rounded-2xl shadow-lg ring-1 ring-luxe-gold/20"
-              />
+        {!isDeals && cat !== 'All' ? (
+          <div className="max-w-[1440px] mx-auto px-4 py-8 sm:py-10 grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] gap-6 lg:gap-8 items-center">
+            <CategoryHero config={categoryHeroConfig(cat, pageDesc)} />
+            {/* Header-right native unit: full 250px frame so the native cards
+                render image+text instead of cropping to text-only. */}
+            <div className="hidden lg:block justify-self-end">
+              <AdsterraAd className="my-0" />
             </div>
-          )}
-          {/* Header-right native unit: full 250px frame so the native cards
-              render image+text instead of cropping to text-only. */}
-          <div className="hidden lg:block justify-self-end">
-            <AdsterraAd className="my-0" />
           </div>
-        </div>
+        ) : (
+          <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] gap-6 lg:gap-8 items-center">
+            <div className="max-w-xl">
+              <p className="eyebrow mb-2">{isDeals ? 'Savings' : 'Our Collection'}</p>
+              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-luxe-black tracking-tight leading-[1.05]">{pageTitle}</h1>
+              <div className="h-1 w-14 bg-luxe-gold rounded-full mt-3" aria-hidden="true" />
+              <p className="text-luxe-gray text-xs sm:text-sm mt-3">{pageDesc}</p>
+            </div>
+            <div className="hidden lg:block justify-self-end">
+              <AdsterraAd className="my-0" />
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Toolbar: mobile Filter button + search + sort — sticks below the header */}
@@ -2703,7 +2685,7 @@ function ShopPage() {
             <FilterBlock />
           </aside>
 
-          <div className="flex-1 min-w-0">
+          <div id="product-grid" className="flex-1 min-w-0 scroll-mt-40">
             <p className="text-[12px] text-luxe-gray mb-3">{f.length} product{f.length !== 1 ? 's' : ''}{cat !== 'All' ? ` in ${cat}` : ''}</p>
 
             {f.length > 0 ? (

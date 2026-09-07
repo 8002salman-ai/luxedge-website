@@ -51,4 +51,14 @@ describe('injectCategoryBody — category pet hero image', () => {
     // Image appears before the heading.
     expect(html.indexOf('<img')).toBeLessThan(html.indexOf('<h1>'));
   });
+
+  it('emits the breadcrumb trail mirroring the client CategoryHero', () => {
+    const html = wrap(cat('Cat Supplies', 'cat-supplies'));
+    expect(html).toContain('<nav aria-label="Breadcrumb">');
+    expect(html).toContain('<a href="/">Home</a>');
+    expect(html).toContain('<a href="/shop">Shop</a>');
+    expect(html).toContain('<li>Cat Supplies</li>');
+    // Breadcrumb sits before the h1.
+    expect(html.indexOf('Breadcrumb')).toBeLessThan(html.indexOf('<h1>'));
+  });
 });
