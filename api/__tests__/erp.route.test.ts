@@ -21,6 +21,9 @@ const { upsertAppSetting, deleteAppSetting } = await import('../_lib/supabase.js
 const erpModule = await import('../admin/erp.js');
 const handler = erpModule.default;
 const { autoForwardPaidOrder } = erpModule;
+// Storage-mode seams: ledger (app_settings) is the default under test so the
+// pre-migration assertions stay valid; column-mode tests opt in explicitly.
+const { __setErpColumnsModeForTests, __resetErpColumnsProbeForTests } = erpModule;
 
 const WEBHOOK_ENV = 'https://erp.embani.example.com/api/luxedge/orders';
 const TOKEN_ENV = 'erp_probe_test_token_1234';
@@ -39,13 +42,17 @@ function makeRes(): { captured: { status: number; body: unknown }; server: Serve
   return { captured, server };
 }
 
+// Every request gets its own TEST-NET address so the in-memory per-IP rate
+// limiter (30 req/60s) never throttles a whole fast test file.
+let ipSeq = 0;
 function makeReq(method: string, payload: Record<string, unknown>): IncomingMessage {
   const body = JSON.stringify(payload);
+  ipSeq += 1;
   const r = {
     method,
     url: '/api/admin/erp',
     headers: { 'content-type': 'application/json' },
-    socket: { remoteAddress: '127.0.0.1' },
+    socket: { remoteAddress: `203.0.113.${(ipSeq % 254) + 1}` },
   } as unknown as IncomingMessage;
   const evt = (name: string, fn: (chunk?: Buffer) => void) => {
     if (name === 'data') process.nextTick(() => fn(Buffer.from(body)));
@@ -63,14 +70,32 @@ interface StubOpts {
   orders?: unknown[];
   /** Custom ERP webhook responder; receives the request init so tests can inspect the payload. */
   erp?: (url: string, init?: RequestInit) => Response | { throw: Error };
+  /** False → the erp_sync_* column probe answers 400 (migration 0029 not applied). */
+  columnsPresent?: boolean;
+  /** Captured per-row ERP sync PATCHes (column mode). */
+  patches?: Array<{ url: string; body: Record<string, unknown> | null }>;
 }
 
 function stubFetch(opts: StubOpts = {}) {
+  opts.patches ??= [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/rest/v1/luxedge_orders')) {
+        // Migration-0029 column probe (select order_number,erp_sync_*).
+        if (url.includes('select=order_number,erp_sync_status')) {
+          if (opts.columnsPresent === false) {
+            return new Response(JSON.stringify({ code: '42703', message: 'column luxedge_orders.erp_sync_status does not exist' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+          }
+        }
+        if (init?.method === 'PATCH') {
+          opts.patches!.push({ url, body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null });
+          return new Response(null, { status: 204 });
+        }
+        if (url.includes('erp_sync_status=eq.failed')) {
+          return new Response(JSON.stringify((opts.orders ?? []).filter((o) => (o as { erp_sync_status?: string }).erp_sync_status === 'failed')), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         return new Response(JSON.stringify(opts.orders ?? []), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (url.includes('/rest/v1/app_settings')) {
@@ -129,9 +154,12 @@ describe('/api/admin/erp', () => {
     delete process.env.EMBANI_ERP_API_TOKEN;
     process.env.VITE_SUPABASE_URL = SUPABASE_URL;
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service_role_probe_key';
+    // Ledger storage by default — matches the pre-migration production schema.
+    __setErpColumnsModeForTests(false);
   });
 
   afterEach(() => {
+    __resetErpColumnsProbeForTests();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     if (original.webhook === undefined) delete process.env.EMBANI_ERP_WEBHOOK_URL; else process.env.EMBANI_ERP_WEBHOOK_URL = original.webhook;
@@ -593,6 +621,132 @@ describe('/api/admin/erp', () => {
     expect(result.reason).toContain('duplicate sku');
     const ledgerWrite = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
     expect(JSON.parse(String(ledgerWrite![1]))['LX-ABCD1234'].status).toBe('failed');
+  });
+
+  // ── Migration-0029 column mode — sync state lives on each luxedge_orders row ──
+
+  it('column mode: GET builds the sync map from the order rows themselves', async () => {
+    __setErpColumnsModeForTests(true);
+    stubFetch({
+      orders: [
+        { order_number: 'LX-BAD-1', erp_sync_status: 'failed', erp_synced_at: '2026-09-01T10:00:00.000Z', erp_sync_error: 'ERP returned HTTP 500' },
+        { order_number: 'LX-OK-1', erp_sync_status: 'created', erp_synced_at: '2026-09-02T10:00:00.000Z' },
+      ],
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('GET', {}), server);
+    expect(captured.status).toBe(200);
+    const sync = (captured.body as { sync: Record<string, { status: string; synced_at?: string; error?: string }> }).sync;
+    expect(sync['LX-BAD-1']).toEqual({ status: 'failed', synced_at: '2026-09-01T10:00:00.000Z', error: 'ERP returned HTTP 500' });
+    expect(sync['LX-OK-1'].status).toBe('created');
+    expect(sync['LX-OK-1'].error).toBeUndefined();
+  });
+
+  it('column mode: push writes per-row PATCHes and never touches the app_settings ledger', async () => {
+    __setErpColumnsModeForTests(true);
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [realOrder()],
+      erp: () => new Response(JSON.stringify({ updated: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    };
+    stubFetch(opts);
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }), server);
+    expect(captured.status).toBe(200);
+    expect(opts.patches!.length).toBe(1);
+    expect(opts.patches![0].url).toContain('order_number=eq.LX-ABCD1234');
+    expect(opts.patches![0].body).toMatchObject({ erp_sync_status: 'updated', erp_sync_error: null });
+    expect(typeof (opts.patches![0].body as { erp_synced_at: unknown }).erp_synced_at).toBe('string');
+    // Ledger doc untouched in column mode.
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
+  });
+
+  it('column mode: push retry of a failed order marks the row synced', async () => {
+    __setErpColumnsModeForTests(true);
+    let calls = 0;
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder({ order_number: 'LX-RETRY-3' })],
+      erp: () => {
+        calls += 1;
+        if (calls === 1) return new Response('down', { status: 500 });
+        return new Response(JSON.stringify({ updated: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    };
+    stubFetch(opts);
+    await handler(makeReq('POST', { action: 'push' }), makeRes().server);
+    expect((opts.patches!.at(-1)!.body as { erp_sync_status: string }).erp_sync_status).toBe('failed');
+    await handler(makeReq('POST', { action: 'push', orderNumbers: ['LX-RETRY-3'] }), makeRes().server);
+    expect((opts.patches!.at(-1)!.body as { erp_sync_status: string }).erp_sync_status).toBe('updated');
+  });
+
+  it('column mode: clear-failed clears only failed rows via one PATCH by id', async () => {
+    __setErpColumnsModeForTests(true);
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [
+        { id: 'o-fail', order_number: 'LX-BAD-1', erp_sync_status: 'failed' },
+        { id: 'o-ok', order_number: 'LX-OK-1', erp_sync_status: 'created' },
+      ],
+    };
+    stubFetch(opts);
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'clear-failed' }), server);
+    expect(captured.status).toBe(200);
+    expect((captured.body as { ok: boolean; cleared: number }).cleared).toBe(1);
+    expect(opts.patches!.length).toBe(1);
+    expect(opts.patches![0].url).toContain('id=in.(o-fail)');
+    expect(opts.patches![0].body).toEqual({ erp_sync_status: null, erp_synced_at: null, erp_sync_error: null });
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
+  });
+
+  it('auto-detects the migration columns via probe and switches to per-row storage', async () => {
+    __resetErpColumnsProbeForTests(); // no override — real probe path
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder()],
+      columnsPresent: true,
+      erp: () => new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    };
+    stubFetch(opts);
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }), server);
+    expect(captured.status).toBe(200);
+    // Columns exist → per-row PATCH, no ledger write.
+    expect(opts.patches!.length).toBe(1);
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
+  });
+
+  it('falls back to the app_settings ledger when the probe says the columns are missing', async () => {
+    __resetErpColumnsProbeForTests(); // no override — real probe path
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_SYNC_STATUS: JSON.stringify({}) },
+      orders: [realOrder()],
+      columnsPresent: false,
+      erp: () => new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    };
+    stubFetch(opts);
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }), server);
+    expect(captured.status).toBe(200);
+    expect(opts.patches!.length).toBe(0); // no row PATCHes
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(true);
+  });
+
+  it('column mode: auto-forward writes its sync state as a single per-row PATCH', async () => {
+    __setErpColumnsModeForTests(true);
+    const opts: StubOpts = {
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      erp: () => new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    };
+    stubFetch(opts);
+    const result = await autoForwardPaidOrder(realOrder() as never);
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('created');
+    expect(opts.patches!.length).toBe(1);
+    expect(opts.patches![0].url).toContain('order_number=eq.LX-ABCD1234');
+    expect((opts.patches![0].body as { erp_sync_status: string }).erp_sync_status).toBe('created');
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
   });
 
   it('browser code never holds ERP secrets or calls the ERP webhook directly', () => {
