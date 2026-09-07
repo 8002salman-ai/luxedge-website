@@ -428,59 +428,38 @@ describe('POST /api/gift-drop/claim — address validation', () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   });
 
-  it('blocks a clearly-invalid US address BEFORE creating the claim (no inventory consumed)', async () => {
-    const { inserted } = stubGiftEnv({ invalid: true });
-    const handler = (await import('../gift-drop.js')).claimHandler;
-    const { server, captured } = makeRes();
-    await handler(giftReq(), server);
-    expect(captured.status).toBe(400);
-    expect(String((captured.body as { error: string }).error)).toMatch(/not found|verify|double-check/i);
-    expect(inserted.length).toBe(0);
-  });
-
-  it('fails CLOSED with an honest retry when Shippo is unreachable (never ships blind)', async () => {
-    const { inserted } = stubGiftEnv({ shippoDown: true });
-    const handler = (await import('../gift-drop.js')).claimHandler;
-    const { server, captured } = makeRes();
-    await handler(giftReq(), server);
-    expect(captured.status).toBe(503);
-    expect(String((captured.body as { error: string }).error)).toMatch(/try again/i);
-    expect(inserted.length).toBe(0);
-  });
-
-  it('FAILS CLOSED when Shippo is not configured — format-invalid address also blocked', async () => {
-    delete process.env.SHIPPO_API_KEY;
+  it('rejects invalid ZIP format with basic validation (no Shippo required)', async () => {
     const { inserted } = stubGiftEnv();
     const bad = makeReq('POST', { ...validClaim, formSeconds: 30, address: { ...validClaim.address, zip: '12' } });
     const handler = (await import('../gift-drop.js')).claimHandler;
     const { server, captured } = makeRes();
     await handler(bad, server);
-    // 503: Shippo not configured → fail closed (not 400 format error).
-    expect(captured.status).toBe(503);
-    expect(String((captured.body as { error: string }).error)).toMatch(/unavailable|try again|verify/i);
+    expect(captured.status).toBe(400);
+    expect(String((captured.body as { error: string }).error)).toMatch(/ZIP|postal/i);
     expect(inserted.length).toBe(0);
   });
 
-  it('FAILS CLOSED when Shippo is not configured — even a valid-format US address is rejected', async () => {
-    // Real public claims must never ship without USPS verification.
+  it('accepts valid-format US address without Shippo configured', async () => {
+    // Free Gift uses basic local validation — Shippo is NOT required.
     delete process.env.SHIPPO_API_KEY;
-    const { inserted } = stubGiftEnv();
-    const handler = (await import('../gift-drop.js')).claimHandler;
-    const { server, captured } = makeRes();
-    await handler(giftReq(), server);
-    // 503 = server cannot verify (config missing), NOT 400 (format issue).
-    expect(captured.status).toBe(503);
-    expect(String((captured.body as { error: string }).error)).toMatch(/unavailable|try again|verify/i);
-    expect(inserted.length).toBe(0);
-  });
-
-  it('normalizes the address and allows the claim when Shippo validates it', async () => {
     const { inserted } = stubGiftEnv();
     const handler = (await import('../gift-drop.js')).claimHandler;
     const { server, captured } = makeRes();
     await handler(giftReq(), server);
     expect(captured.status).toBe(200);
     expect(inserted.length).toBe(1);
-    expect((inserted[0].shipping_address as { line1: string }).line1).toContain('WOOF');
+  });
+
+  it('normalizes the address formatting', async () => {
+    const { inserted } = stubGiftEnv();
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(giftReq(), server);
+    expect(captured.status).toBe(200);
+    expect(inserted.length).toBe(1);
+    // Address is normalized (state abbreviation, ZIP format)
+    const addr = inserted[0].shipping_address as { state: string; zip: string };
+    expect(addr.state).toMatch(/^[A-Z]{2}$/);
+    expect(addr.zip).toMatch(/^\d{5}/);
   });
 });
