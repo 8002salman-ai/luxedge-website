@@ -407,6 +407,108 @@ describe('/api/admin/erp', () => {
     expect(deleteAppSetting).not.toHaveBeenCalled();
   });
 
+  it('push with orderNumbers retries only the requested order', async () => {
+    const sent: Array<Array<Record<string, unknown>>> = [];
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [
+        realOrder({ order_number: 'LX-RETRY-1' }),
+        realOrder({ id: '22222222-2222-2222-2222-222222222222', order_number: 'LX-LEAVE-1' }),
+      ],
+      erp: (_url, init) => {
+        const payload = JSON.parse(String(init?.body)) as { orders: Array<Record<string, unknown>> };
+        sent.push(payload.orders);
+        return new Response(JSON.stringify({ updated: payload.orders.length }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push', orderNumbers: ['LX-RETRY-1'] }), server);
+    expect(captured.status).toBe(200);
+    expect(sent.length).toBe(1);
+    expect(sent[0].length).toBe(1);
+    expect(sent[0][0].order_number).toBe('LX-RETRY-1');
+    const b = captured.body as { ok: boolean; sent: number; updated: number | null };
+    expect(b.ok).toBe(true);
+    expect(b.sent).toBe(1);
+  });
+
+  it('push orderNumbers retry after a failure flips the ledger entry to synced', async () => {
+    let calls = 0;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [realOrder({ order_number: 'LX-RETRY-2' })],
+      erp: () => {
+        calls += 1;
+        if (calls === 1) return new Response('down', { status: 500 });
+        return new Response(JSON.stringify({ updated: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    await handler(makeReq('POST', { action: 'push' }), makeRes().server);
+    const failCall = vi.mocked(upsertAppSetting).mock.calls.filter(([k]) => k === 'ERP_SYNC_STATUS');
+    expect(JSON.parse(String(failCall.at(-1)![1]))['LX-RETRY-2'].status).toBe('failed');
+
+    await handler(makeReq('POST', { action: 'push', orderNumbers: ['LX-RETRY-2'] }), makeRes().server);
+    const okCall = vi.mocked(upsertAppSetting).mock.calls.filter(([k]) => k === 'ERP_SYNC_STATUS');
+    expect(JSON.parse(String(okCall.at(-1)![1]))['LX-RETRY-2'].status).toBe('updated');
+  });
+
+  it('push with an unknown orderNumber never calls the ERP', async () => {
+    let erpHit = false;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [realOrder()],
+      erp: () => {
+        erpHit = true;
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      },
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push', orderNumbers: ['LX-NOPE-999'] }), server);
+    expect(captured.status).toBe(200);
+    expect(erpHit).toBe(false);
+    const b = captured.body as { ok: boolean; sent: number; message: string };
+    expect(b.sent).toBe(0);
+    expect(b.message).toContain('no matching real order');
+  });
+
+  it('clear-failed removes only failed entries and keeps synced ones', async () => {
+    const ledger = JSON.stringify({
+      'LX-BAD-9': { status: 'failed', synced_at: '2026-09-01T10:00:00.000Z', error: 'ERP returned HTTP 500' },
+      'LX-GOOD-9': { status: 'created', synced_at: '2026-09-01T09:00:00.000Z' },
+    });
+    stubFetch({ settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_SYNC_STATUS: ledger } });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'clear-failed' }), server);
+    expect(captured.status).toBe(200);
+    const b = captured.body as { ok: boolean; cleared: number };
+    expect(b.ok).toBe(true);
+    expect(b.cleared).toBe(1);
+    const write = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
+    const after = JSON.parse(String(write![1])) as Record<string, { status: string }>;
+    expect(Object.keys(after)).toEqual(['LX-GOOD-9']);
+    expect(after['LX-GOOD-9'].status).toBe('created');
+  });
+
+  it('clear-failed with no failures is a no-op that never rewrites the ledger', async () => {
+    const ledger = JSON.stringify({ 'LX-GOOD-8': { status: 'updated', synced_at: '2026-09-01T09:00:00.000Z' } });
+    stubFetch({ settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_SYNC_STATUS: ledger } });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'clear-failed' }), server);
+    expect(captured.status).toBe(200);
+    const b = captured.body as { ok: boolean; cleared: number };
+    expect(b.ok).toBe(true);
+    expect(b.cleared).toBe(0);
+    expect(vi.mocked(upsertAppSetting).mock.calls.some(([k]) => k === 'ERP_SYNC_STATUS')).toBe(false);
+  });
+
+  it('push rejects a malformed orderNumbers payload', async () => {
+    stubFetch({ settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV } });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push', orderNumbers: 'LX-ABCD1234' }), server);
+    expect(captured.status).toBe(400);
+    expect((captured.body as { error: string }).error).toContain('orderNumbers');
+  });
+
   it('browser code never holds ERP secrets or calls the ERP webhook directly', () => {
     const src = readFileSync(new URL('../../src/admin/AdminSection.tsx', import.meta.url), 'utf8');
     // No localStorage persistence of ERP settings (legacy plaintext removed).

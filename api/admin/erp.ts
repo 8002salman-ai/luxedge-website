@@ -16,7 +16,8 @@
 //       { action: 'set',   field: 'webhook'|'token', value }  → store server-side
 //       { action: 'clear', field: 'webhook'|'token' }         → remove attached value
 //       { action: 'test' }                                    → harmless ERP probe
-//       { action: 'push' }                                    → sync real orders
+//       { action: 'push', orderNumbers?: string[] }           → sync real orders (or a subset for retry)
+//       { action: 'clear-failed' }                            → remove failed entries from the sync ledger
 //
 // PUSH CONTRACT (Luxedge → Embani ERP webhook):
 //   POST <webhook>  Authorization: Bearer <token>
@@ -428,7 +429,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // ── PUSH — sync real orders to ERP, record the ledger, report per-order failures. ──
+  // ── PUSH — sync real orders to ERP, record the ledger, report per-order failures.
+  //    Optional orderNumbers restricts the push to a subset (per-order Retry).
+  //    The same stable order_number is always sent, so retries reconcile.
   if (action === 'push') {
     const cfg = await effectiveConfig();
     if (!cfg.webhook) {
@@ -440,6 +443,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, 400, { error: `Webhook URL rejected: ${guard}` });
       return;
     }
+    // Optional subset for retries — e.g. { orderNumbers: ['LX-ABCD1234'] }.
+    let requested: Set<string> | null = null;
+    if (body.orderNumbers !== undefined && body.orderNumbers !== null) {
+      const list = body.orderNumbers;
+      if (!Array.isArray(list) || !list.every((n) => typeof n === 'string' && n.trim().length > 0)) {
+        sendJson(res, 400, { error: 'orderNumbers must be an array of order numbers.' });
+        return;
+      }
+      requested = new Set(list.map((n) => String(n).trim()));
+    }
     const db = await fetchRealOrders();
     if (!db.ok) {
       sendJson(res, db.status, { error: db.error });
@@ -447,10 +460,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     // Defensive filter on top of the SQL exclusion — gift-drop $0 claims and
     // the demo LX-1001 order can never be pushed to ERP, even if a query or
-    // data change ever let them through.
-    const realOrders = db.orders.filter((o) => o.coupon_code !== 'PET-GIFT-DROP' && o.order_number !== 'LX-1001');
+    // data change ever let them through. Requested numbers that don't match a
+    // real order are dropped here (never fabricated).
+    const realOrders = db.orders.filter((o) => o.coupon_code !== 'PET-GIFT-DROP' && o.order_number !== 'LX-1001' && (!requested || requested.has(o.order_number)));
     if (realOrders.length === 0) {
-      sendJson(res, 200, { ok: true, sent: 0, created: 0, updated: 0, failed: [], message: 'ERP Sync complete — no orders to push yet.' });
+      sendJson(res, 200, { ok: true, sent: 0, created: 0, updated: 0, failed: [], message: requested ? 'ERP Retry — no matching real order to push for the requested order numbers.' : 'ERP Sync complete — no orders to push yet.' });
       return;
     }
 
@@ -529,5 +543,25 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  sendJson(res, 400, { error: 'Unknown action — use set, clear, test or push.' });
+  // ── CLEAR-FAILED — remove failed entries from the sync ledger (errors that
+  //    were fixed outside the ERP push, e.g. an order cancelled in Luxedge).
+  //    Successfully-synced entries are never touched. ──
+  if (action === 'clear-failed') {
+    const ledger = await readSyncLedger();
+    const cleared = Object.entries(ledger).filter(([, e]) => e.status === 'failed');
+    if (cleared.length === 0) {
+      sendJson(res, 200, { ok: true, cleared: 0, message: 'No failed ERP syncs to clear.' });
+      return;
+    }
+    for (const [number] of cleared) delete ledger[number];
+    const ok = await writeSyncLedger(ledger);
+    if (!ok) {
+      sendJson(res, 502, { error: 'Could not update the sync ledger (app_settings unavailable).' });
+      return;
+    }
+    sendJson(res, 200, { ok: true, cleared: cleared.length, message: `Cleared ${cleared.length} failed ERP sync${cleared.length === 1 ? '' : 's'} from the ledger.` });
+    return;
+  }
+
+  sendJson(res, 400, { error: 'Unknown action — use set, clear, test, push or clear-failed.' });
 }
