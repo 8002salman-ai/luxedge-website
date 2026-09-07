@@ -50,6 +50,7 @@ import blogStatsHandler from '../api/admin/blog-stats';
 import mediaStatsHandler from '../api/admin/media-stats';
 import autoListHandler from '../api/admin/auto-list';
 import tableColumnsHandler from '../api/admin/table-columns';
+import merchStatsHandler, { recomputeMerchStats } from '../api/merch-stats';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
@@ -107,6 +108,7 @@ const ROUTES: Route[] = [
   { path: '/api/admin/media-stats', handler: mediaStatsHandler },
   { path: '/api/admin/auto-list', handler: autoListHandler },
   { path: '/api/admin/table-columns', handler: tableColumnsHandler },
+  { path: '/api/merch-stats', handler: merchStatsHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },
@@ -513,6 +515,8 @@ export default {
       return;
     }
 
+    // Pre-warm the merchandising stats cache (15-min TTL) so storefront ranking rarely pays the aggregation cost.
+    try { await recomputeMerchStats(); } catch { /* best-effort */ }
     const result = await runMediaSync('cron');
     if (!result.ok) {
       console.error(`[media-cron] sync skipped: ${result.error || 'unknown error'}`);
