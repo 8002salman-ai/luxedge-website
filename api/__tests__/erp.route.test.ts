@@ -45,7 +45,7 @@ function makeRes(): { captured: { status: number; body: unknown }; server: Serve
 // Every request gets its own TEST-NET address so the in-memory per-IP rate
 // limiter (30 req/60s) never throttles a whole fast test file.
 let ipSeq = 0;
-function makeReq(method: string, payload: Record<string, unknown>): IncomingMessage {
+function makeReq(method: string, payload: Record<string, unknown>, env?: unknown): IncomingMessage {
   const body = JSON.stringify(payload);
   ipSeq += 1;
   const r = {
@@ -53,6 +53,7 @@ function makeReq(method: string, payload: Record<string, unknown>): IncomingMess
     url: '/api/admin/erp',
     headers: { 'content-type': 'application/json' },
     socket: { remoteAddress: `203.0.113.${(ipSeq % 254) + 1}` },
+    ...(env ? { env } : {}),
   } as unknown as IncomingMessage;
   const evt = (name: string, fn: (chunk?: Buffer) => void) => {
     if (name === 'data') process.nextTick(() => fn(Buffer.from(body)));
@@ -78,6 +79,10 @@ interface StubOpts {
 
 function stubFetch(opts: StubOpts = {}) {
   opts.patches ??= [];
+  // Stateful app_settings so the sync-history log (read-modify-write on the
+  // ERP_SYNC_LOG doc) can grow across requests within a test.
+  const settings: Record<string, string> = { ...(opts.settings || {}) };
+  const stamps: Record<string, string> = {};
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -101,8 +106,31 @@ function stubFetch(opts: StubOpts = {}) {
       if (url.includes('/rest/v1/app_settings')) {
         const m = url.match(/key=eq\.([^&]+)/);
         const key = m ? decodeURIComponent(m[1]) : '';
-        const v = opts.settings?.[key];
-        return new Response(JSON.stringify(v ? [{ value: v }] : []), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        const method = String(init?.method || 'GET').toUpperCase();
+        if (method === 'GET') {
+          return new Response(
+            JSON.stringify(key in settings ? [{ value: settings[key], updated_at: stamps[key] }] : []),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        if (method === 'POST') {
+          const b = JSON.parse(String(init.body)) as { key: string; value: string; updated_at?: string };
+          settings[b.key] = b.value;
+          if (b.updated_at) stamps[b.key] = b.updated_at;
+          return new Response(JSON.stringify([{ key: b.key, value: b.value }]), { status: 201, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (method === 'PATCH') {
+          const b = JSON.parse(String(init.body)) as { value: string; updated_at?: string };
+          const stampFilter = url.match(/updated_at=eq\.([^&]+)/);
+          const stamp = stampFilter ? decodeURIComponent(stampFilter[1]) : null;
+          if (key in settings && (stamp === null || stamps[key] === stamp)) {
+            settings[key] = b.value;
+            if (b.updated_at) stamps[key] = b.updated_at;
+            return new Response(JSON.stringify([{ key, value: b.value }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          }
+          return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }); // stale stamp → 0 rows
+        }
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       if (opts.erp) {
         const r = opts.erp(url, init);
@@ -537,6 +565,124 @@ describe('/api/admin/erp', () => {
     await handler(makeReq('POST', { action: 'push', orderNumbers: 'LX-ABCD1234' }), server);
     expect(captured.status).toBe(400);
     expect((captured.body as { error: string }).error).toContain('orderNumbers');
+  });
+
+  // ── Sync history log (append-only, timestamped) ────────────────────────────
+
+  it('push appends a timestamped history entry and GET returns it', async () => {
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [realOrder()],
+      erp: () => new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    await handler(makeReq('POST', { action: 'push' }), makeRes().server);
+    const { captured, server } = makeRes();
+    await handler(makeReq('GET', {}), server);
+    const syncLog = (captured.body as { syncLog: Array<{ order_number: string; status: string; at: string }> }).syncLog;
+    expect(Array.isArray(syncLog)).toBe(true);
+    expect(syncLog.length).toBe(1);
+    expect(syncLog[0].order_number).toBe('LX-ABCD1234');
+    expect(syncLog[0].status).toBe('created');
+    expect(typeof syncLog[0].at).toBe('string');
+  });
+
+  it('history keeps EVERY attempt — a failure then a retry shows both, newest first', async () => {
+    let calls = 0;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder({ order_number: 'LX-HIST-1' })],
+      erp: () => {
+        calls += 1;
+        if (calls === 1) return new Response('down', { status: 500 });
+        return new Response(JSON.stringify({ updated: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    await handler(makeReq('POST', { action: 'push' }), makeRes().server);
+    await handler(makeReq('POST', { action: 'push', orderNumbers: ['LX-HIST-1'] }), makeRes().server);
+    const { captured, server } = makeRes();
+    await handler(makeReq('GET', {}), server);
+    const syncLog = (captured.body as { syncLog: Array<{ order_number: string; status: string; at: string; error?: string }> }).syncLog;
+    const log = syncLog.filter((e) => e.order_number === 'LX-HIST-1');
+    expect(log.length).toBe(2);
+    expect(log[0].status).toBe('updated'); // newest first
+    expect(log[1].status).toBe('failed');
+    expect(typeof log[1].error).toBe('string');
+  });
+
+  it('clear-failed removes failed sync state but never erases history', async () => {
+    stubFetch({
+      settings: {
+        ERP_WEBHOOK_URL: WEBHOOK_ENV,
+        ERP_SYNC_STATUS: JSON.stringify({ 'LX-BAD-9': { status: 'failed', synced_at: '2026-09-01T10:00:00.000Z', error: 'x' } }),
+        ERP_SYNC_LOG: JSON.stringify([{ order_number: 'LX-BAD-9', status: 'failed', at: '2026-09-01T10:00:00.000Z', error: 'x' }]),
+      },
+    });
+    await handler(makeReq('POST', { action: 'clear-failed' }), makeRes().server);
+    const { captured, server } = makeRes();
+    await handler(makeReq('GET', {}), server);
+    const syncLog = (captured.body as { syncLog: Array<{ order_number: string; status: string }> }).syncLog;
+    expect(syncLog.length).toBe(1);
+    expect(syncLog[0]).toMatchObject({ order_number: 'LX-BAD-9', status: 'failed' });
+  });
+
+  // ── Owner email alert on failed pushes (SEND_MAIL binding) ─────────────────
+
+  it('emails the owner with the failed order numbers when a batch has failures', async () => {
+    const sentMails: Array<{ to: string; subject: string; text: string }> = [];
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [realOrder({ order_number: 'LX-BAD-1' })],
+      erp: () => new Response(JSON.stringify({ failed: [{ order_number: 'LX-BAD-1', reason: 'invalid SKU' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }, {
+      SEND_MAIL: { send: async (msg: { to: string; subject: string; text: string }) => { sentMails.push(msg); } },
+    }), server);
+    expect(captured.status).toBe(200);
+    expect(sentMails.length).toBe(1);
+    expect(sentMails[0].to).toBe('8002salman@gmail.com');
+    expect(sentMails[0].subject).toContain('failed');
+    expect(sentMails[0].text).toContain('LX-BAD-1');
+    expect(sentMails[0].text).toContain('invalid SKU');
+  });
+
+  it('emails with ALL order numbers when the whole batch fails', async () => {
+    const sentMails: Array<{ text: string }> = [];
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder({ order_number: 'LX-B1' }), realOrder({ id: '22222222-2222-2222-2222-222222222222', order_number: 'LX-B2' })],
+      erp: () => new Response('down', { status: 503 }),
+    });
+    await handler(makeReq('POST', { action: 'push' }, {
+      SEND_MAIL: { send: async (msg: { text: string }) => { sentMails.push(msg); } },
+    }), makeRes().server);
+    expect(sentMails.length).toBe(1);
+    expect(sentMails[0].text).toContain('LX-B1');
+    expect(sentMails[0].text).toContain('LX-B2');
+  });
+
+  it('does not email on a clean batch, and survives a missing SEND_MAIL binding on failure', async () => {
+    // Clean batch + binding present → no alert.
+    const sentMails: Array<{ to: string }> = [];
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder()],
+      erp: () => new Response(JSON.stringify({ created: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    await handler(makeReq('POST', { action: 'push' }, {
+      SEND_MAIL: { send: async (msg: { to: string }) => { sentMails.push(msg); } },
+    }), makeRes().server);
+    expect(sentMails.length).toBe(0);
+
+    // Failing batch but no binding → push still succeeds (no crash, no email).
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV },
+      orders: [realOrder({ order_number: 'LX-NB-1' })],
+      erp: () => new Response(JSON.stringify({ failed: [{ order_number: 'LX-NB-1', reason: 'x' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }), server);
+    expect(captured.status).toBe(200);
   });
 
   // ── autoForwardPaidOrder (invoked by /api/webhook when an order is paid) ──
