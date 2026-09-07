@@ -9,6 +9,26 @@
 @import "@fontsource-variable/space-grotesk";
 @import "tailwindcss";
 
+/* ============================================================
+ * GLOBAL MOBILE-TOUCH POLISH
+ * These are safe, no-layout-impact defaults that make controls
+ * feel native on phones (kill the gray tap flash, remove the
+ * double-tap-zoom delay on interactive elements). Desktop is
+ * unaffected.
+ * ============================================================ */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+a,
+button,
+select,
+summary,
+label,
+input[type='submit'],
+[role='button'] {
+  touch-action: manipulation;
+}
+
 /*
  * LUXEDGE DESIGN SYSTEM
  * Premium polish on the classic Luxedge blue identity.

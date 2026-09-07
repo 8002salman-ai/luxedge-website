@@ -123,6 +123,17 @@ function AdminLayout({ children }: { children: ReactNode }) {
     },
   ];
 
+  // Mobile quick navigation (bottom bar, lg+ hidden): the four everyday seller
+  // destinations plus "More" which opens the full sidebar drawer. eBay-style
+  // seller apps keep list/create/orders one tap away — this mirrors that.
+  const MOBILE_NAV: { key: 'home' | 'products' | 'add' | 'orders' | 'more'; label: string; to?: string; icon: React.ComponentType<Record<string, unknown>> }[] = [
+    { key: 'home', label: 'Home', to: '/admin', icon: SquaresFour },
+    { key: 'products', label: 'Listings', to: '/admin/products', icon: Package },
+    { key: 'add', label: 'Add', to: '/admin/products/new', icon: Plus },
+    { key: 'orders', label: 'Orders', to: '/admin/orders', icon: ShoppingCart },
+    { key: 'more', label: 'More', icon: List },
+  ];
+
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
     <aside className={`flex flex-col shrink-0 ${mobile ? 'w-full h-full' : 'w-60 h-screen sticky top-0 hidden lg:flex'}`}
       style={{ background: 'linear-gradient(180deg, #0b1120 0%, #111c34 55%, #0b1120 100%)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.04)' }}>
@@ -206,7 +217,44 @@ function AdminLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto min-w-0 p-3 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
+        <main className="flex-1 overflow-y-auto min-w-0 p-3 pb-24 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
+
+        {/* Mobile bottom navigation — the everyday seller tasks stay one tap
+            away; the full menu lives behind "More" (drawer). ≥52px tap
+            targets, safe-area aware. Desktop (lg+) keeps the full sidebar. */}
+        <nav
+          className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-4px_20px_rgba(15,23,42,0.08)]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          aria-label="Admin quick navigation"
+        >
+          <div className="grid grid-cols-5 max-w-lg mx-auto">
+            {MOBILE_NAV.map((it) => {
+              if (it.key === 'more') {
+                return (
+                  <button key="more" type="button" onClick={() => setMobSide(true)}
+                    className="flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium text-gray-500 hover:text-gray-800 min-h-[52px]">
+                    <span className="p-1.5"><List size={20} /></span>
+                    More
+                  </button>
+                );
+              }
+              const on =
+                it.key === 'home' ? loc.pathname === '/admin'
+                : it.key === 'products' ? (loc.pathname.startsWith('/admin/products') && !loc.pathname.startsWith('/admin/products/new'))
+                : it.key === 'add' ? loc.pathname.startsWith('/admin/products/new')
+                : it.key === 'orders' ? loc.pathname.startsWith('/admin/orders')
+                : false;
+              const Icon = it.icon;
+              return (
+                <Link key={it.key} to={it.to || '/admin'}
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] min-h-[52px] ${on ? 'text-blue-600 font-semibold' : 'text-gray-500 font-medium hover:text-gray-700'}`}>
+                  <span className={`px-3 py-1 rounded-xl ${on ? 'bg-blue-50' : ''}`}><Icon size={20} weight={on ? 'bold' : 'regular'} /></span>
+                  {it.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   );

@@ -1,0 +1,27 @@
+{
+  "name": "Luxedge — Premium Pet Essentials",
+  "short_name": "Luxedge",
+  "id": "/",
+  "description": "Shop practical pet, horse and livestock essentials at Luxedge.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/luxedge-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/luxedge-mark.png",
+      "sizes": "194x190",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

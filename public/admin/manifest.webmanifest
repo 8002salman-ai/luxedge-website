@@ -1,0 +1,47 @@
+{
+  "name": "Luxedge Admin",
+  "short_name": "Luxedge Admin",
+  "id": "/admin/",
+  "description": "Manage Luxedge products, inventory, orders and SEO from your phone.",
+  "start_url": "/admin",
+  "scope": "/admin/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "categories": ["business", "shopping"],
+  "icons": [
+    {
+      "src": "/luxedge-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/luxedge-mark.png",
+      "sizes": "194x190",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Listings",
+      "short_name": "Listings",
+      "url": "/admin/products",
+      "icons": [{ "src": "/luxedge-mark.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Add Product",
+      "short_name": "Add",
+      "url": "/admin/products/new",
+      "icons": [{ "src": "/luxedge-mark.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "url": "/admin/orders",
+      "icons": [{ "src": "/luxedge-mark.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

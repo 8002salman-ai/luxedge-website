@@ -1910,7 +1910,10 @@ export function CatalogProductEditor() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
+      {/* Sticky action bar (mobile): Save / status stay reachable while the
+          form scrolls and the on-screen keyboard never buries the primary
+          action. Harmless on desktop where the same bar stays above the fold. */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
         <button onClick={() => nav('/admin/products')} className="p-1.5 hover:bg-gray-100 rounded-lg shrink-0"><ArrowLeft size={16} /></button>
         <h1 className="font-bold text-gray-800 whitespace-nowrap">{isNew ? 'Add Product' : 'Edit Product'}</h1>
         <span className="h-4 w-px bg-gray-200 shrink-0" aria-hidden="true" />

@@ -1209,6 +1209,11 @@ function RouteTitle() {
     };
     const desc = (d: string) => { setMeta('description', d); setOg('og:description', d); setOg('og:title', document.title); };
     setCanonical();
+    // PWA: swap the manifest per surface — admin is its own installable app
+    // scope (/admin → "Luxedge Admin"), everything else is the storefront
+    // ("Luxedge"). Static default lives in index.html.
+    const mf = document.querySelector('link[rel="manifest"]');
+    if (mf) mf.setAttribute('href', pathname.startsWith('/admin') ? '/admin/manifest.webmanifest' : '/manifest.webmanifest');
     const privateRoutes = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist', 'profile'];
     if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write') {
       setMeta('robots', 'noindex, nofollow');
