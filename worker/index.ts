@@ -49,6 +49,7 @@ import productStatsHandler from '../api/admin/product-stats';
 import blogStatsHandler from '../api/admin/blog-stats';
 import mediaStatsHandler from '../api/admin/media-stats';
 import autoListHandler from '../api/admin/auto-list';
+import tableColumnsHandler from '../api/admin/table-columns';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
@@ -105,6 +106,7 @@ const ROUTES: Route[] = [
   { path: '/api/admin/blog-stats', handler: blogStatsHandler },
   { path: '/api/admin/media-stats', handler: mediaStatsHandler },
   { path: '/api/admin/auto-list', handler: autoListHandler },
+  { path: '/api/admin/table-columns', handler: tableColumnsHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },

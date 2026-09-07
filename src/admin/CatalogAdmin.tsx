@@ -43,7 +43,7 @@ import { getAutoPublishEnabled, setAutoPublishEnabled } from '../features/catalo
 import { generateSeoJson } from '../features/ai/seo';
 import { useSeoJobStore } from '../features/catalog/seoJobStore';
 import {
-  CATALOG_COLUMN_LABELS, loadCatalogColumns, saveCatalogColumns, moveColumn,
+  CATALOG_COLUMN_LABELS, loadCatalogColumns, saveCatalogColumns, loadServerColumns, saveServerColumns, moveColumn,
   type CatalogColumnKey,
 } from '../features/catalog/tableColumns';
 import { parseHtmlPage } from '../features/ai/importer';
@@ -369,13 +369,28 @@ export function CatalogProductsPage() {
     setSort((prev) => (prev === s.asc ? s.desc : prev === s.desc ? s.asc : s.first));
   };
 
-  // Column header drag -> reorder, persisted per-device.
+  // Column header drag -> reorder, persisted per-device in localStorage AND
+  // server-side (per admin) so the layout follows the seller across devices.
   const reorderColumns = (from: CatalogColumnKey, to: CatalogColumnKey) => {
     if (from === to) return;
     const next = moveColumn(colOrder, from, to);
     setColOrder(next);
     saveCatalogColumns(next, typeof localStorage !== 'undefined' ? localStorage : null);
+    void saveServerColumns(next);
   };
+
+  // Pull the server-side column order on mount so another device's layout
+  // (or a previous session) applies immediately. Server wins over the stale
+  // local copy when it has an order for this admin.
+  useEffect(() => {
+    let cancelled = false;
+    void loadServerColumns().then((server) => {
+      if (cancelled || !server) return;
+      setColOrder(server);
+      saveCatalogColumns(server, typeof localStorage !== 'undefined' ? localStorage : null);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // "All statuses" hides archived rows — archive is a folder, not a status
   // you keep scrolling past. Archived products are only visible when the
@@ -888,9 +903,13 @@ export function CatalogProductsPage() {
       )}
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Bounded height + overflow-auto on BOTH axes: the table is wider than
+            the viewport, so the horizontal scrollbar must live in a container
+            whose height is capped — otherwise it sits thousands of pixels
+            below the fold and "side scroll" appears broken. */}
+        <div className="overflow-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 250px)' }}>
           <table className="w-full min-w-[1240px]">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs text-gray-500 uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3 w-8">
                   <input
