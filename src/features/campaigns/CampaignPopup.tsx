@@ -13,6 +13,7 @@
 // ============================================================================
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { trackEvent, utmParams } from '../../lib/marketing';
 
 interface PopupCampaign {
   slug: string;
@@ -67,6 +68,7 @@ export default function CampaignPopup() {
     const t = window.setTimeout(() => {
       setOpen(true);
       markSeen(campaign.slug);
+      trackEvent('free_gift_popup_view', { campaign: campaign.slug, ...utmParams() });
       window.setTimeout(() => closeRef.current?.focus(), 50);
     }, delay);
     return () => window.clearTimeout(t);
@@ -83,6 +85,7 @@ export default function CampaignPopup() {
   const submit = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setState('error'); setMsg('Please enter a valid email.'); return; }
     setState('busy');
+    trackEvent('free_gift_claim_started', { campaign: campaign.slug, ...utmParams() });
     try {
       // Save the lead through the existing CRM endpoint (source = campaign popup),
       // then send them to the campaign landing to complete the claim.
@@ -101,6 +104,7 @@ export default function CampaignPopup() {
       if (!r.ok) throw new Error(j.error || 'Could not save your email.');
       setState('done');
       setMsg('Thank you! Your gift is waiting on the campaign page.');
+      trackEvent('free_gift_claim_success', { campaign: campaign.slug, ...utmParams() });
     } catch (e) {
       setState('error');
       setMsg((e as Error).message || 'Network error — please try again.');
@@ -109,6 +113,7 @@ export default function CampaignPopup() {
 
   const go = () => {
     markSeen(campaign.slug);
+    trackEvent('free_gift_popup_click', { campaign: campaign.slug, ...utmParams() });
     nav(`/campaigns/${campaign.slug}`);
   };
 

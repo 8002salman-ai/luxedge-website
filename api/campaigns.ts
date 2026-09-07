@@ -86,7 +86,7 @@ async function resolveCampaign(slug: string): Promise<CampaignConfig | null> {
         freeShipping: true,
         productScope: 'all',
       },
-      popup: { enabled: false },
+      popup: { enabled: true, delayMs: 4000, frequencyDays: 30, headline: 'Get Your Free Luxedge Gift', subtext: 'One free gift per person — choose an eligible item priced $15 or below. Enter your email to get your personal claim code. No credit card required.' },
       referral: { enabled: false },
       email: { enabled: true },
       tracking: {},

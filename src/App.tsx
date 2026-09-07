@@ -742,7 +742,7 @@ function Header() {
     setMob(false);
   };
   useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
-  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/media', l: 'Media' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
+  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/free-pet-gift', l: '🎁 Free Gift' }, { p: '/media', l: 'Media' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   const catNav = [
     { l: 'Dog', to: '/category/dog-supplies' },
     { l: 'Cat', to: '/category/cat-supplies' },
@@ -1111,6 +1111,7 @@ function PCard({ product }: { product: Product }) {
             {product.newArrival && <span className="badge-new">New</span>}
             {discount > 0 && <span className="badge-sale">-{discount}%</span>}
             {product.featured && !product.newArrival && <span className="badge-featured">Featured</span>}
+            {product.price <= 15 && <span className="badge-gift">🎁 Free Gift Eligible</span>}
           </div>
           <span className="product-card-view">View product <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
         </div>
@@ -1290,6 +1291,9 @@ function SLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex flex-col">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-4 focus:py-2 focus:bg-luxe-black focus:text-white focus:rounded-lg focus:text-sm">Skip to content</a>
       <ScrollToTop />
+      <Link to="/free-pet-gift" className="block w-full bg-gradient-to-r from-violet-600 via-purple-600 to-violet-700 text-white text-center py-2 px-4 text-xs sm:text-[13px] font-bold tracking-wide hover:from-violet-700 hover:via-purple-700 hover:to-violet-800 transition-colors z-[60] relative" aria-label="New Customer Free Gift — claim one eligible item up to $15 free">
+        🎁 New Customer Gift — Claim one eligible item up to $15 FREE →
+      </Link>
       <Header />
       <main id="main-content" className="flex-1">{children}</main>
       <Footer />
@@ -1604,6 +1608,17 @@ function ProductDetailPage() {
                     className={`px-4 py-2 text-xs font-semibold border-2 rounded-lg transition-all ${selSize === s ? 'border-luxe-gold bg-luxe-light text-luxe-black' : 'border-gray-200 text-gray-600 hover:border-gray-400'}`}>{s}</button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Free Gift eligibility banner (products $15 and below) */}
+          {product.price <= 15 && (
+            <div className="mb-4 rounded-xl border-2 border-violet-200 bg-violet-50 p-4">
+              <p className="text-sm font-bold text-violet-900">🎁 Eligible for New Customer Free Gift</p>
+              <p className="text-xs text-violet-700 mt-1">Have a Luxedge Free Gift code? This item can be claimed free with a valid code.</p>
+              <Link to="/free-pet-gift" className="mt-2.5 inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-bold transition-colors">
+                🎁 Claim as My Free Gift
+              </Link>
             </div>
           )}
 

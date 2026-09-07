@@ -830,6 +830,7 @@ input[type="number"] { -moz-appearance: textfield; }
 .badge-new { background: var(--color-luxe-gold); color: white; }
 .badge-sale { background: var(--color-sale); color: white; }
 .badge-featured { background: var(--color-luxe-black); color: white; }
+.badge-gift { background: #7c3aed; color: white; }
 
 /* ── SECTION DENSITY UPGRADE ── */
 .section-compact { padding: clamp(1.15rem, 2.4vw, 1.8rem) 0; }
