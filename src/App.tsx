@@ -1668,7 +1668,7 @@ function ProductDetailPage() {
             {[
               ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
               ['Weight', product.weight], ['Dimensions', product.dimensions],
-              ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : `$${product.shippingCost}`],
+              ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : product.shippingCost ? `$${product.shippingCost}` : 'Shown at checkout'],
             ].filter(([, v]) => v).map(([k, v], i) => (
               <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
                 <td className="px-3 py-2.5 font-medium text-gray-600 w-1/3">{k}</td>
