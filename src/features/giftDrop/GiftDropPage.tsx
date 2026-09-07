@@ -247,6 +247,7 @@ export default function GiftDropPage() {
               We run drops in small batches for real pet owners. When the next drop opens it will be announced on our{' '}
               <a className="text-amber-300 underline" href="https://luxedge.us/blog">blog</a> and social channels.
             </p>
+            <WaitlistForm />
           </div>
         )}
 
@@ -258,6 +259,7 @@ export default function GiftDropPage() {
               All {state.total} real gifts are now matched with pet owners. No payment was ever required, and nobody is
               charged for anything, ever. Follow the Luxedge blog for the next drop.
             </p>
+            <WaitlistForm />
           </div>
         )}
 
@@ -512,5 +514,92 @@ export default function GiftDropPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+// ============================================================================
+// WAITLIST — shown only when the drop is paused or fully claimed.
+//
+// Explicit consent: the visitor submits their email *only* to be notified
+// about the next Pet Gift Drop, and the submit itself is the opt-in. The lead
+// is stored through the existing CRM capture endpoint (source=manual) with
+// message metadata = pet-gift-drop-waitlist, so the owner can segment it.
+// ============================================================================
+function WaitlistForm() {
+  const [email, setEmail] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+
+  const join = async (e: FormEvent) => {
+    e.preventDefault();
+    const em = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setState('error');
+      setMsg('That email address does not look valid.');
+      return;
+    }
+    setState('sending');
+    setMsg('');
+    try {
+      const res = await fetch('/api/crm/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: em,
+          source: 'manual',
+          optedIn: true,
+          pageUrl: typeof window !== 'undefined' ? window.location.href : 'https://luxedge.us/free-pet-gift',
+          message: 'pet-gift-drop-waitlist',
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.ok) {
+        setState('done');
+      } else {
+        setState('error');
+        setMsg(d.error || 'We could not save your email just now — please try again.');
+      }
+    } catch {
+      setState('error');
+      setMsg('Network error — please check your connection and try again.');
+    }
+  };
+
+  if (state === 'done') {
+    return (
+      <div className="mx-auto mt-7 max-w-sm rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4">
+        <p className="text-sm font-bold text-emerald-200">You&apos;re on the list! ✓</p>
+        <p className="mt-1 text-[12.5px] text-emerald-100/80">
+          We&apos;ll email you only when the next Pet Gift Drop opens — no spam, and you can unsubscribe anytime.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={join} className="mx-auto mt-7 max-w-sm text-left">
+      <p className="text-center text-sm font-semibold text-white">Notify me about the next Pet Gift Drop</p>
+      <p className="mt-1 text-center text-[12px] text-slate-400">
+        Submitting your email is your opt-in — we&apos;ll only use it to tell you when a new drop opens.
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-[15px] text-white placeholder:text-slate-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300/30"
+        />
+        <button
+          type="submit"
+          disabled={state === 'sending'}
+          className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-5 py-3 text-sm font-black text-gray-900 transition hover:from-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {state === 'sending' ? 'Saving…' : 'Notify me'}
+        </button>
+      </div>
+      {state === 'error' && msg && <p className="mt-2 text-center text-[12px] text-rose-300">{msg}</p>}
+    </form>
   );
 }
