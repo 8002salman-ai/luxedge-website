@@ -22,6 +22,17 @@ describe('editorial release boundaries', () => {
       expect(result && 'html' in result && result.html).toContain('noindex');
     }
   });
+  it('serves /campaigns/:slug as a noindexed 200 (engine landings, SPA-rendered)', async () => {
+    const result = await maybeInjectSeo(shell, '/campaigns/pet-gift-drop', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 200);
+    expect(result && 'html' in result && result.html).toContain('noindex');
+    expect(result && 'html' in result && result.html).toContain('canonical');
+  });
+  it('keeps truly unknown routes as real noindex 404s (no homepage soft-404)', async () => {
+    const result = await maybeInjectSeo(shell, '/campaigns', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 404);
+    expect(result && 'html' in result && result.html).toContain('noindex');
+  });
   it('excludes utility, nested checkout, search and media routes from both ad modes', () => {
     for (const path of ['/admin', '/checkout/success', '/cart', '/account', '/wishlist', '/blog/write', '/media/example', '/404']) {
       expect(isExcludedPath(path, DEFAULT_CONFIG), path).toBe(true);
