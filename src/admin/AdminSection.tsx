@@ -1028,7 +1028,7 @@ function AOrders() {
     } finally { setErpBusy(false); }
   };
 
-  const pushToErp = async (testOnly = false) => {
+  const pushToErp = async (testOnly = false, orderNumbers?: string[]) => {
     if (erpBusy) return;
     const token = getAccessToken();
     if (!token) { setErpResult({ ok: false, msg: 'Not signed in.' }); return; }
@@ -1037,7 +1037,7 @@ function AOrders() {
       const res = await fetch('/api/admin/erp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ action: testOnly ? 'test' : 'push' }),
+        body: JSON.stringify(orderNumbers && orderNumbers.length ? { action: testOnly ? 'test' : 'push', orderNumbers } : { action: testOnly ? 'test' : 'push' }),
       });
       const data = await res.json().catch(() => null) as { ok?: boolean; message?: string; sent?: number; created?: number | null; updated?: number | null; failed?: { order_number?: string; reason?: string }[]; error?: string } | null;
       if (!data) { setErpResult({ ok: false, msg: `ERP request failed — HTTP ${res.status}` }); return; }
@@ -1052,6 +1052,32 @@ function AOrders() {
       if (testOnly) notify('ERP connection OK');
     } catch {
       setErpResult({ ok: false, msg: 'ERP request failed — could not reach the Luxedge server.' });
+    } finally { setErpBusy(false); }
+  };
+
+  // Failed ERP syncs from the server-side ledger — retry one, retry all, or
+  // clear the recorded errors after they have been resolved another way.
+  const failedErpSyncs = erpCfg ? Object.entries(erpCfg.sync).filter(([, e]) => e.status === 'failed') : [];
+
+  const clearFailedErp = async () => {
+    if (erpBusy || failedErpSyncs.length === 0) return;
+    const token = getAccessToken();
+    setErpBusy(true); setErpResult(null);
+    try {
+      const res = await fetch('/api/admin/erp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'clear-failed' }),
+      });
+      const data = await res.json().catch(() => null) as { ok?: boolean; message?: string; cleared?: number; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        setErpResult({ ok: false, msg: (data as { error?: string })?.error || `Could not clear — HTTP ${res.status}` });
+        return;
+      }
+      loadErpCfg();
+      setErpResult({ ok: true, msg: data.message || '✓ Failed ERP syncs cleared.' });
+    } catch {
+      setErpResult({ ok: false, msg: 'Network error — could not clear failed ERP syncs.' });
     } finally { setErpBusy(false); }
   };
 
@@ -1157,6 +1183,29 @@ function AOrders() {
           <button onClick={() => pushToErp(true)} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1.5">{erpBusy ? <ArrowClockwise size={13} className="animate-spin" /> : <Shuffle size={13} />}{erpBusy ? 'Working…' : 'Test'}</button>
           <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"><CloudArrowUp size={13} /> Push orders</button>
         </div>
+
+        {/* Failed ERP syncs (from the server-side ledger) — retry per order or clear all */}
+        {failedErpSyncs.length > 0 && (
+          <div className="rounded-lg border border-red-200 bg-red-50/40 overflow-hidden">
+            <div className="px-3 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5"><Warning size={13} /> {failedErpSyncs.length} failed ERP sync{failedErpSyncs.length !== 1 ? 's' : ''}</p>
+              <div className="flex gap-2">
+                <button onClick={() => pushToErp(false, failedErpSyncs.map(([n]) => n))} disabled={erpBusy} className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry all</button>
+                <button onClick={clearFailedErp} disabled={erpBusy} className="px-2.5 py-1 border border-red-300 text-red-600 rounded-lg text-[10px] font-semibold hover:bg-red-100 disabled:opacity-50">Clear all errors</button>
+              </div>
+            </div>
+            <div className="divide-y divide-red-100/70">
+              {failedErpSyncs.map(([orderNumber, e]) => (
+                <div key={orderNumber} className="px-3 py-2 flex items-center gap-2 flex-wrap min-w-0">
+                  <p className="font-mono text-[11px] font-semibold text-gray-800 shrink-0">{orderNumber}</p>
+                  <p className="text-[10px] text-red-600/90 break-words min-w-0 flex-1" title={e.error || ''}>{e.error || 'ERP sync failed'}</p>
+                  <span className="text-[9px] text-gray-400 shrink-0">{e.synced_at ? new Date(e.synced_at).toLocaleString() : ''}</span>
+                  <button onClick={() => pushToErp(false, [orderNumber])} disabled={erpBusy} className="px-2.5 py-1 bg-white border border-red-300 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {erpResult && (
         <p className={`mt-2 text-[11px] break-words ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
