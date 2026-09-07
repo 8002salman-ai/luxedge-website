@@ -48,8 +48,57 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   let body: unknown;
   try { body = await readJsonBody(req); } catch { sendJson(res, 400, { error: 'Invalid request body.' }); return; }
   const b = (body ?? {}) as Record<string, unknown>;
-  const action = b.action === 'rates' ? 'rates' : 'validate';
+  const action = String(b.action || 'validate');
 
+  // Admin actions: status + test (require admin auth)
+  if (action === 'status' || action === 'test') {
+    const { requireAdmin } = await import('./_lib/auth.js');
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+    const { shippoConfigured, shippoApiKeyMasked } = await import('./_lib/shippo.js');
+    if (action === 'status') {
+      sendJson(res, 200, {
+        configured: shippoConfigured(),
+        apiKeyPresent: shippoConfigured(),
+        apiKeyMasked: shippoApiKeyMasked(),
+        fromName: process.env.SHIPPO_FROM_NAME || '',
+        fromAddress: process.env.SHIPPO_FROM_ADDRESS || '',
+        fromCity: process.env.SHIPPO_FROM_CITY || '',
+        fromState: process.env.SHIPPO_FROM_STATE || '',
+        fromZip: process.env.SHIPPO_FROM_ZIP || '',
+      });
+      return;
+    }
+    // action === 'test'
+    if (!shippoConfigured()) {
+      sendJson(res, 400, { ok: false, message: 'Shippo API key is not configured.' });
+      return;
+    }
+    // Validate a simple test address to confirm the API works
+    const t0 = Date.now();
+    try {
+      const testAddr: ShippingAddressInput = {
+        fullName: 'Test User',
+        addressLine1: '1600 Pennsylvania Ave NW',
+        city: 'Washington',
+        state: 'DC',
+        postalCode: '20500',
+        country: 'US',
+      };
+      const result = await validateShippingAddress(testAddr);
+      sendJson(res, 200, {
+        ok: true,
+        message: `Shippo connection successful — address validation returned ${result.isValid ? 'valid' : 'needs review'}`,
+        latencyMs: Date.now() - t0,
+        result,
+      });
+    } catch (e) {
+      sendJson(res, 400, { ok: false, message: `Shippo test failed: ${(e as Error).message}` });
+    }
+    return;
+  }
+
+  // Public actions: validate + rates
   const address = parseAddress(b);
   if (!address) {
     sendJson(res, 400, { error: 'Complete shipping address is required (name, street, city, state, postal code).' });

@@ -69,6 +69,13 @@ export function shippoConfigured(): boolean {
   return !!(process.env.SHIPPO_API_KEY || '').trim();
 }
 
+export function shippoApiKeyMasked(): string {
+  const key = (process.env.SHIPPO_API_KEY || '').trim();
+  if (!key) return '';
+  if (key.length <= 8) return '••••';
+  return `${key.slice(0, 6)}••••${key.slice(-4)}`;
+}
+
 function shippoKey(): string {
   return (process.env.SHIPPO_API_KEY || '').trim();
 }

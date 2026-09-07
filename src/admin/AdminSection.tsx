@@ -18,6 +18,7 @@ import ProductResearch from './ProductResearch';
 import CJSetup from './CJSetup';
 import PaymentsSetup from './PaymentsSetup';
 import GiftDropAdmin from './GiftDropAdmin';
+import ShippingSetup from './ShippingSetup';
 import CampaignManager from './CampaignManager';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
@@ -837,17 +838,26 @@ function AOrders() {
   const [erpBusy, setErpBusy] = useState(false);
   const [erpResult, setErpResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [showErpLog, setShowErpLog] = useState(false);
+  // Provider filter for orders
+  const [providerFilter, setProviderFilter] = useState<string>('all');
+  const [includeGifts, setIncludeGifts] = useState(false);
 
-  // Authoritative persisted orders ONLY (created by the Stripe webhook). No
+  // Authoritative persisted orders ONLY (created by the Stripe webhook or gift-drop). No
   // fake order history — the legacy demo table was removed for truthfulness.
-  useEffect(() => {
+  const loadOrders = () => {
     const token = getAccessToken();
     if (!token) { setLoaded(true); return; }
-    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+    const params = new URLSearchParams({ action: 'orders' });
+    if (providerFilter !== 'all') params.set('provider', providerFilter);
+    if (includeGifts) params.set('includeGifts', 'true');
+    fetch(`/api/checkout?${params}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : []))
       .catch(() => setStripeOrders([]))
       .finally(() => setLoaded(true));
+  };
+  useEffect(() => { loadOrders(); }, [providerFilter, includeGifts]);
+  useEffect(() => {
     try { const raw = localStorage.getItem('luxedge-tracking'); if (raw) setTracking(JSON.parse(raw)); } catch { /* ignore */ }
     try { const raw = localStorage.getItem('luxedge-order-extras'); if (raw) setOrderExtras(JSON.parse(raw)); } catch { /* ignore */ }
     // Purge legacy plaintext ERP settings that older builds stored locally.
@@ -1263,10 +1273,25 @@ function AOrders() {
     )}
 
     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <div>
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-sm text-gray-800">Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
-          <p className="text-[11px] text-gray-400">Real records from the Stripe webhook. Add tracking, print labels, and update status here.</p>
+          <p className="text-[11px] text-gray-400">Real records from the Stripe webhook + gift drops. Filter by provider or type.</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="text-[11px] border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white font-medium text-gray-600">
+            <option value="all">All providers</option>
+            <option value="none">🎁 Free Gift</option>
+            <option value="stripe">Stripe</option>
+            <option value="square">Square</option>
+            <option value="paypal">PayPal</option>
+            <option value="braintree">Braintree</option>
+            <option value="authorize_net">Authorize.Net</option>
+          </select>
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={includeGifts} onChange={(e) => setIncludeGifts(e.target.checked)} className="w-3.5 h-3.5 rounded" />
+            Include gifts
+          </label>
         </div>
       </div>
       {!loaded ? (
@@ -1283,9 +1308,20 @@ function AOrders() {
             <>
               <tr key={o.id} className={`border-t hover:bg-gray-50 cursor-pointer ${isDemo ? 'bg-amber-50/40' : ''}`} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
                 <td className="px-6 py-3">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p>
                     {isDemo && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full">DEMO</span>}
+                    {!isDemo && (() => {
+                      const pp = String((o as unknown as Record<string, unknown>).payment_provider || '');
+                      const ot = String((o as unknown as Record<string, unknown>).order_type || 'paid');
+                      if (ot === 'free_gift' || pp === 'none') {
+                        return <span className="text-[9px] font-bold px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">🎁 FREE GIFT</span>;
+                      }
+                      if (pp && pp !== 'stripe' && pp !== 'none') {
+                        return <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full capitalize">{pp}</span>;
+                      }
+                      return null;
+                    })()}
                     {!isDemo && (() => {
                       const s = erpSyncFor(o.order_number);
                       if (!s) return null;
@@ -6003,6 +6039,7 @@ export default function AdminSection() {
       <Route path="hermes-intel" element={<AdminLayout><HermesIntel /></AdminLayout>} />
       <Route path="cj-setup" element={<AdminLayout><CJSetup /></AdminLayout>} />
       <Route path="payments" element={<AdminLayout><PaymentsSetup /></AdminLayout>} />
+      <Route path="shipping" element={<AdminLayout><ShippingSetup /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />

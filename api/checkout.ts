@@ -136,14 +136,38 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   // -------------------------------------------------------------------------
   // GET — admin order list (authoritative persisted orders)
+  // Supports ?provider= filter and ?includeGifts=true to show free gift orders.
   // -------------------------------------------------------------------------
   if (req.method === 'GET' && url.searchParams.get('action') === 'orders') {
     if (!(await requireAdmin(req, res))) return;
     const key = serviceRole();
-    // Exclude Pet Gift Drop $0 promotional rows (coupon_code marker) from the
-    // sales Orders screen — gift claims are managed on their own admin page.
-    const r = await restFetch('luxedge_orders', `?coupon_code=not.eq.PET-GIFT-DROP&order=created_at.desc&limit=50`, key);
-    if (!r.ok) { sendJson(res, r.status, r.data); return; }
+    const providerFilter = (url.searchParams.get('provider') || '').trim();
+    const includeGifts = url.searchParams.get('includeGifts') === 'true';
+
+    // Base: exclude PET-GIFT-DROP unless explicitly requested
+    let query = '?order=created_at.desc&limit=50';
+    if (!includeGifts) {
+      query += '&coupon_code=not.eq.PET-GIFT-DROP';
+    }
+    // Provider filter (payment_provider column from migration 0031)
+    if (providerFilter && providerFilter !== 'all') {
+      if (providerFilter === 'none') {
+        // Free gifts = payment_provider=none or coupon_code=PET-GIFT-DROP
+        query = '?order=created_at.desc&limit=100&coupon_code=eq.PET-GIFT-DROP';
+      } else {
+        query += `&payment_provider=eq.${encodeURIComponent(providerFilter)}`;
+      }
+    }
+
+    const r = await restFetch('luxedge_orders', query, key);
+    if (!r.ok) {
+      // If payment_provider column doesn't exist yet (migration 0031 pending),
+      // fall back to the original query
+      const fallback = await restFetch('luxedge_orders', '?coupon_code=not.eq.PET-GIFT-DROP&order=created_at.desc&limit=50', key);
+      if (!fallback.ok) { sendJson(res, fallback.status, fallback.data); return; }
+      sendJson(res, 200, { orders: fallback.data });
+      return;
+    }
     sendJson(res, 200, { orders: r.data });
     return;
   }
