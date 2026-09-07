@@ -145,8 +145,8 @@ export function getEnabledProviders(): PaymentProvider[] {
 
 export function getProviderForCheckout(): { cardProvider: PaymentProvider | null; paypalProvider: PaymentProvider | null } {
   const enabled = getEnabledProviders();
-  // Find the primary card provider (or first enabled one)
-  const cardProvider = enabled.find(p => p.id !== 'paypal' && p.id !== 'payoneer') || null;
+  // Exclude 'none' (free-gift only) and 'manual' and 'payoneer' from card providers
+  const cardProvider = enabled.find(p => !['none', 'manual', 'paypal', 'payoneer'].includes(p.id)) || null;
   // Find PayPal if enabled
   const paypalProvider = enabled.find(p => p.id === 'paypal') || null;
   return { cardProvider, paypalProvider };
