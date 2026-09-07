@@ -422,3 +422,156 @@ describe('/api/webhook', () => {
     expect(env.state.erpCalls.length).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// payment_intent.succeeded — on-site PaymentElement flow. The pending order
+// row already exists (created at PaymentIntent time); the webhook promotes it
+// to paid + consumes the reservation exactly once. Replays are no-ops.
+// ---------------------------------------------------------------------------
+describe('/api/webhook payment_intent.succeeded', () => {
+  const INTENT = {
+    id: 'pi_onsite_1',
+    amount: 2999,
+    currency: 'usd',
+    status: 'succeeded',
+    receipt_email: 'buyer@example.com',
+    metadata: { reservation: 'res-onsite-1', ids: '11111111-1111-4111-8111-111111111111', qtys: '1', coupon: 'none' },
+  };
+
+  function intentEvent(type = 'payment_intent.succeeded', overrides: Record<string, unknown> = {}): string {
+    return JSON.stringify({ id: 'evt_pi_1', type, data: { object: { ...INTENT, ...overrides } } });
+  }
+
+  function stubPiEnv(initialStatus: string | null) {
+    const state = {
+      orderStatus: initialStatus as string | null,
+      consumeCalls: 0,
+      patchStatuses: [] as Array<string | null>,
+    };
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      // Stripe PI retrieve (webhook + promotePaidIntent both call it).
+      if (url.startsWith('https://api.stripe.com/v1/payment_intents/')) {
+        return new Response(JSON.stringify(INTENT), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.includes('/rest/v1/rpc/consume_reservation')) {
+        state.consumeCalls += 1;
+        return new Response(JSON.stringify({ ok: true, consumed: 1, group_size: 1 }), { status: 200 });
+      }
+      if (url.includes('/rest/v1/luxedge_orders')) {
+        if (method === 'PATCH') {
+          const b = JSON.parse(String(init?.body || '{}')) as { status?: string };
+          if (typeof b.status === 'string') state.orderStatus = b.status;
+          state.patchStatuses.push(b.status ?? null);
+          const order = {
+            id: 'ord_pending', order_number: 'LX-ABC123', status: b.status ?? state.orderStatus,
+            total: 29.99, currency: 'usd', customer_email: 'buyer@example.com',
+          };
+          return new Response(JSON.stringify([order]), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
+        // GET existing by stripe_payment_intent
+        const row = state.orderStatus
+          ? [{ id: 'ord_pending', order_number: 'LX-ABC123', status: state.orderStatus, total: 29.99, currency: 'usd' }]
+          : [];
+        return new Response(JSON.stringify(row), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.includes('/rest/v1/app_settings')) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response(JSON.stringify([]), { status: 200 });
+    }));
+    return state;
+  }
+
+  beforeEach(() => {
+    process.env.VITE_SUPABASE_URL = SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = SR;
+    process.env.STRIPE_WEBHOOK_SECRET = WH;
+    process.env.STRIPE_SECRET_KEY = STRIPE;
+    __setErpColumnsModeForTests(false);
+  });
+  afterEach(() => {
+    __resetErpColumnsProbeForTests();
+    vi.unstubAllGlobals();
+    for (const [k, v] of Object.entries(original)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  });
+
+  it('promotes the pending on-site order to paid and consumes the reservation', async () => {
+    const st = stubPiEnv('pending');
+    const body = intentEvent();
+    const { server, cap } = res();
+    await handler(req(body, sign(body)), server);
+    expect(cap.status).toBe(200);
+    expect((cap.body as { promoted?: boolean }).promoted).toBe(true);
+    expect(st.patchStatuses).toContain('paid');
+    expect(st.consumeCalls).toBe(1);
+  });
+
+  it('is idempotent — a replay never double-consumes or re-promotes', async () => {
+    const st = stubPiEnv('pending');
+    const body = intentEvent();
+    const sig = sign(body);
+    const a = res();
+    await handler(req(body, sig), a.server);
+    expect((a.cap.body as { promoted?: boolean }).promoted).toBe(true);
+    const b = res();
+    await handler(req(body, sig), b.server);
+    expect(b.cap.status).toBe(200);
+    expect((b.cap.body as { duplicate?: boolean }).duplicate).toBe(true);
+    expect(st.consumeCalls).toBe(1);
+  });
+
+});
+
+describe('promotePaidIntent (shared by verify + webhook)', () => {
+  beforeEach(() => {
+    process.env.VITE_SUPABASE_URL = SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = SR;
+    process.env.STRIPE_WEBHOOK_SECRET = WH;
+    process.env.STRIPE_SECRET_KEY = STRIPE;
+    __setErpColumnsModeForTests(false);
+  });
+  afterEach(() => {
+    __resetErpColumnsProbeForTests();
+    vi.unstubAllGlobals();
+    for (const [k, v] of Object.entries(original)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  });
+
+  it('never promotes a non-succeeded intent (no DB write, no consume)', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.startsWith('https://api.stripe.com/v1/payment_intents/')) {
+        return new Response(JSON.stringify({ id: 'pi_onsite_1', status: 'processing', amount: 2999, currency: 'usd' }), { status: 200 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }));
+    const { promotePaidIntent } = await import('../checkout-onsite.js');
+    const r = await promotePaidIntent('pi_onsite_1');
+    expect(r.ok).toBe(false);
+    expect(r.status).toBe(402);
+    expect(calls.some((c) => c.includes('/rest/v1/luxedge_orders'))).toBe(false);
+    expect(calls.some((c) => c.includes('consume_reservation'))).toBe(false);
+  });
+
+  it('guards the charged amount against the persisted order total', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.startsWith('https://api.stripe.com/v1/payment_intents/')) {
+        return new Response(JSON.stringify({ id: 'pi_onsite_1', status: 'succeeded', amount: 5000, currency: 'usd' }), { status: 200 });
+      }
+      if (url.includes('/rest/v1/luxedge_orders')) {
+        return new Response(JSON.stringify([{ id: 'ord_pending', status: 'pending', total: 29.99, currency: 'usd' }]), { status: 200 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }));
+    const { promotePaidIntent } = await import('../checkout-onsite.js');
+    const r = await promotePaidIntent('pi_onsite_1');
+    expect(r.ok).toBe(false);
+    expect(r.status).toBe(400);
+  });
+});

@@ -25,6 +25,11 @@ import {
   type GiftClaimInput,
   type GiftClaimRow,
 } from './_lib/gift-drop.js';
+import {
+  normalizeShippingAddress,
+  validateShippingAddress,
+  type ShippingAddressInput,
+} from './_lib/shippo.js';
 
 // Independent per-IP limiter for claim submissions (soft anti-bot layer).
 const claimLimiter = new InMemoryRateLimiter();
@@ -132,6 +137,61 @@ export async function claimHandler(req: IncomingMessage, res: ServerResponse): P
     // Count unavailable → fail closed rather than oversell.
     sendJson(res, 503, { error: 'Could not check gift availability — please try again.' });
     return;
+  }
+
+  // -------------------------------------------------------------------------
+  // Address validation — BEFORE any claim/order/inventory is touched.
+  // The gift is scarce and real: never consume one for an address Shippo
+  // (USPS) has rejected. When Shippo is down or the address is non-US the
+  // format-level check still runs; a Shippo outage fails US claims CLOSED
+  // with an honest retry message rather than shipping blind.
+  // -------------------------------------------------------------------------
+  const addrInput: ShippingAddressInput = {
+    fullName: input.firstName,
+    addressLine1: input.address.line1 || '',
+    addressLine2: input.address.line2,
+    city: input.address.city || '',
+    state: input.address.state || '',
+    postalCode: input.address.zip || '',
+    country: input.address.country || 'US',
+  };
+  // validateShippingAddress always runs: format-level (basic) checks for every
+  // destination, full USPS validation for US when Shippo is configured.
+  const outcome = await validateShippingAddress(addrInput);
+  // Shippo unreachable (US + configured) → fail CLOSED: never consume a real
+  // scarce gift while pretending the address was verified. Honest retry.
+  if (outcome.unavailable) {
+    sendJson(res, 503, { error: 'We could not verify your delivery address right now — please try again in a minute.' });
+    return;
+  }
+  if (!outcome.isValid) {
+    const msg = outcome.messages[0] || 'We could not verify this delivery address. Please double-check it.';
+    sendJson(res, 400, { error: msg });
+    return;
+  }
+  // Store the address the customer actually confirmed on the review step:
+  //  - When USPS proposed a street correction (recommendedAddress) the client
+  //    blocks the claim until the customer explicitly chooses "use suggested"
+  //    (form already carries the approved street) or "keep my address" — the
+  //    server never silently rewrites a consciously-kept street/city.
+  //  - Formatting (state abbreviation, ZIP shape, country) is always stored
+  //    normalized from what was submitted.
+  if (outcome.recommendedAddress) {
+    const typed = normalizeShippingAddress(addrInput);
+    input.address.line1 = typed.addressLine1;
+    input.address.line2 = typed.addressLine2 || undefined;
+    input.address.city = typed.city;
+    input.address.state = typed.state;
+    input.address.zip = typed.postalCode;
+    input.address.country = typed.country;
+  } else {
+    const n = outcome.normalizedAddress;
+    input.address.line1 = n.addressLine1;
+    input.address.line2 = n.addressLine2 || undefined;
+    input.address.city = n.city;
+    input.address.state = n.state;
+    input.address.zip = n.postalCode;
+    input.address.country = n.country;
   }
 
   const giftName = String(cfg.giftName || 'Complimentary Luxedge pet gift');

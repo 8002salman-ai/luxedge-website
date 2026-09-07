@@ -8,7 +8,8 @@
 // creates a $0 promotional order with payment NOT_REQUIRED, and this page
 // never asks for (or mentions needing) a card.
 // ============================================================================
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { validateCheckoutAddress } from '../../services/checkoutOnsite';
 
 type CampaignState =
   | { phase: 'loading' }
@@ -26,6 +27,23 @@ type SuccessState = {
   orderNumber: string;
   giftName: string;
   test?: boolean;
+};
+
+/** Address in the same shape as the claim form (server-validated copy). */
+type AddrForm = {
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  zip: string;
+};
+
+/** "Did you mean…" gate shown when USPS proposes a street-level correction.
+ * The claim is NOT sent until the customer picks a side — the scarce gift is
+ * never consumed for an address the customer did not consciously confirm. */
+type AddrGate = {
+  normalized: AddrForm;
+  recommended: AddrForm | null;
 };
 
 const PET_TYPES = [
@@ -67,6 +85,105 @@ export default function GiftDropPage() {
   });
   const startedAt = useRef<number>(Date.now());
   const topRef = useRef<HTMLDivElement>(null);
+  const gateRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Address validation gate (server-validated BEFORE the claim consumes a gift).
+  const [addrChecking, setAddrChecking] = useState(false);
+  const [addrGate, setAddrGate] = useState<AddrGate | null>(null);
+  const [addrDecision, setAddrDecision] = useState<'recommended' | 'original' | ''>('');
+  const [validatedFor, setValidatedFor] = useState(''); // address fingerprint validated
+
+  const addrFingerprint = useCallback(() =>
+    [form.line1, form.line2, form.city, form.state, form.zip]
+      .map((s) => String(s || '').trim().toLowerCase())
+      .join('|'),
+    [form.line1, form.line2, form.city, form.state, form.zip],
+  );
+
+  const addressComplete = Boolean(
+    form.line1.trim() && form.city.trim() && form.state.trim() && /^\d{5}/.test(form.zip),
+  );
+
+  const toAddrForm = (a: { addressLine1: string; addressLine2?: string | null; city: string; state: string; postalCode: string }): AddrForm => ({
+    line1: a.addressLine1 || '',
+    line2: a.addressLine2 || '',
+    city: a.city || '',
+    state: a.state || '',
+    zip: a.postalCode || '',
+  });
+
+  const applyAddr = (a: AddrForm) =>
+    setForm((f) => ({ ...f, line1: a.line1, line2: a.line2, city: a.city, state: a.state, zip: a.zip }));
+
+  // ---- Debounced Shippo address validation (runs when address fields complete) ----
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (abortRef.current) abortRef.current.abort();
+    if (!addressComplete || petType !== 'dog' && petType !== 'cat') {
+      // Only validate once we have a pet type AND a complete US address.
+      setAddrGate(null);
+      setAddrDecision('');
+      setValidatedFor('');
+      return;
+    }
+    // Reset gate when the address changes (customer may be editing).
+    const fp = addrFingerprint();
+    if (fp === validatedFor) return; // already validated for this exact address
+    setAddrGate(null);
+    setAddrDecision('');
+    debounceRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setAddrChecking(true);
+      try {
+        const addr = {
+          fullName: form.firstName.trim() || 'Gift Recipient',
+          addressLine1: form.line1.trim(),
+          addressLine2: form.line2.trim() || undefined,
+          city: form.city.trim(),
+          state: form.state.trim(),
+          postalCode: form.zip.trim(),
+          country: 'US',
+        };
+        const result = await validateCheckoutAddress(addr, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        const fpNow = addrFingerprint();
+        if (!result.isValid) {
+          setAddrGate({ normalized: toAddrForm(result.normalizedAddress), recommended: null });
+          setValidatedFor('');
+          return;
+        }
+        if (result.recommendedAddress) {
+          // USPS proposes a street-level correction — show "Did you mean?"
+          setAddrGate({
+            normalized: toAddrForm(result.normalizedAddress),
+            recommended: toAddrForm(result.recommendedAddress),
+          });
+          setAddrDecision('');
+          setValidatedFor(''); // gate stays open until customer picks
+        } else {
+          // Valid with only formatting normalizations — auto-apply and open.
+          const n = result.normalizedAddress;
+          setForm((prev) => ({ ...prev, state: n.state || prev.state, zip: n.postalCode || prev.zip }));
+          setValidatedFor(fpNow);
+          setAddrGate(null);
+          setAddrDecision('');
+        }
+      } catch {
+        if (controller.signal.aborted) return;
+        // Network/Shippo error — do NOT block the claim for non-US or
+        // when validation is optional; the server always re-validates.
+        setValidatedFor(addrFingerprint());
+        setAddrGate(null);
+      } finally {
+        if (!controller.signal.aborted) setAddrChecking(false);
+      }
+    }, 800);
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressComplete, form.line1, form.line2, form.city, form.state, form.zip, petType]);
 
   useEffect(() => {
     let alive = true;
@@ -111,6 +228,17 @@ export default function GiftDropPage() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       showError('That email address does not look valid.');
+      return;
+    }
+    // Address gate: if USPS proposed a correction, customer must pick a side.
+    if (addrGate && !addrDecision) {
+      showError('Please review the suggested address correction above before claiming your gift.');
+      gateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    // If address validation is still running, wait for it.
+    if (addrChecking) {
+      showError('Please wait while we verify your address…');
       return;
     }
     setSubmitting(true);
@@ -373,6 +501,52 @@ export default function GiftDropPage() {
                       <input id="gd-zip" className={inputCls} value={form.zip} onChange={set('zip')} autoComplete="postal-code" required />
                     </div>
                   </div>
+
+                  {/* ---- Address validation gate ---- */}
+                  {addrChecking && (
+                    <div className="col-span-full mt-3 flex items-center gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[13px] text-blue-700">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
+                      Verifying address with USPS…
+                    </div>
+                  )}
+
+                  {/* USPS proposes a street correction → explicit customer choice */}
+                  {addrGate && addrGate.recommended && (
+                    <div ref={gateRef} className="col-span-full mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                      <p className="text-[13px] font-bold text-amber-800">Did USPS mean this address?</p>
+                      <p className="mt-1 text-[12.5px] text-amber-700">The postal service suggests a correction for better deliverability:</p>
+                      <div className="mt-2.5 grid gap-2 text-[13px]">
+                        <button
+                          type="button"
+                          onClick={() => { applyAddr(addrGate.recommended!); setAddrDecision('recommended'); setValidatedFor(addrFingerprint()); setAddrGate(null); }}
+                          className="rounded-lg border-2 border-emerald-400 bg-emerald-50 px-3.5 py-2.5 text-left font-medium text-emerald-800 transition hover:bg-emerald-100"
+                        >
+                          ✓ Use suggested: {addrGate.recommended.line1}, {addrGate.recommended.city}, {addrGate.recommended.state} {addrGate.recommended.zip}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAddrDecision('original'); setValidatedFor(addrFingerprint()); setAddrGate(null); }}
+                          className="rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-left text-gray-600 transition hover:bg-gray-50"
+                        >
+                          Keep my address as entered
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Address validation failed (no suggestion) */}
+                  {addrGate && !addrGate.recommended && (
+                    <div className="col-span-full mt-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">
+                      ⚠ We could not verify this address with USPS. Please double-check the street, city, state and ZIP.
+                    </div>
+                  )}
+
+                  {/* Address verified successfully */}
+                  {validatedFor && validatedFor === addrFingerprint() && !addrGate && (
+                    <div className="col-span-full mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700">
+                      <span className="text-emerald-500">✓</span> Address verified by USPS
+                    </div>
+                  )}
                 </div>
                 <p className="mt-3 flex items-start gap-2 text-[12px] leading-snug text-gray-500">
                   <span>🔒</span> United States delivery for this drop. Your details are used only to send your gift and are never sold.

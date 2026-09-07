@@ -21,8 +21,12 @@ import { MediaLatestSection } from './media/MediaHub';
 import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
-import { createCheckoutSession, fetchCheckoutSessionStatus, probeStripeConfig, type CheckoutSessionStatus } from './services/checkout';
+import { fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
+import { verifyOnsitePayment as verifyOnsitePaymentApi } from './services/checkoutOnsite';
 import { useWishlist, WishlistButton, configureWishlistAccount } from './features/wishlist/wishlist';
+// On-site (PaymentElement) checkout — lazy so Stripe + the card form only load
+// when a shopper actually reaches /checkout (keeps the storefront bundle lean).
+const CheckoutOnsitePage = lazy(() => import('./features/checkout/CheckoutOnsitePage').then((m) => ({ default: m.default })));
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package, Building01,
   ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
@@ -2977,303 +2981,70 @@ function CartPage() {
 // event once on the verified paid success page. `transaction_id` (order number
 // or Stripe session id) lets GA4 de-duplicate if the page is ever revisited.
 // ============================================================================
-const PURCHASE_SNAPSHOT_KEY = 'luxedge_pending_purchase';
 const firedPurchases = new Set<string>();
-
-interface PurchaseSnapshot {
-  sessionId: string;
-  currency: string;
-  value: number; // pre-tax client total — fallback only; server/Stripe is authoritative
-  shipping: number;
-  coupon: string | null;
-  items: { item_id: string; item_name: string; price: number; quantity: number }[];
-}
-
-function writePurchaseSnapshot(s: PurchaseSnapshot): void {
-  try { sessionStorage.setItem(PURCHASE_SNAPSHOT_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
-}
-
-function readPurchaseSnapshot(sessionId: string): PurchaseSnapshot | null {
-  try {
-    const raw = sessionStorage.getItem(PURCHASE_SNAPSHOT_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw) as PurchaseSnapshot;
-    return s && s.sessionId === sessionId ? s : null;
-  } catch { return null; }
-}
-
-function clearPurchaseSnapshot(): void {
-  try { sessionStorage.removeItem(PURCHASE_SNAPSHOT_KEY); } catch { /* ignore */ }
-}
-
 /**
  * Fire the GA4 purchase for a verified paid checkout return. `order.total` is
  * stored in dollars while Stripe's `session.amountTotal` is in cents — both
  * are normalized to dollars for the event `value` (the final charged total).
  */
 function firePurchaseEvent(r: CheckoutSessionStatus): void {
-  const snapshot = readPurchaseSnapshot(r.session?.id || '');
   const orderDollars = typeof r.order?.total === 'number' ? r.order.total : null;
   const sessionDollars = r.session?.amountTotal != null ? r.session.amountTotal / 100 : null;
-  const items = snapshot?.items?.length ? snapshot.items : [];
+  const items: never[] = [];
   trackEvent('purchase', {
     transaction_id: r.order?.orderNumber || r.session?.id || '',
-    value: orderDollars ?? sessionDollars ?? snapshot?.value ?? 0,
-    currency: r.order?.currency || r.session?.currency || snapshot?.currency || 'USD',
-    shipping: snapshot?.shipping ?? undefined,
-    coupon: snapshot?.coupon ?? undefined,
+    value: orderDollars ?? sessionDollars ?? 0,
+    currency: r.order?.currency || r.session?.currency || 'USD',
     ...(items.length ? { items } : {}),
     ...utmParams(),
   });
-  clearPurchaseSnapshot();
 }
 
-function CheckoutPage() {
-  const { cart, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold, user, notify, updateQty, removeFromCart } = useApp();
-  const nav = useNavigate();
-  const [searchParams] = useSearchParams();
-  const cancelled = searchParams.get('cancelled') === '1';
-  const [submitting, setSubmitting] = useState(false);
-  const [payError, setPayError] = useState('');
-  const [couponInput, setCouponInput] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [f, setF] = useState({ email: user?.email || '', firstName: user?.name?.split(' ')[0] || '', lastName: user?.name?.split(' ').slice(1).join(' ') || '', phone: '', address: '', city: '', state: '', zip: '' });
-
-  const sub = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-  const couponDisc = coupon ? (coupon.discountType === 'percent' ? Math.round(sub * (coupon.discountValue / 100) * 100) / 100 : Math.min(sub, coupon.discountValue)) : 0;
-  const discountedSub = Math.max(0, sub - couponDisc);
-  const shipCost = freeShippingEnabled && discountedSub >= freeShippingThreshold ? 0 : 4.99;
-  // No sales tax at launch (Stripe Tax add-on disabled) — this IS the final
-  // total charged: catalog prices + shipping, nothing hidden.
-  const totalBeforeTax = +(discountedSub + shipCost).toFixed(2);
-
-  useEffect(() => { if (cart.length === 0) nav('/shop'); }, [cart.length, nav]);
-  if (cart.length === 0) return null;
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!f.firstName.trim()) e.firstName = 'Required';
-    if (!f.lastName.trim()) e.lastName = 'Required';
-    if (!f.email.trim() || !f.email.includes('@')) e.email = 'Valid email required';
-    if (!f.phone.trim()) e.phone = 'Required';
-    if (!f.address.trim()) e.address = 'Required';
-    if (!f.city.trim()) e.city = 'Required';
-    if (!f.state.trim()) e.state = 'Required';
-    if (!f.zip.trim() || !/^\d{5}/.test(f.zip)) e.zip = 'Valid ZIP required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleCoupon = () => {
-    if (!couponInput.trim()) return;
-    const errMsg = applyCoupon(couponInput);
-    if (errMsg) notify(errMsg, 'error'); else notify('Coupon applied!');
-    setCouponInput('');
-  };
-
-  // Payment provider state — a single isolated integration point. The SERVER is
-  // the authority on whether Stripe is configured (it holds the keys); the
-  // browser never holds a secret, so we probe /api/checkout?probe=1 on mount.
-  // Until the server says configured, checkout stays disabled and never fakes
-  // an order.
-  const [paymentsConfigured, setPaymentsConfigured] = useState(false);
-  useEffect(() => { let live = true; void probeStripeConfig().then(ok => { if (live) setPaymentsConfigured(ok); }); return () => { live = false; }; }, []);
-
-  const handleCheckout = async () => {
-    if (!paymentsConfigured) return; // disabled state — never submit a fake order
-    if (!validate()) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    setSubmitting(true);
-    setPayError('');
-    try {
-      trackEvent('begin_checkout', { currency: 'USD', value: totalBeforeTax, items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })), ...utmParams() });
-      const res = await createCheckoutSession({
-        items: cart.map(i => ({ id: i.product.id, quantity: i.quantity })),
-        couponCode: coupon?.code || undefined,
-        customer: { email: f.email, name: `${f.firstName} ${f.lastName}`.trim(), phone: f.phone, address: f.address, city: f.city, state: f.state, zip: f.zip },
-      });
-      // Snapshot the order so the success page can report a GA4 purchase with
-      // real item detail (the cart is cleared on return to the success URL).
-      writePurchaseSnapshot({
-        sessionId: res.sessionId,
-        currency: res.totals?.currency || 'USD',
-        value: res.totals?.total ?? totalBeforeTax,
-        shipping: shipCost,
-        coupon: coupon?.code || null,
-        items: cart.map(i => ({ item_id: i.product.id, item_name: i.product.name, price: i.product.price, quantity: i.quantity })),
-      });
-      // Stripe-hosted checkout — the browser is redirected to Stripe. Luxedge
-      // never sees or stores card details.
-      window.location.assign(res.url);
-    } catch (e) {
-      setPayError((e as Error).message);
-      setSubmitting(false);
-    }
-  };
-
-  const I = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 transition-all';
-  const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
-  const ER = (field: string) => errors[field] ? <p className="text-red-500 text-xs mt-1">{errors[field]}</p> : null;
-  const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-
-  return (
-    <div className="bg-luxe-cream min-h-screen">
-      {cancelled && (
-        <div className="max-w-5xl mx-auto px-4 pt-6">
-          <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-            <AlertTriangle strokeWidth={1.5} size={18} className="text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-amber-800">Payment cancelled</p>
-              <p className="text-xs text-amber-700">Your cart is still saved. No payment was taken — you can try again whenever you're ready.</p>
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <p className="eyebrow mb-2">Checkout</p>
-        <h1 className="font-serif text-3xl font-bold text-luxe-black mb-8">Complete Your Order</h1>
-        <div className="grid lg:grid-cols-5 gap-8">
-          {/* â”€â”€â”€â”€ LEFT: Contact + Shipping â”€â”€â”€â”€ */}
-          <div className="lg:col-span-3 space-y-6">
-            {payError && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-                <AlertTriangle strokeWidth={1.5} size={18} className="text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-red-800">Checkout could not start</p>
-                  <p className="text-xs text-red-700">{payError}</p>
-                </div>
-              </div>
-            )}
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
-              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><UserIcon strokeWidth={1.5} size={18} className="text-luxe-gold" /> Contact Information</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div><label className={L}>First Name *</label><input value={f.firstName} onChange={e => setF({ ...f, firstName: e.target.value })} className={I} placeholder="John" />{ER('firstName')}</div>
-                <div><label className={L}>Last Name *</label><input value={f.lastName} onChange={e => setF({ ...f, lastName: e.target.value })} className={I} placeholder="Doe" />{ER('lastName')}</div>
-                <div><label className={L}>Email *</label><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} className={I} placeholder="john@example.com" />{ER('email')}</div>
-                <div><label className={L}>Phone *</label><input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} className={I} placeholder="(555) 123-4567" />{ER('phone')}</div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
-              <h2 className="font-bold text-lg mb-5 flex items-center gap-2"><Truck01 strokeWidth={1.5} size={18} className="text-luxe-gold" /> Shipping Address</h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2"><label className={L}>Street Address *</label><input value={f.address} onChange={e => setF({ ...f, address: e.target.value })} className={I} placeholder="123 Main Street, Apt 4B" />{ER('address')}</div>
-                <div><label className={L}>City *</label><input value={f.city} onChange={e => setF({ ...f, city: e.target.value })} className={I} placeholder="City" />{ER('city')}</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className={L}>State *</label><select value={f.state} onChange={e => setF({ ...f, state: e.target.value })} className={I}><option value="">--</option>{US_STATES.map(s => <option key={s}>{s}</option>)}</select>{ER('state')}</div>
-                  <div><label className={L}>ZIP *</label><input value={f.zip} onChange={e => setF({ ...f, zip: e.target.value })} className={I} placeholder="75038" maxLength={10} />{ER('zip')}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* â”€â”€â”€â”€ RIGHT: Order Summary â”€â”€â”€â”€ */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm sticky top-20">
-              <h2 className="font-bold text-lg mb-5">Order Summary</h2>
-              <div className="space-y-4 mb-6 max-h-64 overflow-y-auto pr-1">
-                {cart.map(item => (
-                  <div key={item.product.id} className="flex gap-3">
-                    <div className="relative shrink-0">
-                      <img src={(Array.isArray(item.product.images) && item.product.images[0]) || LUXEDGE_IMAGE_FALLBACK} alt="" onError={onImageError} className="w-16 h-16 object-cover rounded-lg border" />
-                      <span className="absolute -top-2 -right-2 w-5 h-5 bg-gray-700 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{item.quantity}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product.name}</p>
-                      <p className="text-xs text-gray-500">{item.product.category}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg">
-                          <button onClick={() => updateQty(item.product.id, item.quantity - 1)} aria-label="Decrease quantity" className="p-1 hover:text-luxe-gold transition-colors"><Minus strokeWidth={1.5} size={11} /></button>
-                          <input type="text" inputMode="numeric" defaultValue={item.quantity} key={item.quantity}
-                            onBlur={(e) => { const v = parseInt(e.target.value, 10); if (Number.isNaN(v)) { e.target.value = String(item.quantity); return; } const max = Math.max(1, item.product.stock || 99); updateQty(item.product.id, Math.min(max, Math.max(1, v))); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            aria-label="Quantity — type a number"
-                            className="w-7 text-center text-xs font-semibold bg-transparent py-0.5 focus:outline-none focus:ring-1 focus:ring-luxe-gold/40" />
-                          <button onClick={() => updateQty(item.product.id, item.quantity + 1)} aria-label="Increase quantity" className="p-1 hover:text-luxe-gold transition-colors"><Plus strokeWidth={1.5} size={11} /></button>
-                        </div>
-                        <button onClick={() => removeFromCart(item.product.id)} aria-label="Remove item" className="p-1 text-gray-400 hover:text-red-500 transition-colors"><Trash01 strokeWidth={1.5} size={13} /></button>
-                      </div>
-                    </div>
-                    <p className="text-sm font-semibold shrink-0">${(item.product.price * item.quantity).toFixed(2)}</p>
-                  </div>
-                ))}
-              </div>
-              {/* Coupon — real active store coupons only (e.g. WELCOME10) */}
-              <div className="mb-4">
-                {coupon ? (
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
-                    <div>
-                      <p className="text-xs font-bold text-green-700">{coupon.code} applied</p>
-                      <p className="text-[10px] text-green-600">{coupon.discountType === 'percent' ? `${coupon.discountValue}% off` : `$${coupon.discountValue} off`}</p>
-                    </div>
-                    <button onClick={removeCoupon} className="text-[11px] text-green-700 underline">Remove</button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input value={couponInput} onChange={e => setCouponInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleCoupon())} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Coupon code (e.g. WELCOME10)" />
-                    <button onClick={handleCoupon} className="px-4 py-2 bg-luxe-charcoal text-white rounded-lg text-xs font-semibold">Apply</button>
-                  </div>
-                )}
-              </div>
-              <div className="border-t pt-4 space-y-2.5 text-sm">
-                <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-medium">${sub.toFixed(2)}</span></div>
-                {couponDisc > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-medium text-green-600">âˆ’${couponDisc.toFixed(2)}</span></div>}
-                <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span className={`font-medium ${shipCost === 0 ? 'text-green-600' : ''}`}>{shipCost === 0 ? 'FREE' : `$${shipCost.toFixed(2)}`}</span></div>
-                {freeShippingEnabled && shipCost > 0 && <p className="text-xs text-luxe-gold">ðŸ’¡ Add ${(freeShippingThreshold - discountedSub).toFixed(2)} more for free shipping!</p>}
-                <div className="flex justify-between pt-3 border-t">
-                  <span className="font-bold text-lg">Total</span>
-                  <div className="text-right">
-                    <span className="font-bold text-xl text-gray-900">${totalBeforeTax.toFixed(2)}</span>
-                    <p className="text-[10px] text-gray-400">USD · final price — no tax or hidden fees added at checkout</p>
-                  </div>
-                </div>
-              </div>
-              <button onClick={handleCheckout} disabled={!paymentsConfigured || submitting}
-                className="mt-6 w-full py-4 bg-luxe-gold hover:bg-luxe-gold-dark disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-gold text-sm">
-                {!paymentsConfigured ? (
-                  'Payments Coming Soon'
-                ) : submitting ? <Loading01 strokeWidth={1.5} size={16} className="animate-spin" /> : <Lock01 strokeWidth={1.5} size={16} />}
-                {!paymentsConfigured ? null : submitting ? 'Starting checkout…' : 'Continue to Payment'}
-              </button>
-              {!paymentsConfigured && (
-                <div className="mt-4 rounded-xl bg-luxe-gold-soft border border-luxe-gold/20 p-4 text-center">
-                  <p className="text-[13px] font-semibold text-luxe-black">We're wiring up payments right now.</p>
-                  <p className="text-xs text-luxe-gray mt-1">Your cart is saved — nothing has been charged. Check back shortly, or email <a className="underline text-luxe-gold-dark" href="mailto:hello@luxedge.us?subject=Checkout+question">hello@luxedge.us</a>.</p>
-                </div>
-              )}
-              <p className="mt-3 text-center text-[10px] text-gray-400 flex items-center justify-center gap-1"><ShieldTick strokeWidth={1.5} size={12} className="text-luxe-gold" />{paymentsConfigured ? "You'll complete payment on Stripe's checkout page — Luxedge never sees your card details." : 'No payment is taken until checkout is enabled.'}</p>
-              <div className="mt-4 pt-4 border-t space-y-2.5">
-                {[
-                  { i: Truck01, t: freeShippingEnabled && shipCost === 0 ? 'Free shipping on this order' : 'Delivery estimate shown at checkout' },
-                  { i: RefreshCcw01, t: '30-day return requests' },
-                  { i: ShieldTick, t: 'HTTPS connection' },
-                ].map((b, i) => (
-                  <div key={i} className="flex items-center gap-2.5 text-xs text-gray-500">
-                    <b.i strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" />{b.t}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ============================================================================
 // PAYMENT RESULT (real status from Stripe — never a fake success)
+//
+// Two flows land here:
+//   • legacy hosted-checkout: /checkout/success?session_id=cs_…
+//   • on-site PaymentElement: /checkout/success?source=onsite&intent=pi_…&order=LX-…
+// Both verify against the server/Stripe before showing success.
 // ============================================================================
 function CheckoutSuccessPage() {
   const { clearCart, removeCoupon } = useApp();
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id') || '';
+  const intentId = searchParams.get('intent') || '';
+  const orderNumberParam = searchParams.get('order') || '';
+  const onsite = searchParams.get('source') === 'onsite';
   const [status, setStatus] = useState<'loading' | 'paid' | 'unpaid' | 'error'>('loading');
   const [info, setInfo] = useState<{ orderNumber: string | null; total: number | null; currency: string | null; email: string | null }>({ orderNumber: null, total: null, currency: null, email: null });
 
   useEffect(() => {
-    if (!sessionId) { setStatus('error'); return; }
+    if (!onsite && !sessionId) { setStatus('error'); return; }
     let active = true;
     (async () => {
       try {
+        if (onsite) {
+          if (!intentId || !orderNumberParam) { setStatus('error'); return; }
+          // Real verification — the server checks the PaymentIntent status and
+          // promotes the pending order only when payment truly succeeded.
+          const v = await verifyOnsitePaymentApi(orderNumberParam, intentId);
+          if (!active) return;
+          if (v.paid) {
+            setInfo({ orderNumber: orderNumberParam, total: null, currency: null, email: null });
+            setStatus('paid');
+            clearCart(); removeCoupon();
+            if (!firedPurchases.has(intentId)) {
+              firedPurchases.add(intentId);
+              // GA4 purchase — the on-site page already snapshots nothing;
+              // fire a lightweight purchase keyed on the stable order number.
+              trackEvent('purchase', { transaction_id: orderNumberParam, currency: 'USD', ...utmParams() });
+            }
+          } else {
+            setStatus('unpaid');
+          }
+          return;
+        }
         const r = await fetchCheckoutSessionStatus(sessionId);
         if (!active) return;
         // `order.total` is stored in dollars while Stripe's `amountTotal` is in
@@ -3294,7 +3065,7 @@ function CheckoutSuccessPage() {
       }
     })();
     return () => { active = false; };
-  }, [sessionId, clearCart, removeCoupon]);
+  }, [onsite, sessionId, intentId, orderNumberParam, clearCart, removeCoupon]);
 
   if (status === 'loading') return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
@@ -4021,7 +3792,7 @@ export default function App() {
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
-          <Route path="/checkout" element={<SLayout><CheckoutPage /></SLayout>} />
+          <Route path="/checkout" element={<SLayout><Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading secure checkout…</div>}><CheckoutOnsitePage /></Suspense></SLayout>} />
           <Route path="/checkout/success" element={<SLayout><CheckoutSuccessPage /></SLayout>} />
           <Route path="/orders" element={<SLayout><OrdersPage /></SLayout>} />
           <Route path="/about" element={<SLayout><AboutPage /></SLayout>} />
