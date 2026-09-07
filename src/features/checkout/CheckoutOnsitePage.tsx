@@ -459,12 +459,13 @@ export default function CheckoutOnsitePage() {
             {/* PAYMENT */}
             <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-1">Payment</h2>
-              <p className="text-xs text-gray-500 mb-4">Your card is charged only after you review the order below.</p>
+              <p className="text-xs text-gray-500 mb-4">Your order is charged only after you review the totals below. Payment is processed securely by {config?.activeCardProvider || 'Stripe'}.</p>
               {!config ? (
                 <p className="text-sm text-gray-500">Checking payment availability…</p>
-              ) : !config.stripeConfigured ? (
+              ) : !config.anyProviderReady && !config.stripeConfigured ? (
                 <div className="rounded-xl bg-luxe-gold-soft border border-luxe-gold/20 p-4 text-sm">
-                  Card payments are not configured yet on this store. Your cart is saved — please try again later.
+                  <p className="font-semibold text-luxe-gold-dark">Payment setup temporarily unavailable</p>
+                  <p className="text-xs text-gray-600 mt-1">No payment provider is currently configured. Your cart is saved — please try again later or contact support.</p>
                 </div>
               ) : paymentSession ? (
                 <OnsitePaymentForm
@@ -534,9 +535,9 @@ export default function CheckoutOnsitePage() {
 
               <button
                 onClick={startPayment}
-                disabled={starting || !config?.stripeConfigured || Boolean(paymentSession)}
+                disabled={starting || (!config?.anyProviderReady && !config?.stripeConfigured) || Boolean(paymentSession)}
                 className={`mt-6 w-full py-4 rounded-xl text-white font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-gold ${
-                  starting || !config?.stripeConfigured || paymentSession ? 'bg-gray-300 cursor-not-allowed' : 'bg-luxe-gold hover:bg-luxe-gold-dark'
+                  starting || (!config?.anyProviderReady && !config?.stripeConfigured) || paymentSession ? 'bg-gray-300 cursor-not-allowed' : 'bg-luxe-gold hover:bg-luxe-gold-dark'
                 }`}
               >
                 {starting ? 'Reserving your items…' : paymentSession ? 'Card form above' : 'Continue to payment'}

@@ -196,7 +196,44 @@ const PROVIDER_DISPLAY: Record<ProviderId, { name: string; envKeys: Record<strin
   manual: { name: 'Manual Payment', envKeys: {}, dashboardUrl: '', setupChecklist: ['Enable manual payment mode'] },
 };
 
+function buildProviderOverview() {
+  const config = defaultPaymentConfig(); // sync fallback
+  const envDetected = detectProviderFromEnv();
+  const providers = Object.entries(PROVIDER_DISPLAY).filter(([id]) => id !== 'none').map(([id, display]) => {
+    const pid = id as ProviderId;
+    const cfg = config.providers[pid] || { enabled: false, role: 'available' as const, mode: 'sandbox' as const };
+    const detected = envDetected[pid];
+    const isConfigured = detected?.status === 'ready' || detected?.status === 'sandbox';
+    const keys: Record<string, { configured: boolean; masked: string; source: string }> = {};
+    for (const [label, envKey] of Object.entries(display.envKeys)) {
+      const val = envVal(envKey);
+      if (val) {
+        keys[label] = { configured: true, masked: mask(val), source: 'env' };
+      } else {
+        keys[label] = { configured: false, masked: '', source: 'none' };
+      }
+    }
+    return {
+      id: pid, name: display.name, enabled: cfg.enabled, role: cfg.role,
+      mode: detected?.mode || cfg.mode,
+      status: detected?.status || (isConfigured ? (cfg.enabled ? 'ready' : 'sandbox') : 'not_configured'),
+      isConfigured, keys, dashboardUrl: display.dashboardUrl, setupChecklist: display.setupChecklist,
+      lastTestAt: cfg.lastTestAt, lastTestOk: cfg.lastTestOk,
+      lastWebhookAt: cfg.lastWebhookAt, lastPaymentAt: cfg.lastPaymentAt, lastError: cfg.lastError,
+    };
+  });
+  return { primary: config.primary, backup: config.backup, providers };
+}
+
+export async function handlePaymentsGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const auth = await requireAdmin(req, res);
+  if (!auth) return;
+  sendJson(res, 200, { ok: true, ...buildProviderOverview() });
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Support both GET and POST
+  if (req.method === 'GET') { await handlePaymentsGet(req, res); return; }
   if (req.method !== 'POST') { sendJson(res, 405, { error: 'Method not allowed' }); return; }
   const auth = await requireAdmin(req, res);
   if (!auth) return;
@@ -208,55 +245,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (action === 'get' || !action) {
     // Return full payment system overview
-    const config = await loadConfig();
-    const envDetected = detectProviderFromEnv();
-    const providers = Object.entries(PROVIDER_DISPLAY).filter(([id]) => id !== 'none').map(([id, display]) => {
-      const pid = id as ProviderId;
-      const cfg = config.providers[pid] || { enabled: false, role: 'available' as const, mode: 'sandbox' as const };
-      const detected = envDetected[pid];
-      const p = getProvider(pid);
-      const isConfigured = p?.isConfigured() || false;
-
-      // Mask secret env keys
-      const keys: Record<string, { configured: boolean; masked: string; source: string }> = {};
-      for (const [label, envKey] of Object.entries(display.envKeys)) {
-        const val = envVal(envKey);
-        if (val) {
-          keys[label] = { configured: true, masked: mask(val), source: 'env' };
-        } else {
-          keys[label] = { configured: false, masked: '', source: 'none' };
-        }
-      }
-
-      return {
-        id: pid,
-        name: display.name,
-        enabled: cfg.enabled,
-        role: cfg.role,
-        mode: detected?.mode || cfg.mode,
-        status: detected?.status || (isConfigured ? (cfg.enabled ? 'ready' : 'sandbox') : 'not_configured'),
-        isConfigured,
-        keys,
-        dashboardUrl: display.dashboardUrl,
-        setupChecklist: display.setupChecklist,
-        lastTestAt: cfg.lastTestAt,
-        lastTestOk: cfg.lastTestOk,
-        lastWebhookAt: cfg.lastWebhookAt,
-        lastPaymentAt: cfg.lastPaymentAt,
-        lastError: cfg.lastError,
-      };
-    });
-
-    sendJson(res, 200, {
-      ok: true,
-      primary: config.primary,
-      backup: config.backup,
-      providers,
-    });
+    const { primary, backup, providers } = buildProviderOverview();
+    sendJson(res, 200, { ok: true, primary, backup, providers });
     return;
-  }
-
-  if (action === 'test') {
+  }  if (action === 'test') {
     const providerId = String(b.provider || '') as ProviderId;
     const p = getProvider(providerId);
     if (!p) { sendJson(res, 400, { error: `Unknown provider: ${providerId}` }); return; }

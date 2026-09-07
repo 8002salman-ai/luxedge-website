@@ -41,6 +41,12 @@ export interface OnsiteCheckoutConfig {
   stripePublishableKey: string | null;
   stripeMode: 'test' | 'live' | null;
   shippoConfigured: boolean;
+  // Multi-provider engine fields
+  activeCardProvider?: string | null;
+  hasPaypal?: boolean;
+  anyProviderReady?: boolean;
+  cardClientConfig?: Record<string, string> | null;
+  paypalClientConfig?: Record<string, string> | null;
 }
 
 export async function fetchOnsiteConfig(): Promise<OnsiteCheckoutConfig> {
@@ -54,6 +60,11 @@ export async function fetchOnsiteConfig(): Promise<OnsiteCheckoutConfig> {
     stripePublishableKey: data.stripePublishableKey || null,
     stripeMode: data.stripeMode === 'live' ? 'live' : data.stripeMode === 'test' ? 'test' : null,
     shippoConfigured: data.shippoConfigured === true,
+    activeCardProvider: data.activeCardProvider || null,
+    hasPaypal: data.hasPaypal || false,
+    anyProviderReady: data.anyProviderReady || false,
+    cardClientConfig: data.cardClientConfig || null,
+    paypalClientConfig: data.paypalClientConfig || null,
   };
 }
 

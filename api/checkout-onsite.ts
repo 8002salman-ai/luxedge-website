@@ -46,6 +46,10 @@ import {
   validateShippingAddress,
   type ShippingAddressInput,
 } from './_lib/shippo.js';
+import {
+  getProviderForCheckout,
+  type ProviderId,
+} from './_lib/payment-providers.js';
 
 // ---------------------------------------------------------------------------
 // Environment + small Supabase REST helpers (same pattern as api/checkout.ts)
@@ -273,11 +277,24 @@ export async function configHandler(req: IncomingMessage, res: ServerResponse): 
   if (req.method !== 'GET') { sendJson(res, 405, { error: 'Method not allowed' }); return; }
   const stripeCfg = await stripeReady();
   const pk = stripeCfg ? await resolvePublishableKey() : '';
+
+  // Payment provider engine info
+  const { cardProvider, paypalProvider } = getProviderForCheckout();
+  const activeCardId: ProviderId | null = cardProvider?.id || null;
+  const hasPaypal = paypalProvider?.isConfigured() || false;
+  const anyProviderReady = (cardProvider?.isConfigured() || false) || hasPaypal;
+
   sendJson(res, 200, {
     stripeConfigured: stripeCfg && !!pk,
     stripePublishableKey: pk || null,
     stripeMode: stripeCfg ? await stripeMode() : null,
     shippoConfigured: shippoConfigured(),
+    // Multi-provider engine
+    activeCardProvider: activeCardId,
+    hasPaypal,
+    anyProviderReady,
+    cardClientConfig: cardProvider?.getClientConfig() || null,
+    paypalClientConfig: paypalProvider?.getClientConfig() || null,
   });
 }
 

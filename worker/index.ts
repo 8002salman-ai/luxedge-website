@@ -49,6 +49,9 @@ import cjKeyHandler from '../api/admin/cj-key';
 import paymentKeysHandler from '../api/admin/payment-keys';
 import erpHandler from '../api/admin/erp';
 import paymentsHandler from '../api/admin/payments';
+import webhookSquareHandler from '../api/webhook-square';
+import webhookPaypalHandler from '../api/webhook-paypal';
+import webhookBraintreeHandler from '../api/webhook-braintree';
 import productStatsHandler from '../api/admin/product-stats';
 import blogStatsHandler from '../api/admin/blog-stats';
 import mediaStatsHandler from '../api/admin/media-stats';
@@ -133,6 +136,9 @@ const ROUTES: Route[] = [
   { path: '/api/campaigns/state', handler: campaignsStateHandler },
   { path: '/api/campaigns/claim', handler: campaignsClaimHandler },
   { path: '/api/admin/campaigns', handler: campaignsAdminHandler },
+  { path: '/api/webhook/square', handler: webhookSquareHandler },
+  { path: '/api/webhook/paypal', handler: webhookPaypalHandler },
+  { path: '/api/webhook/braintree', handler: webhookBraintreeHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },

@@ -1,378 +1,381 @@
+// ============================================================================
+// LUXEDGE — Admin Payments Setup (multi-provider)
+//
+// Shows all configured payment providers (Square, PayPal, Braintree, Stripe,
+// Payoneer, Authorize.Net) with status, test, enable/disable, primary/backup
+// selection. Secrets are NEVER exposed — only masked values are shown.
+// ============================================================================
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plug, CheckCircle, XCircle, Warning, ArrowClockwise,
-  ShieldCheck, CreditCard, FloppyDisk, Eye, EyeSlash, Trash,
-  ExclamationMark, Receipt
+  ArrowLeft, Plug, CheckCircle, XCircle, ArrowClockwise,
+  ShieldCheck, CreditCard, Globe,
 } from '@phosphor-icons/react';
 import { getAccessToken } from '../services/supabase';
 
 /* ── Types ── */
-type Source = 'env' | 'attached' | 'none';
-interface KeyStatus { configured: boolean; masked: string; source: Source }
-interface TestResult {
-  ok: boolean;
-  mode?: 'live' | 'test';
-  chargesEnabled?: boolean;
-  payoutsEnabled?: boolean;
-  masked?: string;
-  message?: string;
+type ProviderId = 'none' | 'stripe' | 'square' | 'paypal' | 'braintree' | 'payoneer' | 'authorize_net';
+type ProviderStatus = 'not_configured' | 'sandbox' | 'connected' | 'ready' | 'disabled' | 'error';
+type ProviderRole = 'primary' | 'backup' | 'available';
+
+interface ProviderKeyInfo {
+  configured: boolean;
+  masked: string;
+  source: string;
 }
-interface SessionParam { key: string; value: string; note: string }
+interface ProviderCard {
+  id: ProviderId;
+  name: string;
+  enabled: boolean;
+  role: ProviderRole;
+  mode: 'sandbox' | 'production';
+  status: ProviderStatus;
+  isConfigured: boolean;
+  keys: Record<string, ProviderKeyInfo>;
+  dashboardUrl: string;
+  setupChecklist: string[];
+  lastTestAt?: string;
+  lastTestOk?: boolean;
+  lastWebhookAt?: string;
+  lastPaymentAt?: string;
+  lastError?: string;
+}
+interface PaymentsData {
+  ok: boolean;
+  primary: ProviderId;
+  backup: ProviderId;
+  providers: ProviderCard[];
+}
 
 const CARD = 'bg-white rounded-2xl border border-gray-100 shadow-sm p-5';
-const BTN = 'inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-200';
+const BTN = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all duration-200 disabled:opacity-50';
+
+const PROVIDER_ICONS: Record<string, string> = {
+  stripe: '💳', square: '◼️', paypal: '🅿️', braintree: '🔒', payoneer: '💰', authorize_net: '🔐',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  ready: 'bg-green-100 text-green-800',
+  sandbox: 'bg-blue-100 text-blue-800',
+  connected: 'bg-green-100 text-green-800',
+  not_configured: 'bg-gray-100 text-gray-500',
+  disabled: 'bg-amber-100 text-amber-700',
+  error: 'bg-red-100 text-red-700',
+};
+
+function statusLabel(s: ProviderStatus): string {
+  switch (s) {
+    case 'ready': return 'Ready';
+    case 'sandbox': return 'Sandbox';
+    case 'connected': return 'Connected';
+    case 'not_configured': return 'Not Configured';
+    case 'disabled': return 'Disabled';
+    case 'error': return 'Error';
+    default: return s;
+  }
+}
+
+function relativeTime(iso?: string): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return `${Math.floor(diff / 86400000)}d ago`;
+  } catch { return '—'; }
+}
 
 export default function PaymentsSetup() {
   const nav = useNavigate();
-  const [secretKey, setSecretKey] = useState<KeyStatus>({ configured: false, masked: '', source: 'none' });
-  const [webhookSecret, setWebhookSecret] = useState<KeyStatus>({ configured: false, masked: '', source: 'none' });
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [testing, setTesting] = useState(false);
+  const [data, setData] = useState<PaymentsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sessionConfig, setSessionConfig] = useState<SessionParam[] | null>(null);
-
-  // Form state
-  const [secretInput, setSecretInput] = useState('');
-  const [whInput, setWhInput] = useState('');
-  const [showSecret, setShowSecret] = useState(false);
-  const [showWh, setShowWh] = useState(false);
-  const [saving, setSaving] = useState('');
+  const [testing, setTesting] = useState<ProviderId | null>(null);
+  const [testResult, setTestResult] = useState<{ provider: ProviderId; ok: boolean; message?: string } | null>(null);
   const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
 
   const authHeaders = useCallback((): Record<string, string> => {
     const token = getAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
-  const loadStatus = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/payment-keys', { headers: authHeaders() });
-      if (res.ok) {
-        const data = await res.json() as { secretKey: KeyStatus; webhookSecret: KeyStatus; sessionConfig?: SessionParam[] };
-        setSecretKey(data.secretKey);
-        setWebhookSecret(data.webhookSecret);
-        setSessionConfig(data.sessionConfig || null);
-      }
+      const res = await fetch('/api/admin/payments', { headers: authHeaders() });
+      if (res.ok) setData(await res.json() as PaymentsData);
     } catch { /* ignore */ }
     setLoading(false);
   }, [authHeaders]);
 
-  useEffect(() => { void loadStatus(); }, [loadStatus]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  const saveKey = async (keyType: 'secretKey' | 'webhookSecret') => {
-    const input = keyType === 'secretKey' ? secretInput : whInput;
-    if (!input.trim()) { setNote({ kind: 'err', text: 'Enter a key first' }); return; }
-    setSaving(keyType);
+  const postAction = async (body: Record<string, unknown>) => {
     setNote(null);
     try {
-      const res = await fetch('/api/admin/payment-keys', {
+      const res = await fetch('/api/admin/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ action: 'set', keyType, key: input.trim() }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json() as { ok?: boolean; masked?: string; error?: string };
-      if (data.ok) {
-        if (keyType === 'secretKey') { setSecretKey({ configured: true, masked: data.masked || '', source: 'attached' }); setSecretInput(''); }
-        else { setWebhookSecret({ configured: true, masked: data.masked || '', source: 'attached' }); setWhInput(''); }
-        setNote({ kind: 'ok', text: '✓ Key saved server-side.' });
-      } else {
-        setNote({ kind: 'err', text: `Error: ${data.error || 'Failed to save'}` });
-      }
+      return await res.json() as { ok?: boolean; message?: string; error?: string };
     } catch {
-      setNote({ kind: 'err', text: 'Network error — could not save key' });
+      return { ok: false, error: 'Network error' };
     }
-    setSaving('');
   };
 
-  const clearKey = async (keyType: 'secretKey' | 'webhookSecret') => {
-    setNote(null);
-    try {
-      const res = await fetch('/api/admin/payment-keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ action: 'clear', keyType }),
-      });
-      const data = await res.json() as { ok?: boolean; configured?: boolean; masked?: string };
-      if (data.ok) {
-        if (keyType === 'secretKey') setSecretKey({ configured: !!data.configured, masked: data.masked || '', source: data.configured ? 'env' : 'none' });
-        else setWebhookSecret({ configured: !!data.configured, masked: data.masked || '', source: data.configured ? 'env' : 'none' });
-        setNote({ kind: 'ok', text: '✓ Key removed.' });
-      }
-    } catch { /* ignore */ }
-  };
-
-  const runTest = async () => {
-    setTesting(true);
+  const testProvider = async (id: ProviderId) => {
+    setTesting(id);
     setTestResult(null);
-    try {
-      const res = await fetch('/api/admin/payment-keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ action: 'test' }),
-      });
-      setTestResult(await res.json() as TestResult);
-    } catch {
-      setTestResult({ ok: false, message: 'Network error — could not reach server.' });
-    }
-    setTesting(false);
+    const r = await postAction({ action: 'test', provider: id });
+    setTestResult({ provider: id, ok: !!r.ok, message: r.message || r.error });
+    setTesting(null);
+    void loadData();
   };
 
-  const stripeReady = secretKey.configured;
-  const pendingActivation = testResult?.ok === true && testResult.chargesEnabled === false;
+  const toggleProvider = async (id: ProviderId, enabled: boolean) => {
+    const r = await postAction({ action: 'toggle', provider: id, enabled });
+    setNote(r.ok ? { kind: 'ok', text: r.message || 'Saved' } : { kind: 'err', text: r.error || 'Failed' });
+    void loadData();
+  };
+
+  const setRole = async (id: ProviderId, role: 'primary' | 'backup') => {
+    const action = role === 'primary' ? 'set_primary' : 'set_backup';
+    const r = await postAction({ action, provider: id });
+    setNote(r.ok ? { kind: 'ok', text: r.message || 'Saved' } : { kind: 'err', text: r.error || 'Failed' });
+    void loadData();
+  };
+
+  if (loading && !data) {
+    return (
+      <div className="max-w-5xl mx-auto p-6 flex items-center justify-center min-h-[40vh]">
+        <ArrowClockwise size={24} className="animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  const providers = data?.providers || [];
+  const primary = data?.primary || 'none';
+  const backup = data?.backup || 'none';
+  const anyConfigured = providers.some((p) => p.isConfigured);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* ── Header ── */}
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => nav('/admin')} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
           <ArrowLeft size={20} className="text-gray-500" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">Payments Setup</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Configure Stripe for secure checkout</p>
+          <h1 className="text-2xl font-bold text-gray-900">Payment Providers</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Configure and manage checkout payment methods</p>
         </div>
-        <button
-          onClick={loadStatus}
-          disabled={loading}
-          className={`${BTN} bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50`}
-        >
+        <button onClick={loadData} disabled={loading} className={`${BTN} bg-blue-500 text-white hover:bg-blue-600`}>
           {loading ? <ArrowClockwise size={14} className="animate-spin" /> : <Plug size={14} />}
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
 
-      {/* ── Status Banner ── */}
-      <div className={`rounded-2xl p-5 flex items-center gap-4 ${stripeReady ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${stripeReady ? 'bg-green-100' : 'bg-red-100'}`}>
-          {stripeReady ? <CheckCircle size={24} className="text-green-600" /> : <XCircle size={24} className="text-red-500" />}
+      {/* System Status Banner */}
+      <div className={`rounded-2xl p-5 flex items-center gap-4 ${anyConfigured ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${anyConfigured ? 'bg-green-100' : 'bg-amber-100'}`}>
+          {anyConfigured ? <CheckCircle size={24} className="text-green-600" /> : <XCircle size={24} className="text-amber-600" />}
         </div>
         <div className="flex-1">
-          <p className={`font-bold text-lg ${stripeReady ? 'text-green-800' : 'text-red-800'}`}>
-            {stripeReady ? 'Stripe — Configured' : 'Stripe — Not Configured'}
+          <p className={`font-bold text-lg ${anyConfigured ? 'text-green-800' : 'text-amber-800'}`}>
+            {anyConfigured ? 'Payment System Active' : 'No Payment Provider Configured'}
           </p>
           <p className="text-sm text-gray-600 mt-0.5">
-            {stripeReady
-              ? 'Checkout will create a Stripe-hosted payment page. Add the webhook secret below to record paid orders.'
-              : 'Add your Stripe secret key below to enable checkout.'}
+            {anyConfigured
+              ? `Primary: ${primary === 'none' ? 'None' : primary} · Backup: ${backup === 'none' ? 'None' : backup}`
+              : 'Add credentials for at least one provider to accept payments. Free gift orders work without any provider.'}
           </p>
         </div>
-        {stripeReady && (
-          <button onClick={runTest} disabled={testing} className={`${BTN} bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50`}>
-            {testing ? <ArrowClockwise size={14} className="animate-spin" /> : <Plug size={14} />}
-            {testing ? 'Testing...' : 'Test Account'}
-          </button>
-        )}
       </div>
 
-      {/* ── Test result ── */}
+      {/* Test Result */}
       {testResult && (
-        <div className={`rounded-2xl p-5 border ${testResult.ok ? (pendingActivation ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200') : 'bg-red-50 border-red-200'}`}>
-          <div className="flex items-start gap-3">
-            {testResult.ok
-              ? (pendingActivation ? <Warning size={20} className="text-amber-600" /> : <CheckCircle size={20} className="text-green-600" />)
-              : <XCircle size={20} className="text-red-500" />}
-            <div className="flex-1">
-              <p className="font-semibold text-gray-800">
-                {testResult.ok
-                  ? `Stripe key valid — ${testResult.mode === 'live' ? 'LIVE' : 'TEST'} mode${testResult.masked ? ` (${testResult.masked})` : ''}`
-                  : testResult.message || 'Test failed'}
-              </p>
-              {testResult.ok && (
-                <>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Charges: {testResult.chargesEnabled ? 'Enabled ✓' : 'Not enabled yet'} · Payouts: {testResult.payoutsEnabled ? 'Enabled ✓' : 'Not enabled'}
+        <div className={`rounded-2xl p-4 border ${testResult.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div className="flex items-center gap-3">
+            {testResult.ok ? <CheckCircle size={20} className="text-green-600" /> : <XCircle size={20} className="text-red-500" />}
+            <div>
+              <p className="font-semibold text-sm text-gray-800">{testResult.provider} test: {testResult.ok ? 'PASSED' : 'FAILED'}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{testResult.message || 'No details'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provider Cards */}
+      <div className="space-y-4">
+        {providers.map((p) => {
+          const isExpanded = expandedId === p.id;
+          const isPrimary = primary === p.id;
+          const isBackup = backup === p.id;
+          const configuredKeys = Object.values(p.keys).filter((k) => k.configured).length;
+          const totalKeys = Object.keys(p.keys).length;
+
+          return (
+            <div key={p.id} className={CARD}>
+              {/* Provider Header */}
+              <div className="flex items-center gap-4">
+                <div className="text-2xl">{PROVIDER_ICONS[p.id] || '💳'}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-gray-900">{p.name}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${STATUS_COLORS[p.status] || STATUS_COLORS.not_configured}`}>
+                      {statusLabel(p.status)}
+                    </span>
+                    {isPrimary && <span className="px-2 py-0.5 rounded-full bg-luxe-gold text-white text-[10px] font-bold">PRIMARY</span>}
+                    {isBackup && <span className="px-2 py-0.5 rounded-full bg-purple-500 text-white text-[10px] font-bold">BACKUP</span>}
+                    {p.mode === 'production' && <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] font-bold">PROD</span>}
+                    {p.mode === 'sandbox' && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">SANDBOX</span>}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {totalKeys > 0 ? `${configuredKeys}/${totalKeys} credentials configured` : 'No credentials required'}
+                    {p.lastTestAt && <> · Last test: {p.lastTestOk ? '✓' : '✗'} {relativeTime(p.lastTestAt)}</>}
+                    {p.lastWebhookAt && <> · Last webhook: {relativeTime(p.lastWebhookAt)}</>}
                   </p>
-                  {pendingActivation && (
-                    <p className="text-sm text-amber-700 mt-1">
-                      Your Stripe account can't accept live card payments yet. Complete account activation (business details / bank account) in the Stripe Dashboard — checkout will stay safe until then.
-                    </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Enable/Disable Toggle */}
+                  <button
+                    onClick={() => toggleProvider(p.id, !p.enabled)}
+                    disabled={!p.isConfigured}
+                    className={`${BTN} ${p.enabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'} disabled:opacity-40`}
+                  >
+                    {p.enabled ? 'ON' : 'OFF'}
+                  </button>
+
+                  {/* Test */}
+                  <button
+                    onClick={() => testProvider(p.id)}
+                    disabled={!p.isConfigured || testing === p.id}
+                    className={`${BTN} bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-40`}
+                  >
+                    {testing === p.id ? <ArrowClockwise size={12} className="animate-spin" /> : <Plug size={12} />}
+                    Test
+                  </button>
+
+                  {/* Primary/Backup */}
+                  {p.isConfigured && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setRole(p.id, 'primary')}
+                        className={`${BTN} ${isPrimary ? 'bg-luxe-gold text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        ★
+                      </button>
+                      <button
+                        onClick={() => setRole(p.id, 'backup')}
+                        className={`${BTN} ${isBackup ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        ◆
+                      </button>
+                    </div>
                   )}
-                </>
+
+                  {/* Expand */}
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                    className={`${BTN} bg-gray-100 text-gray-600 hover:bg-gray-200`}
+                  >
+                    {isExpanded ? '▲' : '▼'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Expanded Details */}
+              {isExpanded && (
+                <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                  {/* Credential Status */}
+                  {totalKeys > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Credentials</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {Object.entries(p.keys).map(([label, info]) => (
+                          <div key={label} className={`flex items-center justify-between p-2.5 rounded-xl text-sm ${info.configured ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <ShieldCheck size={14} className={info.configured ? 'text-green-600' : 'text-gray-400'} />
+                              <span className="text-gray-700 truncate">{label}</span>
+                            </div>
+                            <span className={`text-xs font-mono ml-2 shrink-0 ${info.configured ? 'text-green-700' : 'text-gray-400'}`}>
+                              {info.configured ? info.masked || '✓' : 'MISSING'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Set via Cloudflare Worker secrets: {Object.values(p.keys).map((k) => k.source === 'env' ? '' : '').length > 0
+                          ? 'credentials are in env vars'
+                          : `wrangler secret put <VAR_NAME>`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Dashboard Link */}
+                  {p.dashboardUrl && (
+                    <a href={p.dashboardUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-semibold">
+                      <Globe size={14} /> Open {p.name} Dashboard
+                    </a>
+                  )}
+
+                  {/* Setup Checklist */}
+                  {p.setupChecklist.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Setup Checklist</h4>
+                      <div className="space-y-1.5">
+                        {p.setupChecklist.map((item, i) => {
+                          // Heuristic: if status is ready and item is last, mark done
+                          const done = (p.status === 'ready' || p.status === 'connected') && i < p.setupChecklist.length - 1;
+                          return (
+                            <div key={i} className="flex items-center gap-2 text-sm">
+                              <span className={done ? 'text-green-500' : 'text-gray-300'}>
+                                {done ? <CheckCircle size={14} /> : <span className="inline-block w-3.5 h-3.5 border-2 border-gray-300 rounded-full" />}
+                              </span>
+                              <span className={done ? 'text-gray-500 line-through' : 'text-gray-700'}>{item}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {p.lastError && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                      <span className="font-semibold">Last error:</span> {p.lastError}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Checkout Session Configuration (read-only) ── */}
-      {sessionConfig && (
-        <div className={CARD}>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
-              <Receipt size={16} className="text-white" />
-            </div>
-            <h2 className="font-bold text-gray-900">Checkout Session Configuration</h2>
-          </div>
-          <p className="text-xs text-gray-500 mb-4">
-            Read-only — exactly what the server sends to Stripe when a customer checks out. No paid add-ons.
-          </p>
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
-            {sessionConfig.map((p, i) => (
-              <div
-                key={p.key}
-                className={`flex items-center justify-between gap-4 px-4 py-2.5 text-sm ${i % 2 ? 'bg-gray-50/60' : ''}`}
-              >
-                <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-mono text-xs text-gray-600 whitespace-nowrap">{p.key}</span>
-                  <span className="text-xs text-gray-400 truncate">{p.note}</span>
-                </div>
-                <span className="font-mono text-xs font-semibold text-green-700 whitespace-nowrap shrink-0">{p.value}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-3">
-            Lowest-cost standard Stripe Checkout — one-time purchases only. No subscriptions, no usage-based
-            billing, no monthly paid Stripe features.
-          </p>
-        </div>
-      )}
-
-      {/* ── Keys ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Secret key */}
-        <div className={CARD}>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
-              <CreditCard size={16} className="text-white" />
-            </div>
-            <h2 className="font-bold text-gray-900">Stripe Secret Key</h2>
-          </div>
-
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl text-sm bg-gray-50 text-gray-700 border border-gray-100">
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck size={14} />
-                <span className="font-semibold">Server-side only</span>
-              </div>
-              <p className="text-xs text-gray-500">Stored securely in your database — never exposed to the browser or logs.</p>
-            </div>
-
-            {secretKey.configured && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
-                <CheckCircle size={16} className="text-green-600 shrink-0" />
-                <span className="text-sm text-green-800">Current: <code className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{secretKey.masked}</code></span>
-                <span className="text-[10px] uppercase tracking-wide text-green-600 ml-auto">{secretKey.source}</span>
-                <button onClick={() => clearKey('secretKey')} className="p-1 text-red-400 hover:text-red-600" title="Remove key">
-                  <Trash size={14} />
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Paste Stripe Secret Key</label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    value={secretInput}
-                    onChange={e => setSecretInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveKey('secretKey')}
-                    placeholder="sk_live_... or sk_test_..."
-                    className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                  />
-                  <button onClick={() => setShowSecret(!showSecret)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
-                    {showSecret ? <EyeSlash size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                <button
-                  onClick={() => saveKey('secretKey')}
-                  disabled={saving === 'secretKey' || !secretInput.trim()}
-                  className={`${BTN} bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 shrink-0`}
-                >
-                  {saving === 'secretKey' ? <ArrowClockwise size={14} className="animate-spin" /> : <FloppyDisk size={14} />}
-                  {saving === 'secretKey' ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">Find it in Stripe Dashboard → Developers → API keys.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Webhook secret */}
-        <div className={CARD}>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-purple-500 flex items-center justify-center">
-              <ExclamationMark size={16} className="text-white" />
-            </div>
-            <h2 className="font-bold text-gray-900">Webhook Secret</h2>
-          </div>
-
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl text-sm bg-gray-50 text-gray-700 border border-gray-100">
-              <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck size={14} />
-                <span className="font-semibold">Signs payment events</span>
-              </div>
-              <p className="text-xs text-gray-500">Records paid orders &amp; updates stock when a customer completes checkout.</p>
-            </div>
-
-            {webhookSecret.configured && (
-              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
-                <CheckCircle size={16} className="text-green-600 shrink-0" />
-                <span className="text-sm text-green-800">Current: <code className="font-mono bg-green-100 px-1.5 py-0.5 rounded">{webhookSecret.masked}</code></span>
-                <span className="text-[10px] uppercase tracking-wide text-green-600 ml-auto">{webhookSecret.source}</span>
-                <button onClick={() => clearKey('webhookSecret')} className="p-1 text-red-400 hover:text-red-600" title="Remove key">
-                  <Trash size={14} />
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">Paste Webhook Secret (whsec_...)</label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <input
-                    type={showWh ? 'text' : 'password'}
-                    value={whInput}
-                    onChange={e => setWhInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && saveKey('webhookSecret')}
-                    placeholder="whsec_..."
-                    className="w-full px-3 py-2.5 pr-10 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400"
-                  />
-                  <button onClick={() => setShowWh(!showWh)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
-                    {showWh ? <EyeSlash size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-                <button
-                  onClick={() => saveKey('webhookSecret')}
-                  disabled={saving === 'webhookSecret' || !whInput.trim()}
-                  className={`${BTN} bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-50 shrink-0`}
-                >
-                  {saving === 'webhookSecret' ? <ArrowClockwise size={14} className="animate-spin" /> : <FloppyDisk size={14} />}
-                  {saving === 'webhookSecret' ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">
-                Add a webhook endpoint at <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">https://luxedge.us/api/webhook</code> in Stripe Dashboard → Developers → Webhooks, then paste its signing secret. Subscribe to <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">checkout.session.completed</code> (and optionally <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">charge.refunded</code>).
-              </p>
-            </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
+      {/* Free Gift Info */}
+      <div className={CARD}>
+        <div className="flex items-center gap-2 mb-3">
+          <CreditCard size={18} className="text-luxe-gold" />
+          <h2 className="font-bold text-gray-900">$0 Free Gift Orders</h2>
+        </div>
+        <p className="text-sm text-gray-600">
+          Free promotional gift orders ($0 total) are handled separately — they never require any payment
+          provider. No SDK, no card form, no payment API call is made for $0 orders. This is by design
+          and does not indicate a misconfiguration.
+        </p>
+      </div>
+
+      {/* Note */}
       {note && (
         <p className={`text-sm ${note.kind === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{note.text}</p>
       )}
-
-      {/* ── What Payments Enables ── */}
-      <div className={CARD}>
-        <h2 className="font-bold text-gray-900 mb-3">What Payments Enables</h2>
-        <div className="space-y-2">
-          {[
-            'Stripe-hosted checkout — Luxedge never sees card details',
-            'Server-authoritative pricing (the browser can\'t change the amount)',
-            'Real paid orders recorded in the Admin → Orders page',
-            'Atomic inventory reservation so two customers can\'t buy the last unit',
-          ].map((t, i) => (
-            <div key={i} className="flex items-start gap-2 text-sm text-gray-600">
-              <span className="text-blue-500 mt-0.5"><CheckCircle size={14} /></span>
-              <span>{t}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
