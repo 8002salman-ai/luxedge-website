@@ -805,7 +805,14 @@ export function _AProductEdit() { // superseded by CatalogAdmin.CatalogProductEd
   );
 }
 
-interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; created_at: string; items?: unknown[]; shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null; }
+interface StripeOrderRow { id: string; order_number: string; customer_email: string | null; customer_name?: string | null; total: number | null; currency: string | null; status: string; stripe_session_id: string | null; stripe_payment_intent?: string | null; created_at: string; items?: unknown[]; shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null; }
+
+// ERP (Embani LLC) sync — server-side only. The browser never sees the webhook
+// token: /api/admin/erp stores it server-side and calls the ERP webhook. GET
+// returns masked values + a per-order sync ledger.
+interface ErpKeyStatus { configured: boolean; masked: string; source: 'env' | 'attached' | 'none' }
+interface ErpSyncEntry { status: string; synced_at?: string; error?: string }
+interface ErpConfig { webhook: ErpKeyStatus; token: ErpKeyStatus; sync: Record<string, ErpSyncEntry> }
 
 function AOrders() {
   const { notify } = useApp();
@@ -819,9 +826,11 @@ function AOrders() {
   // Per-order invoice extras (shipping / tax rate / discount) — admin-recorded,
   // persisted locally like tracking. Defaults are honest: 0 = not recorded.
   const [orderExtras, setOrderExtras] = useState<Record<string, { shipping: number; taxRate: number; discount: number }>>({});
-  // ERP (Embani LLC) sync config — webhook URL + optional token, stored locally.
-  const [erpWebhook, setErpWebhook] = useState('');
-  const [erpToken, setErpToken] = useState('');
+  // ERP (Embani LLC) sync — webhook URL + token live server-side (env wins,
+  // app_settings fallback). This UI only ever sees masked values.
+  const [erpCfg, setErpCfg] = useState<ErpConfig | null>(null);
+  const [erpWebhookInput, setErpWebhookInput] = useState('');
+  const [erpTokenInput, setErpTokenInput] = useState('');
   const [erpBusy, setErpBusy] = useState(false);
   const [erpResult, setErpResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -837,9 +846,22 @@ function AOrders() {
       .finally(() => setLoaded(true));
     try { const raw = localStorage.getItem('luxedge-tracking'); if (raw) setTracking(JSON.parse(raw)); } catch { /* ignore */ }
     try { const raw = localStorage.getItem('luxedge-order-extras'); if (raw) setOrderExtras(JSON.parse(raw)); } catch { /* ignore */ }
-    setErpWebhook(localStorage.getItem('luxedge-erp-webhook') || '');
-    setErpToken(localStorage.getItem('luxedge-erp-token') || '');
+    // Purge legacy plaintext ERP settings that older builds stored locally.
+    try { localStorage.removeItem('luxedge-erp-webhook'); localStorage.removeItem('luxedge-erp-token'); } catch { /* ignore */ }
+    loadErpCfg();
   }, []);
+
+  // ── ERP config + sync ledger (masked, from the server) ──
+  const loadErpCfg = () => {
+    const token = getAccessToken();
+    if (!token) return;
+    fetch('/api/admin/erp', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: ErpConfig | null) => { if (d) setErpCfg(d); })
+      .catch(() => { /* keep last known state */ });
+  };
+
+  const erpSyncFor = (orderNumber: string): ErpSyncEntry | undefined => erpCfg?.sync?.[orderNumber];
 
   const saveTracking = (id: string, t: { carrier: string; number: string }) => {
     const next = { ...tracking, [id]: t };
@@ -923,47 +945,113 @@ function AOrders() {
     setTimeout(() => { try { win.print(); } catch { /* user prints manually */ } }, 400);
   };
 
-  // ── CSV export (matches the Excel-based Embani ERP workflow). ──
+  // ── CSV export (real orders only, accounting-friendly columns for the Embani
+  //    Excel workbook — the demo LX-1001 order and gift-drop rows never appear). ──
   const downloadCsv = () => {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = ['order_number', 'date', 'customer_email', 'status', 'subtotal', 'shipping', 'tax', 'discount', 'total', 'items'];
-    const rows = visibleOrders.map(({ order: o, isDemo }) => {
+    const header = ['order_id', 'order_number', 'date', 'customer_name', 'customer_email', 'sku', 'item', 'quantity', 'unit_price', 'subtotal', 'shipping', 'tax', 'discount', 'total', 'currency', 'payment_status', 'fulfillment_status', 'stripe_payment_id', 'tracking_number'];
+    const rows: string[] = [];
+    for (const o of stripeOrders) {
+      const rawItems = (Array.isArray(o.items) ? o.items : []) as Array<Record<string, unknown>>;
       const t = totalsOf(o);
-      return [o.order_number, new Date(o.created_at).toISOString(), o.customer_email, o.status + (isDemo ? ' (DEMO)' : ''), t.subtotal.toFixed(2), t.shipping.toFixed(2), t.tax.toFixed(2), t.discount.toFixed(2), t.grand.toFixed(2), fmtItems(o.items).map(it => `${it.name} x${it.qty}`).join(' | ')].map(esc).join(',');
-    });
+      const tr = tracking[o.id];
+      const common = [o.id, o.order_number, new Date(o.created_at).toISOString(), o.customer_name || '', o.customer_email || '', '', '', '', '', t.subtotal.toFixed(2), t.shipping.toFixed(2), t.tax.toFixed(2), t.discount.toFixed(2), t.grand.toFixed(2), o.currency || 'USD', payStatus(String(o.status || '')), String(o.status || ''), o.stripe_payment_intent || o.stripe_session_id || '', tr?.number || ''];
+      if (rawItems.length === 0) {
+        rows.push([...common.slice(0, 5), '', 'No line items', '', '', ...common.slice(9)].map(esc).join(','));
+        continue;
+      }
+      for (const it of rawItems) {
+        const qty = Number(it.quantity || 1);
+        const unit = Number(it.unitPrice ?? it.price ?? 0);
+        rows.push([o.id, o.order_number, new Date(o.created_at).toISOString(), o.customer_name || '', o.customer_email || '', String(it.sku || it.variantSku || ''), String(it.name || it.title || 'Item'), String(qty), unit.toFixed(2), t.subtotal.toFixed(2), t.shipping.toFixed(2), t.tax.toFixed(2), t.discount.toFixed(2), t.grand.toFixed(2), o.currency || 'USD', payStatus(String(o.status || '')), String(o.status || ''), o.stripe_payment_intent || o.stripe_session_id || '', tr?.number || ''].map(esc).join(','));
+      }
+    }
+    if (rows.length === 0) { notify('No real orders to export yet.', 'error'); return; }
     const csv = [header.map(esc).join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `luxedge-orders-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(a.href);
-    notify('Orders CSV downloaded — import it into your Embani ERP workbook');
+    notify(`CSV exported — ${stripeOrders.length} real order(s). Import it into your Embani ERP workbook.`);
   };
 
-  // ── ERP push — sends orders to the Embani ERP webhook when that repo is live. ──
-  const pushToErp = async (testOnly = false) => {
-    if (!erpWebhook.trim()) { setErpResult({ ok: false, msg: 'Set the ERP webhook URL first.' }); return; }
+  // ── ERP actions — the browser talks ONLY to /api/admin/erp. The webhook URL
+  //    and Bearer token never leave the server, so they can't appear in the
+  //    bundle, page source, or client network requests. ──
+  const saveErpSettings = async () => {
+    const token = getAccessToken();
+    const fields: { field: 'webhook' | 'token'; value: string }[] = [];
+    if (erpWebhookInput.trim()) fields.push({ field: 'webhook', value: erpWebhookInput.trim() });
+    if (erpTokenInput.trim()) fields.push({ field: 'token', value: erpTokenInput.trim() });
+    if (!fields.length) { setErpResult({ ok: false, msg: 'Enter a webhook URL or token to save.' }); return; }
     setErpBusy(true); setErpResult(null);
     try {
-      const payload = {
-        app: 'luxedge', event: testOnly ? 'test' : 'orders.sync',
-        sent_at: new Date().toISOString(),
-        ...(testOnly ? {} : { orders: visibleOrders.map(({ order: o, isDemo, tr }) => ({
-          order_number: o.order_number, date: o.created_at, customer_email: o.customer_email, status: o.status,
-          demo: isDemo, subtotal: subtotalOf(o), ...extrasFor(o), total: totalsOf(o).grand,
-          tracking: tr ? { carrier: tr.carrier, number: tr.number } : null,
-          items: fmtItems(o.items), shipping_address: (o as { shipping_address?: unknown }).shipping_address || null,
-        })) }),
-      };
-      const res = await fetch(erpWebhook.trim(), {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...(erpToken.trim() ? { Authorization: `Bearer ${erpToken.trim()}` } : {}) },
-        body: JSON.stringify(payload),
+      for (const f of fields) {
+        const res = await fetch('/api/admin/erp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ action: 'set', field: f.field, value: f.value }),
+        });
+        const data = await res.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!res.ok || !data?.ok) {
+          setErpResult({ ok: false, msg: `Could not save ${f.field}: ${(data as { error?: string })?.error || `HTTP ${res.status}`}` });
+          return;
+        }
+      }
+      setErpWebhookInput(''); setErpTokenInput('');
+      loadErpCfg();
+      setErpResult({ ok: true, msg: '✓ ERP settings saved server-side.' });
+    } catch {
+      setErpResult({ ok: false, msg: 'Network error — could not save ERP settings.' });
+    } finally { setErpBusy(false); }
+  };
+
+  const clearErpField = async (field: 'webhook' | 'token') => {
+    const token = getAccessToken();
+    setErpBusy(true); setErpResult(null);
+    try {
+      const res = await fetch('/api/admin/erp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: 'clear', field }),
       });
-      const text = await res.text();
-      setErpResult({ ok: res.ok, msg: res.ok ? `ERP ${testOnly ? 'connection OK' : `received ${visibleOrders.length} order(s)`} — HTTP ${res.status}` : `ERP returned HTTP ${res.status}: ${text.slice(0, 120)}` });
-      if (res.ok) notify(testOnly ? 'ERP connection OK' : `Pushed ${visibleOrders.length} orders to ERP`);
-    } catch (e) {
-      setErpResult({ ok: false, msg: `ERP request failed: ${(e as Error).message}` });
+      const data = await res.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || !data?.ok) {
+        setErpResult({ ok: false, msg: (data as { error?: string })?.error || `Could not clear — HTTP ${res.status}` });
+        return;
+      }
+      loadErpCfg();
+      setErpResult({ ok: true, msg: `✓ ${field === 'webhook' ? 'Webhook URL' : 'API token'} cleared.` });
+    } catch {
+      setErpResult({ ok: false, msg: 'Network error — could not clear setting.' });
+    } finally { setErpBusy(false); }
+  };
+
+  const pushToErp = async (testOnly = false) => {
+    if (erpBusy) return;
+    const token = getAccessToken();
+    if (!token) { setErpResult({ ok: false, msg: 'Not signed in.' }); return; }
+    setErpBusy(true); setErpResult(null);
+    try {
+      const res = await fetch('/api/admin/erp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ action: testOnly ? 'test' : 'push' }),
+      });
+      const data = await res.json().catch(() => null) as { ok?: boolean; message?: string; sent?: number; created?: number | null; updated?: number | null; failed?: { order_number?: string; reason?: string }[]; error?: string } | null;
+      if (!data) { setErpResult({ ok: false, msg: `ERP request failed — HTTP ${res.status}` }); return; }
+      if (!res.ok) { setErpResult({ ok: false, msg: data.error || `ERP request failed — HTTP ${res.status}` }); return; }
+      if (data.ok === false) {
+        setErpResult({ ok: false, msg: data.message || 'ERP sync failed' });
+        if (!testOnly) loadErpCfg(); // refresh the failed ledger badges
+        return;
+      }
+      if (!testOnly) loadErpCfg(); // refresh created/updated badges
+      setErpResult({ ok: true, msg: data.message || (testOnly ? 'ERP connection successful' : 'ERP Sync complete') });
+      if (testOnly) notify('ERP connection OK');
+    } catch {
+      setErpResult({ ok: false, msg: 'ERP request failed — could not reach the Luxedge server.' });
     } finally { setErpBusy(false); }
   };
 
@@ -997,6 +1085,13 @@ function AOrders() {
     s?.includes('refund') || s === 'cancelled' || s === 'failed' ? 'bg-red-100 text-red-600' :
     'bg-gray-100 text-gray-600';
 
+  // Payment status derived from the order lifecycle (matches the ERP contract).
+  const payStatus = (s: string) =>
+    ['awaiting_payment', 'pending'].includes(s) ? 'pending' :
+    ['paid', 'processing', 'shipped', 'delivered'].includes(s) ? 'paid' :
+    s === 'refunded' ? 'refunded' :
+    s === 'cancelled' ? 'cancelled' : s || 'unknown';
+
   const fmtItems = (items: unknown[] | undefined) =>
     (Array.isArray(items) ? items : []).map((it: unknown) => {
       const r = (it || {}) as Record<string, unknown>;
@@ -1020,31 +1115,53 @@ function AOrders() {
       <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-blue-600">{stats.shipped}</p><p className="text-xs text-gray-500">Shipped / delivered</p></div>
     </div>
 
-    {/* ERP sync — Embani LLC link (webhook push + CSV for the Excel workbook) */}
+    {/* ERP sync — Embani LLC (server-side webhook push + CSV for the Excel workbook) */}
     <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <CloudArrowUp size={18} className="text-indigo-600" />
-          <div>
+        <div className="flex items-center gap-2 min-w-0">
+          <CloudArrowUp size={18} className="text-indigo-600 shrink-0" />
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-indigo-900">ERP Sync — Embani LLC</p>
-            <p className="text-[11px] text-indigo-700/70">Push orders to your ERP webhook, or download CSV for the Embani Excel workbook. Works with any ERP repo that exposes a POST webhook.</p>
+            <p className="text-[11px] text-indigo-700/70">Orders are pushed to your ERP webhook from the server — the API token never touches this browser. Or download CSV for the Embani Excel workbook.</p>
           </div>
         </div>
         <div className="flex gap-2">
           <button onClick={downloadCsv} className="btn-glow px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"><Download size={13} /> Export CSV (Excel)</button>
         </div>
       </div>
-      <div className="mt-3 grid sm:grid-cols-2 gap-2">
-        <input value={erpWebhook} onChange={(e) => { setErpWebhook(e.target.value); localStorage.setItem('luxedge-erp-webhook', e.target.value); }} placeholder="ERP webhook URL — e.g. https://erp.yourdomain.com/api/luxedge/orders" className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
-        <div className="flex gap-2">
-          <input value={erpToken} onChange={(e) => { setErpToken(e.target.value); localStorage.setItem('luxedge-erp-token', e.target.value); }} type="password" placeholder="ERP API token (optional)" className="flex-1 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
-          <button onClick={() => pushToErp(true)} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50">{erpBusy ? '…' : 'Test'}</button>
-          <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"><CloudArrowUp size={13} /> Push orders</button>
+
+      {/* Current server-side config (masked) + sync ledger summary */}
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-indigo-800/80">
+        <span className="flex items-center gap-1"><LinkSimple size={12} className="text-indigo-500" /> Webhook: {erpCfg?.webhook.configured ? `${erpCfg.webhook.masked} (${erpCfg.webhook.source === 'env' ? 'environment' : 'attached'})` : 'not configured'}</span>
+        <span className="flex items-center gap-1"><Key size={12} className="text-indigo-500" /> Token: {erpCfg?.token.configured ? `•••••••••• (${erpCfg.token.source === 'env' ? 'environment' : 'attached'})` : 'not configured'}</span>
+        {erpCfg && Object.keys(erpCfg.sync).length > 0 && (() => {
+          const entries = Object.values(erpCfg.sync);
+          const failed = entries.filter(e => e.status === 'failed').length;
+          return <span className="flex items-center gap-1"><ShieldCheck size={12} className={failed ? 'text-amber-500' : 'text-green-600'} /> {entries.length - failed} synced · {failed} failed</span>;
+        })()}
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <div className="grid sm:grid-cols-2 gap-2">
+          <div className="min-w-0">
+            <input value={erpWebhookInput} onChange={(e) => setErpWebhookInput(e.target.value)} placeholder={erpCfg?.webhook.configured ? (erpCfg.webhook.source === 'env' ? 'Webhook is set in the server environment (••••)' : `Update webhook (currently ${erpCfg.webhook.masked})`) : 'ERP webhook URL — e.g. https://erp.example.com/api/luxedge/orders'} className="w-full min-w-0 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
+            {erpCfg?.webhook.configured && erpCfg.webhook.source === 'attached' && <button onClick={() => clearErpField('webhook')} disabled={erpBusy} className="mt-1 text-[10px] text-indigo-500 hover:text-red-500 underline disabled:opacity-50">Remove webhook URL</button>}
+          </div>
+          <div className="min-w-0">
+            <input value={erpTokenInput} onChange={(e) => setErpTokenInput(e.target.value)} type="password" autoComplete="new-password" placeholder={erpCfg?.token.configured ? `Token is set${erpCfg.token.source === 'env' ? ' in the server environment' : ''} (••••) — leave blank to keep` : 'ERP API token (optional)'} className="w-full min-w-0 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
+            {erpCfg?.token.configured && erpCfg.token.source === 'attached' && <button onClick={() => clearErpField('token')} disabled={erpBusy} className="mt-1 text-[10px] text-indigo-500 hover:text-red-500 underline disabled:opacity-50">Remove token</button>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={saveErpSettings} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1.5"><FloppyDisk size={13} /> Save settings</button>
+          <button onClick={() => pushToErp(true)} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1.5">{erpBusy ? <ArrowClockwise size={13} className="animate-spin" /> : <Shuffle size={13} />}{erpBusy ? 'Working…' : 'Test'}</button>
+          <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"><CloudArrowUp size={13} /> Push orders</button>
         </div>
       </div>
       {erpResult && (
-        <p className={`mt-2 text-[11px] ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
+        <p className={`mt-2 text-[11px] break-words ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
       )}
+      <p className="mt-2 text-[10px] text-indigo-500/70">Only genuine Stripe-webhook orders are pushed — the demo LX-1001 order and $0 gift-drop claims are never sent. Every order keeps its original order number, so re-pushing reconciles in the ERP instead of duplicating.</p>
     </div>
 
     {/* Demo banner */}
@@ -1078,6 +1195,13 @@ function AOrders() {
                   <div className="flex items-center gap-1.5">
                     <p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p>
                     {isDemo && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full">DEMO</span>}
+                    {!isDemo && (() => {
+                      const s = erpSyncFor(o.order_number);
+                      if (!s) return null;
+                      return s.status === 'failed'
+                        ? <span title={s.error || 'ERP sync failed'} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full">ERP ✗</span>
+                        : <span title={`Synced to ERP ${s.synced_at ? new Date(s.synced_at).toLocaleString() : ''}`} className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">ERP ✓</span>;
+                    })()}
                   </div>
                   <p className="text-[10px] text-gray-400">{new Date(o.created_at).toLocaleString()}</p>
                 </td>

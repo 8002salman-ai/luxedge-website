@@ -34,6 +34,12 @@ run_worker_first = true
 name = "SEND_MAIL"
 
 # Plain-text env (non-secret). Secrets are set with `wrangler secret put`.
+# Embani ERP sync (Admin → Orders → ERP Sync):
+#   * EMBANI_ERP_WEBHOOK_URL — set via `wrangler var put EMBANI_ERP_WEBHOOK_URL`
+#     (or the Cloudflare dashboard) if the URL contains no secret.
+#   * EMBANI_ERP_API_TOKEN   — SECRET: `wrangler secret put EMBANI_ERP_API_TOKEN`.
+#   Either can instead be attached from Admin → Orders → ERP Sync (stored in
+#   app_settings, server-side only); env values always win.
 [vars]
 VERCEL_ENV = "production"
 DEPLOYMENT_ENV = "production"
