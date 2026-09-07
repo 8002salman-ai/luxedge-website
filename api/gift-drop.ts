@@ -158,10 +158,20 @@ export async function claimHandler(req: IncomingMessage, res: ServerResponse): P
   // validateShippingAddress always runs: format-level (basic) checks for every
   // destination, full USPS validation for US when Shippo is configured.
   const outcome = await validateShippingAddress(addrInput);
-  // Shippo unreachable (US + configured) → fail CLOSED: never consume a real
-  // scarce gift while pretending the address was verified. Honest retry.
+  // CRITICAL fail-closed rule for scarce real gifts:
+  //   - Shippo unreachable (US + configured) → fail CLOSED.
+  //   - Shippo NOT configured → also fail CLOSED: a scarce real gift must
+  //     never ship to an address that was only format-checked, never USPS-verified.
+  //   - Only a fully Shippo-validated (source='shippo') or explicitly non-US
+  //     address may proceed.
   if (outcome.unavailable) {
     sendJson(res, 503, { error: 'We could not verify your delivery address right now — please try again in a minute.' });
+    return;
+  }
+  if (outcome.source !== 'shippo' && outcome.configured === false) {
+    // Shippo is not configured — we cannot USPS-verify this address.
+    // Fail closed rather than shipping blind to an unverified address.
+    sendJson(res, 503, { error: 'Address verification is temporarily unavailable. Please try again shortly.' });
     return;
   }
   if (!outcome.isValid) {

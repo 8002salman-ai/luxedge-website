@@ -73,7 +73,7 @@ const campaignDoc = {
 };
 
 /** Stub PostgREST: campaign doc; count /N; household list; insert capture. */
-function stubDb(opts: { active?: boolean; count?: number; duplicate?: boolean; live?: boolean } = {}) {
+function stubDb(opts: { active?: boolean; count?: number; duplicate?: boolean; live?: boolean; shippoDown?: boolean } = {}) {
   const active = opts.active ?? true;
   const count = opts.count ?? 49;
   const inserted: Array<Record<string, unknown>> = [];
@@ -85,6 +85,15 @@ function stubDb(opts: { active?: boolean; count?: number; duplicate?: boolean; l
       const method = init?.method || 'GET';
       calls.push(`${method} ${url.split(HOST)[1] || url}`);
       const h = (init?.headers || {}) as Record<string, string>;
+
+      // Shippo address validation — return a valid response by default.
+      if (url.startsWith('https://api.goshippo.com/addresses/')) {
+        if (opts.shippoDown) throw new Error('network down');
+        return new Response(JSON.stringify({
+          street1: '12 WOOF LANE', city: 'AUSTIN', state: 'TX', zip: '78701',
+          validation_results: { is_valid: true, messages: [] },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
 
       if (url.includes('/rest/v1/app_settings')) {
         return new Response(JSON.stringify([{ value: JSON.stringify({ ...campaignDoc, active }) }]), {
@@ -183,14 +192,17 @@ describe('gift-drop pure logic', () => {
 
 // ---------------------------------------------------------------------------
 describe('POST /api/gift-drop/claim', () => {
+  const originalShippo = process.env.SHIPPO_API_KEY;
   beforeEach(() => {
     process.env.VITE_SUPABASE_URL = HOST;
     process.env.SUPABASE_SERVICE_ROLE_KEY = KEY;
+    process.env.SHIPPO_API_KEY = 'test-shippo-key';
   });
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.VITE_SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (originalShippo === undefined) delete process.env.SHIPPO_API_KEY; else process.env.SHIPPO_API_KEY = originalShippo;
   });
 
   it('rejects invalid payloads with 400 before touching the DB', async () => {
@@ -436,15 +448,29 @@ describe('POST /api/gift-drop/claim — address validation', () => {
     expect(inserted.length).toBe(0);
   });
 
-  it('blocks a format-invalid US address even when Shippo is NOT configured (basic gate always runs)', async () => {
+  it('FAILS CLOSED when Shippo is not configured — format-invalid address also blocked', async () => {
     delete process.env.SHIPPO_API_KEY;
     const { inserted } = stubGiftEnv();
     const bad = makeReq('POST', { ...validClaim, formSeconds: 30, address: { ...validClaim.address, zip: '12' } });
     const handler = (await import('../gift-drop.js')).claimHandler;
     const { server, captured } = makeRes();
     await handler(bad, server);
-    expect(captured.status).toBe(400);
-    expect(String((captured.body as { error: string }).error)).toMatch(/ZIP/i);
+    // 503: Shippo not configured → fail closed (not 400 format error).
+    expect(captured.status).toBe(503);
+    expect(String((captured.body as { error: string }).error)).toMatch(/unavailable|try again|verify/i);
+    expect(inserted.length).toBe(0);
+  });
+
+  it('FAILS CLOSED when Shippo is not configured — even a valid-format US address is rejected', async () => {
+    // Real public claims must never ship without USPS verification.
+    delete process.env.SHIPPO_API_KEY;
+    const { inserted } = stubGiftEnv();
+    const handler = (await import('../gift-drop.js')).claimHandler;
+    const { server, captured } = makeRes();
+    await handler(giftReq(), server);
+    // 503 = server cannot verify (config missing), NOT 400 (format issue).
+    expect(captured.status).toBe(503);
+    expect(String((captured.body as { error: string }).error)).toMatch(/unavailable|try again|verify/i);
     expect(inserted.length).toBe(0);
   });
 
