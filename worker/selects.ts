@@ -15,9 +15,16 @@
 // ============================================================================
 
 /** Product SSR query (seo-meta.ts) — page facts + embedded category name for
- * the "More in {category}" contextual link. */
+ * the "More in {category}" contextual link.
+ *
+ * product_images are deliberately NOT embedded here: a handful of junk rows
+ * carry inline base64 image blobs (~9 MB in the live DB) that PostgREST
+ * embeds into every product row, making the products payload ~9 MB and the
+ * first page load after the 15-min worker cache expiry crawl. seo-meta.ts
+ * fetches images in a SEPARATE lightweight query filtered to real HTTP URLs
+ * (url=not.like.data:*) and merges them back per product. */
 export const SEO_PRODUCTS_SELECT =
-  'id,slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,product_images(url,public_url,is_primary,sort_order),categories(name)';
+  'id,slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)';
 
 export const SEO_CATEGORIES_SELECT = 'slug,name';
 

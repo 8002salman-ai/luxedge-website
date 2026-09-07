@@ -316,7 +316,13 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     // Tolerate failures (missing table, grants, RLS) without failing the load.
     let imagesByProduct = new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>();
     try {
-      const imgRows = await db.list<DbImageRow>('product_images', { select: PRODUCT_IMAGES_PUBLIC_SELECT, limit: 1000 });
+      // Server-side filter drops the inline base64 blob rows (~9 MB in the
+      // live DB) — images become ~60 KB and cold loads stop waiting on MBs.
+      const imgRows = await db.list<DbImageRow>('product_images', {
+        select: PRODUCT_IMAGES_PUBLIC_SELECT,
+        limit: 1000,
+        rawFilters: { url: 'not.like.data:*' },
+      });
       if (Array.isArray(imgRows)) {
         imagesByProduct = (imgRows as DbImageRow[]).reduce((acc, img) => {
           const url = img.url || img.public_url;

@@ -497,7 +497,9 @@ async function loadRefs() {
   const db = getDb();
   const [cats, imgs, vars] = await Promise.all([
     db.list<CategoryRow>('categories'),
-    db.list<ImageRow>('product_images', { limit: 2000 }),
+    // Skip inline base64 blob rows (test/junk data, ~9 MB in the live DB) —
+    // real HTTP image URLs only, so admin/product loads stay fast.
+    db.list<ImageRow>('product_images', { limit: 2000, rawFilters: { url: 'not.like.data:*' } }),
     db.list<VariantRow>('product_variants', { limit: 2000 }),
   ]);
   return {

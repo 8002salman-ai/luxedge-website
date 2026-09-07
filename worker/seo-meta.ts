@@ -117,6 +117,7 @@ export interface ProductRow {
 }
 
 interface ProductImageRow {
+  product_id?: string | null;
   url?: string | null;
   public_url?: string | null;
   is_primary?: boolean | null;
@@ -161,11 +162,56 @@ async function getProducts(): Promise<ProductRow[] | null> {
   // stock, shipping and delivery estimates, plus the embedded category name for
   // a contextual "More in {category}" link. features/specifications are mostly
   // empty in the live catalog, so they are deliberately not pre-rendered.
-  return cachedFetch('seo:products', TTL_DB, () =>
-    fetchJson<ProductRow[]>(
+  //
+  // Images come from a SEPARATE query (getProductImages) filtered to real HTTP
+  // URLs — excluding the inline base64 blobs that made the embedded products
+  // payload ~9 MB and every cache-expiry page load 1-2s slower.
+  return cachedFetch('seo:products', TTL_DB, async () => {
+    const [products, images] = await Promise.all([
+      fetchJson<ProductRow[]>(
+        base,
+        key,
+        `products?select=${SEO_PRODUCTS_SELECT}&status=eq.active&limit=500`,
+      ),
+      getProductImages(),
+    ]);
+    if (!products) return null;
+    if (images && images.length) {
+      const byProduct = new Map<string, ProductImageRow[]>();
+      for (const img of images) {
+        if (!img.product_id) continue;
+        const arr = byProduct.get(img.product_id) || [];
+        arr.push(img);
+        byProduct.set(img.product_id, arr);
+      }
+      if (byProduct.size) {
+        for (const p of products) {
+          const list = byProduct.get(p.id);
+          if (list) {
+            // Keep the same ordering consumers expect: primary first, then sort.
+            p.product_images = list.slice().sort(
+              (a, b) =>
+                (Number(b.is_primary === true) - Number(a.is_primary === true)) ||
+                ((a.sort_order ?? 0) - (b.sort_order ?? 0)),
+            );
+          }
+        }
+      }
+    }
+    return products;
+  });
+}
+
+/** Lightweight image rows for SEO products — HTTP URLs only (no base64 blobs). */
+async function getProductImages(): Promise<ProductImageRow[] | null> {
+  const base = supabaseBase();
+  const key = supabaseAnon();
+  if (!base || !key) return null;
+  return cachedFetch('seo:product-images', TTL_DB, () =>
+    fetchJson<ProductImageRow[]>(
       base,
       key,
-      `products?select=${SEO_PRODUCTS_SELECT}&status=eq.active&limit=500`,
+      `product_images?select=product_id,url,public_url,is_primary,sort_order&url=not.like.data:*&limit=3000`,
     ),
   );
 }
