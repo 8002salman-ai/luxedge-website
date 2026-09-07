@@ -824,11 +824,11 @@ function injectProductBody(html: string, p: ProductRow): string {
 // server-rendered category header shows the same pet image the hydrated page
 // does. Keep the two maps in sync.
 const CAT_HERO_IMAGES: Record<string, string> = {
-  'Dog Supplies': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Cat Supplies': 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Bird Supplies': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Horse': 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
-  'Cattle': 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
+  'Dog Supplies': 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
+  'Cat Supplies': 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
+  'Bird Supplies': 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
+  'Horse': 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
+  'Cattle': 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
   'Pet Beds': 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
   'Pet Toys': 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
   'Feeding & Water': 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=640&h=760&fit=crop&crop=faces&auto=format&q=88',
@@ -848,7 +848,12 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
   const hero = CAT_HERO_IMAGES[cat.name] || '';
   const parts: string[] = [];
   if (hero) parts.push(`<img src="${esc(hero)}" alt="${esc(cat.name)} essentials" />`);
-  parts.push(`<h1>${esc(cat.name)}</h1>`, `<p>${esc(desc)}</p>`);
+  // Mirror the client CategoryHero breadcrumb so crawlers see the same trail.
+  parts.push(
+    `<nav aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/shop">Shop</a></li><li>${esc(cat.name)}</li></ol></nav>`,
+    `<h1>${esc(cat.name)}</h1>`,
+    `<p>${esc(desc)}</p>`,
+  );
   if (inCategory.length > 0) {
     const items = inCategory
       .slice(0, 12)
