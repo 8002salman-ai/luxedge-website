@@ -50,6 +50,8 @@ import blogStatsHandler from '../api/admin/blog-stats';
 import mediaStatsHandler from '../api/admin/media-stats';
 import autoListHandler from '../api/admin/auto-list';
 import tableColumnsHandler from '../api/admin/table-columns';
+import giftDropAdminHandler from '../api/admin/gift-drop';
+import { stateHandler as giftDropStateHandler, claimHandler as giftDropClaimHandler } from '../api/gift-drop';
 import merchStatsHandler, { recomputeMerchStats } from '../api/merch-stats';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
@@ -109,6 +111,9 @@ const ROUTES: Route[] = [
   { path: '/api/admin/auto-list', handler: autoListHandler },
   { path: '/api/admin/table-columns', handler: tableColumnsHandler },
   { path: '/api/merch-stats', handler: merchStatsHandler },
+  { path: '/api/gift-drop/state', handler: giftDropStateHandler },
+  { path: '/api/gift-drop/claim', handler: giftDropClaimHandler },
+  { path: '/api/admin/gift-drop', handler: giftDropAdminHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },

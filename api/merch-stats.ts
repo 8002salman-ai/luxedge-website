@@ -186,7 +186,7 @@ export async function recomputeMerchStats(): Promise<boolean> {
       restList<OrderRow>(
         cfg,
         'luxedge_orders',
-        `?select=items,created_at,status&status=in.(paid,processing,shipped,delivered)&created_at=gte.${encodeURIComponent(isoDaysAgo(180, now))}`,
+        `?select=items,created_at,status,coupon_code&status=in.(paid,processing,shipped,delivered)&coupon_code=not.eq.PET-GIFT-DROP&created_at=gte.${encodeURIComponent(isoDaysAgo(180, now))}`,
       ),
     ]);
     if (!events || !orders) return false;

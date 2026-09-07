@@ -140,7 +140,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === 'GET' && url.searchParams.get('action') === 'orders') {
     if (!(await requireAdmin(req, res))) return;
     const key = serviceRole();
-    const r = await restFetch('luxedge_orders', '?order=created_at.desc&limit=50', key);
+    // Exclude Pet Gift Drop $0 promotional rows (coupon_code marker) from the
+    // sales Orders screen — gift claims are managed on their own admin page.
+    const r = await restFetch('luxedge_orders', `?coupon_code=not.eq.PET-GIFT-DROP&order=created_at.desc&limit=50`, key);
     if (!r.ok) { sendJson(res, r.status, r.data); return; }
     sendJson(res, 200, { orders: r.data });
     return;

@@ -17,6 +17,7 @@ import ProductScout from './ProductScout';
 import ProductResearch from './ProductResearch';
 import CJSetup from './CJSetup';
 import PaymentsSetup from './PaymentsSetup';
+import GiftDropAdmin from './GiftDropAdmin';
 import AiControlCenter from './AiControlCenter';
 import { CatalogProductsPage, CatalogProductEditor, CatalogPromotionsPage } from './CatalogAdmin';
 import HermesIntel from './HermesIntel';
@@ -43,7 +44,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
-  Receipt, CloudArrowUp, YoutubeLogo, CreditCard,
+  Receipt, CloudArrowUp, YoutubeLogo, CreditCard, Gift,
 } from '@phosphor-icons/react';
 
 // ADMIN PANEL - FULL WORKING SYSTEM
@@ -78,6 +79,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
       items: [
         { to: '/admin/products', icon: Package, label: 'Products', g: 'linear-gradient(135deg,#8b5cf6,#a855f7)', dot: '#a78bfa' },
         { to: '/admin/promotions', icon: Tag, label: 'Promotions', g: 'linear-gradient(135deg,#ec4899,#f43f5e)', dot: '#f472b6' },
+        { to: '/admin/gift-drop', icon: Gift, label: 'Gift Drop', g: 'linear-gradient(135deg,#f59e0b,#fbbf24)', dot: '#fbbf24' },
         { to: '/admin/orders', icon: ShoppingCart, label: 'Orders', g: 'linear-gradient(135deg,#10b981,#14b8a6)', dot: '#34d399' },
         { to: '/admin/users', icon: UsersIcon, label: 'Users', g: 'linear-gradient(135deg,#6366f1,#3b82f6)', dot: '#818cf8' },
         { to: '/admin/categories', icon: TreeStructure, label: 'Categories', g: 'linear-gradient(135deg,#f59e0b,#f97316)', dot: '#fbbf24' },
@@ -5768,6 +5770,7 @@ export default function AdminSection() {
       <Route path="products/edit/:id" element={<AdminLayout><CatalogProductEditor /></AdminLayout>} />
       <Route path="promotions" element={<AdminLayout><CatalogPromotionsPage /></AdminLayout>} />
       <Route path="orders" element={<AdminLayout><AOrders /></AdminLayout>} />
+      <Route path="gift-drop" element={<AdminLayout><GiftDropAdmin /></AdminLayout>} />
       <Route path="users" element={<AdminLayout><AUsers /></AdminLayout>} />
       <Route path="categories" element={<AdminLayout><ACategories /></AdminLayout>} />
       <Route path="reviews" element={<AdminLayout><AReviews /></AdminLayout>} />

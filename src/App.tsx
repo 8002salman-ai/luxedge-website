@@ -120,6 +120,7 @@ function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
 // are server-side only; the browser proxies through /api/ai/*)
 // ============================================================================
 import { classifyProductSafety } from './features/catalog/productSafety';
+import GiftDropPage from './features/giftDrop/GiftDropPage';
 import { productPath } from './features/catalog/seo';
 
 import type {
@@ -1215,13 +1216,19 @@ function RouteTitle() {
     const mf = document.querySelector('link[rel="manifest"]');
     if (mf) mf.setAttribute('href', pathname.startsWith('/admin') ? '/admin/manifest.webmanifest' : '/manifest.webmanifest');
     const privateRoutes = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist', 'profile'];
-    if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write') {
+    if (segs[0] === 'free-pet-gift') {
+      // Time-boxed campaign with real (finite) inventory: keep it out of the
+      // permanent index (it will flip to a "fully claimed" state) — still
+      // follow links so ad/social traffic and any backlinks pass value on.
+      setMeta('robots', 'noindex, follow');
+    } else if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write') {
       setMeta('robots', 'noindex, nofollow');
     } else if (['', 'shop', 'category', 'product', 'blog', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'faq'].includes(segs[0] || '')) {
       setMeta('robots', 'index, follow');
     }
     if (segs.length === 0) { full("Luxedge — Premium Pet & Animal Essentials"); desc("Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge."); }
     else if (segs[0] === "shop") { set("Shop All Products"); desc("Browse the full Luxedge collection of premium pet essentials for dogs and cats."); }
+    else if (segs[0] === "free-pet-gift") { set("Luxedge Pet Gift Drop — Free Gift for Dogs & Cats"); desc("Claim a complimentary Luxedge pet gift for your dog or cat — product and standard shipping are free. No purchase required and no card is ever asked for, while real supplies last."); }
     else if (segs[0] === "category") { const c = fromSlug(decodeURIComponent(segs[1] || "")); set("Shop " + c); desc(CAT_META[c]?.desc || `Browse our ${c} collection at Luxedge.`); }
     else if (segs[0] === "product") {
       // Real catalog product (never the demo ALL_PRODUCTS fixture).
@@ -4005,6 +4012,7 @@ export default function App() {
           {/* Store */}
           <Route path="/" element={<SLayout><HomePage /></SLayout>} />
           <Route path="/shop" element={<SLayout><ShopPage /></SLayout>} />
+          <Route path="/free-pet-gift" element={<SLayout><GiftDropPage /></SLayout>} />
           <Route path="/category/:slug" element={<SLayout><ShopPage /></SLayout>} />
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />
