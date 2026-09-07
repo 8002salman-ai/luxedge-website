@@ -1050,6 +1050,23 @@ export async function maybeInjectSeo(
   // receive their pre-rendered body with real internal links. React replaces
   // #root on mount, so bots and humans see the same semantic content.
 
+  // Pet Gift Drop campaign (client-rendered /free-pet-gift): time-boxed, real
+  // finite inventory — serve the SPA shell with campaign meta, noindexed (it
+  // will flip to a fully-claimed state; follow links so ad/social traffic and
+  // backlinks still pass value). Never a 404: real claims come from the page.
+  if (segs.length > 0 && segs[0] === 'free-pet-gift') {
+    return {
+      html: inject(html, {
+        title: 'Luxedge Pet Gift Drop — Free Gift for Dogs & Cats',
+        description:
+          'Claim a complimentary Luxedge pet gift for your dog or cat — product and standard shipping are free. No purchase required and no card is ever asked for, while real supplies last.',
+        canonical: `${root}/free-pet-gift`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
   // Noindex utility/private routes so they never appear in search results.
   // Matches any depth: /admin, /admin/blogs, /checkout, /checkout/success, …
   const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist'];
