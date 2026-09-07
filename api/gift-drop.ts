@@ -141,9 +141,12 @@ export async function claimHandler(req: IncomingMessage, res: ServerResponse): P
   const orderRow = buildGiftOrderRow(input, { ...(cfg as object), giftName, giftValueCents } as never, isTest);
   let insertRes: Response;
   try {
+    // Prefer return=representation: this Supabase/PostgREST is configured with
+    // return=minimal as default (empty 201 body), so without the header we
+    // cannot read the created claim back from the response.
     insertRes = await fetch(`${url}/rest/v1/luxedge_orders`, {
       method: 'POST',
-      headers: H,
+      headers: { ...H, Prefer: 'return=representation' },
       body: JSON.stringify(orderRow),
       signal: AbortSignal.timeout(10_000),
     });
@@ -164,8 +167,28 @@ export async function claimHandler(req: IncomingMessage, res: ServerResponse): P
     sendJson(res, 502, { error: 'Could not complete your claim just now — please try again.' });
     return;
   }
-  const inserted = (await insertRes.json()) as GiftClaimRow[];
-  const claim = Array.isArray(inserted) ? inserted[0] : null;
+  let claim: GiftClaimRow | null = null;
+  try {
+    const inserted = (await insertRes.json()) as GiftClaimRow[];
+    claim = Array.isArray(inserted) ? inserted[0] : null;
+  } catch {
+    claim = null;
+  }
+  if (!claim || !claim.id) {
+    // Fallback: read the row back by its deterministic order number.
+    try {
+      const back = await fetch(
+        `${url}/rest/v1/luxedge_orders?order_number=eq.${encodeURIComponent(orderRow.order_number)}&select=*&limit=1`,
+        { headers: H, signal: AbortSignal.timeout(10_000) },
+      );
+      if (back.ok) {
+        const rows = (await back.json()) as GiftClaimRow[];
+        claim = Array.isArray(rows) && rows.length ? rows[0] : null;
+      }
+    } catch {
+      claim = null;
+    }
+  }
   if (!claim || !claim.id) {
     sendJson(res, 502, { error: 'Could not complete your claim just now — please try again.' });
     return;
