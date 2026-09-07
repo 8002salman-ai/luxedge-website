@@ -121,6 +121,8 @@ function onImageError(e: React.SyntheticEvent<HTMLImageElement>) {
 // ============================================================================
 import { classifyProductSafety } from './features/catalog/productSafety';
 import GiftDropPage from './features/giftDrop/GiftDropPage';
+import CampaignLanding from './features/campaigns/CampaignLanding';
+import CampaignPopup from './features/campaigns/CampaignPopup';
 import { productPath } from './features/catalog/seo';
 
 import type {
@@ -1290,6 +1292,7 @@ function SLayout({ children }: { children: ReactNode }) {
       <CartDrawer />
       <CookieConsent />
       <WelcomePopup />
+      <CampaignPopup />
       <WhatsAppButton />
       <AIAssistant />
     </div>
@@ -4013,6 +4016,7 @@ export default function App() {
           <Route path="/" element={<SLayout><HomePage /></SLayout>} />
           <Route path="/shop" element={<SLayout><ShopPage /></SLayout>} />
           <Route path="/free-pet-gift" element={<SLayout><GiftDropPage /></SLayout>} />
+          <Route path="/campaigns/:slug" element={<SLayout><CampaignLanding /></SLayout>} />
           <Route path="/category/:slug" element={<SLayout><ShopPage /></SLayout>} />
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />

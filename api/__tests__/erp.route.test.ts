@@ -113,14 +113,15 @@ function stubFetch(opts: StubOpts = {}) {
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           );
         }
+        const bodyRaw = init?.body;
         if (method === 'POST') {
-          const b = JSON.parse(String(init.body)) as { key: string; value: string; updated_at?: string };
+          const b = JSON.parse(String(bodyRaw)) as { key: string; value: string; updated_at?: string };
           settings[b.key] = b.value;
           if (b.updated_at) stamps[b.key] = b.updated_at;
           return new Response(JSON.stringify([{ key: b.key, value: b.value }]), { status: 201, headers: { 'Content-Type': 'application/json' } });
         }
         if (method === 'PATCH') {
-          const b = JSON.parse(String(init.body)) as { value: string; updated_at?: string };
+          const b = JSON.parse(String(bodyRaw)) as { value: string; updated_at?: string };
           const stampFilter = url.match(/updated_at=eq\.([^&]+)/);
           const stamp = stampFilter ? decodeURIComponent(stampFilter[1]) : null;
           if (key in settings && (stamp === null || stamps[key] === stamp)) {
