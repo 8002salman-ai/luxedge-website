@@ -17,6 +17,16 @@
     <link rel="canonical" href="https://luxedge.us" />
     <link rel="icon" type="image/png" href="/luxedge-mark.png" />
 
+    <!-- Installable app (PWA): buyer manifest by default; the admin routes
+         switch to the admin-scoped manifest at runtime (see App.tsx) so
+         installing from /admin/* produces a standalone "Luxedge Admin" app. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Luxedge" />
+    <link rel="apple-touch-icon" href="/luxedge-mark.png" />
+
     <!-- LCP hero image — preload so the above-the-fold hero doesn't wait on a
          late image fetch on slow connections (mirrors src/App.tsx heroDogImage). -->
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&amp;h=1000&amp;fit=crop&amp;crop=faces&amp;auto=format&amp;q=88" />

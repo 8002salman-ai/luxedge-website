@@ -97,7 +97,6 @@ export function aggregateMerchStats(
     return c;
   };
   const d7 = now - 7 * 86_400_000;
-  const d30 = now - 30 * 86_400_000;
   const d90 = now - 90 * 86_400_000;
 
   for (const e of events) {
