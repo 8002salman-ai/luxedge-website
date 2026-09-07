@@ -1113,6 +1113,24 @@ export async function maybeInjectSeo(
     };
   }
 
+  // /campaigns/:slug — Campaign Engine landing (client-rendered). Campaigns are
+  // temporary promotions that flip to claimed/ended states, so the whole prefix
+  // is noindexed (ad/social traffic still works). Unknown slugs must NOT become
+  // a 200 indexable homepage copy — but they also shouldn't be a hard 404 for
+  // the SPA router, so a missing campaign is a real 404 that the client also
+  // shows as closed/unavailable.
+  if (segs.length === 2 && segs[0] === 'campaigns') {
+    return {
+      html: inject(html, {
+        title: 'Luxedge Campaign',
+        description: 'A limited Luxedge promotion — view eligibility and claim details on the campaign page.',
+        canonical: `${root}/campaigns/${encodeURIComponent(segs[1])}`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
   // Noindex utility/private routes so they never appear in search results.
   // Matches any depth: /admin, /admin/blogs, /checkout, /checkout/success, …
   const noIndexFirst = ['admin', 'checkout', 'login', 'signup', 'account', 'cart', 'orders', 'wishlist'];
