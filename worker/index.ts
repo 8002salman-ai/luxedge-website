@@ -53,6 +53,12 @@ import autoListHandler from '../api/admin/auto-list';
 import tableColumnsHandler from '../api/admin/table-columns';
 import giftDropAdminHandler from '../api/admin/gift-drop';
 import { stateHandler as giftDropStateHandler, claimHandler as giftDropClaimHandler } from '../api/gift-drop';
+import campaignsAdminHandler from '../api/admin/campaigns';
+import {
+  listHandler as campaignsListHandler,
+  stateHandler as campaignsStateHandler,
+  claimHandler as campaignsClaimHandler,
+} from '../api/campaigns';
 import merchStatsHandler, { recomputeMerchStats } from '../api/merch-stats';
 import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
@@ -116,6 +122,10 @@ const ROUTES: Route[] = [
   { path: '/api/gift-drop/state', handler: giftDropStateHandler },
   { path: '/api/gift-drop/claim', handler: giftDropClaimHandler },
   { path: '/api/admin/gift-drop', handler: giftDropAdminHandler },
+  { path: '/api/campaigns', handler: campaignsListHandler },
+  { path: '/api/campaigns/state', handler: campaignsStateHandler },
+  { path: '/api/campaigns/claim', handler: campaignsClaimHandler },
+  { path: '/api/admin/campaigns', handler: campaignsAdminHandler },
   { path: '/api/admin/products', handler: adminProductsHandler },
   { path: '/google-products.xml', handler: googleFeedHandler },
   { path: '/api/img-proxy', handler: imgProxyHandler },

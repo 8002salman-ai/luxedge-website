@@ -8,7 +8,7 @@ import { readJsonBody, sendJson } from '../_lib/providers.js';
 import { supabaseConfig, supabaseFetch, uid, isMissingTable } from './_lib.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const SOURCES = ['whatsapp', 'ai_chat', 'manual', 'welcome_popup'];
+const SOURCES = ['whatsapp', 'ai_chat', 'manual', 'welcome_popup', 'campaign_popup', 'campaign_page'];
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
