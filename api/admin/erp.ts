@@ -12,8 +12,13 @@
 //
 //   GET /api/admin/erp
 //       → { webhook: { configured, masked, source }, token: {...},
-//           sync: { [order_number]: { status, synced_at, error? } } }
+//           sync: { [order_number]: { status, synced_at, error? } },
+//           syncLog: [{ order_number, status, at, error? }...] (history, newest first) }
 //       NEVER returns the raw token or the full webhook URL.
+//
+//   On any push that ends with failures, the owner is emailed (SEND_MAIL
+//   binding) a list of the failed order numbers so they can re-push those.
+//   The alert is best-effort and never affects the push result.
 //
 //   POST /api/admin/erp
 //       { action: 'set',   field: 'webhook'|'token', value }  → store server-side
@@ -55,6 +60,9 @@ import { validateFetchTarget } from '../_lib/ssrf.js';
 const ERP_WEBHOOK_KEY = 'ERP_WEBHOOK_URL';
 const ERP_TOKEN_KEY = 'ERP_API_TOKEN';
 const ERP_SYNC_LEDGER_KEY = 'ERP_SYNC_STATUS';
+const ERP_SYNC_LOG_KEY = 'ERP_SYNC_LOG';
+/** Cap the append-only sync history so the doc can never grow unbounded. */
+const ERP_SYNC_LOG_CAP = 2000;
 
 const ERP_TIMEOUT_MS = 12_000;
 
@@ -63,6 +71,15 @@ type SyncStatus = 'created' | 'updated' | 'sent' | 'failed';
 interface SyncEntry {
   status: SyncStatus;
   synced_at?: string;
+  error?: string;
+}
+
+/** One row of the append-only sync history (never overwritten — the ledger keeps
+ *  the latest status per order, this keeps every attempt with its timestamp). */
+interface SyncLogEntry {
+  order_number: string;
+  status: SyncStatus;
+  at: string;
   error?: string;
 }
 
@@ -220,6 +237,9 @@ async function readErpSync(): Promise<Record<string, SyncEntry>> {
 async function writeErpSyncEntries(entries: Record<string, SyncEntry>): Promise<boolean> {
   const keys = Object.keys(entries);
   if (!keys.length) return true;
+  // Append to the history log on EVERY outcome write — manual push, per-order
+  // retry, auto-forward, and whole-batch failures all leave a timestamped row.
+  await appendErpSyncLog(entries);
   if (await erpColumnsAvailable()) {
     const cfg = supabaseCfg();
     if (!cfg) return false;
@@ -243,6 +263,107 @@ async function writeErpSyncEntries(entries: Record<string, SyncEntry>): Promise<
   const ledger = parseLedgerDoc(await readSetting(ERP_SYNC_LEDGER_KEY));
   for (const k of keys) ledger[k] = entries[k];
   return upsertAppSetting(ERP_SYNC_LEDGER_KEY, JSON.stringify(ledger));
+}
+
+// ---------------------------------------------------------------------------
+// SYNC HISTORY — append-only log of every attempt (created/updated/failed with
+// timestamps). Lives in the ERP_SYNC_LOG app_settings doc so it works in BOTH
+// storage modes (before and after migration 0029) with no schema dependency.
+// Appends use a read-modify-write guarded by the row's updated_at stamp so two
+// concurrent paid orders cannot lose each other's history rows.
+// ---------------------------------------------------------------------------
+function parseSyncLogDoc(raw: string | null): SyncLogEntry[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as SyncLogEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Read the full sync history, newest attempt first (capped for the response). */
+async function readErpSyncLog(): Promise<SyncLogEntry[]> {
+  const cfg = supabaseCfg();
+  if (!cfg) return [];
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/app_settings?key=eq.${encodeURIComponent(ERP_SYNC_LOG_KEY)}&select=value`, {
+      headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+      signal: AbortSignal.timeout(6_000),
+    });
+    if (!res.ok) return [];
+    const rows = (await res.json()) as Array<{ value?: string }>;
+    return parseSyncLogDoc(rows[0]?.value ?? null)
+      .slice()
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
+      .slice(0, 1000);
+  } catch {
+    return [];
+  }
+}
+
+/** Append history entries (order_number → outcome). Best-effort, never throws.
+ *  Concurrency-safe: retries up to 3 times when the stamp moved between read
+ *  and write. Creates the doc on first use. */
+async function appendErpSyncLog(entries: Record<string, SyncEntry>): Promise<void> {
+  const cfg = supabaseCfg();
+  const list = Object.entries(entries);
+  if (!cfg || !list.length) return;
+  const now = new Date().toISOString();
+  const incoming: SyncLogEntry[] = list.map(([order_number, e]) => ({
+    order_number,
+    status: e.status,
+    at: e.synced_at || now,
+    ...(e.error ? { error: e.error } : {}),
+  }));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const get = await fetch(`${cfg.url}/rest/v1/app_settings?key=eq.${encodeURIComponent(ERP_SYNC_LOG_KEY)}&select=value,updated_at`, {
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}` },
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!get.ok) return;
+      const rows = (await get.json()) as Array<{ value?: string; updated_at?: string }>;
+      const current = parseSyncLogDoc(rows[0]?.value ?? null);
+      const merged = [...incoming, ...current].slice(0, ERP_SYNC_LOG_CAP);
+      const stamp = rows[0]?.updated_at;
+      const newValue = JSON.stringify(merged);
+
+      if (!stamp) {
+        // No row yet — create it (upsert; the first-ever append cannot race).
+        const post = await fetch(`${cfg.url}/rest/v1/app_settings`, {
+          method: 'POST',
+          headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({ key: ERP_SYNC_LOG_KEY, value: newValue, updated_at: new Date().toISOString() }),
+          signal: AbortSignal.timeout(6_000),
+        });
+        if (post.ok) return;
+        continue;
+      }
+
+      // Conditional write — if the stamp moved, 0 rows update and we retry on
+      // the fresher copy instead of clobbering a concurrent append.
+      const patch = await fetch(`${cfg.url}/rest/v1/app_settings?key=eq.${encodeURIComponent(ERP_SYNC_LOG_KEY)}&updated_at=eq.${encodeURIComponent(stamp)}`, {
+        method: 'PATCH',
+        headers: { apikey: cfg.serviceRole, Authorization: `Bearer ${cfg.serviceRole}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+        body: JSON.stringify({ value: newValue, updated_at: new Date().toISOString() }),
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!patch.ok) return;
+      const body = await patch.text().catch(() => '');
+      let affected = -1;
+      try {
+        const parsed = body ? JSON.parse(body) : null;
+        affected = Array.isArray(parsed) ? parsed.length : -1;
+      } catch {
+        affected = -1;
+      }
+      if (affected === 0) continue; // stale stamp → re-read and retry
+      return;
+    } catch {
+      return;
+    }
+  }
 }
 
 /** Clear every failed sync entry; returns how many were cleared. */
@@ -297,6 +418,46 @@ async function callErp(webhook: string, token: string, body: Record<string, unkn
     const msg = (e as Error).message || 'network error';
     // Timeout / network failure — do not leak URL or token details.
     return { ok: false, status: 0, body: '', error: msg.includes('timeout') ? 'ERP request timed out' : 'Could not reach the ERP server' };
+  }
+}
+
+/** The owner's email for operational alerts. Overridable via env; defaults to
+ *  the store owner address used across the app (email routing forward target). */
+function ownerAlertEmail(): string {
+  return (process.env.ERP_ALERT_EMAIL || process.env.OWNER_EMAIL || '8002salman@gmail.com').trim().toLowerCase();
+}
+
+/** Send the owner an email (via the SEND_MAIL binding) when an ERP push batch
+ *  ended with failures. Best-effort and NEVER throws — the push response must
+ *  not be affected by email availability. Lists the failed order numbers so
+ *  the owner can re-push exactly those from Admin → Orders. */
+async function sendErpFailureAlert(
+  req: IncomingMessage,
+  failed: Array<{ order_number?: string; reason?: string }>,
+): Promise<void> {
+  if (!failed || !failed.length) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const env = (req as any)?.env as { SEND_MAIL?: { send: (msg: { from: string; to: string; subject: string; text?: string; html?: string; reply_to?: string }) => Promise<void> } } | undefined;
+    const binding = env?.SEND_MAIL;
+    const to = ownerAlertEmail();
+    if (!binding || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return;
+    const lines = failed
+      .map((f) => `  • ${f.order_number || '(unknown order)'}${f.reason ? ` — ${f.reason}` : ''}`)
+      .join('\n');
+    const subject = `ERP Sync failed for ${failed.length} order${failed.length === 1 ? '' : 's'}`;
+    const text = [
+      'Hi,',
+      '',
+      `${failed.length} order(s) failed to sync to the Embani ERP:`, '',
+      lines, '',
+      'Fix the cause and re-push exactly those orders from Admin → Orders → ERP Sync, or use the per-order Retry.',
+      '',
+      '— Luxedge',
+    ].join('\n');
+    await binding.send({ from: 'sales@luxedge.us', to, subject, text });
+  } catch {
+    // Never let an email failure surface — the ERP push result is authoritative.
   }
 }
 
@@ -518,11 +679,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (!(await requireAdmin(req, res))) return;
 
   if (req.method === 'GET') {
-    const [cfg, sync] = await Promise.all([effectiveConfig(), readErpSync()]);
+    const [cfg, sync, syncLog] = await Promise.all([effectiveConfig(), readErpSync(), readErpSyncLog()]);
     sendJson(res, 200, {
       webhook: statusOf(!!cfg.webhook, maskWebhook(cfg.webhook), cfg.webhookSource),
       token: statusOf(!!cfg.token, maskToken(cfg.token), cfg.tokenSource),
       sync,
+      syncLog,
     });
     return;
   }
@@ -714,6 +876,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const failed = realOrders
         .filter((o) => failedByNumber[o.order_number])
         .map((o) => ({ order_number: o.order_number, reason: failedByNumber[o.order_number] }));
+      // Alert the owner whenever this batch ended with failures.
+      await sendErpFailureAlert(req, failed);
       const parts = [`ERP Sync complete`, `Sent: ${realOrders.length}`];
       if (created !== null) parts.push(`Created: ${created}`);
       if (updated !== null) parts.push(`Updated: ${updated}`);
@@ -741,12 +905,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       failedEntries[o.order_number] = { status: 'failed', synced_at: now, error: reason };
     }
     await writeErpSyncEntries(failedEntries);
+    const failedOrders = realOrders.map((o) => ({ order_number: o.order_number, reason }));
+    // Alert the owner — the whole batch failed.
+    await sendErpFailureAlert(req, failedOrders);
     sendJson(res, 200, {
       ok: false,
       sent: realOrders.length,
       created: 0,
       updated: 0,
-      failed: realOrders.map((o) => ({ order_number: o.order_number, reason })),
+      failed: failedOrders,
       latencyMs,
       message: `ERP Sync failed — ${reason}. No orders were confirmed.`,
     });

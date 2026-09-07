@@ -44,7 +44,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
-  Receipt, CloudArrowUp, YoutubeLogo, CreditCard, Gift,
+  Receipt, CloudArrowUp, YoutubeLogo, CreditCard, Gift, Clock,
 } from '@phosphor-icons/react';
 
 // ADMIN PANEL - FULL WORKING SYSTEM
@@ -812,7 +812,8 @@ interface StripeOrderRow { id: string; order_number: string; customer_email: str
 // returns masked values + a per-order sync ledger.
 interface ErpKeyStatus { configured: boolean; masked: string; source: 'env' | 'attached' | 'none' }
 interface ErpSyncEntry { status: string; synced_at?: string; error?: string }
-interface ErpConfig { webhook: ErpKeyStatus; token: ErpKeyStatus; sync: Record<string, ErpSyncEntry> }
+interface ErpSyncLogEntry { order_number: string; status: string; at: string; error?: string }
+interface ErpConfig { webhook: ErpKeyStatus; token: ErpKeyStatus; sync: Record<string, ErpSyncEntry>; syncLog?: ErpSyncLogEntry[] }
 
 function AOrders() {
   const { notify } = useApp();
@@ -833,6 +834,7 @@ function AOrders() {
   const [erpTokenInput, setErpTokenInput] = useState('');
   const [erpBusy, setErpBusy] = useState(false);
   const [erpResult, setErpResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [showErpLog, setShowErpLog] = useState(false);
 
   // Authoritative persisted orders ONLY (created by the Stripe webhook). No
   // fake order history — the legacy demo table was removed for truthfulness.
@@ -1207,6 +1209,44 @@ function AOrders() {
           </div>
         )}
       </div>
+
+      {/* Full ERP sync history — every attempt (created/updated/failed) with timestamps */}
+      {erpCfg?.syncLog?.length ? (
+        <div className="rounded-lg border border-indigo-200 bg-white/60 overflow-hidden mt-3">
+          <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-2 flex-wrap">
+            <button onClick={() => setShowErpLog(!showErpLog)} className="text-xs font-semibold text-indigo-800 flex items-center gap-1.5 hover:text-indigo-950">
+              <Clock size={13} /> Sync history ({erpCfg.syncLog.length}) {showErpLog ? <CaretUp size={12} /> : <CaretDown size={12} />}
+            </button>
+            <div className="flex gap-1.5 text-[10px]">
+              {(() => {
+                const c = erpCfg.syncLog!.filter(e => e.status === 'created').length;
+                const u = erpCfg.syncLog!.filter(e => e.status === 'updated' || e.status === 'sent').length;
+                const f = erpCfg.syncLog!.filter(e => e.status === 'failed').length;
+                return (<>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">{c} created</span>
+                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">{u} updated</span>
+                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-semibold">{f} failed</span>
+                </>);
+              })()}
+            </div>
+          </div>
+          {showErpLog && (
+            <div className="max-h-56 overflow-y-auto divide-y divide-indigo-100/70">
+              {erpCfg.syncLog.slice(0, 300).map((e, i) => (
+                <div key={i} className="px-3 py-1.5 flex items-start gap-2 min-w-0">
+                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${e.status === 'created' ? 'bg-emerald-100 text-emerald-700' : e.status === 'updated' || e.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`}>{e.status}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-[10px] font-semibold text-gray-800 break-words">{e.order_number}</p>
+                    {e.error && <p className="text-[9px] text-red-500/90 break-words" title={e.error}>{e.error}</p>}
+                  </div>
+                  <span className="text-[9px] text-gray-400 shrink-0">{e.at ? new Date(e.at).toLocaleString() : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {erpResult && (
         <p className={`mt-2 text-[11px] break-words ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
       )}
