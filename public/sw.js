@@ -20,8 +20,8 @@
  * no assumption that a cached copy is the truth for anything dynamic.
  * ============================================================================
  */
-const SHELL_CACHE = 'luxedge-shell-v1';
-const ASSET_CACHE = 'luxedge-assets-v1';
+const SHELL_CACHE = 'luxedge-shell-v2';
+const ASSET_CACHE = 'luxedge-assets-v2';
 
 self.addEventListener('install', () => {
   // Take control quickly; precaching is avoided so an empty cache can never

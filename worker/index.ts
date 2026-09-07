@@ -428,6 +428,31 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     const isFileLike = lastSeg.includes('.');
     if (isFileLike) {
       const assetRes = await env.ASSETS.fetch(request);
+      // Hashed chunks are versioned by filename, so a miss can only mean a
+      // STALE shell is referencing a chunk that was removed in a deploy.
+      // Never answer it with the SPA shell (200 + HTML) and never cache the
+      // miss: a browser would try to parse HTML as a module, React never
+      // boots, and the page hangs on the SSR article text. A real 404 makes
+      // the stale load fail fast; the next fresh page load references live
+      // chunks and recovers. no-store also stops Cloudflare from caching
+      // HTML under a .js URL (observed: immutable 1-year HIT on old chunks).
+      const assetContentType = assetRes.headers.get('content-type') || '';
+      // A hashed /assets/* file is NEVER legitimately HTML. Cloudflare may
+      // still serve the previously-poisoned edge cache entry (200 + HTML,
+      // cached immutable) for an old chunk URL after a deploy, so guard on
+      // content-type, not just status — HTML means "SPA fallback / stale",
+      // and serving it under a .js URL would re-poison browsers.
+      const htmlDisguisedAsAsset = url.pathname.startsWith('/assets/') && assetContentType.includes('text/html');
+      if (url.pathname.startsWith('/assets/') && (!assetRes.ok || htmlDisguisedAsAsset)) {
+        return new Response('Not Found', {
+          status: 404,
+          headers: {
+            'content-type': 'text/plain; charset=utf-8',
+            'cache-control': 'no-store',
+            'x-robots-tag': 'noindex',
+          },
+        });
+      }
       // Vite hashed subresources (/assets/*-hash.js|css) are immutable per
       // build — long-cache them so repeat visits don't revalidate ~1MB of
       // bundles on every page load. Unhashed public files keep ASSETS defaults.

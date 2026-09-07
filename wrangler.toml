@@ -16,7 +16,15 @@ keep_vars = true
 [assets]
 directory = "dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+# CRITICAL: SPA fallback is implemented in worker/index.ts ONLY for non-file
+# page routes (via maybeInjectSeo). The ASSETS binding itself must NOT serve
+# index.html for missing file requests: after a deploy, stale HTML can
+# reference hashed chunks that no longer exist, and answering /assets/*.js
+# with 200 + HTML makes browsers parse HTML as a module -> React never boots
+# and the page hangs on the SSR article text (the reported "only text, keeps
+# loading" bug). "none" lets ASSETS return a real 404 for missing files so a
+# stale shell fails fast and the next fresh page load recovers.
+not_found_handling = "none"
 run_worker_first = true
 
 # Cloudflare Email Sending (outbound from sales@luxedge.us) — the send_email
