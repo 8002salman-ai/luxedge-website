@@ -1,4 +1,6 @@
 import type { JSX } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
 
 /**
  * CATEGORY HERO CONFIG — one source of truth for every catalog category header.
@@ -24,6 +26,9 @@ export interface CategoryHeroConfig {
   desc: string;           // one-line value statement
   image: string;          // editorial pet/lifestyle photo
   imageAlt: string;
+  mobileImage?: string;
+  imagePosition?: string;
+  badge?: string;
   tint: 'dog' | 'cat' | 'horse' | 'bird' | 'cattle' | 'neutral';
   ctaHref: string;        // primary action (scrolls to the product grid)
   ctaLabel: string;
@@ -36,7 +41,8 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     headline: 'Gear That Keeps Up With Your Dog',
     desc: 'Walking, training & everyday dog essentials — picked for comfort, durability and real everyday use.',
     image: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
-    imageAlt: 'Happy dog smiling beside walking gear',
+    imageAlt: 'Golden retriever holding a stick on a wooden deck',
+    imagePosition: '50% 55%',
     tint: 'dog',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop dog essentials',
@@ -52,7 +58,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     headline: 'Soft Comfort for Curious Cats',
     desc: 'Play, comfort & everyday cat essentials — calm, considered pieces your cat will actually love.',
     image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
-    imageAlt: 'Elegant cat lounging peacefully',
+    imageAlt: 'Black and white cat looking toward the camera',
     tint: 'cat',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop cat essentials',
@@ -68,7 +74,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     headline: 'Stable & Field Essentials, Built to Last',
     desc: 'Practical care and stable essentials for horses — quality tack and care you can depend on.',
     image: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
-    imageAlt: 'Powerful horse in a quiet field',
+    imageAlt: 'White horse moving beside trees',
     tint: 'horse',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop horse care',
@@ -82,8 +88,9 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     label: 'Bird Supplies',
     headline: 'Fresh Care for Feathered Friends',
     desc: 'Seed, feed & care essentials for birds — light, natural and made for everyday feeding.',
-    image: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=720&h=820&fit=crop&crop=faces&auto=format&q=88',
-    imageAlt: 'Bright, healthy bird perched close',
+    image: 'https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=720&h=820&fit=crop&crop=top&auto=format&q=88',
+    imageAlt: 'Colorful bird perched on a branch',
+    imagePosition: '50% 15%',
     tint: 'bird',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop bird supplies',
@@ -108,8 +115,40 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
   },
 };
 
-// Non-pet general categories (Pet Beds, Pet Toys, Grooming, ...) keep the
-// neutral luxe-cream band but still get the premium header via the fallback.
+// Existing lifestyle sources keep the collection photography consistent.
+// General collections use context-setting photography, not product thumbnails.
+const generalCollections = [
+  { name: 'Feeding & Water', headline: 'A little care, every mealtime.', desc: 'Explore bowls, feeders and water essentials for your everyday routine.', source: 'Cat Supplies', chips: ['Dog Supplies', 'Cat Supplies', 'Cattle'] },
+  { name: 'Pet Accessories', headline: 'For all the places you go together.', desc: 'Explore useful extras for days out, travel and life at home.', source: 'Dog Supplies', chips: ['Dog Supplies', 'Cat Supplies', 'Grooming'] },
+  { name: 'Pet Beds', headline: 'Their own little place to unwind.', desc: 'Find a comfortable corner with beds and resting essentials for dogs and cats.', source: 'Cat Supplies', chips: ['Dog Supplies', 'Cat Supplies', 'Pet Accessories'] },
+  { name: 'Pet Toys', headline: 'Make room for a little play.', desc: 'Explore toys for curious noses, playful paws and time together.', source: 'Dog Supplies', chips: ['Dog Supplies', 'Cat Supplies', 'Bird Supplies'] },
+  { name: 'Grooming', headline: 'Everyday care. A closer connection.', desc: 'Browse grooming tools and care accessories for your companion’s routine.', source: 'Horse', chips: ['Dog Supplies', 'Cat Supplies', 'Horse'] },
+];
+const collectionSlugs: Record<string, string> = {
+  'Dog Supplies': 'dog-supplies', 'Cat Supplies': 'cat-supplies', Horse: 'horse',
+  Cattle: 'cattle', 'Bird Supplies': 'bird-supplies', 'Pet Accessories': 'pet-accessories', Grooming: 'grooming',
+};
+for (const collection of generalCollections) {
+  const source = CATEGORY_HERO_CONFIG[collection.source];
+  CATEGORY_HERO_CONFIG[collection.name] = {
+    ...source, label: collection.name, headline: collection.headline, desc: collection.desc,
+    tint: 'neutral', ctaLabel: `Shop ${collection.name.toLowerCase()}`,
+    chips: collection.chips.map(label => ({ label, href: `/category/${collectionSlugs[label]}` })),
+  };
+}
+
+/** Sized variants only for the existing image CDN; custom CMS sources pass through. */
+export function categoryImageVariant(source: string, width: number): string {
+  if (!source.startsWith('https://images.unsplash.com/')) return source;
+  const url = new URL(source);
+  url.searchParams.set('w', String(width));
+  url.searchParams.set('h', String(Math.round(width * 0.9)));
+  url.searchParams.set('q', '75');
+  url.searchParams.set('auto', 'format');
+  return url.toString();
+}
+
+// Unknown future categories remain usable without a fabricated photo or links.
 const NEUTRAL_CONFIG: Omit<CategoryHeroConfig, 'label' | 'headline' | 'desc'> = {
   image: '',
   imageAlt: '',
@@ -119,8 +158,7 @@ const NEUTRAL_CONFIG: Omit<CategoryHeroConfig, 'label' | 'headline' | 'desc'> = 
   chips: [],
 };
 
-/** Resolve a config for any category name; general categories fall back to the
- * neutral treatment (no pet image, standard headline). */
+/** Resolve existing collections, with a neutral fallback for future categories. */
 export function categoryHeroConfig(name: string, fallbackDesc: string): CategoryHeroConfig {
   return (
     CATEGORY_HERO_CONFIG[name] || {
@@ -138,67 +176,46 @@ interface Props {
 
 /**
  * Premium, reusable category-page hero: breadcrumb → eyebrow label → strong
- * headline → gold rule → description → CTA → subcategory chips on the left,
+ * headline → description → CTA → related collection links on the left,
  * editorial pet image on the right, all inside a subtle per-category tinted
- * band. Fully responsive (image + chips hide gracefully on mobile) and
+ * band. Mobile presents the photo first and keeps collection links available;
  * lightweight — no carousel, no autoplay, no text baked into the image.
  */
 export default function CategoryHero({ config }: Props): JSX.Element {
-  const { label, headline, desc, image, imageAlt, tint, ctaHref, ctaLabel, chips } = config;
+  const { label, headline, desc, image, imageAlt, tint, ctaHref, ctaLabel, chips, mobileImage, imagePosition, badge } = config;
   return (
-    <div className={`w-full rounded-2xl px-5 py-8 sm:px-8 sm:py-10 category-tint category-tint-${tint}`}>
-      <div className="grid gap-8 items-center lg:grid-cols-[minmax(0,1fr)_auto]">
-        {/* Text stack */}
-        <div className="max-w-xl">
-          <nav aria-label="Breadcrumb" className="mb-3">
-            <ol className="flex items-center gap-1.5 text-[11px] font-medium text-luxe-gray">
-              <li><a href="/" className="hover:text-luxe-gold transition-colors">Home</a></li>
-              <li aria-hidden="true" className="text-luxe-silver">/</li>
-              <li><a href="/shop" className="hover:text-luxe-gold transition-colors">Shop</a></li>
-              <li aria-hidden="true" className="text-luxe-silver">/</li>
-              <li aria-current="page" className="text-luxe-charcoal font-semibold truncate">{label}</li>
-            </ol>
-          </nav>
-          <p className="eyebrow mb-2">{label}</p>
-          <h1 className="font-serif text-3xl sm:text-4xl lg:text-[2.85rem] font-extrabold text-luxe-black tracking-tight leading-[1.05]">
-            {headline}
-          </h1>
-          <div className="h-1 w-14 bg-luxe-gold rounded-full mt-3" aria-hidden="true" />
-          <p className="text-luxe-gray text-xs sm:text-sm mt-3">{desc}</p>
-          <a
-            href={ctaHref}
-            className="mt-5 inline-flex items-center gap-2 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm font-bold px-5 py-2.5 rounded-full shadow-sm transition-colors"
-          >
-            {ctaLabel}
-          </a>
-          {chips.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {chips.map((chip) => (
-                <a
-                  key={chip.href}
-                  href={chip.href}
-                  className="text-[12px] font-semibold text-luxe-charcoal bg-white/70 hover:bg-white hover:text-luxe-gold border border-luxe-silver rounded-full px-3.5 py-1.5 transition-colors"
-                >
-                  {chip.label}
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* Pet image */}
+    <div className={`category-hero category-hero--${tint}`}>
+      <nav aria-label="Breadcrumb" className="category-hero__breadcrumb">
+        <ol>
+          <li><Link to="/">Home</Link></li>
+          <li aria-hidden="true">/</li>
+          <li><Link to="/shop">Shop</Link></li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page">{label}</li>
+        </ol>
+      </nav>
+      <div className={`category-hero__body${image ? '' : ' category-hero__body--text'}`}>
         {image && (
-          <div className="hidden md:block w-52 sm:w-60 lg:w-72 shrink-0">
-            <img
-              src={image}
-              alt={imageAlt}
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-              className="w-full aspect-[5/6] object-cover rounded-2xl shadow-lg ring-1 ring-luxe-gold/20"
-            />
-          </div>
+          <picture className="category-hero__media">
+            {mobileImage && <source media="(max-width: 599px)" srcSet={mobileImage} />}
+            <img src={categoryImageVariant(image, 720)}
+              srcSet={image.startsWith('https://images.unsplash.com/') ? [360, 540, 720, 1080].map(w => `${categoryImageVariant(image, w)} ${w}w`).join(', ') : undefined}
+              sizes="(min-width: 1440px) 380px, (min-width: 1024px) 32vw, (min-width: 640px) 44vw, 100vw"
+              alt={imageAlt} width="720" height="648" loading="eager" fetchPriority="high" decoding="async"
+              style={{ objectPosition: imagePosition || '50% 50%' }} />
+          </picture>
         )}
+        <div className="category-hero__copy">
+          <p className="category-hero__eyebrow">{label}{badge && <span>{badge}</span>}</p>
+          <h1>{headline}</h1>
+          <p className="category-hero__description">{desc}</p>
+          <a href={ctaHref} className="category-hero__cta">{ctaLabel}<ArrowDown size={16} aria-hidden="true" /></a>
+        </div>
       </div>
+      {chips.length > 0 && <nav aria-label={`Explore related ${label.toLowerCase()} collections`} className="category-hero__browse">
+        <p>Explore more</p>
+        <ul>{chips.map(chip => <li key={chip.href}><Link to={chip.href}>{chip.label}<ArrowUpRight size={13} aria-hidden="true" /></Link></li>)}</ul>
+      </nav>}
     </div>
   );
 }
