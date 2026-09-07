@@ -5,6 +5,7 @@ import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import AdsterraAd from './components/AdsterraAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
+import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -1279,15 +1280,6 @@ function ProductDetailPage() {
   const [selSize, setSelSize] = useState('');
   const [ctaVisible, setCtaVisible] = useState(true);
   const ctaRef = useRef<HTMLDivElement>(null);
-  const galleryRef = useRef<HTMLDivElement>(null);
-
-  // Sync the mobile swipe gallery indicator to the scrolled image index.
-  const onGalleryScroll = useCallback(() => {
-    const el = galleryRef.current;
-    if (!el) return;
-    const idx = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
-    setSelImg(Math.max(0, Math.min(idx, (product?.images.length || 1) - 1)));
-  }, [product?.images.length]);
 
   // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
   useEffect(() => {
@@ -1445,7 +1437,7 @@ function ProductDetailPage() {
   const handleAddToCart = () => {
     if (activeStock === 0) return;
     for (let i = 0; i < qty; i++) addToCart(product);
-    notify(`${qty}Ã— ${product.name} added to cart!`);
+    notify(`${qty} × ${product.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
@@ -1469,72 +1461,20 @@ function ProductDetailPage() {
   return (
     <div className="pdp-shell w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400 mb-5">
+      <nav aria-label="Product breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 mb-5">
         <Link to="/" className="hover:text-luxe-gold transition-colors">Home</Link>
         <ChevronRight strokeWidth={1.5} size={11} />
         <Link to="/shop" className="hover:text-luxe-gold transition-colors">Shop</Link>
         <ChevronRight strokeWidth={1.5} size={11} />
         <Link to={`/category/${toSlug(product.category)}`} className="hover:text-luxe-gold transition-colors">{product.category}</Link>
         <ChevronRight strokeWidth={1.5} size={11} />
-        <span className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
+        <span aria-current="page" className="text-gray-700 truncate min-w-0 max-w-[220px] font-medium">{product.name}</span>
       </nav>
 
       <div className="pdp-grid grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6 lg:gap-10 xl:gap-14">
-        {/* LEFT: Image Gallery */}
-        <div className="pdp-gallery min-w-0 lg:sticky lg:top-24 self-start">
-          {/* Mobile: swipeable gallery with image indicator dots */}
-          <div
-            ref={galleryRef}
-            onScroll={onGalleryScroll}
-            aria-label={`${product.name} — image gallery`}
-            className="flex lg:hidden overflow-x-auto snap-x snap-mandatory scrollbar-hide rounded-3xl border border-luxe-silver/70 bg-luxe-cream shadow-md"
-          >
-            {product.images.map((img, i) => (
-              <div key={i} className="w-full shrink-0 snap-center">
-                <div className="aspect-[4/3]">
-                  <img src={img} alt={`${product.name} — image ${i + 1}`} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
-                </div>
-              </div>
-            ))}
-          </div>
-          {product.images.length > 1 && (
-            <div className="flex lg:hidden justify-center gap-1.5 mt-3">
-              {product.images.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { const el = galleryRef.current; if (el) el.scrollTo({ left: el.clientWidth * i, behavior: 'smooth' }); }}
-                  aria-label={`Go to image ${i + 1}`}
-                  aria-current={selImg === i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${selImg === i ? 'w-6 bg-luxe-gold' : 'w-1.5 bg-luxe-silver hover:bg-luxe-gray'}`}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Desktop: large main image + thumbnail rail */}
-          <div className="hidden lg:block">
-            <div className="pdp-main-frame relative rounded-3xl overflow-hidden border border-luxe-silver/70 bg-luxe-cream shadow-md">
-              <div className="aspect-[4/3]">
-                <img key={selImg} src={product.images[selImg] || product.images[0]} alt={product.name} fetchPriority="high" decoding="async" onError={onImageError} className="pdp-gallery-image w-full h-full object-contain" />
-              </div>
-              {discount > 0 && (
-                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                  <span className="px-2 py-1 bg-sale text-white text-[10px] font-bold rounded-full shadow">-{discount}%</span>
-                </div>
-              )}
-              {product.freeShipping && <span className="absolute top-3 right-3 px-2 py-1 bg-luxe-black/90 text-luxe-gold-light text-[9px] font-bold rounded-full">FREE SHIP</span>}
-            </div>
-            {product.images.length > 1 && (
-              <div className="flex gap-2.5 mt-3 overflow-x-auto pb-1">
-                {product.images.map((img, i) => (
-                  <button key={i} onClick={() => setSelImg(i)} aria-label={`View image ${i + 1}`} aria-current={selImg === i}
-                    className={`w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${selImg === i ? 'border-luxe-gold ring-2 ring-luxe-gold/20 shadow-md' : 'border-luxe-silver hover:border-luxe-gold/50 opacity-80 hover:opacity-100'}`}>
-                    <img src={img} alt="" onError={onImageError} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Shared gallery: original catalog photos, desktop rail and mobile thumbnails. */}
+        <div className="pdp-gallery min-w-0 lg:sticky lg:top-40 self-start">
+          <ProductGallery key={product.id} name={product.name} images={product.images} imageAlts={product.imageAlts} selected={selImg} onSelect={setSelImg} />
         </div>
 
         {/* RIGHT: Product Info — AliExpress-style premium */}
@@ -1558,13 +1498,14 @@ function ProductDetailPage() {
           )}
 
           {/* Price */}
-          <div className="rounded-2xl bg-luxe-gold-soft/70 border border-luxe-gold/25 p-5 mb-4">
+          <div className="pdp-price-block rounded-2xl border border-luxe-silver p-5 mb-4">
+            <p className="text-[10px] uppercase tracking-widest text-luxe-gray font-semibold mb-1">Your price · USD</p>
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="font-serif text-3xl font-bold text-luxe-black">${activePrice.toFixed(2)}</span>
               {discount > 0 && <span className="text-sm text-luxe-gray line-through">${activeOriginal.toFixed(2)}</span>}
               {discount > 0 && <span className="px-2 py-0.5 bg-sale text-white text-[11px] font-bold rounded-full">Save ${(activeOriginal - activePrice).toFixed(2)}</span>}
             </div>
-            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% off — limited time deal</p>}
+            {discount > 0 && <p className="text-[11px] text-luxe-gold-dark mt-2 font-semibold">{discount}% below the listed original price</p>}
           </div>
 
           {/* Stock + Shipping — honest: only real supplier-verified stock is
@@ -1619,12 +1560,12 @@ function ProductDetailPage() {
           )}
 
           {/* Buttons */}
-          <div ref={ctaRef} className="flex items-stretch gap-3 mb-4">
+          <div ref={ctaRef} className="pdp-purchase-actions mb-4">
             <WishlistButton product={product} size={20} notify={notify} className="px-4 bg-white border-2 border-gray-200 rounded-xl hover:border-rose-400" />
             <div className="flex items-center border-2 border-gray-200 rounded-xl">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
+              <button aria-label="Decrease quantity" onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Minus strokeWidth={1.5} size={14} /></button>
               <span className="px-3 py-2.5 text-sm font-semibold border-x-2 border-gray-100 min-w-[2.25rem] text-center">{qty}</span>
-              <button onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus strokeWidth={1.5} size={14} /></button>
+              <button aria-label="Increase quantity" onClick={() => setQty(Math.min(activeStock || 1, qty + 1))} className="px-3 py-2.5 hover:bg-gray-50 text-gray-500"><Plus strokeWidth={1.5} size={14} /></button>
             </div>
             <button onClick={handleAddToCart} disabled={activeStock === 0}
               className="btn-glow flex-1 py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:bg-luxe-silver disabled:cursor-not-allowed disabled:text-luxe-gray shadow-gold hover:shadow-luxe-gold/30 hover:scale-[1.02] bg-luxe-gold hover:bg-luxe-gold-dark">
@@ -1711,7 +1652,7 @@ function ProductDetailPage() {
       {/* Description */}
       {tab === 'desc' && (
         <div className="max-w-3xl">
-          <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description}</p>
+          <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description || product.shortDesc || 'Please contact us for additional product information before ordering.'}</p>
           {product.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               {product.tags.map(t => <span key={t} className="text-xs text-luxe-gold hover:underline cursor-pointer">#{t}</span>)}

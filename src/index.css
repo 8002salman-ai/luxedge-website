@@ -931,3 +931,46 @@ input[type="number"] { -moz-appearance: textfield; }
   .category-hero__copy h1 { max-width: 17ch; font-size: clamp(32px, 5cqi, 44px); }
 }
 @media (prefers-reduced-motion: reduce) { .category-hero a { transition: none; } }
+
+/* Product detail: photo-led marketplace layout, scoped to the existing PDP. */
+.pdp-shell { padding-top: 24px; padding-bottom: 40px; }
+.pdp-info { background: #fff; border: 1px solid var(--color-luxe-silver); border-radius: 20px; padding: 24px; }
+.pdp-info h1 { font-size: clamp(26px, 2.4vw, 36px); line-height: 1.15; letter-spacing: -.035em; }
+.pdp-price-block { background: #f5f8fc; box-shadow: none; }
+.pdp-price-block > div > span:first-child { font-family: var(--font-sans); font-size: 34px; letter-spacing: -.04em; }
+.pdp-purchase-actions { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: stretch; padding-top: 12px; }
+.pdp-purchase-actions > div { justify-self: end; }
+.pdp-purchase-actions > button:nth-last-child(-n+2) { grid-column: 1 / -1; min-height: 48px; border-radius: 10px; box-shadow: none; transform: none; }
+.pdp-shell button:focus-visible, .pdp-shell a:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.product-gallery { min-width: 0; }
+.product-gallery__layout { display: grid; gap: 12px; }
+.product-gallery__stage { grid-row: 1; min-width: 0; position: relative; overflow: hidden; background: white; border: 1px solid var(--color-luxe-silver); border-radius: 20px; touch-action: pan-y; }
+.product-gallery__open { position: relative; display: block; width: 100%; aspect-ratio: 1; cursor: zoom-in; padding: 18px; }
+.product-gallery__open > img { width: 100%; height: 100%; object-fit: contain; }
+.product-gallery__zoom { position: absolute; right: 14px; bottom: 14px; display: flex; align-items: center; gap: 6px; border: 1px solid #d8dde4; border-radius: 999px; padding: 8px 12px; background: rgb(255 255 255 / 95%); color: #384454; font-size: 11px; }
+.product-gallery__thumbs { display: flex; gap: 8px; overflow: auto; padding: 3px; scrollbar-width: thin; }
+.product-gallery__thumbs button { width: 64px; height: 64px; flex-shrink: 0; border: 1px solid #d8dde4; border-radius: 10px; background: white; padding: 4px; overflow: hidden; }
+.product-gallery__thumbs button[aria-pressed="true"] { border: 2px solid #245fba; box-shadow: 0 0 0 2px #e1ebfa; }
+.product-gallery__thumbs img { width: 100%; height: 100%; object-fit: contain; }
+.product-gallery__controls { display: flex; align-items: center; justify-content: center; gap: 18px; border-top: 1px solid #edf0f3; padding: 6px; font-size: 12px; color: #505864; }
+.product-gallery__controls button, .product-gallery__dialog button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid #d8dde4; border-radius: 50%; background: white; color: #263446; }
+.product-gallery__caption { padding: 12px 3px; font-size: 11px; color: #606b78; line-height: 1.5; }
+.product-gallery__empty { display: grid; place-items: center; aspect-ratio: 1; color: #606b78; font-size: 14px; }
+.product-gallery__dialog { position: fixed; inset: 0; margin: auto; width: min(1100px, 96vw); max-height: 94dvh; padding: 18px; border: 0; border-radius: 16px; background: white; color: #1c2027; }
+.product-gallery__dialog::backdrop { background: rgb(15 23 42 / 80%); }
+.product-gallery__dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; font-weight: 600; }
+.product-gallery__dialog-header button { flex-shrink: 0; }
+.product-gallery__dialog > img { width: 100%; height: min(70dvh, 800px); object-fit: contain; margin-top: 12px; }
+.product-gallery__dialog-nav { display: flex; align-items: center; justify-content: center; gap: 20px; padding-top: 12px; font-size: 12px; }
+@media (min-width: 1024px) {
+  .pdp-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; }
+  .product-gallery__layout { grid-template-columns: 72px minmax(0, 1fr); align-items: start; }
+  .product-gallery__thumbs { flex-direction: column; max-height: 560px; grid-column: 1; grid-row: 1; }
+  .product-gallery__stage { grid-column: 2; }
+  .product-gallery__caption { padding-left: 84px; }
+}
+@media (max-width: 479px) {
+  .pdp-info { padding: 18px; border-radius: 16px; }
+  .product-gallery__open { padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .pdp-shell button { transition: none; } }
