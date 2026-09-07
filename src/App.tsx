@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, useMemo, lazy, Suspense, Fragment } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef, useMemo, lazy, Suspense, Fragment, useSyncExternalStore } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
@@ -14,6 +14,8 @@ import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken, getFreshAccessToken } from './services/supabase';
 import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
+import { rankProducts, probeVisualQuality, markBrokenImage, subscribeVisualQuality, getVisualQualityVersion, type MerchStats } from './features/catalog/merchandising';
+import { loadMerchStats } from './services/merch';
 import { loadPublishedBlogs } from './services/blog';
 import { MediaLatestSection } from './media/MediaHub';
 import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
@@ -50,6 +52,8 @@ export interface Product {
   variants: ProductVariant[];
   // Catalog Launch Phase — real merchandising data from the DB (never fake).
   featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
+  /** Manual admin pin — products.sort_order > 0 ranks first (ascending). */
+  sortOrder?: number;
   stockStatus?: string; usInventory?: boolean;
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   slug?: string;
@@ -199,6 +203,7 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     featured: p.featured,
     newArrival: p.newArrival,
     saleEnabled: p.saleEnabled,
+    sortOrder: p.sortOrder,
     stockStatus: p.stockStatus,
     usInventory: p.usInventory,
     commerceReadiness: p.commerceReadiness,
@@ -342,6 +347,7 @@ interface Ctx {
   notif: { msg: string; type: 'success' | 'error' | 'info' } | null;
   notify: (m: string, type?: 'success' | 'error' | 'info') => void;
   // Catalog Launch Phase — coupons + free-shipping strategy from the store.
+  merchStats: Map<string, MerchStats>;
   coupon: StoreCoupon | null;
   applyCoupon: (code: string) => string | null;
   removeCoupon: () => void;
@@ -401,6 +407,9 @@ function AppProvider({ children }: { children: ReactNode }) {
   // must NEVER appear when the database has no published products; only the
   // qualified/approved pipeline may populate the customer-facing catalog.
   const [products, setProducts] = useState<Product[]>([]);
+  // Smart merchandising — per-product performance stats from /api/merch-stats.
+  // Empty map when unavailable (grids fall back to flag/availability ordering).
+  const [merchStats, setMerchStats] = useState<Map<string, MerchStats>>(new Map());
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
@@ -461,6 +470,26 @@ function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { cancelled = true; };
   }, []);
+
+  // Smart merchandising — load per-product stats (session-cached) and probe
+  // the visual quality of the strongest candidates once data is ready.
+  useEffect(() => {
+    let cancelled = false;
+    void loadMerchStats().then((m) => { if (!cancelled) setMerchStats(m); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (products.length === 0) return;
+    const ranked = rankProducts(products, { stats: merchStats, explore: false });
+    const top = ranked.slice(0, 12).map((p) => ({ id: p.id, url: p.images && p.images[0] ? proxiedImage(p.images[0]) : undefined }));
+    let cancelled = false;
+    const run = () => { if (!cancelled) void probeVisualQuality(top, { budget: 12, concurrency: 2 }); };
+    const w = window as unknown as { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => number };
+    const idle = w.requestIdleCallback ? w.requestIdleCallback(run, { timeout: 3000 }) : 0;
+    // Fallback timer: idle may never fire on some engines.
+    const safety = window.setTimeout(run, 3000);
+    return () => { cancelled = true; window.clearTimeout(safety); if (idle) window.clearTimeout(idle); };
+  }, [products, merchStats]);
 
   // Catalog Launch Phase — load store promotions (coupons + free-shipping
   // strategy). Safe defaults when unavailable (no coupons, free shipping off).
@@ -598,7 +627,7 @@ function AppProvider({ children }: { children: ReactNode }) {
   const freeShippingEnabled = promotions.freeShippingEnabled;
   const freeShippingThreshold = promotions.freeShippingThreshold;
 
-  return <AC.Provider value={{ user, cart, products, users, reviews, categories, blogs, setBlogs, reloadBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
+  return <AC.Provider value={{ user, cart, products, merchStats, users, reviews, categories, blogs, setBlogs, reloadBlogs, login, guestLogin, logout, signup, changePassword, updateAdminProfile, addToCart, removeFromCart, updateQty, clearCart, setProducts, setUsers, setReviews, setCategories, cartOpen, openCart, closeCart, notif, notify, coupon, applyCoupon, removeCoupon, freeShippingEnabled, freeShippingThreshold }}>{children}</AC.Provider>;
 }
 
 // ============================================================================
@@ -1066,7 +1095,7 @@ function PCard({ product }: { product: Product }) {
   return (
     <article className="product-card group relative">        <Link to={productPath(product)} onClick={selectProduct} className="block focus-visible:outline-luxe-gold" aria-label={`View ${product.name}`}>
         <div className="product-card-media">
-          <img src={image} alt={product.name} loading="lazy" decoding="async" onError={onImageError} className="product-card-image" />
+          <img src={image} alt={product.name} loading="lazy" decoding="async" onError={(e) => { onImageError(e); markBrokenImage(product.id); }} className="product-card-image" />
           {secondImage && (
             <img src={secondImage} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError}
               className="product-card-image product-card-image-secondary" />
@@ -1833,8 +1862,10 @@ function speciesOf(p: Product): string {
 }
 
 function HomeBrowseSection({ products }: { products: Product[] }) {
-  const { reviews } = useApp();
-  const [sort, setSort] = useState('featured');
+  const { reviews, merchStats } = useApp();
+  // Subscribe so quality-store changes (broken images) re-rank this grid.
+  useMerchVisualVersion();
+  const [sort, setSort] = useState('recommended');
   const [cat, setCat] = useState('All');
   const [species, setSpecies] = useState('All');
   const [brand, setBrand] = useState('All');
@@ -1879,22 +1910,26 @@ function HomeBrowseSection({ products }: { products: Product[] }) {
 
   const clearAll = () => { setCat('All'); setSpecies('All'); setBrand('All'); setMaxPrice(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); };
 
-  const f = products
+  const base = products
     .filter(p => cat === 'All' || p.category === cat)
     .filter(p => species === 'All' || speciesOf(p) === species)
     .filter(p => brand === 'All' || (p.brand || 'Luxedge') === brand)
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
     .filter(p => !onlyInStock || p.stock > 0)
     .filter(p => !onlyFreeShipping || p.freeShipping)
-    .filter(p => !onlyNew || p.newArrival)
-    .sort((a, b) => {
-      if (sort === 'price-low') return a.price - b.price;
-      if (sort === 'price-high') return b.price - a.price;
-      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
-      if (sort === 'rated') return (scoreMap.get(b.id)?.avg || 0) - (scoreMap.get(a.id)?.avg || 0);
-      if (sort === 'reviewed') return (scoreMap.get(b.id)?.count || 0) - (scoreMap.get(a.id)?.count || 0);
-      return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
-    });
+    .filter(p => !onlyNew || p.newArrival);
+  // Recommended = smart adaptive merchandising (real stats when available).
+  // Explicit user sorts behave exactly as before.
+  const f = sort === 'recommended'
+    ? rankProducts(base, { stats: merchStats, explore: true })
+    : base.slice().sort((a, b) => {
+        if (sort === 'price-low') return a.price - b.price;
+        if (sort === 'price-high') return b.price - a.price;
+        if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+        if (sort === 'rated') return (scoreMap.get(b.id)?.avg || 0) - (scoreMap.get(a.id)?.avg || 0);
+        if (sort === 'reviewed') return (scoreMap.get(b.id)?.count || 0) - (scoreMap.get(a.id)?.count || 0);
+        return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+      });
 
   const chipBase = 'px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors whitespace-nowrap';
   const chipOff = 'border-luxe-silver/80 text-luxe-gray hover:border-luxe-gold/60 hover:text-luxe-gold bg-white';
@@ -1930,6 +1965,7 @@ function HomeBrowseSection({ products }: { products: Product[] }) {
                 Sort By
                 <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort products"
                   className="text-[12px] px-3 py-1.5 border border-luxe-silver rounded-lg bg-white focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 font-medium text-luxe-black">
+                  <option value="recommended">Recommended</option>
                   <option value="featured">Featured</option>
                   <option value="newest">Newest</option>
                   <option value="rated">Highest Rated</option>
@@ -1988,8 +2024,15 @@ function HomeBrowseSection({ products }: { products: Product[] }) {
   );
 }
 
+// Rerenders consumers whenever the visual-quality store changes (e.g. a broken
+// image is observed) so ranked grids can sink the broken product immediately.
+function useMerchVisualVersion(): number {
+  return useSyncExternalStore(subscribeVisualQuality, getVisualQualityVersion, () => 0);
+}
+
 function HomePage() {
-  const { products, freeShippingEnabled } = useApp();
+  const { products, freeShippingEnabled, merchStats } = useApp();
+  const visualVersion = useMerchVisualVersion();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
   const [nlSaved, setNlSaved] = useState(false);
@@ -1998,8 +2041,18 @@ function HomePage() {
   // images stay available in Shop but are not promoted into editorial slots.
   const featured = products.filter(p => p.isActive);
   const homepageVisualProducts = featured.filter((p) => firstUsableImage(p));
-  const topPicks = homepageVisualProducts.filter(p => p.featured);
-  const newArrivals = homepageVisualProducts.filter(p => p.newArrival);
+  // Smart merchandising: every pool is ordered by the adaptive rank (real
+  // performance stats when available; otherwise visual quality, availability
+  // and freshness). Reranks when the visual-quality store changes.
+  const rankedFeatured = useMemo(
+    () => rankProducts(homepageVisualProducts, { stats: merchStats, explore: false }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [homepageVisualProducts, merchStats, visualVersion],
+  );
+  const rankList = useCallback((list: Product[]) => rankProducts(list, { stats: merchStats, explore: false }), [merchStats, visualVersion]);
+  const pickBest = (pred: (p: Product) => boolean) => rankedFeatured.find((p) => pred(p) && firstUsableImage(p));
+  const topPicks = rankList(homepageVisualProducts.filter(p => p.featured));
+  const newArrivals = rankList(homepageVisualProducts.filter(p => p.newArrival));
   // Deals include either a real compare-at saving or an admin-enabled sale.
   // Never invent a discount when the source catalog has no compare-at price.
   const deals = homepageVisualProducts
@@ -2012,24 +2065,24 @@ function HomePage() {
   // catalog explicitly records CJ as their source and they are customer-visible.
   const cjProducts = homepageVisualProducts.filter(p => /cjdropshipping|\bcj\b/i.test(`${p.supplierSource || ''} ${p.sourceType || ''} ${p.inventorySource || ''}`));
   // "Trending" is merchandising intent from the catalog, not fabricated sales.
-  const trendingProducts = homepageVisualProducts.filter(p => p.featured || p.newArrival || p.saleEnabled).slice(0, 10);
-  const dogEssentials = homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog'));
-  const catEssentials = homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat'));
-  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || featured.find((p) => firstUsableImage(p)));
+  const trendingProducts = rankList(homepageVisualProducts.filter(p => p.featured || p.newArrival || p.saleEnabled)).slice(0, 10);
+  const dogEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog')));
+  const catEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat')));
+  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || rankedFeatured.find((p) => firstUsableImage(p)));
   const heroDogImage = 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
   const heroCatImage = 'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
   const heroParrotImage = 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ara_ararauna_01.jpg/960px-Ara_ararauna_01.jpg';
-  const catVisual = featured.find((p) => firstUsableImage(p) && (p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat'))));
+  const catVisual = pickBest((p) => p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat')));
   const categoryVisuals = [
-    { label: 'Walk & travel', to: '/category/pet-accessories', product: featured.find((p) => /carrier backpack/i.test(p.name) && firstUsableImage(p)) },
-    { label: 'Play', to: '/category/pet-toys', product: featured.find((p) => p.category === 'Pet Toys' && firstUsableImage(p)) },
-    { label: 'Feeding', to: '/category/feeding-water', product: featured.find((p) => p.category === 'Feeding & Water' && firstUsableImage(p)) },
-    { label: 'Comfort', to: '/category/pet-beds', product: featured.find((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p)) || featured.find((p) => p.category === 'Pet Beds' && firstUsableImage(p)) },
+    { label: 'Walk & travel', to: '/category/pet-accessories', product: pickBest((p) => /carrier backpack/i.test(p.name)) },
+    { label: 'Play', to: '/category/pet-toys', product: pickBest((p) => p.category === 'Pet Toys') },
+    { label: 'Feeding', to: '/category/feeding-water', product: pickBest((p) => p.category === 'Feeding & Water') },
+    { label: 'Comfort', to: '/category/pet-beds', product: pickBest((p) => /dog\s+(bed|mat|sofa)/i.test(p.name)) || pickBest((p) => p.category === 'Pet Beds') },
     { label: 'Cat essentials', to: '/category/cat-supplies', product: catVisual },
   ].filter((tile): tile is { label: string; to: string; product: Product } => Boolean(tile.product && firstUsableImage(tile.product)))
     .filter((tile, index, all) => all.findIndex((candidate) => candidate.product.id === tile.product.id) === index);
-  const editorialProduct = featured.find((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name) && firstUsableImage(p))
-    || featured.find((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name) && firstUsableImage(p))
+  const editorialProduct = pickBest((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name))
+    || pickBest((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name))
     || catVisual
     || heroProduct;
   const shipCopy = freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout';
@@ -2429,14 +2482,16 @@ function HomePage() {
 
 function ShopPage() {
   const { slug } = useParams<{ slug?: string }>();
-  const { products } = useApp();
+  const { products, merchStats } = useApp();
+  // Subscribe so quality-store changes (broken images) re-rank the grid.
+  useMerchVisualVersion();
   const nav = useNavigate();
   const [params] = useSearchParams();
 
   const initialCat = slug ? fromSlug(slug) : 'All';
   const [cat, setCat] = useState(initialCat);
   const [q, setQ] = useState(params.get('q') || '');
-  const [sort, setSort] = useState('featured');
+  const [sort, setSort] = useState('recommended');
   const [maxPrice, setMaxPrice] = useState(() => { const m = params.get('max'); return m ? +m : 0; }); // 0 = no limit
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
@@ -2456,7 +2511,7 @@ function ShopPage() {
   useEffect(() => { const qp = params.get('q'); if (qp) trackEvent('search', { search_term: qp, ...utmParams() }); setQ(qp || ''); }, [params]);
   useEffect(() => { const m = params.get('max'); if (m !== null) setMaxPrice(+m); }, [params]);
 
-  const f = products.filter(p => p.isActive)
+  const base = products.filter(p => p.isActive)
     .filter(p => cat === 'All' || p.category === cat)
     .filter(p => isDeals
       ? (p.saleEnabled || p.originalPrice > p.price || dealFallbackIds.has(p.id))
@@ -2464,14 +2519,20 @@ function ShopPage() {
     .filter(p => maxPrice === 0 || p.price <= maxPrice)
     .filter(p => !onlyInStock || p.stock > 0)
     .filter(p => !onlyFreeShipping || p.freeShipping)
-    .filter(p => !onlyNew || p.newArrival)
-    .sort((a, b) => {
-      if (sort === 'price-low') return a.price - b.price;
-      if (sort === 'price-high') return b.price - a.price;
-      if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
-      if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
-      return 0;
-    });
+    .filter(p => !onlyNew || p.newArrival);
+  // Recommended (default) = smart adaptive merchandising — real stats when
+  // available, otherwise visual/availability/freshness. Category relevance is
+  // guaranteed because the category filter above runs first (a high global
+  // scorer can never cross into a category it does not belong to).
+  const f = sort === 'recommended'
+    ? rankProducts(base, { stats: merchStats, explore: true })
+    : base.slice().sort((a, b) => {
+        if (sort === 'price-low') return a.price - b.price;
+        if (sort === 'price-high') return b.price - a.price;
+        if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+        if (sort === 'featured') return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
+        return 0;
+      });
 
   // GA4: fire view_item_list whenever the visible filtered set changes (max 20 rows).
   useEffect(() => {
@@ -2589,6 +2650,7 @@ function ShopPage() {
           </div>
           <select value={sort} onChange={e => setSort(e.target.value)}
             className="shrink-0 text-[12px] bg-transparent border-0 focus:outline-none text-luxe-gray font-medium">
+            <option value="recommended">Recommended</option>
             <option value="featured">Featured</option>
             <option value="newest">Newest</option>
             <option value="price-low">Price: Low to High</option>

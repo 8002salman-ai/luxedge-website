@@ -64,6 +64,8 @@ export interface CatalogProduct {
   commerceReadiness: CommerceReadiness;
   sourceType?: string;
   inventorySource?: string;
+  /** Manual admin pin (products.sort_order > 0 ranks first, ascending). */
+  sortOrder?: number;
   variants: CatalogVariant[];
   seoTitle?: string;
   seoDescription?: string;
@@ -151,6 +153,7 @@ interface DbProductRow {
   supplier_source?: string | null;
   supplier_product_ref?: string | null;
   supplier_url?: string | null;
+  sort_order?: number | null;
   cost_price?: number | null;
   landed_cost?: number | null;
   shipping_cost?: number | null;
@@ -223,7 +226,7 @@ interface DbSettingRow {
 // ============================================================================
 export const CATEGORIES_PUBLIC_SELECT = 'id,name,slug,is_active';
 export const PRODUCTS_PUBLIC_SELECT =
-  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku';
+  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order';
 export const PRODUCT_IMAGES_PUBLIC_SELECT = 'product_id,url,alt_text,is_primary,sort_order,variant_id';
 export const PRODUCT_VARIANTS_PUBLIC_SELECT = 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty';
 export const COUPONS_PUBLIC_SELECT =
@@ -439,6 +442,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
         supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
         supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
         supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
+        sortOrder: num(p.sort_order),
       };
     });
 
