@@ -47,6 +47,7 @@ import {
   type CatalogColumnKey,
 } from '../features/catalog/tableColumns';
 import { parseHtmlPage } from '../features/ai/importer';
+import { prepareImageForUpload } from '../lib/image-upload';
 import { AIImportPanel } from './AIImportPanel';
 import {
   parseCsvImport, classifyDuplicates,
@@ -2509,20 +2510,17 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
 // storage is unavailable (the row then persists only if the URL is kept, so
 // callers should surface the warning honestly).
 // ---------------------------------------------------------------------------
-async function uploadImageToStorage(dataUrl: string, filename: string, contentType: string): Promise<{ url: string; stored: boolean }> {
-  try {
-    const token = getAccessToken();
-    const r = await fetch('/api/upload-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ productId: 'product', filename, contentType, base64: dataUrl }),
-    });
-    const j = await r.json().catch(() => null);
-    if (r.ok && j?.publicUrl) return { url: String(j.publicUrl), stored: true };
-    return { url: dataUrl, stored: false };
-  } catch {
-    return { url: dataUrl, stored: false };
-  }
+async function uploadImageToStorage(dataUrl: string, filename: string, contentType: string): Promise<string> {
+  const token = getAccessToken();
+  const r = await fetch('/api/upload-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ productId: 'product', filename, contentType, base64: dataUrl }),
+  });
+  const j = await r.json().catch(() => null);
+  if (r.ok && j?.publicUrl) return String(j.publicUrl);
+  // Fail honestly — never a phantom data-URL row that vanishes after reload.
+  throw new Error(j?.error || `Image upload failed (HTTP ${r.status})`);
 }
 
 /**
@@ -2618,17 +2616,21 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
       const startLen = product.images.length;
       const added: CatalogImage[] = [];
       for (const f of picked) {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error('read failed'));
-          r.readAsDataURL(f);
-        });
-        const { url: stored, stored: ok } = await uploadImageToStorage(dataUrl, f.name, f.type);
-        added.push({ id: uid(), productId: product.id, url: stored, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
-        if (!ok) notify(`Storage upload unavailable — image kept locally (${f.name})`, 'error');
+        try {
+          // Downscale/convert client-side first so the upload fits the storage
+          // bucket's 5 MB limit and allowed MIME types (fixes phantom uploads
+          // that used to fall back to inline base64 and vanish on reload).
+          const prep = await prepareImageForUpload(f);
+          const stored = await uploadImageToStorage(prep.dataUrl, prep.filename, prep.contentType);
+          added.push({ id: uid(), productId: product.id, url: stored, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
+        } catch (e) {
+          notify(`Could not upload ${f.name}: ${(e as Error).message}. Try a smaller image or add an image URL instead.`, 'error');
+        }
       }
-      onProduct({ ...product, images: [...product.images, ...added] });
-      notify(picked.length === 1 ? 'Image uploaded' : `${picked.length} images uploaded`);
+      if (added.length) {
+        onProduct({ ...product, images: [...product.images, ...added] });
+        notify(added.length === 1 ? 'Image uploaded' : `${added.length} images uploaded`);
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -2694,7 +2696,7 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
     setProcessing(idx);
     try {
       const removed = await removeImageBackground(img.url);
-      const { url: stored } = await uploadImageToStorage(removed, `bg-removed-${idx}.png`, 'image/png');
+      const stored = await uploadImageToStorage(removed, `bg-removed-${idx}.png`, 'image/png');
       onProduct({ ...product, images: product.images.map((x, i) => (i === idx ? { ...x, url: stored } : x)) });
       notify('Background removed — the new version is saved as the image.');
     } catch (e) {

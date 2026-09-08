@@ -181,6 +181,24 @@ describe('catalog repository (local adapter)', () => {
     expect(after!.images[1].variantId).toBe(vid);
   });
 
+  it('getProduct shows inline-base64 image rows the bulk loader hides', async () => {
+    // Regression: an upload that fell back to a data: URL is persisted, but
+    // loadRefs skips data:* rows on bulk loads. getProduct must merge the
+    // product's OWN rows back in so the admin editor never hides a saved
+    // image (which previously made the next Save delete it silently).
+    const p = await createProduct({ ...base });
+    await saveProductImages(p.id, [
+      { url: 'https://img/real.jpg', isPrimary: true, sortOrder: 0 },
+      { url: 'data:image/webp;base64,UklGRi4CAABXRUJQVlA4ICICAACQAgCdASoAA', sortOrder: 1 },
+    ]);
+    const loaded = await getProduct(p.id);
+    expect(loaded!.images.length).toBe(2);
+    expect(loaded!.images.map((i) => i.url)).toEqual([
+      'https://img/real.jpg',
+      'data:image/webp;base64,UklGRi4CAABXRUJQVlA4ICICAACQAgCdASoAA',
+    ]);
+  });
+
   it('variant manager replaces the set', async () => {
     const p = await createProduct({ ...base });
     await saveProductVariants(p.id, [

@@ -57,22 +57,35 @@ async function probeColumnsBySelect(table: string, candidates: string[]): Promis
   // the select succeeds (all remaining exist) or no candidates are left.
   // Two error shapes occur across PostgREST versions: PGRST204
   // ("Could not find the 'X' column") and 42703 ("column table.X does not exist").
-  for (let i = 0; i <= candidates.length && remaining.length; i++) {
-    u.searchParams.set('select', remaining.join(','));
-    let res: Response | null = null;
-    try {
-      res = await fetch(u.toString(), { headers: h.call(d, 'GET') });
-    } catch {
-      return existing.size ? existing : null;
+  // Retry once on transient failure: a single dropped probe makes image/variant
+  // inserts omit required legacy columns (e.g. product_images.storage_path is
+  // NOT NULL) and every subsequent Save in the session fails silently.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let failed = false;
+    for (let i = 0; i <= candidates.length && remaining.length; i++) {
+      u.searchParams.set('select', remaining.join(','));
+      let res: Response | null = null;
+      try {
+        res = await fetch(u.toString(), { headers: h.call(d, 'GET') });
+      } catch {
+        failed = true;
+        break;
+      }
+      if (res.ok) {
+        remaining.forEach((c) => existing.add(c));
+        break;
+      }
+      const text = await res.text().catch(() => '');
+      const m = text.match(/Could not find the '([^']+)' column/) || text.match(new RegExp(`column ${table}\.([^ ]+) does not exist`));
+      if (!m) {
+        failed = true;
+        break;
+      }
+      remaining = remaining.filter((c) => c !== m[1]);
     }
-    if (res.ok) {
-      remaining.forEach((c) => existing.add(c));
-      break;
-    }
-    const text = await res.text().catch(() => '');
-    const m = text.match(/Could not find the '([^']+)' column/) || text.match(new RegExp(`column ${table}\.([^ ]+) does not exist`));
-    if (!m) return existing.size ? existing : null;
-    remaining = remaining.filter((c) => c !== m[1]);
+    if (!failed) return existing.size ? existing : null;
+    // Transient network/parse failure — retry the whole probe once before
+    // giving up (see comment above for why this matters).
   }
   return existing.size ? existing : null;
 }
@@ -524,7 +537,13 @@ export async function getProduct(id: string): Promise<CatalogProduct | null> {
   const db = getDb();
   const [row, { cats, imgs, vars }] = await Promise.all([db.get<ProductRow>('products', id), loadRefs()]);
   if (!row || typeof row.id !== 'string') return null;
-  return rowToProduct(row, cats, imgs, vars);
+  // loadRefs skips inline-base64 rows (they bloat bulk loads), but the editor
+  // must see everything actually saved for THIS product — otherwise a hidden
+  // row is deleted on the next Save (replace semantics) and images silently
+  // vanish. Merge the product's own rows back in, keeping bulk loads light.
+  const own = await db.list<ImageRow>('product_images', { limit: 50, filters: { product_id: id } });
+  const merged = Array.isArray(own) && own.length ? [...imgs.filter((i) => i.product_id !== id), ...own] : imgs;
+  return rowToProduct(row, cats, merged, vars);
 }
 
 async function uniqueSlug(db: DbAdapter, base: string, excludeId?: string): Promise<string> {
