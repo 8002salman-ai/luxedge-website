@@ -267,7 +267,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
 
 interface DashOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
 
-function ADashboard() {
+export function ADashboard() {
   const { users } = useApp();
   const [realOrders, setRealOrders] = useState<DashOrderRow[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
