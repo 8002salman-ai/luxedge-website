@@ -1684,9 +1684,7 @@ function ProductDetailPage() {
             </div>
           </div>
 
-          {product.deliveryMinDays != null && product.deliveryMaxDays != null && (
-            <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Estimated delivery: {product.deliveryMinDays}–{product.deliveryMaxDays} business days</p>
-          )}
+          <p className="flex items-center gap-2 text-xs text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold shrink-0" /> Delivery timing confirmed during order processing.</p>
 
           {isFoodOrFeedProduct(product) && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
@@ -3555,7 +3553,7 @@ function ShippingPolicyPage() {
   return (
     <LegalPage title="Shipping Policy" updated="August 26, 2026">
       <LS t="Where We Ship"><p>Luxedge currently offers shipping within the United States where the destination is supported by the product, supplier, and carrier. Available destinations and any exclusions are shown during checkout. International shipping is not currently offered. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
-      <LS t="Processing Time"><p>Orders are generally prepared within <strong>1–3 business days</strong> after successful payment confirmation, unless a different estimate is shown on the product page or at checkout. You will receive shipment and tracking information when available.</p></LS>
+      <LS t="Processing Time"><p>Delivery timing is confirmed during order processing. You will receive shipment and tracking information when available.</p></LS>
       <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Delivery estimates are estimates, not guarantees. Processing and carrier times can vary by product and destination. Express shipping is not currently offered unless specifically shown at checkout.</p></div></LS>
       <LS t="Shipping Promotions"><p>Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout. The final shipping charge shown before payment is the controlling amount. Promotions may have exclusions and can change or end without notice.</p></LS>
       <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
@@ -3571,7 +3569,7 @@ function FAQPage() {
   const [open, setOpen] = useState<string | null>(null);
   const faqs = [
     { c: 'Orders & Shipping', qs: [
-      { q: 'How long does shipping take?', a: 'Standard delivery is estimated at 5–14 business days depending on the product (each product page shows its specific window). Processing takes an additional 1–3 business days before shipment. Express shipping is not currently offered.' },
+      { q: 'How long does shipping take?', a: 'Delivery timing is confirmed during order processing and tracking is shared when available. Express shipping is not currently offered unless specifically shown at checkout.' },
       { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility, exclusions, and the final shipping charge are shown in the cart or at checkout.' },
       { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
       { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States where the product and carrier support the destination. International shipping is not currently offered.' },
