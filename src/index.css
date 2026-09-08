@@ -130,6 +130,23 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* ── Large-screen scaling ──
+ * The whole design is rem-based, so scaling the root font-size scales every
+ * section, card, and type block proportionally. On wide/high-res monitors
+ * the site grows to fill the viewport instead of sitting small and centered
+ * (the browser-zoom-free equivalent of "zoom in to read it"). Below 1600px
+ * the base 16px is unchanged, so phones, tablets, and 1440px laptops are
+ * unaffected. */
+@media (min-width: 1600px) {
+  html { font-size: 17px; }
+}
+@media (min-width: 1920px) {
+  html { font-size: 18px; }
+}
+@media (min-width: 2560px) {
+  html { font-size: 20px; }
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--color-text-primary);
