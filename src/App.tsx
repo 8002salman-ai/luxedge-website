@@ -1005,7 +1005,7 @@ function Footer() {
                 Mon – Fri · 9AM – 6PM CT
               </div>
             </div>
-            <p className="mt-5 text-xs leading-relaxed text-luxe-white/50 max-w-[230px]">
+            <p className="mt-5 text-xs leading-relaxed text-luxe-white/65 max-w-[230px]">
               Real people answer — reach out any time and we'll point you in the right direction.
             </p>
           </div>
@@ -1041,7 +1041,7 @@ function Footer() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/55">
+            <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/65">
               <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
               <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments powered by Stripe.' : 'Payments launching soon — keep exploring the collection.'}</span>
             </div>
@@ -1053,7 +1053,7 @@ function Footer() {
       <div className="border-t border-luxe-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-            <p className="text-[13px] text-luxe-white/55 text-center md:text-left">
+            <p className="text-[13px] text-luxe-white/65 text-center md:text-left">
               © {new Date().getFullYear()} Luxedge. All rights reserved.<br />
               Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.
             </p>
@@ -1063,7 +1063,7 @@ function Footer() {
               <Link to="/returns" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Returns</Link>
               <a href="/sitemap.xml" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</a>
             </div>
-            <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/55">
+            <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/65">
               <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) · English
             </div>
           </div>
