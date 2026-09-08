@@ -173,7 +173,9 @@ export function CatalogProductsPage() {
   const [fSpecies, setFSpecies] = useState('all');
   const [fImage, setFImage] = useState('all');
   const [fSeo, setFSeo] = useState('all');
-  const [sort, setSort] = useState('name');
+  // Default: newest-first — the products the owner most recently added are the
+  // ones they care about; alphabetical order hides them in a growing catalog.
+  const [sort, setSort] = useState('newest');
   const [delId, setDelId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -909,9 +911,11 @@ export function CatalogProductsPage() {
             below the fold and "side scroll" appears broken. */}
         <div className="overflow-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 250px)' }}>
           <table className="w-full min-w-[1240px]">
-            <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs text-gray-500 uppercase shadow-sm">
+            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase shadow-sm">
               <tr>
-                <th className="px-4 py-3 w-8">
+                {/* sticky on each th (not thead): pins the column-name bar to the
+                    top of the scroll area while side-scrolling the wide table */}
+                <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 w-8">
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -934,7 +938,7 @@ export function CatalogProductsPage() {
                       onDrop={(e) => { e.preventDefault(); if (dragCol) reorderColumns(dragCol, k); setDragCol(null); }}
                       onDragEnd={() => setDragCol(null)}
                       onClick={s ? () => headerSort(k) : undefined}
-                      className={`px-4 py-3 whitespace-nowrap select-none ${dragCol === k ? 'opacity-40' : ''} ${s ? 'cursor-pointer hover:text-gray-800' : ''}`}
+                      className={`sticky top-0 z-10 bg-gray-50 px-4 py-3 whitespace-nowrap select-none ${dragCol === k ? 'opacity-40' : ''} ${s ? 'cursor-pointer hover:text-gray-800' : ''}`}
                       title={s ? `Click to sort by ${label} — drag to reorder columns` : (COLUMN_TIPS[k] ? `${COLUMN_TIPS[k]} — drag to reorder` : 'Drag to reorder columns')}
                     >
                       <span className="inline-flex items-center gap-1">
