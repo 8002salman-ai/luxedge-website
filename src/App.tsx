@@ -35,7 +35,7 @@ import {
   ChevronDown, ChevronRight,
   Globe01, Clock, Send01, Headphones01, Stars01,
   EyeOff,
-  Sliders01, Feather, Heart,
+  Sliders01, Heart,
 } from '@untitledui/icons';
 import { YoutubeLogo } from '@phosphor-icons/react';
 
@@ -1871,190 +1871,6 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
   );
 }
 
-// --------------------------------------------------------------------------
-// HOMEPAGE PRODUCT BROWSER — a compact shop-style section: Sort By dropdown
-// plus real-data facet filters (category / species / brand / price /
-// availability), each with honest counts from the live catalog. No invented
-// facets: a facet only appears when at least one active product has it.
-// --------------------------------------------------------------------------
-const HOME_PRICE_BUCKETS = [
-  { id: 25, label: 'Under $25' },
-  { id: 50, label: '$25 – $50' },
-  { id: 100, label: '$50 – $100' },
-  { id: 1000, label: 'Over $100' },
-] as const;
-
-function speciesOf(p: Product): string {
-  const s = (p.intendedSpecies || '').toUpperCase();
-  if (s === 'DOG' || s === 'CAT' || s === 'BOTH') return s === 'DOG' ? 'Dog' : s === 'CAT' ? 'Cat' : 'Dog & Cat';
-  if (p.category === 'Bird Supplies') return 'Birds';
-  if (p.category === 'Horse') return 'Horse';
-  if (p.category === 'Cattle') return 'Cattle';
-  return 'Other';
-}
-
-function HomeBrowseSection({ products }: { products: Product[] }) {
-  const { reviews, merchStats } = useApp();
-  // Subscribe so quality-store changes (broken images) re-rank this grid.
-  useMerchVisualVersion();
-  const [sort, setSort] = useState('recommended');
-  const [cat, setCat] = useState('All');
-  const [species, setSpecies] = useState('All');
-  const [brand, setBrand] = useState('All');
-  const [maxPrice, setMaxPrice] = useState(0);
-  const [onlyInStock, setOnlyInStock] = useState(false);
-  const [onlyFreeShipping, setOnlyFreeShipping] = useState(false);
-  const [onlyNew, setOnlyNew] = useState(false);
-
-  // Verified-review scores (real user reviews only — same source as PCard).
-  const scoreMap = useMemo(() => {
-    const map = new Map<string, { sum: number; count: number }>();
-    for (const r of reviews) {
-      if (r.status !== 'approved') continue;
-      const cur = map.get(r.productId) || { sum: 0, count: 0 };
-      cur.sum += r.rating; cur.count += 1;
-      map.set(r.productId, cur);
-    }
-    return new Map([...map].map(([id, v]) => [id, { avg: v.sum / v.count, count: v.count }]));
-  }, [reviews]);
-
-  // Facet options derived from the live catalog — only real values with counts.
-  const facets = useMemo(() => {
-    const catCounts = new Map<string, number>();
-    const speciesCounts = new Map<string, number>();
-    const brandCounts = new Map<string, number>();
-    for (const p of products) {
-      const c = p.category || 'Pet Supplies';
-      catCounts.set(c, (catCounts.get(c) || 0) + 1);
-      const s = speciesOf(p);
-      speciesCounts.set(s, (speciesCounts.get(s) || 0) + 1);
-      const b = p.brand || 'Luxedge';
-      brandCounts.set(b, (brandCounts.get(b) || 0) + 1);
-    }
-    return {
-      cats: [...catCounts].sort((a, b) => b[1] - a[1]),
-      species: [...speciesCounts].sort((a, b) => b[1] - a[1]),
-      brands: [...brandCounts].sort((a, b) => b[1] - a[1]),
-    };
-  }, [products]);
-
-  const activeFilters = (cat !== 'All' ? 1 : 0) + (species !== 'All' ? 1 : 0) + (brand !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
-
-  const clearAll = () => { setCat('All'); setSpecies('All'); setBrand('All'); setMaxPrice(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); };
-
-  const base = products
-    .filter(p => cat === 'All' || p.category === cat)
-    .filter(p => species === 'All' || speciesOf(p) === species)
-    .filter(p => brand === 'All' || (p.brand || 'Luxedge') === brand)
-    .filter(p => maxPrice === 0 || p.price <= maxPrice)
-    .filter(p => !onlyInStock || p.stock > 0)
-    .filter(p => !onlyFreeShipping || p.freeShipping)
-    .filter(p => !onlyNew || p.newArrival);
-  // Recommended = smart adaptive merchandising (real stats when available).
-  // Explicit user sorts behave exactly as before.
-  const f = sort === 'recommended'
-    ? rankProducts(base, { stats: merchStats, explore: true })
-    : base.slice().sort((a, b) => {
-        if (sort === 'price-low') return a.price - b.price;
-        if (sort === 'price-high') return b.price - a.price;
-        if (sort === 'newest') return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
-        if (sort === 'rated') return (scoreMap.get(b.id)?.avg || 0) - (scoreMap.get(a.id)?.avg || 0);
-        if (sort === 'reviewed') return (scoreMap.get(b.id)?.count || 0) - (scoreMap.get(a.id)?.count || 0);
-        return (b.featured ? 1 : 0) - (a.featured ? 1 : 0);
-      });
-
-  const chipBase = 'px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors whitespace-nowrap';
-  const chipOff = 'border-luxe-silver/80 text-luxe-gray hover:border-luxe-gold/60 hover:text-luxe-gold bg-white';
-  const chipOn = 'border-luxe-gold bg-luxe-gold-soft text-luxe-gold-dark';
-  const FacetRow = ({ label, options, value, onPick }: {
-    label: string; options: [string, number][]; value: string;
-    onPick: (v: string) => void;
-  }) => (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">{label}</span>
-      <button onClick={() => onPick('All')} className={`${chipBase} ${value === 'All' ? chipOn : chipOff}`}>All</button>
-      {options.map(([opt, count]) => (
-        <button key={opt} onClick={() => onPick(value === opt ? 'All' : opt)} className={`${chipBase} ${value === opt ? chipOn : chipOff}`}>
-          {opt} <span className="opacity-60">({count})</span>
-        </button>
-      ))}
-    </div>
-  );
-
-  return (
-    <section className="section-compact bg-white">
-      <div className="max-w-7xl mx-auto px-4">
-        <Reveal>
-          <SectionHeader eyebrow="Collection" title="Browse the Collection" to="/shop" linkLabel="View all in Shop" />
-        </Reveal>
-
-        <Reveal delay={60}>
-          <div className="space-y-3">
-            {/* Toolbar: result count + Sort By */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] text-luxe-gray">{f.length} product{f.length !== 1 ? 's' : ''}</p>
-              <label className="flex items-center gap-2 text-[12px] font-semibold text-luxe-gray">
-                Sort By
-                <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort products"
-                  className="text-[12px] px-3 py-1.5 border border-luxe-silver rounded-lg bg-white focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20 font-medium text-luxe-black">
-                  <option value="recommended">Recommended</option>
-                  <option value="featured">Featured</option>
-                  <option value="newest">Newest</option>
-                  <option value="rated">Highest Rated</option>
-                  <option value="reviewed">Most Reviewed</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                </select>
-              </label>
-            </div>
-
-            {/* Facet chips with real counts */}
-            <FacetRow label="Category" options={facets.cats} value={cat} onPick={setCat} />
-            <FacetRow label="Species" options={facets.species} value={species} onPick={setSpecies} />
-            <FacetRow label="Brand" options={facets.brands} value={brand} onPick={setBrand} />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">Price</span>
-              <button onClick={() => setMaxPrice(0)} className={`${chipBase} ${maxPrice === 0 ? chipOn : chipOff}`}>Any</button>
-              {HOME_PRICE_BUCKETS.map(b => {
-                const count = products.filter(p => b.id === 1000 ? p.price > 100 : p.price <= b.id).length;
-                return (
-                  <button key={b.id} onClick={() => setMaxPrice(maxPrice === b.id ? 0 : b.id)} className={`${chipBase} ${maxPrice === b.id ? chipOn : chipOff}`}>
-                    {b.label} <span className="opacity-60">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-luxe-gray mr-1">Availability</span>
-              {([['In stock', onlyInStock, setOnlyInStock], ['Free shipping', onlyFreeShipping, setOnlyFreeShipping], ['New arrivals', onlyNew, setOnlyNew]] as const).map(([label, active, setter]) => (
-                <button key={label} onClick={() => setter(!active)} className={`${chipBase} ${active ? chipOn : chipOff}`}>{label}</button>
-              ))}
-            </div>
-
-            {activeFilters > 0 && (
-              <button onClick={clearAll} className="text-[12px] font-semibold text-luxe-gold hover:text-luxe-gold-dark hover:underline">
-                Clear all filters ({activeFilters})
-              </button>
-            )}
-          </div>
-        </Reveal>
-
-        <Reveal delay={90}>
-          {f.length > 0 ? (
-            <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
-              {f.slice(0, 10).map(p => <PCard key={`browse-${p.id}`} product={p} />)}
-            </div>
-          ) : (
-            <div className="mt-5 text-center py-14">
-              <p className="font-serif text-lg font-bold text-luxe-black mb-1">No products match these filters</p>
-              <button onClick={clearAll} className="mt-3 px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors">Clear all filters</button>
-            </div>
-          )}
-        </Reveal>
-      </div>
-    </section>
-  );
-}
 
 // Rerenders consumers whenever the visual-quality store changes (e.g. a broken
 // image is observed) so ranked grids can sink the broken product immediately.
@@ -2093,11 +1909,6 @@ function HomePage() {
       const saving = (p: Product) => p.originalPrice > p.price ? 1 - p.price / p.originalPrice : 0;
       return saving(b) - saving(a);
     });
-  // Supplier sections are evidence-based: CJ rows appear only when the live
-  // catalog explicitly records CJ as their source and they are customer-visible.
-  const cjProducts = homepageVisualProducts.filter(p => /cjdropshipping|\bcj\b/i.test(`${p.supplierSource || ''} ${p.sourceType || ''} ${p.inventorySource || ''}`));
-  // "Trending" is merchandising intent from the catalog, not fabricated sales.
-  const trendingProducts = rankList(homepageVisualProducts.filter(p => p.featured || p.newArrival || p.saleEnabled)).slice(0, 10);
   const dogEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog')));
   const catEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat')));
   const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || rankedFeatured.find((p) => firstUsableImage(p)));
@@ -2105,27 +1916,43 @@ function HomePage() {
   const heroCatImage = 'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
   const heroParrotImage = 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ara_ararauna_01.jpg/960px-Ara_ararauna_01.jpg';
   const catVisual = pickBest((p) => p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat')));
-  const categoryVisuals = [
-    { label: 'Walk & travel', to: '/category/pet-accessories', product: pickBest((p) => /carrier backpack/i.test(p.name)) },
-    { label: 'Play', to: '/category/pet-toys', product: pickBest((p) => p.category === 'Pet Toys') },
-    { label: 'Feeding', to: '/category/feeding-water', product: pickBest((p) => p.category === 'Feeding & Water') },
-    { label: 'Comfort', to: '/category/pet-beds', product: pickBest((p) => /dog\s+(bed|mat|sofa)/i.test(p.name)) || pickBest((p) => p.category === 'Pet Beds') },
-    { label: 'Cat essentials', to: '/category/cat-supplies', product: catVisual },
-  ].filter((tile): tile is { label: string; to: string; product: Product } => Boolean(tile.product && firstUsableImage(tile.product)))
-    .filter((tile, index, all) => all.findIndex((candidate) => candidate.product.id === tile.product.id) === index);
+
+  // ── Three curated product sections (4 products each) — no repeats ──
+  const newArrivals4 = newArrivals.slice(0, 4);
+  const usedOnHome = new Set(newArrivals4.map(p => p.id));
+  const dogCatPool = [...dogEssentials, ...catEssentials]
+    .filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i && !usedOnHome.has(p.id));
+  const dogCatPicks = rankList(dogCatPool).slice(0, 4);
+  const usedInSections = new Set([...usedOnHome, ...dogCatPicks.map(p => p.id)]);
+  const curatedPicks = rankedFeatured.filter(p => !usedInSections.has(p.id)).slice(0, 4);
+  const curatedList = [...newArrivals4, ...dogCatPicks, ...curatedPicks];
+
+  // Image-led tiles for the compact Popular Categories strip (real catalog
+  // images when available, curated fallbacks otherwise).
+  const catImg = (pred: (p: Product) => boolean, fallback: string) => firstUsableImage(pickBest(pred)) || fallback;
+  const popularCategories = [
+    { label: 'Dog Walking', to: '/category/dog-supplies', img: catImg((p) => p.category === 'Dog Supplies', heroDogImage) },
+    { label: 'Beds & Mats', to: '/category/pet-beds', img: catImg((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) || p.category === 'Pet Beds', LUXEDGE_IMAGE_FALLBACK) },
+    { label: 'Grooming', to: '/category/grooming', img: catImg((p) => p.category === 'Grooming', LUXEDGE_IMAGE_FALLBACK) },
+    { label: 'Feeding', to: '/category/feeding-water', img: catImg((p) => p.category === 'Feeding & Water', LUXEDGE_IMAGE_FALLBACK) },
+    { label: 'Toys', to: '/category/pet-toys', img: catImg((p) => p.category === 'Pet Toys', LUXEDGE_IMAGE_FALLBACK) },
+    { label: 'Travel', to: '/category/pet-accessories', img: catImg((p) => /carrier backpack/i.test(p.name), LUXEDGE_IMAGE_FALLBACK) },
+    { label: 'Cat Essentials', to: '/category/cat-supplies', img: catImg((p) => p.category === 'Cat Supplies', heroCatImage) },
+    { label: 'Birds', to: '/category/bird-supplies', img: '/bird-avatar.jpg' },
+    { label: 'New Arrivals', to: '/shop', img: firstUsableImage(newArrivals4[0]) || LUXEDGE_IMAGE_FALLBACK },
+  ];
   const editorialProduct = pickBest((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name))
     || pickBest((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name))
     || catVisual
     || heroProduct;
   const shipCopy = freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout';
 
-  // GA4: fire view_item_list once for the homepage featured order on load.
+  // GA4: fire view_item_list once for the homepage curated order on load.
   useEffect(() => {
-    if (topPicks.length === 0 && trendingProducts.length === 0) return;
-    const list = (topPicks.length ? topPicks : trendingProducts).slice(0, 20);
+    if (curatedList.length === 0) return;
     trackEvent('view_item_list', {
-      item_list_id: 'homepage-featured',
-      items: list.map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
+      item_list_id: 'homepage-curated',
+      items: curatedList.map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
       ...utmParams(),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2140,8 +1967,7 @@ function HomePage() {
           <div className="hero-stagger text-center lg:text-left">
             <p className="eyebrow mb-4">Sourced worldwide. Chosen with care.</p>
             <h1 className="home-hero-title">
-              <span className="block">The Best Finds for Every Pet,</span>
-              <span className="block">Thoughtfully <em>Curated.</em></span>
+              The Best Finds for Every Pet, <em>Thoughtfully Curated.</em>
             </h1>
             <p className="home-hero-copy">
               We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.
@@ -2154,10 +1980,16 @@ function HomePage() {
                 Explore categories
               </Link>
             </div>
-            <div className="home-hero-notes" aria-label="Luxedge shopping information">
-              <span><Truck01 strokeWidth={1.5} size={12} aria-hidden="true" /> {shipCopy}</span>
-              <span><RefreshCcw01 strokeWidth={1.5} size={12} aria-hidden="true" /> Returns &amp; support</span>
-              <span><Headphones01 strokeWidth={1.5} size={12} aria-hidden="true" /> Real customer support</span>
+            {/* Free-gift campaign — a small elegant chip, never an oversized block */}
+            <div className="mt-4 flex justify-center lg:justify-start">
+              <Link
+                to="/free-pet-gift"
+                className="inline-flex items-center gap-2 rounded-full border border-[#d9b98a] bg-white/75 px-3.5 py-2 text-[12px] font-semibold text-[#7c5a10] shadow-sm transition hover:border-[#9a6f16] hover:bg-white"
+              >
+                <span aria-hidden="true">🎁</span>
+                New customer gift — claim one eligible item up to $15 FREE
+                <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
+              </Link>
             </div>
           </div>
 
@@ -2235,19 +2067,9 @@ function HomePage() {
           </Reveal>
           <Reveal delay={40}>
             <div className="category-scroll">
-              {[
-                { label: 'Dog Walking', to: '/category/dog-supplies', icon: <Truck01 strokeWidth={1.5} size={14} /> },
-                { label: 'Beds & Mats', to: '/category/pet-beds', icon: <Star01 strokeWidth={1.5} size={14} /> },
-                { label: 'Grooming', to: '/category/grooming', icon: <Stars01 strokeWidth={1.5} size={14} /> },
-                { label: 'Feeding', to: '/category/feeding-water', icon: <Zap strokeWidth={1.5} size={14} /> },
-                { label: 'Toys', to: '/category/pet-toys', icon: <Star01 strokeWidth={1.5} size={14} /> },
-                { label: 'Travel', to: '/category/pet-accessories', icon: <Globe01 strokeWidth={1.5} size={14} /> },
-                { label: 'Cat Essentials', to: '/category/cat-supplies', icon: <Stars01 strokeWidth={1.5} size={14} /> },
-                { label: 'Birds', to: '/category/bird-supplies', icon: <Feather strokeWidth={1.5} size={14} /> },
-                { label: 'New Arrivals', to: '/shop', icon: <Zap strokeWidth={1.5} size={14} /> },
-              ].map((cat) => (
+              {popularCategories.map((cat) => (
                 <Link key={cat.label} to={cat.to} className="category-pill">
-                  <span className="text-luxe-gold" aria-hidden="true">{cat.icon}</span>
+                  <img src={cat.img} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError} />
                   {cat.label}
                 </Link>
               ))}
@@ -2281,35 +2103,6 @@ function HomePage() {
           </Reveal>
         </section>
 
-      {/* â•â•â•â•â•â•â•â• SHOP BY CATEGORY â•â•â•â•â•â•â•â• */}
-      <section className="section-compact bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal className="mb-5">
-            <p className="eyebrow mb-2">Shop by category</p>
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
-              <h2 className="section-title">Essentials for better everyday moments.</h2>
-              <Link to="/shop" className="editorial-link text-luxe-gold">View the collection <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="editorial-category-grid">
-              {categoryVisuals.map((tile, index) => (
-                <Link key={`${tile.label}-${tile.product.id}`} to={tile.to} className={`editorial-category-tile group ${index < 4 ? 'editorial-category-large' : 'editorial-category-small'} ${index === 1 ? 'editorial-category-crop' : ''}`}>
-                  <img src={firstUsableImage(tile.product) || LUXEDGE_IMAGE_FALLBACK} alt={tile.product.name} loading="lazy" decoding="async" onError={onImageError} />
-                  <div className="editorial-category-overlay" aria-hidden="true" />
-                  <span className="editorial-category-name">{tile.label}</span>
-                  <ArrowRight strokeWidth={1.5} size={15} className="editorial-category-arrow" aria-hidden="true" />
-                </Link>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* â•â•â•â•â•â•â•â• Ad: After Categories â•â•â•â•â•â•â•â• */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_categories" /></div>
-
-
       {/* â•â•â•â•â•â•â•â• PRODUCT SECTIONS (or premium empty-catalog state) â•â•â•â•â•â•â•â• */}
       {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
           show ONE premium curation notice instead of empty product grids. No
@@ -2329,56 +2122,42 @@ function HomePage() {
         </section>
       ) : (
         <>
-          {/* New Arrivals — real newArrival flag, admin-set */}
-          {newArrivals.length > 0 && (
+          {/* New Arrivals — real newArrival flag, admin-set, capped at 4 */}
+          {newArrivals4.length > 0 && (
             <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
                 <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(newArrivals.length, 10))}>
-                    {newArrivals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  <div className={productGridClass(Math.min(newArrivals4.length, 4))}>
+                    {newArrivals4.map(p => <PCard key={p.id} product={p} />)}
                   </div>
                 </Reveal>
               </div>
             </section>
           )}
 
-          {/* Trending — real catalog merchandising flags only; no fake sales/rankings */}
-          {trendingProducts.length > 0 && (
+          {/* Best for Dogs & Cats — mixed category picks, no duplicates with New Arrivals */}
+          {dogCatPicks.length > 0 && (
             <section className="section-compact bg-white">
               <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Worth a closer look" title="Trending Now" to="/shop" /></Reveal>
+                <Reveal><SectionHeader eyebrow="For Dogs & Cats" title="Best for Dogs & Cats" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-                    {trendingProducts.map(p => <PCard key={`trending-${p.id}`} product={p} />)}
+                  <div className={productGridClass(Math.min(dogCatPicks.length, 4))}>
+                    {dogCatPicks.map(p => <PCard key={`dc-${p.id}`} product={p} />)}
                   </div>
                 </Reveal>
               </div>
             </section>
           )}
 
-          {/* CJ listings — only active catalog products with explicit CJ source evidence */}
-          {cjProducts.length > 0 && (
+          {/* Curated Picks — the ranked collection minus anything shown above */}
+          {curatedPicks.length > 0 && (
             <section className="section-compact bg-luxe-cream">
               <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Supplier-verified collection" title="CJ Pet Picks" to="/shop" /></Reveal>
+                <Reveal><SectionHeader eyebrow="Curated" title="Curated Picks" to="/shop" /></Reveal>
                 <Reveal delay={60}>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-                    {cjProducts.slice(0, 10).map(p => <PCard key={`cj-${p.id}`} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
-
-          {/* Top Picks — real featured flag (admin merchandising decision) */}
-          {topPicks.length > 0 && (
-            <section className="section-compact bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Curated" title="Top Picks" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(topPicks.length, 10))}>
-                    {topPicks.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
+                  <div className={productGridClass(Math.min(curatedPicks.length, 4))}>
+                    {curatedPicks.map(p => <PCard key={`curated-${p.id}`} product={p} />)}
                   </div>
                 </Reveal>
               </div>
@@ -2387,37 +2166,6 @@ function HomePage() {
 
           {/* â•â•â•â•â•â•â•â• Ad: Between Product Sections â•â•â•â•â•â•â•â• */}
           <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
-
-          {/* Dog Essentials — real category data */}
-          {dogEssentials.length > 0 && (
-            <section className="section-compact bg-luxe-cream">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="For Dogs" title="Dog Essentials" to="/category/dog-supplies" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(dogEssentials.length, 10))}>
-                    {dogEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
-
-          {/* Cat Essentials — real category data */}
-          {catEssentials.length > 0 && (
-            <section className="section-compact bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="For Cats" title="Cat Essentials" to="/category/cat-supplies" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(catEssentials.length, 10))}>
-                    {catEssentials.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
-              </div>
-            </section>
-          )}
-
-          {/* All Products — browsable collection (Sort By + facet filters with counts) */}
-          {featured.length > 0 && <HomeBrowseSection products={homepageVisualProducts} />}
         </>
       )}
 
@@ -2442,20 +2190,6 @@ function HomePage() {
         </section>
       )}
 
-      {/* â•â•â•â•â•â•â•â• ON SALE (only when real compare-at pricing exists) â•â•â•â•â•â•â•â• */}
-      {deals.length > 0 && (
-        <section className="section-compact bg-luxe-cream">
-          <div className="max-w-7xl mx-auto px-4">
-            <Reveal><SectionHeader eyebrow="Offers" title="On Sale Now" to="/shop?q=deal" /></Reveal>
-            <Reveal delay={60}>
-              <div className={productGridClass(Math.min(deals.length, 10))}>
-                {deals.slice(0, 10).map(p => <PCard key={p.id} product={p} />)}
-              </div>
-            </Reveal>
-          </div>
-        </section>
-      )}
-
       {/* â•â•â•â•â•â•â•â• LATEST FROM LUXEDGE MEDIA â•â•â•â•â•â•â•â• */}
       <MediaLatestSection />
 
@@ -2465,11 +2199,10 @@ function HomePage() {
           <Reveal>
             <div className="trust-pill-row">
               {[
-                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout' },
-                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-Day Return Requests' },
-                { icon: <ShieldTick strokeWidth={1.5} size={13} />, text: 'Thoughtfully Curated' },
-                { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Customer Support' },
-                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Encrypted Connection' },
+                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: shipCopy },
+                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-day returns' },
+                { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Real customer support' },
+                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Secure checkout' },
               ].map((item, i) => (
                 <span key={i} className="trust-pill">
                   {item.icon}
@@ -2484,7 +2217,7 @@ function HomePage() {
       {/* â•â•â•â•â•â•â•â• NEWSLETTER — dark bookend â•â•â•â•â•â•â•â• */}
       <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
         <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
-        <div className="relative max-w-3xl mx-auto px-4 py-10 sm:py-14 text-center">
+        <div className="relative max-w-3xl mx-auto px-4 py-8 sm:py-11 text-center">
           <p className="eyebrow mb-2 text-luxe-gold-light">Stay in the Loop</p>
           <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-white tracking-tight mb-2">Join the Luxedge Pet Family</h2>
           <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
