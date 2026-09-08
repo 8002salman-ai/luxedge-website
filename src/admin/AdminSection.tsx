@@ -8,6 +8,7 @@ import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } fr
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { listCategories, createCategory, updateCategory, deleteCategory, listProducts, setDbToken } from '../features/catalog/repository';
 import type { CatalogProduct } from '../features/catalog/types';
 import { AIImportPanel } from './AIImportPanel';
@@ -267,25 +268,24 @@ function AdminLayout({ children }: { children: ReactNode }) {
 
 interface DashOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
 
+interface DashStats { revenue: number; paidCount: number; aov: number; days: { label: string; total: number }[]; }
+
 export function ADashboard() {
   const { users } = useApp();
   const [realOrders, setRealOrders] = useState<DashOrderRow[]>([]);
+  const [stats, setStats] = useState<DashStats | null>(null);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [gift, setGift] = useState<{ active: boolean; remaining: number; total: number; claimsToday: number } | null>(null);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [range, setRange] = useState<7 | 30 | 90>(7);
 
   // REAL data only (Stripe webhook orders + the DB catalog + Gift Drop ledger).
-  // No demo numbers.
-  useEffect(() => {
+  // No demo numbers. Orders stats come from the server (paid-only, full order
+  // set, refunds subtracted) and refresh near-real-time on focus + interval.
+  const loadOrders = useCallback(() => {
     const token = getAccessToken();
-    if (!token) return;
+    if (!token) return Promise.resolve();
     setDbToken(token);
-    fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((d: { orders?: DashOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
-      .catch(() => setRealOrders([]));
-    listProducts().then(setCatalog).catch(() => setCatalog([]));
     // Gift Drop live status — claims ledger + remaining inventory.
     fetch('/api/admin/gift-drop', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
@@ -298,10 +298,23 @@ export function ADashboard() {
         setGift({ active: !!d.campaign?.active, remaining: Number(d.stats.remaining) || 0, total: Number(d.stats.total) || 0, claimsToday });
       })
       .catch(() => setGift(null));
-    setLoadedAt(new Date());
+    return fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { orders?: DashOrderRow[]; stats?: DashStats | null }) => {
+        setRealOrders(Array.isArray(d.orders) ? d.orders : []);
+        setStats(d.stats && typeof d.stats.revenue === 'number' ? d.stats : null);
+      })
+      .catch(() => { setRealOrders([]); setStats(null); })
+      .finally(() => setLoadedAt(new Date()));
   }, []);
+  const refresh = useAutoRefresh(loadOrders);
+  useEffect(() => { refresh(); listProducts().then(setCatalog).catch(() => setCatalog([])); }, [refresh]);
 
-  const rev = realOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+  // Server-aggregated, paid-only metrics (refunds subtracted, no page cap).
+  const rev = stats ? stats.revenue : 0;
+  const paidCount = stats ? stats.paidCount : 0;
+  const aov = stats ? stats.aov : 0;
+  const serverDays = stats && Array.isArray(stats.days) && stats.days.length === 7 ? stats.days : null;
 
   // Catalog overview (full DB, not just storefront-active)
   const totalProducts = catalog.length;
@@ -312,9 +325,10 @@ export function ADashboard() {
     .filter(p => Number(p.inventoryQty ?? 0) <= 10)
     .sort((a, b) => Number(a.inventoryQty ?? 0) - Number(b.inventoryQty ?? 0));
   const lowStock = lowStockList.length;
-  const aov = realOrders.length ? rev / realOrders.length : 0;
 
-  // Daily revenue + order counts for the last 90 days (real orders only)
+  // Daily revenue + order counts for the last 90 days (paid-only rows).
+  const isPaidRow = (o: DashOrderRow) => ['paid', 'processing', 'shipped', 'delivered', 'partially_refunded'].includes(String(o.status || ''));
+  const netRowTotal = (o: DashOrderRow) => Math.max(0, Number(o.total || 0) - Number((o as unknown as { refunded_amount?: number | null }).refunded_amount || 0));
   const buildSeries = (n: number): { label: string; total: number; orders: number }[] => {
     const out: { label: string; total: number; orders: number }[] = [];
     for (let i = n - 1; i >= 0; i--) {
@@ -323,18 +337,22 @@ export function ADashboard() {
       const day = realOrders.filter(o => { const t = new Date(o.created_at); return t >= d && t < next; });
       out.push({
         label: d.toLocaleDateString(undefined, n <= 7 ? { weekday: 'narrow' } : { month: 'short', day: 'numeric' }),
-        total: day.reduce((s, o) => s + Number(o.total || 0), 0),
-        orders: day.length,
+        total: day.filter(isPaidRow).reduce((s, o) => s + netRowTotal(o), 0),
+        orders: day.filter(isPaidRow).length,
       });
     }
     return out;
   };
   const series90 = buildSeries(90);
-  const activeSeries = range === 7 ? series90.slice(-7) : range === 30 ? series90.slice(-30) : series90;
+  // 7-day buckets come from the server (paid-only, full set); 30/90 use the
+  // paid-only client series for display.
+  const activeSeries = range === 7 && serverDays
+    ? serverDays.map(d => ({ label: d.label, total: d.total, orders: 0 }))
+    : (range === 7 ? series90.slice(-7) : range === 30 ? series90.slice(-30) : series90);
   const rangeRev = activeSeries.reduce((s, d) => s + d.total, 0);
   const rangeOrders = activeSeries.reduce((s, d) => s + d.orders, 0);
   const maxDay = Math.max(...activeSeries.map(d => d.total), 1);
-  const weekRev = series90.slice(-7).reduce((s, d) => s + d.total, 0);
+  const weekRev = serverDays ? serverDays.reduce((s, d) => s + d.total, 0) : series90.slice(-7).reduce((s, d) => s + d.total, 0);
   const prevWeekRev = series90.slice(-14, -7).reduce((s, d) => s + d.total, 0);
   const revTrend = prevWeekRev > 0 ? ((weekRev - prevWeekRev) / prevWeekRev) * 100 : null;
 
@@ -351,9 +369,9 @@ export function ADashboard() {
   const statusTotal = statusCounts.reduce((a, b) => a + b.n, 0);
 
   const kpis = [
-    { l: 'Revenue (7 days)', v: `$${weekRev.toFixed(2)}`, sub: weekRev > 0 ? (revTrend === null ? '— vs prior week' : `${revTrend >= 0 ? '▲' : '▼'} ${Math.abs(revTrend).toFixed(0)}% vs prior week`) : 'No orders yet', i: CurrencyDollar, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
-    { l: 'Orders', v: realOrders.length, sub: realOrders.length ? `${rev.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} all-time` : 'No orders yet', i: ShoppingCart, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
-    { l: 'Avg order value', v: realOrders.length ? `$${aov.toFixed(2)}` : '—', sub: realOrders.length ? 'per order' : 'No orders yet', i: TrendUp, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Revenue (7 days)', v: `$${weekRev.toFixed(2)}`, sub: weekRev > 0 ? (revTrend === null ? '— vs prior week' : `${revTrend >= 0 ? '▲' : '▼'} ${Math.abs(revTrend).toFixed(0)}% vs prior week`) : 'No paid orders yet', i: CurrencyDollar, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Orders', v: paidCount, sub: paidCount ? `${rev.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} all-time` : 'No paid orders yet', i: ShoppingCart, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Avg order value', v: paidCount ? `$${aov.toFixed(2)}` : '—', sub: paidCount ? 'per paid order' : 'No paid orders yet', i: TrendUp, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
     { l: 'Customers', v: users.length, sub: users.length ? 'registered accounts' : 'No customers yet', i: UsersIcon, to: '/admin/users', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
     { l: 'Active products', v: activeProducts, sub: `${totalProducts} total · ${commerceReady} commerce-ready`, i: Package, to: '/admin/products', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
     { l: 'Low-stock products', v: lowStock, sub: lowStock ? 'need restock' : 'All stocked', i: Warning, to: '/admin/products', iconCls: 'bg-amber-50 text-amber-600' },
@@ -924,19 +942,25 @@ export function AOrders() {
 
   // Authoritative persisted orders ONLY (created by the Stripe webhook or gift-drop). No
   // fake order history — the legacy demo table was removed for truthfulness.
-  const loadOrders = () => {
+  // Paid-only stats come from the server (full order set); refresh near-real-time.
+  const [orderStats, setOrderStats] = useState<DashStats | null>(null);
+  const loadOrders = useCallback(() => {
     const token = getAccessToken();
-    if (!token) { setLoaded(true); return; }
+    if (!token) { setLoaded(true); return Promise.resolve(); }
     const params = new URLSearchParams({ action: 'orders' });
     if (providerFilter !== 'all') params.set('provider', providerFilter);
     if (includeGifts) params.set('includeGifts', 'true');
-    fetch(`/api/checkout?${params}`, { headers: { Authorization: `Bearer ${token}` } })
+    return fetch(`/api/checkout?${params}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : []))
-      .catch(() => setStripeOrders([]))
+      .then((d: { orders?: StripeOrderRow[]; stats?: DashStats | null }) => {
+        setStripeOrders(Array.isArray(d.orders) ? d.orders : []);
+        setOrderStats(d.stats && typeof d.stats.revenue === 'number' ? d.stats : null);
+      })
+      .catch(() => { setStripeOrders([]); setOrderStats(null); })
       .finally(() => setLoaded(true));
-  };
-  useEffect(() => { loadOrders(); }, [providerFilter, includeGifts]);
+  }, [providerFilter, includeGifts]);
+  const refreshOrders = useAutoRefresh(loadOrders);
+  useEffect(() => { refreshOrders(); }, [refreshOrders, providerFilter, includeGifts]);
   useEffect(() => {
     try { const raw = localStorage.getItem('luxedge-tracking'); if (raw) setTracking(JSON.parse(raw)); } catch { /* ignore */ }
     try { const raw = localStorage.getItem('luxedge-order-extras'); if (raw) setOrderExtras(JSON.parse(raw)); } catch { /* ignore */ }
@@ -1193,8 +1217,9 @@ export function AOrders() {
   ];
 
   const stats = {
-    total: stripeOrders.length,
-    revenue: stripeOrders.reduce((s, o) => s + Number(o.total || 0), 0),
+    // Paid-only counts/revenue from the server (refunds subtracted, no page cap).
+    total: orderStats ? orderStats.paidCount : stripeOrders.length,
+    revenue: orderStats ? orderStats.revenue : 0,
     pending: stripeOrders.filter(o => ['pending', 'awaiting_payment', 'paid', 'processing'].includes(String(o.status || ''))).length,
     shipped: stripeOrders.filter(o => ['shipped', 'delivered'].includes(String(o.status || ''))).length,
   };
@@ -1330,7 +1355,7 @@ export function AOrders() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {showDemo && <button onClick={() => setShowDemo(false)} className="text-xs text-gray-400 hover:text-gray-600 underline whitespace-nowrap">Hide demo order</button>}
-          <button onClick={loadOrders} className="btn-glow inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold transition-colors"><ArrowClockwise size={13} /> Refresh</button>
+          <button onClick={refreshOrders} className="btn-glow inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold transition-colors"><ArrowClockwise size={13} /> Refresh</button>
         </div>
       </div>
 

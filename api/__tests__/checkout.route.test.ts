@@ -6,6 +6,7 @@
 // Stripe, rejects tampered prices/coupons, and never returns secrets.
 // ============================================================================
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createHmac } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import handler from '../checkout.js';
 
@@ -19,13 +20,24 @@ const original = {
   anon: process.env.VITE_SUPABASE_ANON_KEY,
   sr: process.env.SUPABASE_SERVICE_ROLE_KEY,
   stripe: process.env.STRIPE_SECRET_KEY,
+  jwtSecret: process.env.SUPABASE_JWT_SECRET,
 };
 
 const PRODUCT = { id: '11111111-1111-4111-8111-111111111111', slug: 'test-product', name: 'Test Product', price: 25, status: 'active', inventory_qty: 10, image_url: 'https://img.test/x.jpg' };
 const WELCOME10 = { code: 'WELCOME10', discount_type: 'percent', discount_value: 10, min_cart_value: 0, is_active: true, start_at: null, end_at: null };
 const SETTINGS = { key: 'free_shipping', value: { freeShippingEnabled: true, freeShippingThreshold: 50 } };
 
-function makeEnv(overrides: { reserveOk?: boolean; stripeFail?: boolean } = {}) {
+function b64url(input: string | Buffer): string {
+  return Buffer.from(input).toString('base64url');
+}
+function signAdminToken(secret: string): string {
+  const h = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const p = b64url(JSON.stringify({ sub: 'adm-1', email: 'admin@luxedge.us', exp: Math.floor(Date.now() / 1000) + 3600, app_metadata: { role: 'admin' } }));
+  const sig = createHmac('sha256', secret).update(`${h}.${p}`).digest('base64url');
+  return `${h}.${p}.${sig}`;
+}
+
+function makeEnv(overrides: { reserveOk?: boolean; stripeFail?: boolean; orderRows?: unknown[] } = {}) {
   const calls: { url: string; method: string; headers: Record<string, string>; body?: unknown }[] = [];
   const controls = {
     reserveOk: overrides.reserveOk ?? true,
@@ -33,6 +45,7 @@ function makeEnv(overrides: { reserveOk?: boolean; stripeFail?: boolean } = {}) 
     reserveCalls: 0,
     releaseCalls: 0,
   };
+  const orderRows = overrides.orderRows ?? [];
   vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({ url, method: init?.method || 'GET', headers: (init?.headers || {}) as Record<string, string>, body: init?.body ? (() => { try { return JSON.parse(String(init.body)); } catch { return String(init.body); } })() : undefined });
@@ -61,7 +74,7 @@ function makeEnv(overrides: { reserveOk?: boolean; stripeFail?: boolean } = {}) 
     if (url.includes('/rest/v1/products')) return new Response(JSON.stringify([PRODUCT]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url.includes('/rest/v1/coupons')) return new Response(JSON.stringify(url.includes('NOPE') ? [] : [WELCOME10]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url.includes('/rest/v1/store_settings')) return new Response(JSON.stringify([SETTINGS]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url.includes('/rest/v1/luxedge_orders')) return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (url.includes('/rest/v1/luxedge_orders')) return new Response(JSON.stringify(orderRows), { status: 200, headers: { 'Content-Type': 'application/json' } });
     return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }));
   (calls as unknown as { controls: typeof controls }).controls = controls;
@@ -82,16 +95,22 @@ function res(): { server: ServerResponse; cap: Cap } {
   return { server, cap };
 }
 
-function req(method: string, body?: unknown, urlPath = '/api/checkout'): IncomingMessage {
+function req(method: string, body?: unknown, urlPath = '/api/checkout', headers: Record<string, string> = {}): IncomingMessage {
   const raw = body !== undefined ? Buffer.from(JSON.stringify(body)) : undefined;
   let ended = false;
   return {
-    method, url: urlPath, headers: { host: 'luxedge.us' },
+    method, url: urlPath, headers: { host: 'luxedge.us', ...headers },
     on: (ev: string, cb: (chunk?: Buffer) => void) => {
       if (ev === 'data' && raw) cb(raw);
       if (ev === 'end' && !ended) { ended = true; cb(); }
     },
   } as unknown as IncomingMessage;
+}
+
+/** Orders endpoint is admin-only: mint a valid admin JWT (HS256). */
+function adminReq(urlPath: string): IncomingMessage {
+  const token = signAdminToken('0123456789abcdef0123456789abcdef');
+  return req('GET', undefined, urlPath, { authorization: `Bearer ${token}` });
 }
 
 describe('/api/checkout', () => {
@@ -100,6 +119,7 @@ describe('/api/checkout', () => {
     process.env.VITE_SUPABASE_ANON_KEY = ANON;
     process.env.SUPABASE_SERVICE_ROLE_KEY = SR;
     process.env.STRIPE_SECRET_KEY = STRIPE;
+    process.env.SUPABASE_JWT_SECRET = '0123456789abcdef0123456789abcdef';
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -107,6 +127,7 @@ describe('/api/checkout', () => {
     if (original.anon === undefined) delete process.env.VITE_SUPABASE_ANON_KEY; else process.env.VITE_SUPABASE_ANON_KEY = original.anon;
     if (original.sr === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = original.sr;
     if (original.stripe === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = original.stripe;
+    if (original.jwtSecret === undefined) delete process.env.SUPABASE_JWT_SECRET; else process.env.SUPABASE_JWT_SECRET = original.jwtSecret;
   });
 
   it('creates a Stripe session charged at the SERVER-computed total (tampering rejected), tax is 0 (no Stripe Tax add-on)', async () => {
@@ -243,5 +264,61 @@ describe('/api/checkout', () => {
     expect(cap.status).toBe(400);
     const controls = (calls as unknown as { controls: { releaseCalls: number } }).controls;
     expect(controls.releaseCalls).toBe(1);
+  });
+
+  it('GET action=orders requires an admin JWT (401 without one)', async () => {
+    makeEnv();
+    const { server, cap } = res();
+    await handler(req('GET', undefined, '/api/checkout?action=orders'), server);
+    expect(cap.status).toBe(401);
+  });
+
+  it('GET action=orders returns paid-only stats: pending rows never inflate revenue/orders', async () => {
+    const orderRows = [
+      { id: '1', order_number: 'LX-1', total: 100, status: 'paid', created_at: '2026-09-08T10:00:00Z' },
+      { id: '2', order_number: 'LX-2', total: 50, status: 'paid', created_at: '2026-09-08T11:00:00Z' },
+      { id: '3', order_number: 'LX-3', total: 9999, status: 'pending', created_at: '2026-09-08T12:00:00Z' },
+      { id: '4', order_number: 'LX-4', total: 8888, status: 'awaiting_payment', created_at: '2026-09-08T13:00:00Z' },
+    ];
+    makeEnv({ orderRows });
+    const { server, cap } = res();
+    await handler(adminReq('/api/checkout?action=orders'), server);
+    expect(cap.status).toBe(200);
+    const body = cap.body as { orders: unknown[]; stats: { revenue: number; paidCount: number; aov: number; days: { total: number }[] } };
+    expect(body.orders).toHaveLength(4); // recent rows still returned for the table
+    expect(body.stats.revenue).toBe(150);
+    expect(body.stats.paidCount).toBe(2);
+    expect(body.stats.aov).toBe(75);
+    expect(body.stats.days).toHaveLength(7);
+    expect(body.stats.days.reduce((s, d) => s + d.total, 0)).toBe(150);
+  });
+
+  it('GET action=orders deducts refunded totals and excludes fully refunded orders', async () => {
+    const orderRows = [
+      { id: '1', order_number: 'LX-1', total: 100, refunded_amount: 30, status: 'partially_refunded', created_at: '2026-09-08T10:00:00Z' },
+      { id: '2', order_number: 'LX-2', total: 100, refunded_amount: 100, status: 'refunded', created_at: '2026-09-08T11:00:00Z' },
+      { id: '3', order_number: 'LX-3', total: 40, status: 'paid', created_at: '2026-09-08T12:00:00Z' },
+    ];
+    makeEnv({ orderRows });
+    const { server, cap } = res();
+    await handler(adminReq('/api/checkout?action=orders'), server);
+    expect(cap.status).toBe(200);
+    const body = cap.body as { stats: { revenue: number; paidCount: number } };
+    expect(body.stats.revenue).toBe(110); // (100-30) + 40; refunded excluded
+    expect(body.stats.paidCount).toBe(2);
+  });
+
+  it('GET action=orders aggregates over the FULL order set (>50 rows), not a truncated page', async () => {
+    const orderRows = Array.from({ length: 75 }, (_, i) => ({
+      id: String(i), order_number: `LX-${i}`, total: 10, status: 'paid', created_at: '2026-09-08T10:00:00Z',
+    }));
+    makeEnv({ orderRows });
+    const { server, cap } = res();
+    await handler(adminReq('/api/checkout?action=orders'), server);
+    expect(cap.status).toBe(200);
+    const body = cap.body as { orders: unknown[]; stats: { revenue: number; paidCount: number } };
+    expect(body.orders).toHaveLength(75); // mock returns all; the client table page is separate
+    expect(body.stats.paidCount).toBe(75);
+    expect(body.stats.revenue).toBe(750);
   });
 });

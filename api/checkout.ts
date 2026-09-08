@@ -14,6 +14,7 @@ import { sendJson, readJsonBody, rateLimited, clientIp } from './_lib/providers.
 import { requireAdmin } from './_lib/auth.js';
 import { computeCheckoutTotals, validateCheckoutRequest, buildStripeLineItems, appBaseUrl, type CheckoutDataLoader } from './_lib/checkout.js';
 import { stripeReady, createCheckoutSession, retrieveCheckoutSession, safeSessionSummary } from './_lib/stripe.js';
+import { computeOrderStats, type OrderStatsRow } from './_lib/orders-stats.js';
 
 interface ServerProductRow {
   id: string;
@@ -135,8 +136,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   // -------------------------------------------------------------------------
-  // GET — admin order list (authoritative persisted orders)
+  // GET — admin order list + paid-only stats (authoritative persisted orders)
   // Supports ?provider= filter and ?includeGifts=true to show free gift orders.
+  // Stats are aggregated server-side over the FULL order set (paid-only,
+  // refunds subtracted) so Revenue/Orders/AOV never count pending pre-payment
+  // rows and never get truncated by the 50-row table page.
   // -------------------------------------------------------------------------
   if (req.method === 'GET' && url.searchParams.get('action') === 'orders') {
     if (!(await requireAdmin(req, res))) return;
@@ -144,31 +148,37 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const providerFilter = (url.searchParams.get('provider') || '').trim();
     const includeGifts = url.searchParams.get('includeGifts') === 'true';
 
-    // Base: exclude PET-GIFT-DROP unless explicitly requested
-    let query = '?order=created_at.desc&limit=50';
-    if (!includeGifts) {
-      query += '&coupon_code=not.eq.PET-GIFT-DROP';
-    }
+    // Shared filter segment so the table and the stats aggregate agree.
+    // Base: exclude PET-GIFT-DROP unless explicitly requested.
+    let filter = '';
+    if (!includeGifts) filter += '&coupon_code=not.eq.PET-GIFT-DROP';
     // Provider filter (payment_provider column from migration 0031)
     if (providerFilter && providerFilter !== 'all') {
       if (providerFilter === 'none') {
         // Free gifts = payment_provider=none or coupon_code=PET-GIFT-DROP
-        query = '?order=created_at.desc&limit=100&coupon_code=eq.PET-GIFT-DROP';
+        filter = '&coupon_code=eq.PET-GIFT-DROP';
       } else {
-        query += `&payment_provider=eq.${encodeURIComponent(providerFilter)}`;
+        filter += `&payment_provider=eq.${encodeURIComponent(providerFilter)}`;
       }
     }
 
-    const r = await restFetch('luxedge_orders', query, key);
+    // Recent rows for the orders table (unchanged 50-row page).
+    const tableQuery = `?order=created_at.desc&limit=50${filter}`;
+    const r = await restFetch('luxedge_orders', tableQuery, key);
     if (!r.ok) {
       // If payment_provider column doesn't exist yet (migration 0031 pending),
-      // fall back to the original query
+      // fall back to the original query.
       const fallback = await restFetch('luxedge_orders', '?coupon_code=not.eq.PET-GIFT-DROP&order=created_at.desc&limit=50', key);
       if (!fallback.ok) { sendJson(res, fallback.status, fallback.data); return; }
-      sendJson(res, 200, { orders: fallback.data });
+      sendJson(res, 200, { orders: fallback.data, stats: computeOrderStats(fallback.data as OrderStatsRow[]) });
       return;
     }
-    sendJson(res, 200, { orders: r.data });
+
+    // Paid-only stats over the FULL order set (minimal columns, no page cap).
+    const statsQuery = `?select=status,total,refunded_amount,created_at&order=created_at.desc&limit=100000${filter}`;
+    const s = await restFetch('luxedge_orders', statsQuery, key);
+    const statsRows = s.ok && Array.isArray(s.data) ? (s.data as OrderStatsRow[]) : (r.data as OrderStatsRow[]);
+    sendJson(res, 200, { orders: r.data, stats: computeOrderStats(statsRows) });
     return;
   }
 
