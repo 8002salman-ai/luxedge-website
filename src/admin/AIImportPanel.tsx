@@ -2,7 +2,7 @@
 // AI PRODUCT IMPORT ENGINE - shared panel used by the Admin sidebar route
 // (/admin/ai-import) and the Add Product editor AI Import mode.
 // ============================================================================
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useApp, loadAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent,
@@ -14,12 +14,17 @@ import {
 } from '../App';
 import type { AIProvider, AIExtractedProduct, ImportHistoryEntry } from '../App';
 import { loadProviderSettings } from '../features/ai/providers';
-import { createProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
+import { createProduct, updateProduct, getProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
+import {
+  getListingPlaybook, getImportHistory, appendImportHistory,
+  supplierBrandForUrl, rulesForCategory, effectiveStatusForImport,
+  type ListingPlaybook, type PlaybookImportHistoryEntry,
+} from '../features/catalog/listingPlaybook';
 import { getFreshAccessToken } from '../services/supabase';
 import {
   ArrowClockwise, ArrowLeft, CheckCircle, Clipboard, ClockCounterClockwise,
   CurrencyDollar, FileText, Globe, Image as ImageIcon, LinkSimple, MagicWand,
-  Package, PencilSimpleLine, Robot, Sparkle, SpinnerGap, Star, Tag, UploadSimple, Warning,
+  Package, PencilSimpleLine, Robot, Sparkle, SpinnerGap, Star, Tag, UploadSimple, Warning, BookBookmark,
 } from '@phosphor-icons/react';
 // ============================================================================
 // AI PRODUCT IMPORT ENGINE
@@ -88,11 +93,18 @@ export function AIImportPanel() {
   });
   const [importProvider, setImportProvider] = useState<string>('auto');
 
-  // ClockCounterClockwise
-  const [history, setHistory] = useState<ImportHistoryEntry[]>(() => {
-    try { return JSON.parse(localStorage.getItem('luxedge_import_history')||'[]'); }
+  // ClockCounterClockwise — DB-backed history (localStorage is a fallback only).
+  const [history, setHistory] = useState<PlaybookImportHistoryEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem('luxedge_import_history')||'[]').map((e: PlaybookImportHistoryEntry) => ({ ...e, store: 'local' as const })); }
     catch { return []; }
   });
+  const [playbook, setPlaybook] = useState<ListingPlaybook | null>(null);
+
+  useEffect(() => {
+    // Listing Playbook (DB) + import history (DB) load together on mount.
+    void getListingPlaybook().then(setPlaybook);
+    void getImportHistory().then((h) => { if (h.length) setHistory(h); });
+  }, []);
 
   const addLog = (msg: string, ok=true) => setProgress(p => [...p, {msg, ok}]);
 
@@ -301,6 +313,8 @@ export function AIImportPanel() {
       const newHist = [entry, ...history].slice(0, 50);
       setHistory(newHist);
       localStorage.setItem('luxedge_import_history', JSON.stringify(newHist));
+      // Persist to the database (never blocks the import on failure).
+      void appendImportHistory(entry).catch(() => {});
 
       addLog(`✓ Done in ${elapsed}s — ready to review!`, true);
       setStep('preview');
@@ -340,9 +354,9 @@ export function AIImportPanel() {
       // Refresh first — a long-open import form must not write with a stale JWT.
       setDbToken(await getFreshAccessToken());
 
-      // DB-level duplicate check — supplier URL / item ID first, then title.
+      // DB-level duplicate check — supplier URL / item ID / SKU, then slug/title.
       const allProducts = await listProducts();
-      const dup = findDuplicateProduct(allProducts, { url, itemId, title });
+      const dup = findDuplicateProduct(allProducts, { url, itemId, title, sku: extracted.sku });
       if (dup) {
         setDupProduct({ id: dup.id, name: dup.name });
         notify('DUPLICATE FOUND — open the existing product instead of saving.', 'error');
@@ -354,6 +368,11 @@ export function AIImportPanel() {
       const catName = String(ef.category || extracted.category || '').trim();
       const categoryId = cats.find((c) => c.name.toLowerCase() === catName.toLowerCase())?.id || null;
 
+      // Listing Playbook: brand rule (e.g. HimalayanKoh) + category rules.
+      const rules = playbook ? rulesForCategory(playbook, catName) : null;
+      const playbookBrand = supplierBrandForUrl(url, rules?.brand);
+      const brand = playbookBrand || ef.brand || extracted.brand || 'Luxedge';
+
       const finalRiskFlags = [...new Set([...(extracted.riskFlags || []), ...risk.warnings])];
       const created = await createProduct(buildImportProductInput({
         title,
@@ -361,7 +380,7 @@ export function AIImportPanel() {
         description: ef.longDescription || extracted.longDescription || undefined,
         features: (extracted.features || []).slice(0, 6),
         specifications: extracted.specifications,
-        brand: ef.brand || extracted.brand || 'Luxedge',
+        brand,
         categoryId,
         price: Number(ef.sellingPrice ?? extracted.sellingPrice) || 0,
         supplierListPrice: Number(extracted.sellingPrice) || undefined,
@@ -384,8 +403,9 @@ export function AIImportPanel() {
       // Images — storage-first: download/upload into the Supabase product-media
       // bucket via the serverless endpoint; fall back to durable supplier URLs
       // only when storage is unavailable, with an explicit warning (never silent).
+      let imageRows: ReturnType<typeof buildImportImages> = [];
       if (selectedImgs.length) {
-        let imageRows = buildImportImages(selectedImgs, heroImg || selectedImgs[0]);
+        imageRows = buildImportImages(selectedImgs, heroImg || selectedImgs[0]);
         const imageWarnings: string[] = [];
         try {
           const sr = await importProductImagesToStorage(created.id, selectedImgs);
@@ -411,8 +431,22 @@ export function AIImportPanel() {
         await saveProductVariants(created.id, variants);
       }
 
+      // Listing Playbook status rule: promote to Active only when the verified
+      // image count meets the minimum; otherwise keep Draft. Re-read the row
+      // from the DB to verify what actually persisted.
+      let finalStatus = created.status || 'draft';
+      if (playbook) {
+        const verified = imageRows.length;
+        const wanted = effectiveStatusForImport(playbook, catName, verified, rules?.defaultStatus || 'draft');
+        if (wanted === 'active' && verified >= (rules?.minImages ?? playbook.global.minImages ?? 3)) {
+          const updated = await updateProduct(created.id, { status: 'active' });
+          const check = updated ? await getProduct(created.id) : null;
+          if (check && check.status === 'active') finalStatus = 'active';
+        }
+      }
+
       const riskNote = risk.warnings.length ? ` Risk flags: ${risk.warnings.join('; ')}.` : '';
-      notify(`DRAFT saved to catalog (${created.name}) — readiness ${created.commerceReadiness || 'DRAFT'}.${riskNote}`);
+      notify(`${finalStatus === 'active' ? 'ACTIVE listing saved' : 'DRAFT saved to catalog'} (${created.name}) — ${imageRows.length} image${imageRows.length === 1 ? '' : 's'}, readiness ${created.commerceReadiness || 'DRAFT'}.${riskNote}`);
       setStep('done');
     } catch (e) {
       notify(`Save failed: ${(e as Error).message}`, 'error');
@@ -449,7 +483,10 @@ export function AIImportPanel() {
             <p className="text-sm text-gray-500">Import any product in under 60 seconds using AI</p>
           </div>
           <button onClick={() => setStep('history')} className="ml-auto flex items-center gap-2 px-4 py-2 border rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            <ClockCounterClockwise size={16} /> ClockCounterClockwise ({history.length})
+            <ClockCounterClockwise size={16} /> History ({history.length})
+          </button>
+          <button onClick={() => navigate('/admin/settings/listing-playbook')} className="flex items-center gap-2 px-4 py-2 border border-blue-200 bg-blue-50 rounded-xl text-sm text-blue-700 hover:bg-blue-100 transition-colors" title="Listing Playbook — rules applied to every import">
+            <BookBookmark size={16} /> Listing Playbook
           </button>
         </div>
         <div>
@@ -484,6 +521,9 @@ export function AIImportPanel() {
           <h1 className="text-xl font-bold">
             {source==='url'?'URL Import':source==='html'?'HTML Import':source==='clipboard'?'Clipboard Import':source==='image'?'Image UploadSimple':'Text Import'}
           </h1>
+          <button onClick={() => navigate('/admin/settings/listing-playbook')} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-blue-200 bg-blue-50 rounded-lg text-xs text-blue-700 hover:bg-blue-100 transition-colors" title="Listing Playbook — rules applied to this import">
+            <BookBookmark size={14} /> Playbook rules
+          </button>
         </div>
 
         {error && <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"><Warning size={18} className="mt-0.5 shrink-0"/><div><p className="font-semibold">Import Failed</p><p>{error}</p></div></div>}

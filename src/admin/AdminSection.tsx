@@ -39,6 +39,7 @@ import {
 } from '../lib/marketing';
 import TrafficDashboard from './TrafficDashboard';
 import AdSenseEarnings from './AdSenseEarnings';
+import { ListingPlaybookAdmin } from './ListingPlaybookAdmin';
 import {
   Warning, ArrowLeft, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
   Clipboard, Code, Cpu, CurrencyDollar, Download, Info, Key, PencilSimple, Eye, FileText, TreeStructure, Globe,
@@ -47,7 +48,7 @@ import {
   ShareNetwork, ShieldCheck, ShoppingCart, Shuffle, Sliders, DeviceMobile, Sparkle, Star, Table, Tag,
   Target, ToggleLeft, ToggleRight, Trash, TrendUp, UploadSimple, User as UserIcon,
   Users as UsersIcon, MagicWand, X, Lightning, Truck, Printer, Barcode, MapPin,
-  Receipt, CloudArrowUp, YoutubeLogo, CreditCard, Gift, Clock,
+  Receipt, CloudArrowUp, YoutubeLogo, CreditCard, Gift, Clock, BookBookmark,
 } from '@phosphor-icons/react';
 
 // ADMIN PANEL - FULL WORKING SYSTEM
@@ -125,6 +126,7 @@ function AdminLayout({ children }: { children: ReactNode }) {
         { to: '/admin/cj-setup', icon: Package, label: 'CJ Supplier', g: 'linear-gradient(135deg,#10b981,#06b6d4)', dot: '#34d399' },
         { to: '/admin/payments', icon: CreditCard, label: 'Payments', g: 'linear-gradient(135deg,#635bff,#8b5cf6)', dot: '#a78bfa' },
         { to: '/admin/settings', icon: GearSix, label: 'Settings', g: 'linear-gradient(135deg,#94a3b8,#64748b)', dot: '#cbd5e1' },
+        { to: '/admin/settings/listing-playbook', icon: BookBookmark, label: 'Listing Playbook', g: 'linear-gradient(135deg,#0ea5e9,#6366f1)', dot: '#60a5fa' },
       ],
     },
   ];
@@ -6261,6 +6263,7 @@ export default function AdminSection() {
       <Route path="payments" element={<AdminLayout><PaymentsSetup /></AdminLayout>} />
       <Route path="shipping" element={<AdminLayout><ShippingSetup /></AdminLayout>} />
       <Route path="settings" element={<AdminLayout><ASettings /></AdminLayout>} />
+      <Route path="settings/listing-playbook" element={<AdminLayout><ListingPlaybookAdmin /></AdminLayout>} />
       <Route path="marketing-traffic" element={<AdminLayout><AMarketingTraffic /></AdminLayout>} />
       <Route path="email-marketing" element={<AdminLayout><AEmailMarketing /></AdminLayout>} />
       <Route path="crm" element={<AdminLayout><ACRM /></AdminLayout>} />

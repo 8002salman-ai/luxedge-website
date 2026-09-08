@@ -1140,21 +1140,28 @@ export function deriveImportReadiness(f: {
 }
 
 /** Find an existing catalog row by supplier URL → item ID → normalized title. */
+/** Slugify for duplicate detection — mirrors the repo's slug generation. */
+export function slugifyTitle(title: string): string {
+  return (title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'product';
+}
+
 export function findDuplicateProduct(
-  products: { id: string; name: string; supplierUrl?: string | null; supplierProductRef?: string | null; sku?: string | null }[],
-  { url, itemId, title }: { url?: string | null; itemId?: string | null; title?: string },
+  products: { id: string; name: string; slug?: string | null; supplierUrl?: string | null; supplierProductRef?: string | null; sku?: string | null }[],
+  { url, itemId, title, sku }: { url?: string | null; itemId?: string | null; title?: string; sku?: string | null },
 ): { id: string; name: string } | null {
   const u = (url || '').trim();
   const it = (itemId || '').trim();
+  const sk = (sku || '').trim();
   for (const p of products) {
     if (u && p.supplierUrl && p.supplierUrl.trim() === u) return p;
     if (it && (p.supplierProductRef === it || p.sku === it)) return p;
+    if (sk && p.sku && p.sku.trim() === sk) return p;
   }
   const norm = normalizeProductTitle(title || '');
-  if (norm) {
-    for (const p of products) {
-      if (normalizeProductTitle(p.name) === norm) return p;
-    }
+  const slug = slugifyTitle(title || '');
+  for (const p of products) {
+    if (slug && p.slug && p.slug.trim() === slug) return p;
+    if (norm && normalizeProductTitle(p.name) === norm) return p;
   }
   return null;
 }

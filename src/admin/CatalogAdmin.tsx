@@ -11,7 +11,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Plus, PencilSimple, Trash, ArrowLeft, Copy, Eye,
   MagnifyingGlass, FloppyDisk, Image as ImageIcon, Stack, Tag, Globe, Truck, Package, CurrencyDollar,
-  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, CaretUp, ArrowSquareOut, Rocket,
+  GearSix, X, Download, List, Megaphone, Warning, Brain, UploadSimple, Sparkle, CaretDown, CaretUp, ArrowSquareOut, Rocket, BookBookmark,
   DotsThreeVertical, Clock, CheckCircle, DotsSixVertical,
 } from '@phosphor-icons/react';
 import Modal from '../components/common/Modal';
@@ -48,6 +48,7 @@ import {
 } from '../features/catalog/tableColumns';
 import { parseHtmlPage } from '../features/ai/importer';
 import { prepareImageForUpload } from '../lib/image-upload';
+import { getListingPlaybook, validateListingAgainstPlaybook, supplierBrandForUrl } from '../features/catalog/listingPlaybook';
 import { AIImportPanel } from './AIImportPanel';
 import {
   parseCsvImport, classifyDuplicates,
@@ -1503,7 +1504,8 @@ function CsvImportModal({ open, onClose, existing, cats, notify, onImported }: {
           inventoryQty: row.inventoryQty,
           shippingCost: row.shippingCost,
           freeShipping: row.freeShipping,
-          brand: row.brand || 'Luxedge',
+          // Listing Playbook brand rule (e.g. HimalayanKoh) wins over row brand.
+          brand: supplierBrandForUrl(row.supplierUrl, undefined) || row.brand || 'Luxedge',
           categoryId: catId,
           tags: row.tags,
           supplierSource: row.supplierSource || 'Zeedrop',
@@ -1791,6 +1793,25 @@ export function CatalogProductEditor() {
     if (!p.name.trim()) { notify('Product name is required', 'error'); return; }
     if (!(p.price > 0)) { notify('Price must be greater than 0', 'error'); return; }
     if (p.images.length === 0) { notify('At least one image is required before activating a premium listing', 'error'); setTab('images'); return; }
+    // Listing Playbook gate — a Live product needs verified images (no
+    // placeholders / inline base64) and supplier data. Draft saves get
+    // non-blocking warnings; Live saves are blocked with the exact reason.
+    const pb = await getListingPlaybook();
+    const verdict = validateListingAgainstPlaybook(pb, {
+      name: p.name,
+      status: p.status,
+      categoryName: p.categoryName,
+      images: p.images,
+      supplierUrl: p.supplierUrl,
+      supplierName: p.supplierSource,
+      supplierSku: p.supplierProductRef,
+    });
+    if (p.status === 'active' && !verdict.ok) {
+      notify(`Cannot save as Live: ${verdict.errors.join(' ')}`, 'error');
+      setTab('images');
+      return;
+    }
+    if (verdict.warnings.length) notify(verdict.warnings.join(' '), 'error');
     setSaving(true);
     try {
       // Refresh the session token before writing — a form left open past the
@@ -1872,9 +1893,10 @@ export function CatalogProductEditor() {
       })));
       // Auto-list: if enabled and this save made the product commerce-ready
       // while it was still a draft, publish it (status → active) so it shows
-      // on the storefront without a second manual step.
+      // on the storefront without a second manual step. The playbook gate
+      // applies here too — never auto-publish a listing that fails it.
       const wasDraft = saved.status !== 'active';
-      if (wasDraft && saved.commerceReadiness === 'COMMERCE_READY' && (await getAutoPublishEnabled())) {
+      if (wasDraft && saved.commerceReadiness === 'COMMERCE_READY' && verdict.ok && (await getAutoPublishEnabled())) {
         const published = await updateProduct(saved.id, { status: 'active' });
         if (published) notify('Auto-published — product is commerce-ready.');
       }
@@ -1929,6 +1951,9 @@ export function CatalogProductEditor() {
             <button onClick={() => setMode('ai')} className={`btn-glow px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${mode === 'ai' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`} title="AI Import — research any product URL and save as a draft">✨ AI Import</button>
           </div>
         )}
+        <button onClick={() => nav('/admin/settings/listing-playbook')} className="px-2.5 py-1.5 border border-blue-200 bg-blue-50 rounded-lg text-[11px] font-semibold text-blue-700 hover:bg-blue-100 flex items-center gap-1 shrink-0" title="Listing Playbook — listing rules applied on save">
+          <BookBookmark size={13} /> Playbook
+        </button>
         <div className="flex-1" />
         {!isNew && mode !== 'ai' && (
           <>
