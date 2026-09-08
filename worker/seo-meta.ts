@@ -843,9 +843,7 @@ function injectProductBody(html: string, p: ProductRow): string {
   else if (p.stock_status && p.stock_status !== 'in_stock') facts.push('Availability confirmed at checkout');
   if (p.free_shipping === true) facts.push('Free shipping');
   else if (p.shipping_cost && Number(p.shipping_cost) > 0) facts.push(`Shipping ${money(p.shipping_cost)}`);
-  if (p.delivery_min_days != null && p.delivery_max_days != null) {
-    facts.push(`Estimated delivery ${p.delivery_min_days}–${p.delivery_max_days} business days`);
-  }
+  facts.push('Delivery timing confirmed during order processing');
   if (facts.length) parts.push(`<p>${esc(facts.join(' · '))}</p>`);
   const lead = (p.short_description || '').trim() || (p.description || '').trim();
   if (lead) parts.push(`<h2>Details</h2>`, `<p>${esc(lead)}</p>`);
