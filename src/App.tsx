@@ -1308,6 +1308,47 @@ function SLayout({ children }: { children: ReactNode }) {
 }
 
 // ============================================================================
+// CHECKOUT LAYOUT — deliberately calmer than the storefront.
+//
+// Only the logo, a secure-checkout indicator and the cart count stay; the
+// announcement bar, full navigation, footer, popups, cookie banner, WhatsApp
+// button and AI assistant are all excluded so nothing distracts from (or
+// overlaps) the payment form.
+// ============================================================================
+function CheckoutLayout({ children }: { children: ReactNode }) {
+  const { cart } = useApp();
+  const cc = cart.reduce((s, i) => s + i.quantity, 0);
+  return (
+    <div className="min-h-screen flex flex-col bg-luxe-cream">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-4 focus:py-2 focus:bg-luxe-black focus:text-white focus:rounded-lg focus:text-sm">Skip to content</a>
+      <ScrollToTop />
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-luxe-silver/60">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+          <Link to="/" className="flex items-center gap-2 shrink-0 group">
+            <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
+            <span className="flex flex-col leading-none">
+              <span className="font-brand text-base font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
+              <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-1 sm:gap-3">
+            <span className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-luxe-charcoal">
+              <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold" />
+              Secure Checkout
+            </span>
+            <Link to="/cart" className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Cart, ${cc} item${cc === 1 ? '' : 's'}`}>
+              <ShoppingBag01 strokeWidth={1.5} size={18} />
+              {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
+            </Link>
+          </div>
+        </div>
+      </header>
+      <main id="main-content" className="flex-1">{children}</main>
+    </div>
+  );
+}
+
+// ============================================================================
 // PRODUCT DETAIL PAGE
 // ============================================================================
 
@@ -3536,8 +3577,8 @@ export default function App() {
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
-          <Route path="/checkout" element={<SLayout><Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading secure checkout…</div>}><CheckoutOnsitePage /></Suspense></SLayout>} />
-          <Route path="/checkout/success" element={<SLayout><CheckoutSuccessPage /></SLayout>} />
+          <Route path="/checkout" element={<CheckoutLayout><Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading secure checkout…</div>}><CheckoutOnsitePage /></Suspense></CheckoutLayout>} />
+          <Route path="/checkout/success" element={<CheckoutLayout><CheckoutSuccessPage /></CheckoutLayout>} />
           <Route path="/orders" element={<SLayout><OrdersPage /></SLayout>} />
           <Route path="/about" element={<SLayout><AboutPage /></SLayout>} />
           <Route path="/contact" element={<SLayout><ContactPage /></SLayout>} />
