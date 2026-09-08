@@ -776,8 +776,8 @@ function Header() {
     <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3 lg:gap-6">
         <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 shrink-0 group" aria-label="Luxedge home">
-          <img src="/luxedge-mark.png" alt="Luxedge" className="h-12 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
+        <Link to="/" className="flex items-center gap-2 shrink-0 group">
+          <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="h-12 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
           <span className="flex flex-col leading-none">
             <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
             <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
@@ -811,7 +811,7 @@ function Header() {
               </div></>}
             </div>
           ) : (
-            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
+            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label="Sign in">
               <UserIcon strokeWidth={1.5} size={17} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
             </Link>
           )}
@@ -905,8 +905,8 @@ function Footer() {
 
           {/* Col 1 — Brand (lg:col-span-4) */}
           <div className="sm:col-span-2 lg:col-span-4">
-            <Link to="/" className="flex items-center gap-3 mb-3 group w-fit" aria-label="Luxedge home">
-              <img src="/luxedge-mark.png" alt="Luxedge" className="w-12 h-12 transition-transform duration-300 group-hover:scale-105" />
+            <Link to="/" className="flex items-center gap-3 mb-3 group w-fit">
+              <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="w-12 h-12 transition-transform duration-300 group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-brand text-lg font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
                 <span className="text-[9px] tracking-[0.26em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
@@ -2178,9 +2178,9 @@ function HomePage() {
                 <img src={heroParrotImage} alt="Colorful parrot" loading="eager" decoding="async" onError={onImageError} />
                 <span>Shop bird essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
               </Link>
-              {heroProduct && <Link to={productPath(heroProduct)} className="home-hero-product-chip">
-                <span>Featured from the collection</span><strong>{heroProduct.name}</strong>
-              </Link>}
+              <Link to={heroProduct ? productPath(heroProduct) : "/shop"} className="home-hero-product-chip" style={{ visibility: heroProduct ? "visible" : "hidden" }}>
+                <span>Featured from the collection</span><strong>{heroProduct?.name || "Browse our collection"}</strong>
+              </Link>
             </div>
           </div>
         </div>
@@ -2212,7 +2212,7 @@ function HomePage() {
                 <Reveal key={pet.label} delay={index * 60}>
                   <Link to={pet.to} className="pet-avatar-item">
                     <div className="pet-avatar-circle">
-                      <img src={pet.img} alt={pet.label} loading="lazy" decoding="async" onError={onImageError} />
+                      <img src={pet.img} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError} />
                     </div>
                     <span className="pet-avatar-name">{pet.label}</span>
                   </Link>
@@ -2259,8 +2259,7 @@ function HomePage() {
       </section>
 
       {/* â•â•â•â•â•â•â•â• DEAL BANNER â•â•â•â•â•â•â•â• */}
-      {deals.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section style={{ visibility: deals.length > 0 ? "visible" : "hidden", height: deals.length > 0 ? "auto" : 0, overflow: "hidden" }} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal>
             <Link to="/shop?q=deal" className="deal-banner block p-6 sm:p-8 lg:p-10">
               <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6">
@@ -2283,7 +2282,6 @@ function HomePage() {
             </Link>
           </Reveal>
         </section>
-      )}
 
       {/* â•â•â•â•â•â•â•â• SHOP BY CATEGORY â•â•â•â•â•â•â•â• */}
       <section className="section-compact bg-luxe-cream">
@@ -3206,7 +3204,7 @@ function LoginPage() {
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
-          <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
+          <Link to="/" className="inline-flex items-center justify-center group">
             <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
@@ -3325,7 +3323,7 @@ function SignupPage() {
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
-          <Link to="/" className="inline-flex items-center justify-center group" aria-label="Luxedge home">
+          <Link to="/" className="inline-flex items-center justify-center group">
             <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
           </Link>
         </div>
