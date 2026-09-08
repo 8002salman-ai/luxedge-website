@@ -94,7 +94,7 @@ export default function CampaignPopup() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim(),
-          source: 'campaign_popup',
+          source: 'welcome_popup',
           pageUrl: pathname,
           message: `Campaign interest: ${campaign.title}`,
           optedIn,

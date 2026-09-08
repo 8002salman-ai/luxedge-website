@@ -94,7 +94,7 @@ export default function CampaignLanding() {
           petType,
           productId: selected || undefined,
           marketingOptIn: form.marketing,
-          source: 'campaign_page',
+          source: 'welcome_popup',
           utm: utm.current,
           company: '', // honeypot
           formSeconds: Math.round((Date.now() - startedAt.current) / 1000),
