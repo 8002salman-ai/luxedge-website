@@ -49,8 +49,8 @@ export interface OnsiteCheckoutConfig {
   paypalClientConfig?: Record<string, string> | null;
 }
 
-export async function fetchOnsiteConfig(): Promise<OnsiteCheckoutConfig> {
-  const res = await fetch('/api/checkout/onsite', { headers: { Accept: 'application/json' } });
+export async function fetchOnsiteConfig(opts: { signal?: AbortSignal } = {}): Promise<OnsiteCheckoutConfig> {
+  const res = await fetch('/api/checkout/onsite', { headers: { Accept: 'application/json' }, signal: opts.signal });
   const data = (await res.json().catch(() => null)) as Partial<OnsiteCheckoutConfig> | null;
   if (!res.ok || !data) {
     return { stripeConfigured: false, stripePublishableKey: null, stripeMode: null, shippoConfigured: false };

@@ -46,6 +46,10 @@ export default function CheckoutOnsitePage() {
   const nav = useNavigate();
 
   const [config, setConfig] = useState<OnsiteCheckoutConfig | null>(null);
+  // Distinct from `config === null` (still loading): a fetch that failed or
+  // timed out gets a retry card instead of silently pretending payments are
+  // unavailable (which would mislabel a transient outage as a config gap).
+  const [configFailed, setConfigFailed] = useState(false);
   const [f, setF] = useState<FieldState>({
     email: user?.email || '', phone: '', fullName: user?.name || '',
     addressLine1: '', addressLine2: '', city: '', state: '', postalCode: '', country: 'US',
@@ -91,11 +95,16 @@ export default function CheckoutOnsitePage() {
     country: f.country || 'US',
   }), [f]);
 
-  useEffect(() => {
-    let live = true;
-    fetchOnsiteConfig().then((c) => { if (live) setConfig(c); }).catch(() => { if (live) setConfig({ stripeConfigured: false, stripePublishableKey: null, stripeMode: null, shippoConfigured: false }); });
-    return () => { live = false; };
+  // Load checkout config (Stripe/payment readiness) with a hard timeout so a
+  // hung /api/checkout/onsite can never leave the buyer staring at an endless
+  // "checking…" spinner. On failure show a retry card instead.
+  const loadConfig = useCallback(() => {
+    setConfigFailed(false);
+    fetchOnsiteConfig({ signal: AbortSignal.timeout(10_000) })
+      .then((c) => { if (c) setConfig(c); })
+      .catch(() => { setConfigFailed(true); });
   }, []);
+  useEffect(() => { loadConfig(); }, [loadConfig]);
 
   const setField = (k: keyof FieldState, v: string) => setF((cur) => ({ ...cur, [k]: v }));
 
@@ -294,10 +303,14 @@ const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1"
 
   // ---- Checkout presentation helpers (no logic changes) ----
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
-  const paymentLoading = !config;
+  const paymentLoading = !config && !configFailed;
+  const paymentFailed = configFailed;
   const paymentUnavailable = Boolean(config) && !config!.anyProviderReady && !config!.stripeConfigured;
   const paymentReady = Boolean(config) && (config!.anyProviderReady || config!.stripeConfigured);
-  const ctaDisabled = starting || paymentLoading || paymentUnavailable || Boolean(paymentSession);
+  // The primary CTA is DISABLED only while actually working (reserving or
+  // loading config). When payment is unavailable the CTA turns into an
+  // ENABLED contact-support action — never a dead button.
+  const ctaDisabled = starting || paymentLoading || Boolean(paymentSession);
   const ctaLabel = starting
     ? 'Reserving your items…'
     : paymentSession
@@ -305,8 +318,11 @@ const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1"
       : paymentLoading
         ? 'Checking secure payment…'
         : paymentUnavailable
-          ? 'Secure payments unavailable'
+          ? 'Contact Support'
           : `Pay securely — $${total.toFixed(2)}`;
+  const onPrimaryClick = paymentUnavailable || paymentFailed
+    ? () => nav('/contact')
+    : () => { void startPayment(); };
 
   const StepChip = ({ n }: { n: number }) => (
     <span className="w-7 h-7 rounded-full bg-luxe-gold text-white text-xs font-bold flex items-center justify-center shrink-0">{n}</span>
@@ -576,16 +592,36 @@ const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1"
 
               <div className="mt-6 pt-5 border-t border-gray-100">
                 <SubTitle>Payment</SubTitle>
-                {!config ? (
-                  <p className="text-sm text-gray-500">Checking secure payment availability…</p>
-                ) : paymentUnavailable ? (
+                {paymentLoading ? (
+                  /* Compact skeleton while the config fetch is in flight —
+                     never a blank/endless "checking…" state. */
+                  <div className="rounded-xl border border-luxe-silver bg-white p-4" aria-busy="true" aria-label="Loading payment options">
+                    <div className="h-3.5 w-40 bg-gray-200 rounded animate-pulse mb-2.5" />
+                    <div className="h-3 w-56 bg-gray-100 rounded animate-pulse mb-2" />
+                    <div className="h-3 w-48 bg-gray-100 rounded animate-pulse" />
+                  </div>
+                ) : paymentFailed ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-                    <p className="font-semibold text-amber-900">Secure payments are temporarily unavailable</p>
-                    <p className="text-xs text-amber-800 mt-1">Your cart is saved. Please try again shortly or contact support.</p>
+                    <p className="font-semibold text-amber-900">We could not load payment options</p>
+                    <p className="text-xs text-amber-800 mt-1">Your cart is saved. Check your connection and try again, or contact support.</p>
+                    <button onClick={loadConfig} className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxe-charcoal text-white rounded-lg text-xs font-bold hover:bg-luxe-black transition-colors">
+                      Retry
+                    </button>
+                  </div>
+                ) : paymentUnavailable ? (
+                  /* ONE concise honest error card — no dead buttons, no
+                     misleading "secure by Stripe" claims. The CTA row becomes
+                     an enabled Contact Support action (see onPrimaryClick). */
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                    <p className="font-semibold text-amber-900">Online payments are temporarily unavailable</p>
+                    <p className="text-xs text-amber-800 mt-1">Your cart is saved — nothing will be charged. Please try again shortly or contact support.</p>
+                    <Link to="/contact" className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-luxe-charcoal text-white rounded-lg text-xs font-bold hover:bg-luxe-black transition-colors">
+                      Contact Support
+                    </Link>
                   </div>
                 ) : paymentSession ? (
                   <OnsitePaymentForm
-                    publishableKey={config.stripePublishableKey || ''}
+                    publishableKey={config?.stripePublishableKey || ''}
                     clientSecret={paymentSession.clientSecret || ''}
                     amountLabel={`$${(paymentSession.totals?.total ?? total).toFixed(2)}`}
                     onSuccess={handlePaid}
@@ -608,15 +644,12 @@ const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1"
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
               {summaryBody}
               <button
-                onClick={startPayment}
+                onClick={onPrimaryClick}
                 disabled={ctaDisabled}
                 className={`mt-6 w-full py-4 rounded-xl text-white font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-gold ${ctaDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-luxe-gold hover:bg-luxe-gold-dark'}`}
               >
                 {ctaLabel}
               </button>
-              {paymentUnavailable && (
-                <p className="mt-2 text-center text-[10px] text-gray-400">Your cart is saved — nothing will be charged until secure payment is available.</p>
-              )}
               {trustRow}
               <p className="mt-3 text-center text-[10px] text-gray-400">🔒 256-bit SSL · your order is reserved for 24 hours while you pay</p>
             </div>
@@ -632,7 +665,7 @@ const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1"
             <p className="font-bold text-lg text-luxe-black leading-tight">${total.toFixed(2)}</p>
           </div>
           <button
-            onClick={startPayment}
+            onClick={onPrimaryClick}
             disabled={ctaDisabled}
             className={`flex-1 py-3.5 rounded-xl text-white font-bold text-sm transition-colors flex items-center justify-center gap-2 ${ctaDisabled ? 'bg-gray-300 cursor-not-allowed' : 'bg-luxe-gold hover:bg-luxe-gold-dark shadow-gold'}`}
           >

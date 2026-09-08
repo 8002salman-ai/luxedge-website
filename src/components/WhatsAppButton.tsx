@@ -23,7 +23,7 @@ export default function WhatsAppButton() {
 
   return (
     <button onClick={openChat} aria-label="Chat on WhatsApp"
-      className="fixed bottom-5 left-5 z-[125] flex items-center gap-2.5 pl-2 pr-4 py-2 rounded-full bg-[#25D366] hover:bg-[#1ebe5b] text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 group">
+      className="fixed bottom-5 left-5 z-[125] hidden md:flex items-center gap-2.5 pl-2 pr-4 py-2 rounded-full bg-[#25D366] hover:bg-[#1ebe5b] text-white shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 group">
       <span className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
         <ChatTeardropDots size={20} weight="fill" />
       </span>

@@ -59,13 +59,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === 'GET') {
     const envSecret = (process.env.STRIPE_SECRET_KEY || '').trim();
     const envWh = (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
-    const [dbSecret, dbWh] = await Promise.all([
+    const envPk = (process.env.STRIPE_PUBLISHABLE_KEY || '').trim();
+    const [dbSecret, dbWh, dbPk] = await Promise.all([
       readSetting(STRIPE_SETTING_KEYS.secretKey),
       readSetting(STRIPE_SETTING_KEYS.webhookSecret),
+      readSetting(STRIPE_SETTING_KEYS.publishableKey),
     ]);
     sendJson(res, 200, {
       secretKey: envOrDb(envSecret, dbSecret || ''),
       webhookSecret: envOrDb(envWh, dbWh || ''),
+      publishableKey: envOrDb(envPk, dbPk || ''),
       // Read-only checkout config for the Admin → Payments summary card.
       sessionConfig: CHECKOUT_SESSION_PARAMS,
     });
@@ -92,13 +95,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const settingKey =
       keyType === 'secretKey' ? STRIPE_SETTING_KEYS.secretKey
       : keyType === 'webhookSecret' ? STRIPE_SETTING_KEYS.webhookSecret
+      : keyType === 'publishableKey' ? STRIPE_SETTING_KEYS.publishableKey
       : '';
     if (!settingKey) {
-      sendJson(res, 400, { error: 'keyType must be secretKey or webhookSecret' });
+      sendJson(res, 400, { error: 'keyType must be secretKey, webhookSecret or publishableKey' });
       return;
     }
     if (key.length < 8) {
       sendJson(res, 400, { error: 'Key too short — paste the full key.' });
+      return;
+    }
+    // The publishable key is public by design (it ships to the browser for
+    // PaymentElement) — but only accept well-formed Stripe keys to keep the
+    // registry clean.
+    if (keyType === 'publishableKey' && !/^pk_(live|test)_/.test(key)) {
+      sendJson(res, 400, { error: 'Publishable key must start with pk_live_ or pk_test_.' });
       return;
     }
     const ok = await upsertAppSetting(settingKey, key);
@@ -116,16 +127,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const settingKey =
       keyType === 'secretKey' ? STRIPE_SETTING_KEYS.secretKey
       : keyType === 'webhookSecret' ? STRIPE_SETTING_KEYS.webhookSecret
+      : keyType === 'publishableKey' ? STRIPE_SETTING_KEYS.publishableKey
       : '';
     if (!settingKey) {
-      sendJson(res, 400, { error: 'keyType must be secretKey or webhookSecret' });
+      sendJson(res, 400, { error: 'keyType must be secretKey, webhookSecret or publishableKey' });
       return;
     }
     await deleteAppSetting(settingKey);
     resetStripeKeyCache();
     const stillEnv = keyType === 'secretKey'
       ? !!(process.env.STRIPE_SECRET_KEY || '').trim()
-      : !!(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+      : keyType === 'webhookSecret'
+        ? !!(process.env.STRIPE_WEBHOOK_SECRET || '').trim()
+        : !!(process.env.STRIPE_PUBLISHABLE_KEY || '').trim();
     sendJson(res, 200, { ok: true, configured: stillEnv, masked: stillEnv ? '•••• (env)' : '' });
     return;
   }

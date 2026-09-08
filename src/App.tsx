@@ -1043,7 +1043,7 @@ function Footer() {
             </div>
             <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/65">
               <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
-              <span>{(import.meta as { env?: Record<string, string> }).env?.VITE_STRIPE_PUBLISHABLE_KEY ? 'Secure payments powered by Stripe.' : 'Payments launching soon — keep exploring the collection.'}</span>
+              <SecurePaymentsNote />
             </div>
           </div>
         </div>
@@ -1344,6 +1344,45 @@ function CheckoutLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main id="main-content" className="flex-1">{children}</main>
+    </div>
+  );
+}
+
+// Compact skeleton for the lazy-loaded checkout route — mirrors the real
+// two-column layout (form left, sticky summary right) so there is no layout
+// jump and no long blank "Loading…" flash.
+function CheckoutLoadingSkeleton() {
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8" aria-busy="true" aria-label="Loading secure checkout">
+      <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mb-2" />
+      <div className="h-7 w-56 bg-gray-200 rounded animate-pulse mb-8" />
+      <div className="grid lg:grid-cols-5 gap-6 sm:gap-8 items-start">
+        <div className="lg:col-span-3 space-y-5">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-2xl border border-luxe-silver/70 p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-7 h-7 rounded-full bg-gray-200 animate-pulse" />
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="h-3.5 w-full bg-gray-100 rounded animate-pulse" />
+                <div className="h-3.5 w-5/6 bg-gray-100 rounded animate-pulse" />
+                <div className="h-3.5 w-2/3 bg-gray-100 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden lg:block lg:col-span-2">
+          <div className="bg-white rounded-2xl border border-luxe-silver/70 p-5 shadow-sm lg:sticky lg:top-20">
+            <div className="h-5 w-36 bg-gray-200 rounded animate-pulse mb-5" />
+            <div className="space-y-3">
+              <div className="h-14 w-full bg-gray-100 rounded-lg animate-pulse" />
+              <div className="h-14 w-full bg-gray-100 rounded-lg animate-pulse" />
+            </div>
+            <div className="h-11 w-full bg-gray-200 rounded-xl animate-pulse mt-6" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1735,9 +1774,6 @@ function ProductDetailPage() {
             </div>
           )}
 
-          {/* Ad: Below Product Information */}
-          <AdSenseAd placement="product_below_info" />
-          <AdsterraAd />
         </div>
       </div>
 
@@ -1854,9 +1890,15 @@ function ProductDetailPage() {
         </div>
       </div>
 
+      {/* Advertisements live BELOW the full product flow (never inside the
+          purchase column, never between the price/qty/Add-to-Cart controls) so
+          they can never distract from or compete with the buy action. */}
+      <AdSenseAd placement="product_below_info" />
+      <AdsterraAd />
+
       {/* â”€â”€ Sticky mobile Add to Cart (hidden on desktop) â”€â”€ */}
       <div className={`lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-luxe-silver/70 shadow-[0_-8px_30px_-12px_rgba(16,26,46,0.2)] transition-transform duration-300 luxe-safe-bottom ${ctaVisible ? 'translate-y-full' : 'translate-y-0'}`} aria-hidden={ctaVisible} inert={ctaVisible}>
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex items-center gap-3 px-4 py-3 pr-20">
           <div className="min-w-0">
             <p className="text-sm font-bold text-luxe-black leading-tight">${activePrice.toFixed(2)}</p>
             {discount > 0 && <p className="text-[10px] text-luxe-gray line-through">${activeOriginal.toFixed(2)}</p>}
@@ -1917,6 +1959,27 @@ function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow
 // image is observed) so ranked grids can sink the broken product immediately.
 function useMerchVisualVersion(): number {
   return useSyncExternalStore(subscribeVisualQuality, getVisualQualityVersion, () => 0);
+}
+
+// Honest payments footnote — never claims Stripe unless the live checkout
+// config actually reports a configured, usable provider (server-side truth,
+// not a build-time env guess). Falls back to a neutral secure-checkout note.
+function SecurePaymentsNote() {
+  const [ready, setReady] = useState<'checking' | 'ready' | 'no'>('checking');
+  useEffect(() => {
+    let live = true;
+    fetch('/api/checkout/onsite', { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6_000) })
+      .then((r) => r.json())
+      .then((d) => { if (live) setReady(d && (d.stripeConfigured || d.anyProviderReady) ? 'ready' : 'no'); })
+      .catch(() => { if (live) setReady('no'); });
+    return () => { live = false; };
+  }, []);
+  if (ready === 'checking') {
+    return <span>Secure checkout · card details never stored</span>;
+  }
+  return ready === 'ready'
+    ? <span>Secure payments powered by Stripe.</span>
+    : <span>Secure checkout · card details never stored</span>;
 }
 
 function HomePage() {
@@ -2417,16 +2480,20 @@ function ShopPage() {
           only image, copy, and accent mood vary (CategoryHero config). */}
       <section className="bg-gradient-to-b from-luxe-cream to-white border-b border-luxe-silver/60">
         {!isDeals && cat !== 'All' ? (
-          <div className="max-w-[1440px] mx-auto px-4 py-8 sm:py-10 grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] gap-6 lg:gap-8 items-center">
+          <div className="max-w-[1440px] mx-auto px-4 py-8 sm:py-10 grid lg:grid-cols-[minmax(0,1fr)_auto] gap-6 lg:gap-8 items-center">
             <CategoryHero config={categoryHeroConfig(cat, pageDesc)} />
             {/* Header-right native unit: full 250px frame so the native cards
-                render image+text instead of cropping to text-only. */}
+                render image+text instead of cropping to text-only. The unit
+                renders nothing when gated (no consent / budget / config), so
+                the `auto` track collapses to zero instead of leaving a blank
+                300–420px gap on desktop. Width lives on the unit itself so an
+                empty column can never reserve space. */}
             <div className="hidden lg:block justify-self-end">
-              <AdsterraAd className="my-0" />
+              <AdsterraAd className="my-0 w-[300px] lg:w-[360px]" />
             </div>
           </div>
         ) : (
-          <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] gap-6 lg:gap-8 items-center">
+          <div className="max-w-[1440px] mx-auto px-4 py-10 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_auto] gap-6 lg:gap-8 items-center">
             <div className="max-w-xl">
               <p className="eyebrow mb-2">{isDeals ? 'Savings' : 'Our Collection'}</p>
               <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-luxe-black tracking-tight leading-[1.05]">{pageTitle}</h1>
@@ -2434,7 +2501,7 @@ function ShopPage() {
               <p className="text-luxe-gray text-xs sm:text-sm mt-3">{pageDesc}</p>
             </div>
             <div className="hidden lg:block justify-self-end">
-              <AdsterraAd className="my-0" />
+              <AdsterraAd className="my-0 w-[300px] lg:w-[360px]" />
             </div>
           </div>
         )}
@@ -2753,6 +2820,12 @@ function CartPage() {
               <Lock01 strokeWidth={1.5} size={14} /> Proceed to Checkout
             </button>
             <Link to="/shop" className="mt-3 block w-full py-2.5 text-center text-xs text-luxe-gray hover:text-luxe-gold transition-colors">Continue Shopping</Link>
+            {/* Delivery reassurance — concise, honest (rates shown at checkout). */}
+            <div className="mt-4 pt-4 border-t border-luxe-silver/60 text-[11px] text-luxe-gray space-y-1.5">
+              <p className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> Delivery options and live rates shown at checkout</p>
+              <p className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> 30-day return requests</p>
+              <p className="flex items-center gap-1.5"><Lock01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> Secure checkout — card details never stored</p>
+            </div>
           </div>
         </div>
       </div>
@@ -3577,7 +3650,7 @@ export default function App() {
           <Route path="/product/:id" element={<SLayout><ProductDetailPage /></SLayout>} />
           <Route path="/wishlist" element={<SLayout><WishlistPage /></SLayout>} />
           <Route path="/cart" element={<SLayout><CartPage /></SLayout>} />
-          <Route path="/checkout" element={<CheckoutLayout><Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-sm text-luxe-gray">Loading secure checkout…</div>}><CheckoutOnsitePage /></Suspense></CheckoutLayout>} />
+          <Route path="/checkout" element={<CheckoutLayout><Suspense fallback={<CheckoutLoadingSkeleton />}><CheckoutOnsitePage /></Suspense></CheckoutLayout>} />
           <Route path="/checkout/success" element={<CheckoutLayout><CheckoutSuccessPage /></CheckoutLayout>} />
           <Route path="/orders" element={<SLayout><OrdersPage /></SLayout>} />
           <Route path="/about" element={<SLayout><AboutPage /></SLayout>} />

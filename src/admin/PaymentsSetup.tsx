@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plug, CheckCircle, XCircle, ArrowClockwise,
-  ShieldCheck, CreditCard, Globe,
+  ShieldCheck, CreditCard, Globe, Key,
 } from '@phosphor-icons/react';
 import { getAccessToken } from '../services/supabase';
 
@@ -95,6 +95,10 @@ export default function PaymentsSetup() {
   const [testResult, setTestResult] = useState<{ provider: ProviderId; ok: boolean; message?: string } | null>(null);
   const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
+  // Stripe key management (owner-attached app_settings keys — never full values).
+  const [stripeKeys, setStripeKeys] = useState<Record<string, { configured: boolean; masked: string; source: string }> | null>(null);
+  const [pkInput, setPkInput] = useState('');
+  const [savingKey, setSavingKey] = useState<'publishableKey' | null>(null);
 
   const authHeaders = useCallback((): Record<string, string> => {
     const token = getAccessToken();
@@ -146,6 +150,65 @@ export default function PaymentsSetup() {
     const r = await postAction({ action, provider: id });
     setNote(r.ok ? { kind: 'ok', text: r.message || 'Saved' } : { kind: 'err', text: r.error || 'Failed' });
     void loadData();
+  };
+
+  // Admin → Payments: manage the owner-attached Stripe keys. Only the
+  // publishable key is editable in the browser (it is public by design — it
+  // ships to the browser for PaymentElement). Secret/webhook keys stay in
+  // Cloudflare Worker secrets / app_settings and are never echoed.
+  const loadStripeKeys = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/payment-keys', { headers: authHeaders() });
+      if (res.ok) {
+        const j = await res.json() as { secretKey?: { configured: boolean; masked: string; source: string }; webhookSecret?: { configured: boolean; masked: string; source: string }; publishableKey?: { configured: boolean; masked: string; source: string } };
+        setStripeKeys({
+          'Secret Key': j.secretKey || { configured: false, masked: '', source: 'none' },
+          'Webhook Secret': j.webhookSecret || { configured: false, masked: '', source: 'none' },
+          'Publishable Key': j.publishableKey || { configured: false, masked: '', source: 'none' },
+        });
+      }
+    } catch { /* ignore */ }
+  }, [authHeaders]);
+
+  useEffect(() => { if (data) void loadStripeKeys(); }, [data, loadStripeKeys]);
+
+  const savePublishableKey = async () => {
+    if (!pkInput.trim()) return;
+    setSavingKey('publishableKey');
+    try {
+      const res = await fetch('/api/admin/payment-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ action: 'set', keyType: 'publishableKey', key: pkInput.trim() }),
+      });
+      const j = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok && j.ok) {
+        setNote({ kind: 'ok', text: 'Stripe publishable key saved — checkout will accept cards once the secret key + webhook are also configured.' });
+        setPkInput('');
+      } else {
+        setNote({ kind: 'err', text: j.error || 'Failed to save the publishable key.' });
+      }
+      void loadStripeKeys();
+      void loadData();
+    } catch {
+      setNote({ kind: 'err', text: 'Network error saving the publishable key.' });
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const clearPublishableKey = async () => {
+    try {
+      const res = await fetch('/api/admin/payment-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ action: 'clear', keyType: 'publishableKey' }),
+      });
+      const j = await res.json() as { ok?: boolean; error?: string };
+      setNote(j.ok ? { kind: 'ok', text: 'Publishable key cleared.' } : { kind: 'err', text: j.error || 'Failed to clear.' });
+      void loadStripeKeys();
+      void loadData();
+    } catch { /* ignore */ }
   };
 
   if (loading && !data) {
@@ -314,6 +377,53 @@ export default function PaymentsSetup() {
                           ? 'credentials are in env vars'
                           : `wrangler secret put <VAR_NAME>`}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Stripe live key management — attach the PUBLIC publishable
+                      key from the browser (no redeploy). Secret/webhook keys are
+                      never editable here; they stay in Worker secrets or the
+                      server-side app_settings registry. */}
+                  {p.id === 'stripe' && stripeKeys && (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Key size={13} /> Stripe Keys (owner-managed)</h4>
+                      <div className="space-y-1.5 text-sm">
+                        {Object.entries(stripeKeys).map(([label, info]) => (
+                          <div key={label} className="flex items-center justify-between gap-2">
+                            <span className="text-gray-600">{label}</span>
+                            <span className={`font-mono text-xs ${info.configured ? 'text-green-700' : 'text-gray-400'}`}>
+                              {info.configured ? `${info.masked} (${info.source})` : 'MISSING'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-2">
+                        The publishable key is public and safe to paste here; it is stored server-side and never shown in full.
+                        Secret + webhook keys are set as Cloudflare Worker secrets (<code className="bg-gray-100 px-1 rounded">wrangler secret put STRIPE_SECRET_KEY</code>).
+                      </p>
+                      {!stripeKeys['Publishable Key']?.configured && (
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            value={pkInput}
+                            onChange={(e) => setPkInput(e.target.value)}
+                            placeholder="pk_live_…"
+                            aria-label="Stripe publishable key"
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:border-luxe-gold focus:ring-2 focus:ring-luxe-gold/20"
+                          />
+                          <button onClick={savePublishableKey} disabled={savingKey === 'publishableKey' || !pkInput.trim()}
+                            className={`${BTN} bg-luxe-gold text-white hover:bg-luxe-gold-dark disabled:opacity-50`}>
+                            {savingKey === 'publishableKey' ? <ArrowClockwise size={12} className="animate-spin" /> : null}
+                            Save
+                          </button>
+                        </div>
+                      )}
+                      {stripeKeys['Publishable Key']?.configured && (
+                        <button onClick={clearPublishableKey} className="mt-3 text-[11px] text-red-500 hover:text-red-700 underline">
+                          Clear publishable key
+                        </button>
+                      )}
                     </div>
                   )}
 

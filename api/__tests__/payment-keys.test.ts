@@ -25,6 +25,7 @@ const handler = (await import('../admin/payment-keys.js')).default;
 // length/masking, never key validity.
 const SECRET_ENV = 'sk_live_probe_test_secret';
 const WH_ENV = 'whsec_probe_test_secret';
+const PK_ENV = 'pk_live_probe_test_secret';
 
 function makeRes(): { captured: { status: number; body: unknown }; server: ServerResponse } {
   const captured = { status: 200, body: null as unknown };
@@ -80,6 +81,7 @@ describe('/api/admin/payment-keys', () => {
   const original = {
     secret: process.env.STRIPE_SECRET_KEY,
     wh: process.env.STRIPE_WEBHOOK_SECRET,
+    pk: process.env.STRIPE_PUBLISHABLE_KEY,
   };
 
   beforeEach(() => {
@@ -88,6 +90,7 @@ describe('/api/admin/payment-keys', () => {
     vi.mocked(deleteAppSetting).mockResolvedValue(true);
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_WEBHOOK_SECRET;
+    delete process.env.STRIPE_PUBLISHABLE_KEY;
   });
 
   afterEach(() => {
@@ -95,6 +98,7 @@ describe('/api/admin/payment-keys', () => {
     vi.clearAllMocks();
     if (original.secret === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = original.secret;
     if (original.wh === undefined) delete process.env.STRIPE_WEBHOOK_SECRET; else process.env.STRIPE_WEBHOOK_SECRET = original.wh;
+    if (original.pk === undefined) delete process.env.STRIPE_PUBLISHABLE_KEY; else process.env.STRIPE_PUBLISHABLE_KEY = original.pk;
   });
 
   it('GET reports not-configured state when neither env nor attached keys exist', async () => {
@@ -117,16 +121,36 @@ describe('/api/admin/payment-keys', () => {
     stubFetch({});
     process.env.STRIPE_SECRET_KEY = SECRET_ENV;
     process.env.STRIPE_WEBHOOK_SECRET = WH_ENV;
+    process.env.STRIPE_PUBLISHABLE_KEY = PK_ENV;
     const { captured, server } = makeRes();
     await handler(makeReq('GET', {}), server);
     expect(captured.status).toBe(200);
-    const b = captured.body as { secretKey: { configured: boolean; source: string; masked: string }; webhookSecret: { configured: boolean; source: string; masked: string } };
+    const b = captured.body as { secretKey: { configured: boolean; source: string; masked: string }; webhookSecret: { configured: boolean; source: string; masked: string }; publishableKey: { configured: boolean; source: string; masked: string } };
     expect(b.secretKey.configured).toBe(true);
     expect(b.secretKey.source).toBe('env');
     expect(b.secretKey.masked).not.toContain(SECRET_ENV);
     expect(b.secretKey.masked).toContain('••••');
     expect(b.webhookSecret.configured).toBe(true);
+    expect(b.publishableKey.configured).toBe(true);
+    expect(b.publishableKey.source).toBe('env');
+    expect(b.publishableKey.masked).not.toContain(PK_ENV);
   });
+
+  it('set persists the publishable key under PAYMENT_STRIPE_PUBLISHABLE_KEY and never echoes it', async () => {
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'set', keyType: 'publishableKey', key: PK_ENV }), server);
+    expect(captured.status).toBe(200);
+    expect(upsertAppSetting).toHaveBeenCalledWith('PAYMENT_STRIPE_PUBLISHABLE_KEY', PK_ENV);
+    expect(JSON.stringify(captured.body)).not.toContain(PK_ENV);
+  });
+
+  it('set rejects a malformed publishable key without touching storage', async () => {
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'set', keyType: 'publishableKey', key: 'not-a-stripe-key' }), server);
+    expect(captured.status).toBe(400);
+    expect(upsertAppSetting).not.toHaveBeenCalled();
+  });
+
 
   it('set rejects a too-short key without touching storage', async () => {
     const { captured, server } = makeRes();

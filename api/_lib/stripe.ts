@@ -82,6 +82,7 @@ async function webhookSecret(): Promise<string> {
 export const STRIPE_SETTING_KEYS = {
   secretKey: `${APP_SETTINGS}_SECRET_KEY`,
   webhookSecret: `${APP_SETTINGS}_WEBHOOK_SECRET`,
+  publishableKey: `${APP_SETTINGS}_PUBLISHABLE_KEY`,
 } as const;
 
 /** application/x-www-form-urlencoded body for the Stripe REST API. */

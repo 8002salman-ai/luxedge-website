@@ -39,6 +39,22 @@ function envVal(key: string): string {
   return (process.env[key] || '').trim();
 }
 
+async function readSetting(key: string): Promise<string | null> {
+  const cfg = supabaseCfg();
+  if (!cfg) return null;
+  try {
+    const res = await fetch(`${cfg.url}/rest/v1/app_settings?key=eq.${encodeURIComponent(key)}&select=value`, {
+      headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ value?: string }>;
+    return rows[0]?.value?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function supabaseCfg(): { url: string; key: string } | null {
   const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -196,13 +212,56 @@ const PROVIDER_DISPLAY: Record<ProviderId, { name: string; envKeys: Record<strin
   manual: { name: 'Manual Payment', envKeys: {}, dashboardUrl: '', setupChecklist: ['Enable manual payment mode'] },
 };
 
-function buildProviderOverview() {
+async function buildProviderOverview() {
   const config = defaultPaymentConfig(); // sync fallback
   const envDetected = detectProviderFromEnv();
+
+  // Stripe keys may live in env (wrangler secrets) or in app_settings
+  // (owner-attached from Admin → Payments without a redeploy). Read the DB
+  // registry once so the overview shows attached keys as configured too.
+  const stripeDb = supabaseCfg()
+    ? await Promise.all([
+        readSetting('PAYMENT_STRIPE_SECRET_KEY'),
+        readSetting('PAYMENT_STRIPE_WEBHOOK_SECRET'),
+        readSetting('PAYMENT_STRIPE_PUBLISHABLE_KEY'),
+      ])
+    : [null, null, null];
+  const [dbStripeSecret, dbStripeWh, dbStripePk] = stripeDb;
+
   const providers = Object.entries(PROVIDER_DISPLAY).filter(([id]) => id !== 'none').map(([id, display]) => {
     const pid = id as ProviderId;
     const cfg = config.providers[pid] || { enabled: false, role: 'available' as const, mode: 'sandbox' as const };
     const detected = envDetected[pid];
+
+    // Stripe: merge env + attached (app_settings) sources, env wins.
+    if (pid === 'stripe') {
+      const merged: Record<string, { configured: boolean; masked: string; source: string }> = {};
+      const pairs: Array<[string, string, string | null]> = [
+        ['Secret Key', 'STRIPE_SECRET_KEY', dbStripeSecret],
+        ['Webhook Secret', 'STRIPE_WEBHOOK_SECRET', dbStripeWh],
+        ['Publishable Key', 'STRIPE_PUBLISHABLE_KEY', dbStripePk],
+      ];
+      for (const [label, envKey, dbVal] of pairs) {
+        const envKeyVal = envVal(envKey);
+        if (envKeyVal) merged[label] = { configured: true, masked: mask(envKeyVal), source: 'env' };
+        else if (dbVal) merged[label] = { configured: true, masked: mask(dbVal), source: 'attached' };
+        else merged[label] = { configured: false, masked: '', source: 'none' };
+      }
+      // A Stripe provider is only "configured" when it can actually take a
+      // payment: secret key + publishable key both present (webhook secret
+      // only matters for server-side events, not client checkout).
+      const ready = merged['Secret Key'].configured && merged['Publishable Key'].configured;
+      return {
+        id: pid, name: display.name, enabled: cfg.enabled, role: cfg.role,
+        mode: detected?.mode || cfg.mode,
+        status: ready ? (detected?.status || 'ready') : 'not_configured',
+        isConfigured: ready,
+        keys: merged, dashboardUrl: display.dashboardUrl, setupChecklist: display.setupChecklist,
+        lastTestAt: cfg.lastTestAt, lastTestOk: cfg.lastTestOk,
+        lastWebhookAt: cfg.lastWebhookAt, lastPaymentAt: cfg.lastPaymentAt, lastError: cfg.lastError,
+      };
+    }
+
     const isConfigured = detected?.status === 'ready' || detected?.status === 'sandbox';
     const keys: Record<string, { configured: boolean; masked: string; source: string }> = {};
     for (const [label, envKey] of Object.entries(display.envKeys)) {
@@ -228,7 +287,7 @@ function buildProviderOverview() {
 export async function handlePaymentsGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const auth = await requireAdmin(req, res);
   if (!auth) return;
-  sendJson(res, 200, { ok: true, ...buildProviderOverview() });
+  sendJson(res, 200, { ok: true, ...(await buildProviderOverview()) });
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -245,7 +304,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (action === 'get' || !action) {
     // Return full payment system overview
-    const { primary, backup, providers } = buildProviderOverview();
+    const { primary, backup, providers } = await buildProviderOverview();
     sendJson(res, 200, { ok: true, primary, backup, providers });
     return;
   }  if (action === 'test') {
