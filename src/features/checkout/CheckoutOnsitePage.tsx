@@ -185,9 +185,7 @@ export default function CheckoutOnsitePage() {
     ? 'FREE'
     : selectedRate
       ? `$${selectedRate.amount.toFixed(2)}`
-      : ratesAttempted && rates.length === 0 && !ratesLoading
-        ? `$${FREE_SHIPPING_FALLBACK.toFixed(2)} (store rate)`
-        : '—';
+      : `$${FREE_SHIPPING_FALLBACK.toFixed(2)} (store rate)`;
 
   const applyCouponLocal = () => {
     const code = couponInput.trim().toUpperCase();
@@ -291,14 +289,14 @@ export default function CheckoutOnsitePage() {
   const err = (k: string) => (errors[k] ? <p className="text-red-500 text-xs mt-1">{errors[k]}</p> : null);
 
   return (
-    <div className="bg-luxe-cream min-h-screen pb-24">
-      <div className="max-w-6xl mx-auto px-4 py-10">
+    <div className="bg-luxe-cream min-h-screen pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <div className="max-w-6xl mx-auto px-4 py-7 sm:py-10">
         <p className="eyebrow mb-2">Checkout</p>
         <h1 className="font-serif text-3xl font-bold text-luxe-black mb-1">Secure Checkout</h1>
         <p className="text-sm text-luxe-gray mb-8">Pay safely right here on luxedge.us — no redirects, no card details stored.</p>
 
-        <div className="grid lg:grid-cols-5 gap-8">
-          <div className="lg:col-span-3 space-y-6">
+        <div className="grid lg:grid-cols-5 gap-6 sm:gap-8">
+          <div className="min-w-0 lg:col-span-3 space-y-5 sm:space-y-6">
             {startError && (
               <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
                 <div className="flex-1"><p className="text-sm font-semibold text-red-800">Checkout could not start</p><p className="text-xs text-red-700 mt-0.5">{startError}</p></div>
@@ -306,56 +304,56 @@ export default function CheckoutOnsitePage() {
             )}
 
             {/* CONTACT */}
-            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-5">Contact</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Email *</label>
-                  <input type="email" value={f.email} onChange={(e) => setField('email', e.target.value)} className={inputCls} placeholder="you@example.com" autoComplete="email" />
+                  <label htmlFor="checkout-email" className={labelCls}>Email *</label>
+                  <input id="checkout-email" name="email" type="email" value={f.email} onChange={(e) => setField('email', e.target.value)} className={inputCls} placeholder="you@example.com" autoComplete="email" />
                   {err('email')}
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Phone (for delivery updates)</label>
-                  <input type="tel" value={f.phone} onChange={(e) => setField('phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" autoComplete="tel" />
+                  <label htmlFor="checkout-phone" className={labelCls}>Phone (for delivery updates)</label>
+                  <input id="checkout-phone" name="tel" type="tel" value={f.phone} onChange={(e) => setField('phone', e.target.value)} className={inputCls} placeholder="(555) 123-4567" autoComplete="tel" />
                 </div>
               </div>
             </section>
 
             {/* SHIPPING */}
-            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-5">Shipping Address</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Full name *</label>
-                  <input value={f.fullName} onChange={(e) => setField('fullName', e.target.value)} className={inputCls} autoComplete="name" />
+                  <label htmlFor="checkout-name" className={labelCls}>Full name *</label>
+                  <input id="checkout-name" name="name" value={f.fullName} onChange={(e) => setField('fullName', e.target.value)} className={inputCls} autoComplete="name" />
                   {err('fullName')}
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Street address *</label>
-                  <input value={f.addressLine1} onChange={(e) => { setField('addressLine1', e.target.value); setAddrResult(null); }} className={inputCls} placeholder="123 Main Street" autoComplete="address-line1" />
+                  <label htmlFor="checkout-address-line1" className={labelCls}>Street address *</label>
+                  <input id="checkout-address-line1" name="address-line1" value={f.addressLine1} onChange={(e) => { setField('addressLine1', e.target.value); setAddrResult(null); }} className={inputCls} placeholder="123 Main Street" autoComplete="address-line1" />
                   {err('addressLine1')}
                 </div>
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Apt / suite (optional)</label>
-                  <input value={f.addressLine2} onChange={(e) => setField('addressLine2', e.target.value)} className={inputCls} autoComplete="address-line2" />
+                  <label htmlFor="checkout-address-line2" className={labelCls}>Apt / suite (optional)</label>
+                  <input id="checkout-address-line2" name="address-line2" value={f.addressLine2} onChange={(e) => setField('addressLine2', e.target.value)} className={inputCls} autoComplete="address-line2" />
                 </div>
                 <div>
-                  <label className={labelCls}>City *</label>
-                  <input value={f.city} onChange={(e) => { setField('city', e.target.value); setAddrResult(null); }} className={inputCls} autoComplete="address-level2" />
+                  <label htmlFor="checkout-city" className={labelCls}>City *</label>
+                  <input id="checkout-city" name="address-level2" value={f.city} onChange={(e) => { setField('city', e.target.value); setAddrResult(null); }} className={inputCls} autoComplete="address-level2" />
                   {err('city')}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>State *</label>
-                    <select value={f.state} onChange={(e) => { setField('state', e.target.value); setAddrResult(null); }} className={inputCls}>
+                    <label htmlFor="checkout-state" className={labelCls}>State *</label>
+                    <select id="checkout-state" name="address-level1" value={f.state} onChange={(e) => { setField('state', e.target.value); setAddrResult(null); }} className={inputCls} autoComplete="address-level1">
                       <option value="">--</option>
                       {US_STATES.map((s) => <option key={s}>{s}</option>)}
                     </select>
                     {err('state')}
                   </div>
                   <div>
-                    <label className={labelCls}>ZIP *</label>
-                    <input value={f.postalCode} onChange={(e) => { setField('postalCode', e.target.value); setAddrResult(null); }} className={inputCls} placeholder="75038" maxLength={10} autoComplete="postal-code" />
+                    <label htmlFor="checkout-postal-code" className={labelCls}>ZIP *</label>
+                    <input id="checkout-postal-code" name="postal-code" value={f.postalCode} onChange={(e) => { setField('postalCode', e.target.value); setAddrResult(null); }} className={inputCls} placeholder="75038" maxLength={10} autoComplete="postal-code" />
                     {err('postalCode')}
                   </div>
                 </div>
@@ -398,7 +396,7 @@ export default function CheckoutOnsitePage() {
             </section>
 
             {/* SHIPPING METHOD */}
-            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-1">Shipping Method</h2>
               {freeShippingNow ? (
                 <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"><b>Free shipping</b> applies to this order.</div>
@@ -434,30 +432,30 @@ export default function CheckoutOnsitePage() {
             </section>
 
             {/* BILLING */}
-            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-4">Billing Details</h2>
-              <label className="flex items-center gap-2 cursor-pointer mb-4 text-sm">
-                <input type="checkbox" checked={billingSame} onChange={(e) => setBillingSame(e.target.checked)} className="w-4 h-4" />
+              <label htmlFor="checkout-billing-same" className="flex items-center gap-2 cursor-pointer mb-4 text-sm">
+                <input id="checkout-billing-same" name="billing-same" type="checkbox" checked={billingSame} onChange={(e) => setBillingSame(e.target.checked)} className="w-4 h-4" />
                 Billing address is the same as shipping
               </label>
               {!billingSame && (
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><label className={labelCls}>Billing name *</label><input value={billing.fullName} onChange={(e) => setBilling({ ...billing, fullName: e.target.value })} className={inputCls} />{err('billingName')}</div>
-                  <div className="sm:col-span-2"><label className={labelCls}>Billing address *</label><input value={billing.addressLine1} onChange={(e) => setBilling({ ...billing, addressLine1: e.target.value })} className={inputCls} />{err('billingLine1')}</div>
-                  <div><label className={labelCls}>City *</label><input value={billing.city} onChange={(e) => setBilling({ ...billing, city: e.target.value })} className={inputCls} />{err('billingCity')}</div>
+                  <div className="sm:col-span-2"><label htmlFor="checkout-billing-name" className={labelCls}>Billing name *</label><input id="checkout-billing-name" name="billing-name" value={billing.fullName} onChange={(e) => setBilling({ ...billing, fullName: e.target.value })} className={inputCls} autoComplete="billing name" />{err('billingName')}</div>
+                  <div className="sm:col-span-2"><label htmlFor="checkout-billing-address" className={labelCls}>Billing address *</label><input id="checkout-billing-address" name="billing-address-line1" value={billing.addressLine1} onChange={(e) => setBilling({ ...billing, addressLine1: e.target.value })} className={inputCls} autoComplete="billing address-line1" />{err('billingLine1')}</div>
+                  <div><label htmlFor="checkout-billing-city" className={labelCls}>City *</label><input id="checkout-billing-city" name="billing-address-level2" value={billing.city} onChange={(e) => setBilling({ ...billing, city: e.target.value })} className={inputCls} autoComplete="billing address-level2" />{err('billingCity')}</div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className={labelCls}>State *</label>
-                      <select value={billing.state} onChange={(e) => setBilling({ ...billing, state: e.target.value })} className={inputCls}><option value="">--</option>{US_STATES.map((s) => <option key={s}>{s}</option>)}</select>
+                    <div><label htmlFor="checkout-billing-state" className={labelCls}>State *</label>
+                      <select id="checkout-billing-state" name="billing-address-level1" value={billing.state} onChange={(e) => setBilling({ ...billing, state: e.target.value })} className={inputCls} autoComplete="billing address-level1"><option value="">--</option>{US_STATES.map((s) => <option key={s}>{s}</option>)}</select>
                       {err('billingState')}
                     </div>
-                    <div><label className={labelCls}>ZIP *</label><input value={billing.postalCode} onChange={(e) => setBilling({ ...billing, postalCode: e.target.value })} className={inputCls} maxLength={10} />{err('billingZip')}</div>
+                    <div><label htmlFor="checkout-billing-zip" className={labelCls}>ZIP *</label><input id="checkout-billing-zip" name="billing-postal-code" value={billing.postalCode} onChange={(e) => setBilling({ ...billing, postalCode: e.target.value })} className={inputCls} maxLength={10} autoComplete="billing postal-code" />{err('billingZip')}</div>
                   </div>
                 </div>
               )}
             </section>
 
             {/* PAYMENT */}
-            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm">
+            <section className="bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm">
               <h2 className="font-bold text-lg mb-1">Payment</h2>
               <p className="text-xs text-gray-500 mb-4">Your order is charged only after you review the totals below. Payment is processed securely by {config?.activeCardProvider || 'Stripe'}.</p>
               {!config ? (
@@ -485,10 +483,10 @@ export default function CheckoutOnsitePage() {
           </div>
 
           {/* ORDER SUMMARY */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl border border-luxe-silver/70 p-6 shadow-sm lg:sticky lg:top-20">
+          <div className="min-w-0 lg:col-span-2">
+            <div className="min-w-0 bg-white rounded-2xl border border-luxe-silver/70 p-4 sm:p-6 shadow-sm lg:sticky lg:top-20">
               <h2 className="font-bold text-lg mb-5">Order Summary</h2>
-              <div className="space-y-4 mb-6 max-h-72 overflow-y-auto pr-1">
+              <div className="space-y-4 mb-6 lg:max-h-72 lg:overflow-y-auto lg:pr-1">
                 {cart.map((item) => {
                   const img = (Array.isArray(item.product.images) && item.product.images[0]) || '';
                   return (
@@ -499,7 +497,7 @@ export default function CheckoutOnsitePage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-luxe-black line-clamp-1">{item.product.name}</p>
-                        <p className="text-xs text-gray-400">{(item.product.price || 0).toFixed(2)} each</p>
+                        <p className="text-xs text-gray-400">${(item.product.price || 0).toFixed(2)} each</p>
                       </div>
                       <p className="text-sm font-semibold shrink-0">${((item.product.price || 0) * item.quantity).toFixed(2)}</p>
                     </div>
@@ -515,7 +513,7 @@ export default function CheckoutOnsitePage() {
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    <input value={couponInput} onChange={(e) => setCouponInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), applyCouponLocal())} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Coupon code" />
+                    <input name="coupon" autoComplete="off" value={couponInput} onChange={(e) => setCouponInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), applyCouponLocal())} className="min-w-0 flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="Coupon code" />
                     <button onClick={applyCouponLocal} className="px-4 py-2 bg-luxe-charcoal text-white rounded-lg text-xs font-semibold">Apply</button>
                   </div>
                 )}

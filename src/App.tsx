@@ -2794,9 +2794,9 @@ function CartDrawer() {
         aria-label="Shopping cart"
         aria-hidden={!cartOpen}
         inert={!cartOpen}
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-[95] shadow-2xl transform transition-transform duration-300 ease-out ${cartOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed top-0 right-0 h-[100dvh] w-full max-w-md bg-white z-[95] shadow-2xl transform transition-transform duration-300 ease-out ${cartOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex min-h-0 h-full flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
@@ -2887,7 +2887,7 @@ function CartDrawer() {
               </div>
 
               {/* Footer */}
-              <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+              <div className="border-t border-gray-100 px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-3">
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="font-semibold text-luxe-black">${sub.toFixed(2)}</span></div>
                   {discount > 0 && <div className="flex justify-between"><span className="text-gray-500">Coupon ({coupon?.code})</span><span className="font-semibold text-green-600">âˆ’${discount.toFixed(2)}</span></div>}
@@ -3160,13 +3160,13 @@ function OrdersPage() {
         <p className="text-sm text-luxe-gray mb-8">Real payment records persisted by the Stripe webhook.</p>
         {realOrders.map(o => (
           <div key={o.id} className="bg-white rounded-xl border p-6 mb-4">
-            <div className="flex justify-between mb-4">
-              <div><p className="font-semibold">{o.order_number}</p><p className="text-sm text-gray-500">{new Date(o.created_at).toLocaleString()}</p></div>
-              <span className="px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm capitalize">{o.status.replace('_', ' ')}</span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-4">
+              <div className="min-w-0"><p className="font-semibold break-words">{o.order_number}</p><p className="text-sm text-gray-500">{new Date(o.created_at).toLocaleString()}</p></div>
+              <span className="self-start shrink-0 px-3 py-1 bg-luxe-gold-soft text-luxe-gold-dark rounded-full text-sm capitalize">{o.status.replace('_', ' ')}</span>
             </div>
-            <div className="pt-4 mt-4 border-t flex justify-between">
-              <span className="font-semibold text-sm text-gray-500">{o.customer_email || '—'}</span>
-              <span className="font-semibold">Total <span className="text-lg font-bold text-luxe-gold">${Number(o.total || 0).toFixed(2)}</span></span>
+            <div className="pt-4 mt-4 border-t flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <span className="min-w-0 break-all font-semibold text-sm text-gray-500">{o.customer_email || '—'}</span>
+              <span className="shrink-0 font-semibold">Total <span className="text-lg font-bold text-luxe-gold">${Number(o.total || 0).toFixed(2)}</span></span>
             </div>
           </div>
         ))}
