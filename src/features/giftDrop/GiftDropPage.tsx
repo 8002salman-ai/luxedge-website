@@ -7,6 +7,10 @@
 // to deliver the free product. There is NO payment step anywhere — the server
 // creates a $0 promotional order with payment NOT_REQUIRED, and this page
 // never asks for (or mentions needing) a card.
+//
+// Premium light redesign (2026-09): compact hero, claim form front-and-center,
+// warm off-white + charcoal + restrained gold/tan. All claim logic, validation
+// and server calls are unchanged — this file only changes presentation.
 // ============================================================================
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 // Free Gift uses basic local address validation — Shippo is NOT required.
@@ -41,13 +45,23 @@ const INTERESTS = ['Feeding', 'Grooming', 'Toys', 'Walking', 'Accessories', 'Hea
 const SIZES = ['Small', 'Medium', 'Large', 'Giant / Multiple pets'];
 
 const inputCls =
-  'w-full rounded-xl border border-gray-300 bg-white px-3.5 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition';
-const labelCls = 'mb-1.5 block text-[13px] font-semibold text-gray-700';
+  'w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 focus:border-[#9a6f16] focus:outline-none focus:ring-2 focus:ring-[#9a6f16]/20 transition';
+const labelCls = 'mb-1 block text-[13px] font-semibold text-[#3d4350]';
+const optLabelCls = 'mb-1 block text-[12.5px] font-medium text-gray-400';
 const req = (s: string) => (
   <>
     {s} <span className="text-rose-500">*</span>
   </>
 );
+
+// Small gold check icon used across trust items / success states.
+function CheckMark({ className = 'h-3.5 w-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
 
 export default function GiftDropPage() {
   const [state, setState] = useState<CampaignState>({ phase: 'loading' });
@@ -195,110 +209,89 @@ export default function GiftDropPage() {
     }
   };
 
+  // Numbered section header — small gold numeral + brand-style title.
+  const SectionHeading = ({ n, title, sub }: { n: number; title: string; sub?: string }) => (
+    <div className="flex items-center gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#f6efdd] text-[12px] font-bold text-[#9a6f16]">{n}</span>
+      <div>
+        <h2 className="text-[13px] font-bold uppercase tracking-[0.14em] text-[#3d4350]">{title}</h2>
+        {sub && <p className="mt-0.5 text-[12.5px] text-gray-500">{sub}</p>}
+      </div>
+    </div>
+  );
+
   // ------------------------------------------------------------------ UI
   return (
-    <div className="min-h-screen bg-[#0b1120]">
-      {/* ============ HERO ============ */}
-      <section className="relative overflow-hidden bg-[#0b1120]">
-        <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" aria-hidden />
-        <div className="pointer-events-none absolute top-40 -left-24 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl" aria-hidden />
-        <div className="mx-auto max-w-5xl px-4 pt-10 pb-12 sm:px-6 lg:pt-16">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Limited real giveaway
+    <div className="min-h-screen bg-[#faf8f3] text-[#1b1f27]">
+      {/* ============ COMPACT HERO ============ */}
+      <section className="relative overflow-hidden border-b border-[#ece5d4]">
+        <div className="pointer-events-none absolute -top-20 right-0 h-56 w-56 rounded-full bg-[#9a6f16]/[0.07] blur-3xl" aria-hidden />
+        <div className="mx-auto max-w-3xl px-4 pb-8 pt-9 text-center sm:px-6 sm:pt-12">
+          <p className="inline-flex items-center gap-2 rounded-full border border-[#e2d3a8] bg-[#f6efdd] px-3.5 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#7c5a10]">
+            🎁 Limited new-customer gift
           </p>
-          <h1 className="mt-5 max-w-2xl text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">                {state.phase === 'open' || state.phase === 'loading' ? (
-                  <>
-                    {state.phase === 'loading' ? 'Luxedge Pet Gift Drop' : `${state.total} real gifts.`}
-                    <br />
-                    <span className="bg-gradient-to-r from-amber-300 to-orange-300 bg-clip-text text-transparent">
-                      {state.phase === 'loading' ? '' : 'For real pet owners.'}
-                    </span>
-                  </>
-                ) : state.phase === 'error' ? (
-                  'Luxedge Pet Gift Drop'
-                ) : (
-                  state.title
-                )}
+          <h1 className="mx-auto mt-4 max-w-2xl text-3xl font-bold leading-[1.12] tracking-tight text-[#1b1f27] sm:text-4xl">
+            A complimentary gift for your dog or cat, <span className="text-[#9a6f16]">on us.</span>
           </h1>
-          <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-slate-300 sm:text-lg">
-            {state.phase === 'open' ? state.message : 'Complimentary Luxedge pet gifts, no purchase required.'}
+          <p className="mx-auto mt-3 max-w-xl text-[14px] leading-relaxed text-[#5b626e] sm:text-[15px]">
+            One real Luxedge product and standard shipping — $0. No purchase, no credit card, nothing to pay. Ever.
           </p>
 
           {/* Live inventory — real numbers from the server, never fake scarcity */}
-          {state.phase === 'open' && (
-            <div className="mt-6 inline-flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
-              <span className="text-2xl font-black text-white">{state.remaining}</span>
-              <span className="text-[13px] leading-tight text-slate-300">
-                of {state.total} real gifts remaining
-                <br />
-                <span className="text-amber-300">while supplies last</span>
+          {state.phase === 'open' ? (
+            <div className="mt-5 inline-flex items-center gap-2.5 rounded-full border border-[#e2d3a8] bg-white px-4 py-2 shadow-[0_2px_10px_-4px_rgba(154,111,22,0.25)]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#9a6f16]/40" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#9a6f16]" />
               </span>
-              <span className="h-8 w-px bg-white/15" aria-hidden />
-              <span className="text-[13px] leading-tight text-slate-300">
-                <span className="font-bold text-white">$0</span> gift
-                <br />
-                <span className="text-emerald-300">+ $0 shipping</span>
+              <span className="text-[12.5px] font-semibold text-[#3d4350]">
+                <span className="font-bold text-[#1b1f27]">{state.remaining}</span> complimentary gifts available · while supplies last
               </span>
             </div>
-          )}
+          ) : state.phase === 'loading' ? (
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-[#ece5d4] bg-white px-4 py-2 text-[12.5px] font-medium text-gray-500">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[#9a6f16]" /> Checking real gift availability…
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {/* ============ TRUST ============ */}
-      <section className="border-y border-white/10 bg-white/[0.03]">
-        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-x-4 gap-y-3 px-4 py-5 text-[12.5px] text-slate-200 sm:grid-cols-4 sm:px-6 sm:text-[13px]">
-          {[
-            'No purchase required',
-            'No credit card needed',
-            'Genuine Luxedge promotion',
-            'One gift per household',
-          ].map((t) => (
-            <div key={t} className="flex items-center gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5"><path d="M20 6 9 17l-5-5" /></svg>
-              </span>
-              {t}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ============ MAIN BODY ============ */}
-      <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:py-14" ref={topRef}>
+      {/* ============ MAIN BODY — form front and center ============ */}
+      <section className="mx-auto max-w-3xl px-4 py-7 sm:px-6 sm:py-9" ref={topRef}>
         {state.phase === 'loading' && (
-          <div className="flex items-center justify-center py-24 text-slate-300">
-            <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-600 border-t-amber-300" />
+          <div className="flex items-center justify-center rounded-2xl border border-[#ece5d4] bg-white py-20 text-[#5b626e] shadow-sm">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#e5d9b6] border-t-[#9a6f16]" />
             <span className="ml-3 text-sm">Checking real gift availability…</span>
           </div>
         )}
 
         {state.phase === 'error' && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-            <p className="text-lg font-semibold text-white">We could not check availability right now.</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+          <div className="rounded-2xl border border-[#ece5d4] bg-white p-8 text-center shadow-sm">
+            <p className="text-lg font-bold text-[#1b1f27]">We could not check availability right now.</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-[#5b626e]">
               Please refresh in a moment — if this keeps happening, email{' '}
-              <a className="text-amber-300 underline" href="mailto:hello@luxedge.us">hello@luxedge.us</a>.
+              <a className="font-semibold text-[#9a6f16] underline" href="mailto:hello@luxedge.us">hello@luxedge.us</a>.
             </p>
           </div>
         )}
 
         {state.phase === 'closed' && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-            <p className="text-2xl">🎁</p>
-            <h2 className="mt-2 text-xl font-bold text-white">This Pet Gift Drop is not open right now.</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+          <div className="rounded-2xl border border-[#ece5d4] bg-white p-8 text-center shadow-sm">
+            <p className="text-3xl">🎁</p>
+            <h2 className="mt-2 text-xl font-bold text-[#1b1f27]">This Pet Gift Drop is not open right now.</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[#5b626e]">
               We run drops in small batches for real pet owners. When the next drop opens it will be announced on our{' '}
-              <a className="text-amber-300 underline" href="https://luxedge.us/blog">blog</a> and social channels.
+              <a className="font-semibold text-[#9a6f16] underline" href="https://luxedge.us/blog">blog</a> and social channels.
             </p>
             <WaitlistForm />
           </div>
         )}
 
         {state.phase === 'full' && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+          <div className="rounded-2xl border border-[#ece5d4] bg-white p-8 text-center shadow-sm">
             <p className="text-3xl">🎉</p>
-            <h2 className="mt-2 text-2xl font-bold text-white">This Pet Gift Drop has been fully claimed.</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-300">
+            <h2 className="mt-2 text-2xl font-bold text-[#1b1f27]">This Pet Gift Drop has been fully claimed.</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[#5b626e]">
               All {state.total} real gifts are now matched with pet owners. No payment was ever required, and nobody is
               charged for anything, ever. Follow the Luxedge blog for the next drop.
             </p>
@@ -307,194 +300,212 @@ export default function GiftDropPage() {
         )}
 
         {state.phase === 'open' && !success && (
-          <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-12">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:gap-8">
             {/* ---- form column ---- */}
-            <form onSubmit={submit} noValidate className="order-2 lg:order-1">
+<form onSubmit={submit} noValidate>
               {error && (
-                <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                  <span className="mt-0.5 text-rose-300">⚠️</span> {error}
+                <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                  <span className="mt-0.5" aria-hidden="true">⚠️</span> {error}
                 </div>
               )}
 
-              {/* 1. Your pet */}
-              <div className="rounded-2xl border border-white/10 bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="text-[13px] font-black uppercase tracking-wider text-gray-500">1 · Your pet</h2>
-                <p className="mt-0.5 text-[13px] text-gray-500">This drop currently covers dogs and cats.</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {PET_TYPES.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setPetType(p.id)}
-                      aria-pressed={petType === p.id}
-                      className={`rounded-xl border-2 p-4 text-left transition ${
-                        petType === p.id
-                          ? 'border-blue-500 bg-blue-50 shadow-sm'
-                          : 'border-gray-200 bg-white hover:border-blue-300'
-                      }`}
-                    >
-                      <span className="text-2xl">{p.emoji}</span>
-                      <p className="mt-1 text-[15px] font-bold text-gray-900">{p.label}</p>
-                      <p className="text-[12px] leading-snug text-gray-500">{p.blurb}</p>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelCls} htmlFor="gd-petname">Pet name (optional)</label>
-                    <input id="gd-petname" className={inputCls} value={form.petName} onChange={set('petName')} placeholder="e.g. Biscuit" autoComplete="off" />
+              {/* Single premium claim card with numbered sections */}
+              <div className="overflow-hidden rounded-2xl border border-[#ece5d4] bg-white shadow-[0_1px_2px_rgba(27,31,39,0.04),0_12px_32px_-16px_rgba(27,31,39,0.14)]">
+                {/* 1. Your pet */}
+                <div className="p-5 sm:p-6">
+                  <SectionHeading n={1} title="Your pet" sub="This drop currently covers dogs and cats." />
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {PET_TYPES.map((p) => {
+                      const active = petType === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setPetType(p.id)}
+                          aria-pressed={active}
+                          className={`relative rounded-xl border p-4 text-left transition ${
+                            active
+                              ? 'border-[#9a6f16] bg-[#faf4e4] shadow-[0_2px_12px_-4px_rgba(154,111,22,0.35)] ring-1 ring-[#9a6f16]/25'
+                              : 'border-gray-200 bg-white hover:border-[#d8c59a]'
+                          }`}
+                        >
+                          {active && (
+                            <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#9a6f16] text-white">
+                              <CheckMark className="h-3 w-3" />
+                            </span>
+                          )}
+                          <span className="text-2xl" aria-hidden="true">{p.emoji}</span>
+                          <p className="mt-1.5 text-[15px] font-bold text-[#1b1f27]">{p.label}</p>
+                          <p className="text-[12px] leading-snug text-gray-500">{p.blurb}</p>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <label className={labelCls} htmlFor="gd-petsize">Pet size (optional)</label>
-                    <select id="gd-petsize" className={inputCls} value={form.petSize} onChange={set('petSize')}>
-                      <option value="">Choose a size…</option>
-                      {SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <label className={labelCls} htmlFor="gd-interest">What is your pet into? (optional)</label>
-                  <div className="flex flex-wrap gap-2">
-                    {INTERESTS.map((i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, petInterest: f.petInterest === i ? '' : i }))}
-                        className={`rounded-full border px-3.5 py-2 text-[13px] font-medium transition ${
-                          form.petInterest === i ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
-                        }`}
-                      >
-                        {i}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
 
-              {/* 2. Who it's for */}
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="text-[13px] font-black uppercase tracking-wider text-gray-500">2 · Who it&apos;s for</h2>
-                <p className="mt-0.5 text-[13px] text-gray-500">Your name + email — the email is where your confirmation goes.</p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelCls} htmlFor="gd-first">{req('First name')}</label>
-                    <input id="gd-first" className={inputCls} value={form.firstName} onChange={set('firstName')} placeholder="First name" autoComplete="given-name" required />
-                  </div>
-                  <div>
-                    <label className={labelCls} htmlFor="gd-email">{req('Email')}</label>
-                    <input id="gd-email" type="email" className={inputCls} value={form.email} onChange={set('email')} placeholder="you@example.com" autoComplete="email" required />
-                  </div>
+                  {/* Optional pet details — collapsed by default */}
+                  <details className="group mt-4">
+                    <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border border-gray-200 bg-[#fafaf8] px-3.5 py-2.5 text-[12.5px] font-semibold text-gray-500 transition hover:border-[#d8c59a] hover:text-[#7c5a10]">
+                      <span>Tell us more about your pet <span className="font-normal text-gray-400">(optional — helps us match the right gift)</span></span>
+                      <span className="text-[#9a6f16] transition-transform group-open:rotate-180" aria-hidden="true">▾</span>
+                    </summary>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={optLabelCls} htmlFor="gd-petname">Pet name (optional)</label>
+                        <input id="gd-petname" className={inputCls} value={form.petName} onChange={set('petName')} placeholder="e.g. Biscuit" autoComplete="off" />
+                      </div>
+                      <div>
+                        <label className={optLabelCls} htmlFor="gd-petsize">Pet size (optional)</label>
+                        <select id="gd-petsize" className={inputCls} value={form.petSize} onChange={set('petSize')}>
+                          <option value="">Choose a size…</option>
+                          {SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={optLabelCls} htmlFor="gd-interest">What is your pet into? (optional)</label>
+                        <div className="flex flex-wrap gap-2">
+                          {INTERESTS.map((i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setForm((f) => ({ ...f, petInterest: f.petInterest === i ? '' : i }))}
+                              className={`rounded-full border px-3.5 py-2 text-[12.5px] font-medium transition ${
+                                form.petInterest === i ? 'border-[#9a6f16] bg-[#faf4e4] text-[#7c5a10]' : 'border-gray-300 bg-white text-gray-600 hover:border-[#d8c59a]'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </details>
                 </div>
-              </div>
 
-              {/* 3. Shipping */}
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white p-5 shadow-sm sm:p-6">
-                <h2 className="text-[13px] font-black uppercase tracking-wider text-gray-500">3 · Where to send it</h2>
-                <p className="mt-0.5 text-[13px] text-gray-500">
-                  We collect your shipping address <strong>only to deliver the free gift</strong>. Standard shipping is complimentary.
-                </p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className={labelCls} htmlFor="gd-line1">{req('Street address')}</label>
-                    <input id="gd-line1" className={inputCls} value={form.line1} onChange={set('line1')} placeholder="Street address" autoComplete="address-line1" required />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className={labelCls} htmlFor="gd-line2">Apt / suite (optional)</label>
-                    <input id="gd-line2" className={inputCls} value={form.line2} onChange={set('line2')} placeholder="Apt, suite, unit…" autoComplete="address-line2" />
-                  </div>
-                  <div>
-                    <label className={labelCls} htmlFor="gd-city">{req('City')}</label>
-                    <input id="gd-city" className={inputCls} value={form.city} onChange={set('city')} autoComplete="address-level2" required />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                {/* 2. Your details */}
+                <div className="border-t border-[#f0ead8] p-5 sm:p-6">
+                  <SectionHeading n={2} title="Your details" sub="Your email is where your confirmation goes." />
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className={labelCls} htmlFor="gd-state">State</label>
-                      <input id="gd-state" className={inputCls} value={form.state} onChange={set('state')} autoComplete="address-level1" />
+                      <label className={labelCls} htmlFor="gd-first">{req('First name')}</label>
+                      <input id="gd-first" className={inputCls} value={form.firstName} onChange={set('firstName')} placeholder="First name" autoComplete="given-name" required />
                     </div>
                     <div>
-                      <label className={labelCls} htmlFor="gd-zip">{req('ZIP')}</label>
-                      <input id="gd-zip" className={inputCls} value={form.zip} onChange={set('zip')} autoComplete="postal-code" required />
+                      <label className={labelCls} htmlFor="gd-email">{req('Email')}</label>
+                      <input id="gd-email" type="email" className={inputCls} value={form.email} onChange={set('email')} placeholder="you@example.com" autoComplete="email" required />
                     </div>
                   </div>
-
-                  {/* ---- Address validation feedback ---- */}
-                  {validatedFor && validatedFor === addrFingerprint() && (
-                    <div className="col-span-full mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700">
-                      <span className="text-emerald-500">✓</span> Address looks good — ready for delivery
-                    </div>
-                  )}
                 </div>
-                <p className="mt-3 flex items-start gap-2 text-[12px] leading-snug text-gray-500">
-                  <span>🔒</span> United States delivery for this drop. Your details are used only to send your gift and are never sold.
-                </p>
+
+                {/* 3. Delivery address */}
+                <div className="border-t border-[#f0ead8] p-5 sm:p-6">
+                  <SectionHeading n={3} title="Delivery address" sub="Collected only to deliver the free gift — standard shipping is complimentary." />
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className={labelCls} htmlFor="gd-line1">{req('Street address')}</label>
+                      <input id="gd-line1" className={inputCls} value={form.line1} onChange={set('line1')} placeholder="Street address" autoComplete="address-line1" required />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={optLabelCls} htmlFor="gd-line2">Apt / suite (optional)</label>
+                      <input id="gd-line2" className={inputCls} value={form.line2} onChange={set('line2')} placeholder="Apt, suite, unit…" autoComplete="address-line2" />
+                    </div>
+                    <div>
+                      <label className={labelCls} htmlFor="gd-city">{req('City')}</label>
+                      <input id="gd-city" className={inputCls} value={form.city} onChange={set('city')} autoComplete="address-level2" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls} htmlFor="gd-state">State</label>
+                        <input id="gd-state" className={inputCls} value={form.state} onChange={set('state')} autoComplete="address-level1" />
+                      </div>
+                      <div>
+                        <label className={labelCls} htmlFor="gd-zip">{req('ZIP')}</label>
+                        <input id="gd-zip" className={inputCls} value={form.zip} onChange={set('zip')} autoComplete="postal-code" required />
+                      </div>
+                    </div>
+
+                    {/* ---- Address validation feedback ---- */}
+                    {validatedFor && validatedFor === addrFingerprint() && (
+                      <div className="col-span-full mt-1 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-[12.5px] font-medium text-emerald-700">
+                        <CheckMark className="h-3.5 w-3.5 text-emerald-500" /> Address looks good — ready for delivery
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-3 flex items-start gap-2 text-[12px] leading-snug text-gray-500">
+                    <span aria-hidden="true">🔒</span> United States delivery for this drop. Your details are used only to send your gift and are never sold.
+                  </p>
+                </div>
+
+                {/* Consent + fine print — compact */}
+                <div className="border-t border-[#f0ead8] px-5 py-4 sm:px-6">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={form.marketing}
+                      onChange={(e) => setForm((f) => ({ ...f, marketing: e.target.checked }))}
+                      className="mt-0.5 h-5 w-5 rounded accent-[#9a6f16]"
+                    />
+                    <span className="text-[12.5px] leading-snug text-gray-600">
+                      <span className="font-semibold text-[#3d4350]">Optional:</span> keep me posted on future Luxedge drops, deals and
+                      pet-care guides. Unticked by default — we never send marketing without your say-so.
+                    </span>
+                  </label>
+                </div>
+
+                {/* Honeypot + review note */}
+                <input type="text" name="company" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
+
+                {/* CTA */}
+                <div className="border-t border-[#f0ead8] bg-[#fbfaf6] px-5 py-5 sm:px-6">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b1f27] px-6 py-4 text-[15px] font-bold text-white shadow-[0_12px_28px_-12px_rgba(27,31,39,0.55)] transition hover:bg-[#2b3140] hover:shadow-[0_14px_30px_-12px_rgba(27,31,39,0.6)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <>
+                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        Reserving your gift…
+                      </>
+                    ) : (
+                      <>
+                        <span aria-hidden="true">🎁</span> Reserve My Complimentary Gift
+                      </>
+                    )}
+                  </button>
+                  <p className="mt-3 text-center text-[12px] font-medium text-[#5b626e]">
+                    $0 product · $0 standard shipping · No credit card · One per household
+                  </p>
+                </div>
               </div>
-
-              {/* 4. Consent */}
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white p-5 shadow-sm sm:p-6">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={form.marketing}
-                    onChange={(e) => setForm((f) => ({ ...f, marketing: e.target.checked }))}
-                    className="mt-0.5 h-5 w-5 accent-blue-600"
-                  />
-                  <span className="text-[13px] leading-snug text-gray-600">
-                    <span className="font-semibold text-gray-800">Optional:</span> keep me posted on future Luxedge drops, deals and
-                    pet-care guides. Unticked by default — we never send marketing without your say-so.
-                  </span>
-                </label>
-              </div>
-
-              {/* Honeypot + review note */}
-              <input type="text" name="company" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden="true" />
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-400 px-6 py-4 text-base font-black text-gray-900 shadow-lg shadow-amber-500/20 transition hover:from-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? (
-                  <>
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-800/30 border-t-gray-900" />
-                    Reserving your gift…
-                  </>
-                ) : (
-                  <>Claim my free gift · $0 · no card needed</>
-                )}
-              </button>
-              <p className="mt-3 text-center text-[12px] text-gray-500">
-                No purchase, no credit card, no payment step. Gift is unconditional once claimed. One gift per household, while supplies last.
-              </p>
             </form>
 
-            {/* ---- info column ---- */}
-            <aside className="order-1 lg:order-2">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Why Luxedge gives gifts</h3>
-                <p className="mt-3 text-[13.5px] leading-relaxed text-slate-300">
-                  We would rather put a real product in your pet&apos;s paws than spend the same money on ads. Tell us about your
-                  dog or cat and we&apos;ll send a complimentary gift matched from our current stock.
+            {/* ---- compact info column ---- */}
+<aside>
+              <div className="rounded-2xl border border-[#ece5d4] bg-white p-5 shadow-[0_1px_2px_rgba(27,31,39,0.04)] sm:p-6">
+                <h3 className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em] text-[#7c5a10]">
+                  <span aria-hidden="true">🤝</span> Why we give gifts
+                </h3>
+                <p className="mt-2.5 text-[13px] leading-relaxed text-[#5b626e]">
+                  We'd rather put a real product in your pet's paws than spend the same money on ads. Tell us about your dog or cat and we'll send a complimentary gift from our current stock.
                 </p>
-                <ul className="mt-4 space-y-2.5 text-[13.5px] text-slate-200">
+                <ul className="mt-4 space-y-2 text-[13px] text-[#3d4350]">
                   {[
-                    'No purchase, no credit card, no payment step',
-                    'Product + standard shipping are complimentary',
-                    'Real inventory — the number you see is the real number',
+                    'No purchase, no card, no payment step',
+                    'Product + standard shipping: $0',
+                    'Real inventory — the number you see is real',
                     'One gift per eligible household',
-                    'No review or social post is ever required for your gift',
                   ].map((t) => (
                     <li key={t} className="flex items-start gap-2.5">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5"><path d="M20 6 9 17l-5-5" /></svg>
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f6efdd] text-[#9a6f16]">
+                        <CheckMark />
                       </span>
                       {t}
                     </li>
                   ))}
                 </ul>
-                <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4 text-[12.5px] leading-relaxed text-slate-400">
-                  <p className="font-semibold text-slate-200">Fine print — stated plainly</p>
-                  <p className="mt-1.5">Limited to the real inventory shown above. One gift per email and per household address. If all gifts are claimed, we stop taking claims — we never pretend more exist. Later, after you&apos;ve tried your gift, we&apos;d appreciate your <em>honest</em> feedback — positive or negative.</p>
-                </div>
+                <p className="mt-4 rounded-xl border border-[#f0ead8] bg-[#fbfaf6] p-3.5 text-[12px] leading-relaxed text-gray-500">
+                  <span className="font-semibold text-[#3d4350]">Fine print, plainly:</span> limited to real inventory. One gift per email and per household. When gifts run out, the form closes — we never oversell. After you try it, we'd appreciate your <em>honest</em> feedback — positive or negative.
+                </p>
               </div>
             </aside>
           </div>
@@ -503,65 +514,78 @@ export default function GiftDropPage() {
         {/* ---- success ---- */}
         {success && (
           <div className="mx-auto max-w-xl text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-3xl">🎁</div>
-            <h2 className="mt-5 text-3xl font-black text-white">Your gift is reserved{success.test ? ' (TEST)' : ''}!</h2>
-            <p className="mt-3 text-[15px] leading-relaxed text-slate-300">
-              <strong className="text-white">{success.giftName}</strong> is matched to your pet and headed your way soon.
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#f6efdd] shadow-[0_0_0_10px_rgba(154,111,22,0.08)]">
+              <span className="text-3xl" aria-hidden="true">✓</span>
+            </div>
+            <h2 className="mt-5 text-2xl font-bold tracking-tight text-[#1b1f27] sm:text-3xl">
+              Your gift is reserved{success.test ? ' (TEST)' : ''}!
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-[#5b626e]">
+              <strong className="font-semibold text-[#1b1f27]">{success.giftName}</strong> is matched to your pet and headed your way soon.
             </p>
-            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-left text-[13.5px] text-slate-300">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <span>Claim reference</span>
-                <span className="font-mono text-sm font-bold text-amber-300">{success.orderNumber}</span>
+
+            <div className="mx-auto mt-6 max-w-md overflow-hidden rounded-2xl border border-[#ece5d4] bg-white text-left shadow-[0_12px_32px_-16px_rgba(27,31,39,0.18)]">
+              <div className="flex items-center justify-between border-b border-[#f0ead8] px-5 py-3.5">
+                <span className="text-[13px] text-gray-500">Claim reference</span>
+                <span className="font-mono text-[14px] font-bold text-[#7c5a10]">{success.orderNumber}</span>
               </div>
-              <div className="flex items-center justify-between border-b border-white/10 py-3">
-                <span>Cost</span>
-                <span className="font-bold text-emerald-300">$0.00 — nothing to pay</span>
+              <div className="flex items-center justify-between border-b border-[#f0ead8] px-5 py-3.5">
+                <span className="text-[13px] text-gray-500">Cost</span>
+                <span className="text-[13px] font-bold text-emerald-700">$0.00 — nothing to pay</span>
               </div>
-              <div className="flex items-center justify-between border-b border-white/10 py-3">
-                <span>Payment collected</span>
-                <span className="font-semibold text-white">None — no card was ever asked for</span>
+              <div className="flex items-center justify-between border-b border-[#f0ead8] px-5 py-3.5">
+                <span className="text-[13px] text-gray-500">Payment collected</span>
+                <span className="text-[13px] font-semibold text-[#1b1f27]">None — no card was ever asked for</span>
               </div>
-              <div className="flex items-center justify-between pt-3">
-                <span>Confirmation email</span>
-                <span className="font-semibold text-white">On its way 🎉</span>
+              <div className="flex items-center justify-between px-5 py-3.5">
+                <span className="text-[13px] text-gray-500">Confirmation email</span>
+                <span className="text-[13px] font-semibold text-[#1b1f27]">On its way 🎉</span>
               </div>
             </div>
-            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 text-left text-[13px] leading-relaxed text-slate-300">
-              <p className="font-bold text-white">What happens next</p>
-              <ul className="mt-2 space-y-1.5">
-                <li>· We email your confirmation with the reference above.</li>
-                <li>· We prepare and ship your gift — complimentary standard shipping.</li>
-                <li>· After you&apos;ve tried it, we may ask for honest feedback. No star-rating is ever required for the gift itself.</li>
-              </ul>
+
+            <div className="mx-auto mt-6 max-w-md rounded-2xl border border-[#ece5d4] bg-white p-5 text-left shadow-[0_12px_32px_-16px_rgba(27,31,39,0.14)]">
+              <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-[#7c5a10]">What happens next</p>
+              <ol className="mt-3 space-y-3">
+                {[
+                  'We email your confirmation with the reference above.',
+                  'We prepare and ship your gift — complimentary standard shipping.',
+                  'After you try it, we may ask for honest feedback. No review is ever required for the gift itself.',
+                ].map((t, i) => (
+                  <li key={t} className="flex items-start gap-3 text-[13px] leading-snug text-[#3d4350]">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#f6efdd] text-[11px] font-bold text-[#9a6f16]">{i + 1}</span>
+                    {t}
+                  </li>
+                ))}
+              </ol>
             </div>
-            <a href="/" className="mt-8 inline-block rounded-full border border-white/20 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">
+
+            <a href="/" className="mt-7 inline-block rounded-full border border-[#1b1f27]/15 bg-white px-6 py-2.5 text-sm font-semibold text-[#1b1f27] transition hover:border-[#9a6f16] hover:text-[#7c5a10]">
               ← Back to Luxedge
             </a>
           </div>
         )}
-      </section>
 
-      {/* ============ FAQ STRIP ============ */}
-      <section className="border-t border-white/10 bg-white/[0.02]">
-        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-          <h2 className="text-lg font-bold text-white">Plain-language answers</h2>
-          <div className="mt-5 grid gap-6 sm:grid-cols-2">
-            {[
-              { q: 'Is this really free?', a: 'Yes. Product and standard shipping are $0. We never ask for a credit card or any payment method on this page — there is no payment step at all.' },
-              { q: 'Is my review required?', a: 'No. Your gift is unconditional once your claim is confirmed. After you try it, we may ask for honest feedback, but nothing about the gift depends on it.' },
-              { q: 'Why do you need my address?', a: 'Only so we can deliver the free product. We do not use it for marketing and we never sell it.' },
-              { q: 'What if all gifts run out?', a: 'We show the real remaining number from our inventory. When it hits zero the form closes and we say so — we never oversell or fake scarcity.' },
-            ].map((f) => (
-              <div key={f.q}>
-                <p className="text-[14px] font-bold text-white">{f.q}</p>
-                <p className="mt-1 text-[13px] leading-relaxed text-slate-400">{f.a}</p>
-              </div>
-            ))}
+        {/* ============ COMPACT FAQ + FOOTNOTE ============ */}
+        {state.phase === 'open' && (
+          <div className="mx-auto mt-10 max-w-3xl border-t border-[#ece5d4] pt-6">
+            <div className="grid gap-5 sm:grid-cols-3">
+              {[
+                { q: 'Is this really free?', a: 'Yes — product and standard shipping are $0. There is no payment step on this page at all.' },
+                { q: 'Is a review required?', a: 'No. Your gift is unconditional once confirmed; honest feedback later is appreciated, never required.' },
+                { q: 'Why the address?', a: 'Only to deliver the free product. We never sell it and never use it for marketing.' },
+              ].map((f) => (
+                <div key={f.q}>
+                  <p className="text-[13px] font-bold text-[#1b1f27]">{f.q}</p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-gray-500">{f.a}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-6 text-center text-[12px] text-gray-400">
+              Genuine Luxedge promotion · One gift per household · Questions?{' '}
+              <a className="font-semibold text-[#9a6f16] underline" href="mailto:hello@luxedge.us">hello@luxedge.us</a>
+            </p>
           </div>
-          <p className="mt-8 text-center text-[12px] text-slate-500">
-            Genuine Luxedge promotion · Questions? <a className="text-amber-300/90 underline" href="mailto:hello@luxedge.us">hello@luxedge.us</a>
-          </p>
-        </div>
+        )}
       </section>
     </div>
   );
@@ -617,20 +641,20 @@ function WaitlistForm() {
 
   if (state === 'done') {
     return (
-      <div className="mx-auto mt-7 max-w-sm rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-4">
-        <p className="text-sm font-bold text-emerald-200">You&apos;re on the list! ✓</p>
-        <p className="mt-1 text-[12.5px] text-emerald-100/80">
-          We&apos;ll email you only when the next Pet Gift Drop opens — no spam, and you can unsubscribe anytime.
+      <div className="mx-auto mt-6 max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-left">
+        <p className="text-sm font-bold text-emerald-800">You're on the list! ✓</p>
+        <p className="mt-1 text-[12.5px] leading-snug text-emerald-700">
+          We'll email you only when the next Pet Gift Drop opens — no spam, and you can unsubscribe anytime.
         </p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={join} className="mx-auto mt-7 max-w-sm text-left">
-      <p className="text-center text-sm font-semibold text-white">Notify me about the next Pet Gift Drop</p>
-      <p className="mt-1 text-center text-[12px] text-slate-400">
-        Submitting your email is your opt-in — we&apos;ll only use it to tell you when a new drop opens.
+    <form onSubmit={join} className="mx-auto mt-6 max-w-sm text-left">
+      <p className="text-sm font-semibold text-[#1b1f27]">Notify me about the next Pet Gift Drop</p>
+      <p className="mt-1 text-[12px] text-gray-500">
+        Submitting your email is your opt-in — we'll only use it to tell you when a new drop opens.
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
@@ -639,17 +663,17 @@ function WaitlistForm() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
           autoComplete="email"
-          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-[15px] text-white placeholder:text-slate-400 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300/30"
+          className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 focus:border-[#9a6f16] focus:outline-none focus:ring-2 focus:ring-[#9a6f16]/20"
         />
         <button
           type="submit"
           disabled={state === 'sending'}
-          className="rounded-xl bg-gradient-to-r from-amber-400 to-orange-400 px-5 py-3 text-sm font-black text-gray-900 transition hover:from-amber-300 hover:to-orange-300 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-[#1b1f27] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[#2b3140] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {state === 'sending' ? 'Saving…' : 'Notify me'}
         </button>
       </div>
-      {state === 'error' && msg && <p className="mt-2 text-center text-[12px] text-rose-300">{msg}</p>}
+      {state === 'error' && msg && <p className="mt-2 text-center text-[12px] text-rose-600">{msg}</p>}
     </form>
   );
-}
+}
