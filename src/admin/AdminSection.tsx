@@ -3,7 +3,7 @@
 // lazy-loaded chunk. It is only fetched when the user visits /admin/*,
 // which keeps the storefront bundle small and fast.
 // ============================================================================
-import { useState, useEffect, useCallback, ReactNode, Component } from 'react';
+import { useState, useEffect, useCallback, ReactNode, Component, Fragment } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
 import { useAuthStore } from '../store/authStore';
@@ -39,7 +39,7 @@ import {
 import TrafficDashboard from './TrafficDashboard';
 import AdSenseEarnings from './AdSenseEarnings';
 import {
-  Warning, ArrowLeft, ArrowRight, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
+  Warning, ArrowLeft, Robot, CheckCircle, CaretDown, CaretRight, CaretUp,
   Clipboard, Code, Cpu, CurrencyDollar, Download, Info, Key, PencilSimple, Eye, FileText, TreeStructure, Globe,
   Image as ImageIcon, Camera, Stack, SquaresFour, LinkSimple, SpinnerGap, Lock, SignOut, Megaphone, List,
   Monitor, Package, Plus, ArrowClockwise, ArrowCounterClockwise, FloppyDisk, MagnifyingGlass, PaperPlaneRight, GearSix,
@@ -268,11 +268,15 @@ function AdminLayout({ children }: { children: ReactNode }) {
 interface DashOrderRow { id: string; order_number: string; customer_email: string | null; total: number | null; currency: string | null; status: string; created_at: string; }
 
 function ADashboard() {
-  const { users, reviews } = useApp();
+  const { users } = useApp();
   const [realOrders, setRealOrders] = useState<DashOrderRow[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [gift, setGift] = useState<{ active: boolean; remaining: number; total: number; claimsToday: number } | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  const [range, setRange] = useState<7 | 30 | 90>(7);
 
-  // REAL data only (Stripe webhook orders + the DB catalog). No demo numbers.
+  // REAL data only (Stripe webhook orders + the DB catalog + Gift Drop ledger).
+  // No demo numbers.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
@@ -282,30 +286,57 @@ function ADashboard() {
       .then((d: { orders?: DashOrderRow[] }) => setRealOrders(Array.isArray(d.orders) ? d.orders : []))
       .catch(() => setRealOrders([]));
     listProducts().then(setCatalog).catch(() => setCatalog([]));
+    // Gift Drop live status — claims ledger + remaining inventory.
+    fetch('/api/admin/gift-drop', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((d: { campaign?: { active?: boolean }; stats?: { total?: number; remaining?: number }; claims?: Array<{ createdAt?: string; isTest?: boolean }> }) => {
+        if (!d || !d.stats) return;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const claimsToday = Array.isArray(d.claims)
+          ? d.claims.filter((c) => !c.isTest && new Date(c.createdAt || 0) >= today).length
+          : 0;
+        setGift({ active: !!d.campaign?.active, remaining: Number(d.stats.remaining) || 0, total: Number(d.stats.total) || 0, claimsToday });
+      })
+      .catch(() => setGift(null));
+    setLoadedAt(new Date());
   }, []);
 
   const rev = realOrders.reduce((s, o) => s + Number(o.total || 0), 0);
-  const pending = realOrders.filter(o => ['awaiting_payment', 'pending'].includes(String(o.status || ''))).length;
-  const pendingR = reviews.filter(r => r.status === 'pending').length;
 
   // Catalog overview (full DB, not just storefront-active)
   const totalProducts = catalog.length;
   const activeProducts = catalog.filter(p => p.status === 'active').length;
   const drafts = catalog.filter(p => p.status === 'draft').length;
   const commerceReady = catalog.filter(p => p.commerceReadiness === 'COMMERCE_READY').length;
-  const lowStock = catalog.filter(p => Number(p.inventoryQty ?? 0) <= 10).length;
+  const lowStockList = catalog
+    .filter(p => Number(p.inventoryQty ?? 0) <= 10)
+    .sort((a, b) => Number(a.inventoryQty ?? 0) - Number(b.inventoryQty ?? 0));
+  const lowStock = lowStockList.length;
   const aov = realOrders.length ? rev / realOrders.length : 0;
 
-  // Last 7 days revenue (real orders only)
-  const days: { label: string; total: number }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
-    const next = new Date(d); next.setDate(d.getDate() + 1);
-    const total = realOrders.filter(o => { const t = new Date(o.created_at); return t >= d && t < next; }).reduce((s, o) => s + Number(o.total || 0), 0);
-    days.push({ label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), total });
-  }
-  const maxDay = Math.max(...days.map(d => d.total), 1);
-  const weekRev = days.reduce((s, d) => s + d.total, 0);
+  // Daily revenue + order counts for the last 90 days (real orders only)
+  const buildSeries = (n: number): { label: string; total: number; orders: number }[] => {
+    const out: { label: string; total: number; orders: number }[] = [];
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      const next = new Date(d); next.setDate(d.getDate() + 1);
+      const day = realOrders.filter(o => { const t = new Date(o.created_at); return t >= d && t < next; });
+      out.push({
+        label: d.toLocaleDateString(undefined, n <= 7 ? { weekday: 'narrow' } : { month: 'short', day: 'numeric' }),
+        total: day.reduce((s, o) => s + Number(o.total || 0), 0),
+        orders: day.length,
+      });
+    }
+    return out;
+  };
+  const series90 = buildSeries(90);
+  const activeSeries = range === 7 ? series90.slice(-7) : range === 30 ? series90.slice(-30) : series90;
+  const rangeRev = activeSeries.reduce((s, d) => s + d.total, 0);
+  const rangeOrders = activeSeries.reduce((s, d) => s + d.orders, 0);
+  const maxDay = Math.max(...activeSeries.map(d => d.total), 1);
+  const weekRev = series90.slice(-7).reduce((s, d) => s + d.total, 0);
+  const prevWeekRev = series90.slice(-14, -7).reduce((s, d) => s + d.total, 0);
+  const revTrend = prevWeekRev > 0 ? ((weekRev - prevWeekRev) / prevWeekRev) * 100 : null;
 
   // Order status breakdown
   const statusMeta: { s: string; color: string; bg: string }[] = [
@@ -320,208 +351,257 @@ function ADashboard() {
   const statusTotal = statusCounts.reduce((a, b) => a + b.n, 0);
 
   const kpis = [
-    { l: 'Revenue', v: `$${rev.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, sub: `${realOrders.length} orders`, i: CurrencyDollar, bg: 'from-emerald-500 to-teal-600', c1: '#10b981', c2: '#059669' },
-    { l: 'Avg order value', v: `$${aov.toFixed(2)}`, sub: 'per order', i: TrendUp, bg: 'from-violet-500 to-purple-600', c1: '#8b5cf6', c2: '#7c3aed' },
-    { l: 'Products', v: totalProducts, sub: `${activeProducts} live on storefront`, i: Package, bg: 'from-blue-500 to-cyan-400', c1: '#3b82f6', c2: '#00d2ff' },
-    { l: 'Commerce-ready', v: commerceReady, sub: `${drafts} drafts waiting`, i: CheckCircle, bg: 'from-sky-500 to-blue-600', c1: '#0ea5e9', c2: '#2563eb' },
-    { l: 'Customers', v: users.length, sub: 'registered accounts', i: UsersIcon, bg: 'from-indigo-500 to-violet-600', c1: '#6366f1', c2: '#7c3aed' },
-    { l: 'Low stock', v: lowStock, sub: 'need restock', i: Warning, bg: 'from-amber-500 to-orange-600', c1: '#f59e0b', c2: '#ea580c' },
+    { l: 'Revenue (7 days)', v: `$${weekRev.toFixed(2)}`, sub: weekRev > 0 ? (revTrend === null ? '— vs prior week' : `${revTrend >= 0 ? '▲' : '▼'} ${Math.abs(revTrend).toFixed(0)}% vs prior week`) : 'No orders yet', i: CurrencyDollar, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Orders', v: realOrders.length, sub: realOrders.length ? `${rev.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} all-time` : 'No orders yet', i: ShoppingCart, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Avg order value', v: realOrders.length ? `$${aov.toFixed(2)}` : '—', sub: realOrders.length ? 'per order' : 'No orders yet', i: TrendUp, to: '/admin/orders', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Customers', v: users.length, sub: users.length ? 'registered accounts' : 'No customers yet', i: UsersIcon, to: '/admin/users', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Active products', v: activeProducts, sub: `${totalProducts} total · ${commerceReady} commerce-ready`, i: Package, to: '/admin/products', iconCls: 'bg-[#f6efdd] text-[#9a6f16]' },
+    { l: 'Low-stock products', v: lowStock, sub: lowStock ? 'need restock' : 'All stocked', i: Warning, to: '/admin/products', iconCls: 'bg-amber-50 text-amber-600' },
   ];
 
-  return <div className="space-y-4">
-    {/* Header */}
-    <div className="flex items-center justify-between flex-wrap gap-3">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
-        <p className="text-xs text-gray-500 mt-0.5">Store performance and catalog overview.</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <Link to="/" target="_blank" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><Eye size={13} /> View store</Link>
-        <Link to="/admin/ai-import" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 shadow-sm transition-all hover:brightness-110"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
-          <MagicWand size={13} /> AI Import
-        </Link>
-      </div>
-    </div>
+  const quickActions = [
+    { to: '/admin/ai-import', icon: MagicWand, label: 'Import Product', desc: 'Paste a product URL — AI researches & builds the listing' },
+    { to: '/admin/products/new?mode=detail', icon: Plus, label: 'Add Product Manually', desc: 'Full editor — images, variants, SEO, pricing and promotions' },
+    { to: '/admin/marketing', icon: Megaphone, label: 'Generate Product Content', desc: 'AI copy, SEO and descriptions for your catalog' },
+    { to: '/admin/variant-gen', icon: Stack, label: 'Create Variants', desc: 'Generate color/size combinations in one pass' },
+    { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Optimize', desc: 'Meta, schema and keyword suggestions for pages' },
+    { to: '/admin/hermes-intel', icon: Sparkle, label: 'Open AI Intelligence', desc: 'Hermes insights across catalog, media and traffic' },
+  ];
 
-    {/* Add to catalog — quick entry points (Quick / Detail / AI Import) */}
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Plus size={14} className="text-gray-600" /></div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900 leading-tight">Add to Catalog</p>
-            <p className="text-[11px] text-gray-500">New products are saved as drafts and reviewed before publishing.</p>
-          </div>
-        </div>
-        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-[10px] font-medium text-gray-500">Draft by default</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100">
-        <Link to="/admin/products/new?mode=quick" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
-          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2.5 group-hover:bg-blue-100 transition-colors"><Lightning size={15} weight="fill" /></div>
-          <p className="font-semibold text-[13px] text-gray-900">Quick Add</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Title, price, cost and the essentials — one screen.</p>
-        </Link>
-        <Link to="/admin/products/new?mode=detail" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2.5 group-hover:bg-indigo-100 transition-colors"><List size={15} weight="fill" /></div>
-          <p className="font-semibold text-[13px] text-gray-900">Detail Add</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Full editor — images, variants, SEO, pricing and promotions.</p>
-        </Link>
-        <Link to="/admin/products/new?mode=ai" className="group bg-white p-4 hover:bg-gray-50 transition-colors">
-          <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center mb-2.5 group-hover:bg-violet-100 transition-colors"><MagicWand size={15} weight="fill" /></div>
-          <p className="font-semibold text-[13px] text-gray-900">AI Import</p>
-          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Paste a product URL — AI researches and builds the listing.</p>
-        </Link>
-      </div>
-    </div>
-
-    {/* Store Overview hero — catalog truth + 7-day revenue */}
-    <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm card-lift">
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-300/80">Store Overview</p>
-          <div className="flex items-end gap-6 mt-2 flex-wrap">
-            <div><p className="text-2xl font-bold text-white leading-none">{totalProducts}</p><p className="text-[10px] text-blue-200/70 mt-1">Total products</p></div>
-            <div><p className="text-2xl font-bold text-emerald-400 leading-none">{activeProducts}</p><p className="text-[10px] text-blue-200/70 mt-1">Active on storefront</p></div>
-            <div><p className="text-2xl font-bold text-amber-300 leading-none">{drafts}</p><p className="text-[10px] text-blue-200/70 mt-1">Drafts</p></div>
-            <div><p className="text-2xl font-bold text-cyan-300 leading-none">{commerceReady}</p><p className="text-[10px] text-blue-200/70 mt-1">Commerce-ready</p></div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              </span>
+              Live
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Store performance and catalog overview.
+            {loadedAt && <span className="text-gray-400"> · Updated {loadedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to="/" target="_blank" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><Eye size={13} /> View store</Link>
+          <Link to="/admin/ai-import" className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 border border-gray-200 flex items-center gap-1.5 transition-colors"><MagicWand size={13} /> AI Import</Link>
+          <Link to="/admin/products/new?mode=detail" className="px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-[#1b1f27] hover:bg-[#2b3140] flex items-center gap-1.5 shadow-sm transition-colors"><Plus size={13} weight="bold" /> Add to Catalog</Link>
+        </div>
+      </div>
+
+      {/* KPI row — real dashboard data only */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        {kpis.map((k, i) => (
+          <Link key={i} to={k.to} className="group bg-white rounded-xl border border-gray-100 p-3.5 hover:shadow-md hover:border-gray-200 transition-all">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${k.iconCls}`}><k.i size={15} /></div>
+            <p className="mt-2.5 text-lg font-bold text-gray-900 leading-none truncate">{k.v}</p>
+            <p className="text-[10px] font-medium text-gray-500 mt-1">{k.l}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5 truncate">{k.sub}</p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Main grid — left: performance + orders, right: operations */}
+      <div className="grid lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Revenue & orders performance chart with range selector */}
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#f6efdd] flex items-center justify-center"><TrendUp size={14} className="text-[#9a6f16]" /></div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 leading-tight">Revenue & Orders</h2>
+                  <p className="text-[10px] text-gray-400">{rangeOrders} order{rangeOrders !== 1 ? 's' : ''} · ${rangeRev.toFixed(2)} in range</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 p-0.5">
+                {([7, 30, 90] as const).map(r => (
+                  <button key={r} onClick={() => setRange(r)}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-colors ${range === r ? 'bg-[#1b1f27] text-white' : 'text-gray-500 hover:text-gray-800'}`}>
+                    {r}D
+                  </button>
+                ))}
+              </div>
+            </div>
+            {rangeOrders === 0 ? (
+              <div className="py-12 text-center">
+                <div className="mx-auto w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center mb-3"><TrendUp size={16} className="text-gray-300" /></div>
+                <p className="text-xs text-gray-500">No orders yet — share your store or run a campaign.</p>
+                <Link to="/" target="_blank" className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-gray-200 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors"><Eye size={12} /> View store</Link>
+              </div>
+            ) : (
+              <div className="px-4 py-3.5">
+                <div className="flex items-end gap-1 h-24">
+                  {activeSeries.map((d, i) => {
+                    const step = range === 7 ? 1 : range === 30 ? 5 : 15;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${d.label}: $${d.total.toFixed(2)} (${d.orders} order${d.orders !== 1 ? 's' : ''})`}>
+                        <div className="w-full rounded-t bg-gradient-to-t from-[#9a6f16] to-[#c9a44c] transition-all"
+                          style={{ height: `${Math.max((d.total / maxDay) * 80, d.total > 0 ? 6 : 2)}px`, opacity: d.total > 0 ? 1 : 0.25 }} />
+                        <span className="text-[8px] text-gray-400 font-medium uppercase">{i % step === 0 || i === activeSeries.length - 1 ? d.label : ''}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Recent orders — max 5 rows */}
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
+              <h2 className="font-bold text-xs text-gray-800">Recent Orders</h2>
+              <Link to="/admin/orders" className="text-[10px] font-semibold text-[#9a6f16] hover:text-[#7c5a10]">View all orders →</Link>
+            </div>
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[9px] uppercase tracking-wider text-gray-400 border-b border-gray-50">
+                  <th className="px-4 py-2 font-semibold">Order</th>
+                  <th className="px-2 py-2 font-semibold hidden sm:table-cell">Customer</th>
+                  <th className="px-2 py-2 font-semibold hidden md:table-cell">Date</th>
+                  <th className="px-2 py-2 font-semibold text-right">Total</th>
+                  <th className="px-4 py-2 font-semibold text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {realOrders.slice(0, 5).map(o => (
+                  <tr key={o.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
+                    <td className="px-4 py-2"><span className="font-mono font-semibold text-[11px] text-gray-900">{o.order_number}</span></td>
+                    <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.customer_email || '—'}</td>
+                    <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{new Date(o.created_at).toLocaleDateString()}</td>
+                    <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${Number(o.total || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right">
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold capitalize ${
+                        o.status === 'paid' ? 'bg-green-100 text-green-700' :
+                        String(o.status || '').includes('refund') ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{String(o.status || '').replace('_', ' ')}</span>
+                    </td>
+                  </tr>
+                ))}
+                {realOrders.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-[11px] text-gray-400">No orders yet — share your store or run a campaign.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-blue-300/80">Revenue (7 days)</p>
-          <p className="text-xl font-bold text-white mt-1">${weekRev.toFixed(2)}</p>
-          <p className="text-[10px] text-blue-200/70">{realOrders.length} orders all-time · ${rev.toFixed(2)}</p>
-        </div>
-      </div>
-      <div className="bg-white px-5 py-3">
-        <div className="flex items-end gap-1.5 h-16">
-          {days.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full rounded-t-md bg-gradient-to-t from-blue-500 to-cyan-400 transition-all"
-                style={{ height: `${Math.max((d.total / maxDay) * 52, d.total > 0 ? 5 : 2)}px`, opacity: d.total > 0 ? 1 : 0.2 }} />
-              <span className="text-[8px] text-gray-400 font-medium uppercase">{d.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
 
-    {/* KPI mini-cards */}
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
-      {kpis.map((s, i) => (
-        <div key={i} className="card-lift bg-white rounded-xl p-3 border border-gray-100 overflow-hidden relative hover:shadow-md transition-shadow">
-          <div className="absolute top-0 right-0 w-14 h-14 -translate-y-1/2 translate-x-1/2 rounded-full opacity-10" style={{ background: `linear-gradient(135deg, ${s.c1}, ${s.c2})` }} />
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br ${s.bg} shadow-sm mb-2`}><s.i size={13} className="text-white" /></div>
-          <p className="text-base font-bold text-gray-900 leading-none truncate">{s.v}</p>
-          <p className="text-[10px] text-gray-500 font-medium mt-1">{s.l}</p>
-          <p className="text-[9px] text-gray-400 truncate">{s.sub}</p>
-        </div>
-      ))}
-    </div>
+        {/* Right column — operational cards */}
+        <div className="space-y-4">
+          {/* Order status breakdown */}
+          <div className="bg-white rounded-xl border border-gray-100 p-3.5">
+            <h3 className="font-bold text-[11px] text-gray-800 mb-2.5 flex items-center gap-1.5"><Receipt size={11} className="text-[#9a6f16]" />Order Status</h3>
+            {statusTotal === 0 ? (
+              <p className="text-[11px] text-gray-400 py-4 text-center">No order-status data yet.</p>
+            ) : (
+              <>
+                <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                  {statusCounts.filter(x => x.n > 0).map((x, i) => (
+                    <div key={i} className={x.color} style={{ width: `${(x.n / statusTotal) * 100}%` }} title={`${x.s}: ${x.n}`} />
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5">
+                  {statusCounts.map((x, i) => (
+                    <span key={i} className="text-[10px] text-gray-600 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${x.color}`} />{x.s} · <b>{x.n}</b></span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
-    {/* Alerts — only when something needs attention */}
-    {(lowStock > 0 || pending > 0 || pendingR > 0) && (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        {[
-          { on: lowStock > 0, grad: 'from-sky-50 to-orange-50', b: 'border-sky-100', i: Warning, ic: 'bg-sky-100', tc: 'text-blue-600', n: lowStock, l: 'Low stock items', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/products' },
-          { on: pending > 0, grad: 'from-blue-50 to-indigo-50', b: 'border-blue-100', i: ShoppingCart, ic: 'bg-blue-100', tc: 'text-blue-600', n: pending, l: 'Pending orders', t: 'text-blue-800', s: 'text-blue-700', to: '/admin/orders' },
-          { on: pendingR > 0, grad: 'from-purple-50 to-pink-50', b: 'border-purple-100', i: Star, ic: 'bg-purple-100', tc: 'text-purple-600', n: pendingR, l: 'Reviews pending', t: 'text-purple-800', s: 'text-purple-700', to: '/admin/reviews' },
-        ].map((a, idx) => a.on ? (
-          <Link key={idx} to={a.to} className={`bg-gradient-to-br ${a.grad} border ${a.b} rounded-xl p-2.5 card-lift group flex items-center gap-2.5`}>
-            <div className={`w-8 h-8 ${a.ic} rounded-lg flex items-center justify-center shrink-0`}><a.i size={14} className={a.tc} /></div>
-            <div className="flex-1 min-w-0">
-              <p className={`text-[11px] ${a.s} font-medium leading-tight`}>{a.l}</p>
-              <p className={`font-bold ${a.t}`}>{a.n} <span className={`text-[9px] font-semibold ${a.s} opacity-70 group-hover:opacity-100 transition-opacity`}>· View <ArrowRight size={9} className="inline" /></span></p>
+          {/* Low stock — priority items */}
+          <div className="bg-white rounded-xl border border-gray-100 p-3.5">
+            <div className="flex items-center justify-between mb-2.5">
+              <h3 className="font-bold text-[11px] text-gray-800 flex items-center gap-1.5"><Warning size={11} className="text-amber-500" />Low Stock</h3>
+              <Link to="/admin/products" className="text-[10px] font-semibold text-[#9a6f16] hover:text-[#7c5a10]">View inventory →</Link>
             </div>
-          </Link>
-        ) : null)}
-      </div>
-    )}
+            {lowStockList.length === 0 ? (
+              <p className="text-[11px] text-gray-400 py-3 text-center">All products well stocked ✓</p>
+            ) : (
+              <ul className="space-y-2">
+                {lowStockList.slice(0, 4).map(p => (
+                  <li key={p.id} className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-gray-700 truncate">{p.name}</span>
+                    <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${Number(p.inventoryQty ?? 0) <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{p.inventoryQty ?? 0} left</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-    {/* Status breakdown + Quick AI Tools */}
-    <div className="grid lg:grid-cols-3 gap-2.5">
-      <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift lg:col-span-2">
-        <h3 className="font-bold text-[11px] text-gray-800 mb-2.5 flex items-center gap-1.5"><Receipt size={11} className="text-blue-500" />Order Status</h3>
-        {statusTotal === 0 ? (
-          <p className="text-[11px] text-gray-400 py-4 text-center">No orders yet — the status split will appear here.</p>
-        ) : (
-          <>
-            <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
-              {statusCounts.filter(x => x.n > 0).map((x, i) => (
-                <div key={i} className={x.color} style={{ width: `${(x.n / statusTotal) * 100}%` }} title={`${x.s}: ${x.n}`} />
-              ))}
+          {/* Gift Drop live card */}
+          <div className="bg-white rounded-xl border border-gray-100 p-3.5">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-[11px] text-gray-800 flex items-center gap-1.5"><Gift size={11} className="text-[#9a6f16]" />Gift Drop</h3>
+              {gift?.active && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[9px] font-bold"><span className="h-1 w-1 rounded-full bg-emerald-500" />LIVE</span>
+              )}
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5">
-              {statusCounts.map((x, i) => (
-                <span key={i} className="text-[10px] text-gray-600 flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full ${x.color}`} />{x.s} · <b>{x.n}</b></span>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Quick AI Tools */}
-      <div className="bg-white rounded-xl border border-gray-100 p-3 card-lift">
-        <h3 className="font-bold text-[11px] text-gray-800 mb-2 flex items-center gap-1.5"><Lightning size={11} className="text-blue-500" />Quick AI Tools</h3>
-        <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { to: '/admin/ai-import', icon: MagicWand, label: 'Import Product', color: '#8b5cf6' },
-            { to: '/admin/marketing', icon: Megaphone, label: 'Generate Content', color: '#3b82f6' },
-            { to: '/admin/variant-gen', icon: Stack, label: 'Create Variants', color: '#0088ff' },
-            { to: '/admin/seo-engine', icon: MagnifyingGlass, label: 'SEO Optimize', color: '#10b981' },
-            { to: '/admin/hermes-intel', icon: Sparkle, label: 'AI Intelligence', color: '#8b5cf6' },
-          ].map(t => (
-            <Link key={t.to} to={t.to}
-              className="flex flex-col items-start gap-1.5 px-2.5 py-2 rounded-lg text-[10px] font-medium hover:bg-gray-50 transition-all group">
-              <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: `${t.color}15` }}>
-                <t.icon size={11} style={{ color: t.color }} />
+            {gift ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-gray-50 p-2.5">
+                  <p className="text-lg font-bold text-gray-900 leading-none">{gift.claimsToday}</p>
+                  <p className="text-[9px] text-gray-500 mt-1">claims today</p>
+                </div>
+                <div className="rounded-lg bg-gray-50 p-2.5">
+                  <p className="text-lg font-bold text-gray-900 leading-none">{gift.remaining}<span className="text-[10px] font-semibold text-gray-400">/{gift.total}</span></p>
+                  <p className="text-[9px] text-gray-500 mt-1">gifts remaining</p>
+                </div>
               </div>
-              <span className="text-gray-700 group-hover:text-gray-900 leading-tight">{t.label}</span>
+            ) : (
+              <p className="text-[11px] text-gray-400 py-3 text-center">Gift Drop data unavailable.</p>
+            )}
+            <Link to="/admin/gift-drop" className="mt-2.5 block text-center text-[10px] font-semibold text-[#9a6f16] hover:text-[#7c5a10] py-1.5 rounded-lg border border-[#e5d9b6] hover:bg-[#fbf7ee] transition-colors">Open Gift Drop admin →</Link>
+          </div>
+
+          {/* Drafts / publishing queue */}
+          <div className="bg-white rounded-xl border border-gray-100 p-3.5">
+            <div className="flex items-center justify-between mb-2.5">
+              <h3 className="font-bold text-[11px] text-gray-800 flex items-center gap-1.5"><FileText size={11} className="text-[#9a6f16]" />Publishing Queue</h3>
+              <Link to="/admin/products" className="text-[10px] font-semibold text-[#9a6f16] hover:text-[#7c5a10]">Manage →</Link>
+            </div>
+            {drafts === 0 ? (
+              <p className="text-[11px] text-gray-400 py-3 text-center">No drafts waiting for review.</p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#f6efdd] flex items-center justify-center"><FileText size={16} className="text-[#9a6f16]" /></div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 leading-none">{drafts} draft{drafts !== 1 ? 's' : ''} awaiting review</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Ready to review and publish to the storefront.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick actions — 2x3 compact grid */}
+      <div className="bg-white rounded-xl border border-gray-100 p-3.5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-xs text-gray-800 flex items-center gap-1.5"><Lightning size={12} className="text-[#9a6f16]" />Quick Actions</h2>
+          <Link to="/admin/ai-import" className="text-[10px] font-semibold text-[#9a6f16] hover:text-[#7c5a10]">AI Import →</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {quickActions.map(a => (
+            <Link key={a.to} to={a.to} className="group flex items-start gap-2.5 rounded-lg border border-gray-100 hover:border-[#e5d9b6] hover:bg-[#fbf7ee] p-3 transition-colors">
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-[#f6efdd] text-[#9a6f16] flex items-center justify-center group-hover:bg-[#f1e5c8] transition-colors"><a.icon size={15} /></div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-gray-800 leading-tight">{a.label}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">{a.desc}</p>
+              </div>
             </Link>
           ))}
         </div>
       </div>
     </div>
-
-    {/* Recent Orders */}
-    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden card-lift">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-        <h2 className="font-bold text-xs text-gray-800">Recent Orders</h2>
-        <Link to="/admin/orders" className="text-[10px] font-semibold text-blue-600 hover:text-blue-800">View All →</Link>
-      </div>
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[9px] uppercase tracking-wider text-gray-400 border-b border-gray-50">
-            <th className="px-4 py-2 font-semibold">Order</th>
-            <th className="px-2 py-2 font-semibold hidden sm:table-cell">Customer</th>
-            <th className="px-2 py-2 font-semibold hidden md:table-cell">Date</th>
-            <th className="px-2 py-2 font-semibold text-right">Total</th>
-            <th className="px-4 py-2 font-semibold text-right">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {realOrders.slice(0, 5).map(o => (
-            <tr key={o.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/70 transition-colors">
-              <td className="px-4 py-2"><span className="font-mono font-semibold text-[11px] text-gray-900">{o.order_number}</span></td>
-              <td className="px-2 py-2 text-[11px] text-gray-600 hidden sm:table-cell">{o.customer_email || '—'}</td>
-              <td className="px-2 py-2 text-[11px] text-gray-500 hidden md:table-cell">{new Date(o.created_at).toLocaleDateString()}</td>
-              <td className="px-2 py-2 text-[11px] font-bold text-gray-900 text-right">${Number(o.total || 0).toFixed(2)}</td>
-              <td className="px-4 py-2 text-right">
-                <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold capitalize ${
-                  o.status === 'paid' ? 'bg-green-100 text-green-700' :
-                  String(o.status || '').includes('refund') ? 'bg-amber-100 text-amber-700' :
-                  'bg-gray-100 text-gray-600'
-                }`}>{String(o.status || '').replace('_', ' ')}</span>
-              </td>
-            </tr>
-          ))}
-          {realOrders.length === 0 && (
-            <tr><td colSpan={5} className="px-4 py-6 text-center text-[11px] text-gray-400">No orders yet — completed Stripe payments will appear here.</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>;
+  );
 }
 
 export function _AProducts() { // superseded by CatalogAdmin.CatalogProductsPage (DB-backed)
@@ -818,7 +898,7 @@ interface ErpSyncEntry { status: string; synced_at?: string; error?: string }
 interface ErpSyncLogEntry { order_number: string; status: string; at: string; error?: string }
 interface ErpConfig { webhook: ErpKeyStatus; token: ErpKeyStatus; sync: Record<string, ErpSyncEntry>; syncLog?: ErpSyncLogEntry[] }
 
-function AOrders() {
+export function AOrders() {
   const { notify } = useApp();
   const [stripeOrders, setStripeOrders] = useState<StripeOrderRow[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -1138,132 +1218,276 @@ function AOrders() {
       return { name: String(r.name || r.title || 'Item'), qty: Number(r.quantity || 1), price: Number(r.price || 0) };
     });
 
-  return <div className="space-y-6">
-    <div className="flex items-center justify-between">
-      <h1 className="text-2xl font-bold flex items-center gap-2"><ShoppingCart size={22} className="text-blue-600" /> Orders</h1>
-      <div className="flex gap-2">
-        {showDemo && <button onClick={() => setShowDemo(false)} className="text-xs text-gray-400 hover:text-gray-600 underline">Hide demo order</button>}
-        <button onClick={() => { const t = getAccessToken(); fetch('/api/checkout?action=orders', { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then((d: { orders?: StripeOrderRow[] }) => setStripeOrders(Array.isArray(d.orders) ? d.orders : [])).catch(() => {}); }} className="btn-glow px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1.5"><ArrowClockwise size={13} /> Refresh</button>
+  // ── Shared row helpers (used by both the desktop table and mobile cards) ──
+  const copyText = (v: string, label: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(v).then(() => notify(`${label} copied`)).catch(() => notify('Copy failed', 'error'));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = v; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+        notify(`${label} copied`);
+      }
+    } catch { notify('Copy failed', 'error'); }
+  };
+
+  const orderBadges = (o: StripeOrderRow, isDemo: boolean) => {
+    const pp = String((o as unknown as Record<string, unknown>).payment_provider || '');
+    const ot = String((o as unknown as Record<string, unknown>).order_type || 'paid');
+    const s = erpSyncFor(o.order_number);
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {isDemo && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full">DEMO</span>}
+        {!isDemo && (ot === 'free_gift' || pp === 'none') && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">🎁 FREE GIFT</span>
+        )}
+        {!isDemo && pp && pp !== 'stripe' && pp !== 'none' && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full capitalize">{pp}</span>
+        )}
+        {!isDemo && s && (s.status === 'failed'
+          ? <span title={s.error || 'ERP sync failed'} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full">ERP ✗</span>
+          : <span title={`Synced to ERP ${s.synced_at ? new Date(s.synced_at).toLocaleString() : ''}`} className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">ERP ✓</span>)}
+      </div>
+    );
+  };
+
+  const orderActions = (o: StripeOrderRow) => (
+    <div className="flex flex-wrap gap-1.5">
+      <button onClick={(e) => { e.stopPropagation(); setInvoiceOrder(o); }} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-semibold transition-colors"><Receipt size={12} /> Invoice</button>
+      <button onClick={(e) => { e.stopPropagation(); setLabelOrder(o); }} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-[10px] font-semibold transition-colors"><Printer size={12} /> Label</button>
+      <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === o.id ? null : o.id); }} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-semibold text-gray-700 transition-colors">{expanded === o.id ? <CaretUp size={12} /> : <CaretDown size={12} />} Detail</button>
+    </div>
+  );
+
+  const orderDetail = (o: StripeOrderRow, isDemo: boolean, tr: { carrier: string; number: string } | null) => (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {/* Items */}
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Items</p>
+        <div className="space-y-2">
+          {fmtItems(o.items).map((it, i) => (
+            <div key={i} className="flex justify-between gap-3 bg-white rounded-lg border p-2.5 text-xs">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-800 break-words">{it.name}</p>
+                <p className="text-gray-400">Qty {it.qty} · ${it.price.toFixed(2)}</p>
+              </div>
+              <p className="font-semibold shrink-0">${(it.qty * it.price).toFixed(2)}</p>
+            </div>
+          ))}
+          {fmtItems(o.items).length === 0 && <p className="text-xs text-gray-300">No line items recorded.</p>}
+        </div>
+      </div>
+      {/* Shipping + tracking */}
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Shipping & Tracking</p>
+        <div className="space-y-2">
+          <div className="bg-white rounded-lg border p-2.5 text-xs">
+            <p className="text-gray-400 mb-1 flex items-center gap-1"><MapPin size={12} /> Address</p>
+            <p className="text-gray-600 break-words">{(o as { shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null }).shipping_address ? `${(o as { shipping_address: { name?: string; line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.name || ''} · ${(o as { shipping_address: { line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.line1 || ''}, ${(o as { shipping_address: { city?: string; state?: string; zip?: string } }).shipping_address.city || ''} ${(o as { shipping_address: { state?: string; zip?: string } }).shipping_address.state || ''} ${(o as { shipping_address: { zip?: string } }).shipping_address.zip || ''}` : 'Not recorded'}</p>
+          </div>
+          <div className="bg-white rounded-lg border p-2.5 text-xs space-y-2">
+            <p className="text-gray-400">Tracking number</p>
+            <div className="flex gap-1.5">
+              <select value={(tr || tracking[o.id] || { carrier: 'USPS', number: '' }).carrier} onChange={(e) => saveTracking(o.id, { carrier: e.target.value, number: (tr || tracking[o.id] || { number: '' }).number })} className="text-[11px] border border-gray-200 rounded px-1.5 py-1">
+                <option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option>
+              </select>
+              <input value={(tr || tracking[o.id] || { number: '' }).number} onChange={(e) => saveTracking(o.id, { carrier: (tr || tracking[o.id] || { carrier: 'USPS' }).carrier, number: e.target.value })} placeholder="e.g. 9400…" className="flex-1 min-w-0 text-[11px] border border-gray-200 rounded px-2 py-1" />
+            </div>
+            {tr && tr.number && (
+              <a href={`https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tr.number)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[11px] font-medium"><Truck size={12} /> Track on {tr.carrier} →</a>
+            )}
+          </div>
+        </div>
+      </div>
+      {/* Payment */}
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Payment</p>
+        <div className="bg-white rounded-lg border p-2.5 text-xs space-y-1">
+          <div className="flex justify-between"><span className="text-gray-400">Subtotal</span><span>${subtotalOf(o).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Shipping</span><span>${extrasFor(o).shipping.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Tax</span><span>${totalsOf(o).tax.toFixed(2)}</span></div>
+          <div className="flex justify-between border-t border-gray-100 pt-1"><span className="text-gray-400">Total</span><span className="font-semibold">${totalsOf(o).grand.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Currency</span><span>{o.currency || 'USD'}</span></div>
+          <div className="flex justify-between items-start gap-2"><span className="text-gray-400">Stripe</span><span className="font-mono text-[10px] text-gray-500 break-all">{o.stripe_session_id || '—'}</span></div>
+          {isDemo && <p className="text-[10px] text-amber-600 pt-1">Demo record — payment not real.</p>}
+        </div>
+        <div className="flex gap-1.5 mt-2">
+          <button onClick={() => setInvoiceOrder(o)} className="btn-glow flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Receipt size={14} /> Invoice</button>
+          <button onClick={() => setLabelOrder(o)} className="btn-glow flex-1 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Barcode size={14} /> Label</button>
+        </div>
       </div>
     </div>
+  );
 
-    {/* Stats */}
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-gray-800">{stats.total}</p><p className="text-xs text-gray-500">Total orders</p></div>
-      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-emerald-600">${stats.revenue.toFixed(2)}</p><p className="text-xs text-gray-500">Revenue</p></div>
-      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-amber-600">{stats.pending}</p><p className="text-xs text-gray-500">Needs fulfilment</p></div>
-      <div className="bg-white rounded-xl border p-4"><p className="text-2xl font-bold text-blue-600">{stats.shipped}</p><p className="text-xs text-gray-500">Shipped / delivered</p></div>
-    </div>
-
-    {/* ERP sync — Embani LLC (server-side webhook push + CSV for the Excel workbook) */}
-    <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-          <CloudArrowUp size={18} className="text-indigo-600 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-indigo-900">ERP Sync — Embani LLC</p>
-            <p className="text-[11px] text-indigo-700/70">Orders are pushed to your ERP webhook from the server — the API token never touches this browser. Or download CSV for the Embani Excel workbook.</p>
-          </div>
+  return (
+    <div className="space-y-5">
+      {/* Header — fluid: inline on desktop, stacked on tablet/mobile */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2"><ShoppingCart size={20} className="text-[#9a6f16]" /> Orders</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Track, fulfil and sync orders to your ERP.</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={downloadCsv} className="btn-glow px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"><Download size={13} /> Export CSV (Excel)</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {showDemo && <button onClick={() => setShowDemo(false)} className="text-xs text-gray-400 hover:text-gray-600 underline whitespace-nowrap">Hide demo order</button>}
+          <button onClick={loadOrders} className="btn-glow inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold transition-colors"><ArrowClockwise size={13} /> Refresh</button>
         </div>
       </div>
 
-      {/* Current server-side config (masked) + sync ledger summary */}
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-indigo-800/80">
-        <span className="flex items-center gap-1"><LinkSimple size={12} className="text-indigo-500" /> Webhook: {erpCfg?.webhook.configured ? `${erpCfg.webhook.masked} (${erpCfg.webhook.source === 'env' ? 'environment' : 'attached'})` : 'not configured'}</span>
-        <span className="flex items-center gap-1"><Key size={12} className="text-indigo-500" /> Token: {erpCfg?.token.configured ? `•••••••••• (${erpCfg.token.source === 'env' ? 'environment' : 'attached'})` : 'not configured'}</span>
-        {erpCfg && Object.keys(erpCfg.sync).length > 0 && (() => {
-          const entries = Object.values(erpCfg.sync);
-          const failed = entries.filter(e => e.status === 'failed').length;
-          return <span className="flex items-center gap-1"><ShieldCheck size={12} className={failed ? 'text-amber-500' : 'text-green-600'} /> {entries.length - failed} synced · {failed} failed</span>;
-        })()}
+      {/* KPI row — 4-across desktop, 2x2 tablet, single column mobile */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { l: 'Total Orders', v: String(stats.total), icon: ShoppingCart, tint: 'bg-[#f6efdd] text-[#9a6f16]', sub: stats.total ? 'real orders' : 'No orders yet' },
+          { l: 'Revenue', v: `$${stats.revenue.toFixed(2)}`, icon: CurrencyDollar, tint: 'bg-[#f6efdd] text-[#9a6f16]', sub: stats.total ? 'from real orders' : 'No revenue yet' },
+          { l: 'Needs Fulfilment', v: String(stats.pending), icon: Warning, tint: 'bg-amber-50 text-amber-600', sub: stats.pending ? 'awaiting fulfilment' : 'All fulfilled' },
+          { l: 'Shipped / Delivered', v: String(stats.shipped), icon: Truck, tint: 'bg-emerald-50 text-emerald-600', sub: stats.shipped ? 'on the way or delivered' : 'Nothing shipped yet' },
+        ].map((k, i) => (
+          <div key={i} className="bg-white rounded-xl border border-gray-100 p-3.5 shadow-[0_1px_2px_rgba(27,31,39,0.04)]">
+            <div className="flex items-center justify-between">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${k.tint}`}><k.icon size={15} /></div>
+            </div>
+            <p className="mt-2 text-xl font-bold text-gray-900 leading-none truncate">{k.v}</p>
+            <p className="text-[10px] font-medium text-gray-500 mt-1">{k.l}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5 truncate">{k.sub}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-3 grid gap-2">
-        <div className="grid sm:grid-cols-2 gap-2">
-          <div className="min-w-0">
-            <input value={erpWebhookInput} onChange={(e) => setErpWebhookInput(e.target.value)} placeholder={erpCfg?.webhook.configured ? (erpCfg.webhook.source === 'env' ? 'Webhook is set in the server environment (••••)' : `Update webhook (currently ${erpCfg.webhook.masked})`) : 'ERP webhook URL — e.g. https://erp.example.com/api/luxedge/orders'} className="w-full min-w-0 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
-            {erpCfg?.webhook.configured && erpCfg.webhook.source === 'attached' && <button onClick={() => clearErpField('webhook')} disabled={erpBusy} className="mt-1 text-[10px] text-indigo-500 hover:text-red-500 underline disabled:opacity-50">Remove webhook URL</button>}
+      {/* ERP Sync — Embani LLC (server-side webhook push + CSV for the Excel workbook) */}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-[0_1px_2px_rgba(27,31,39,0.04)]">
+        {/* Header: status + Export CSV */}
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#f6efdd] flex items-center justify-center shrink-0"><CloudArrowUp size={15} className="text-[#9a6f16]" /></div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-gray-900 leading-tight">ERP Sync — Embani LLC</p>
+              <p className="text-[11px] text-gray-500">Orders are pushed to your ERP webhook from the server — the API token never touches this browser.</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <input value={erpTokenInput} onChange={(e) => setErpTokenInput(e.target.value)} type="password" autoComplete="new-password" placeholder={erpCfg?.token.configured ? `Token is set${erpCfg.token.source === 'env' ? ' in the server environment' : ''} (••••) — leave blank to keep` : 'ERP API token (optional)'} className="w-full min-w-0 px-3 py-2 border border-indigo-200 rounded-lg text-xs bg-white" />
-            {erpCfg?.token.configured && erpCfg.token.source === 'attached' && <button onClick={() => clearErpField('token')} disabled={erpBusy} className="mt-1 text-[10px] text-indigo-500 hover:text-red-500 underline disabled:opacity-50">Remove token</button>}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={saveErpSettings} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1.5"><FloppyDisk size={13} /> Save settings</button>
-          <button onClick={() => pushToErp(true)} disabled={erpBusy} className="px-3 py-2 border border-indigo-300 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 disabled:opacity-50 flex items-center gap-1.5">{erpBusy ? <ArrowClockwise size={13} className="animate-spin" /> : <Shuffle size={13} />}{erpBusy ? 'Working…' : 'Test'}</button>
-          <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"><CloudArrowUp size={13} /> Push orders</button>
+          <button onClick={downloadCsv} className="btn-glow inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"><Download size={13} /> Export CSV (Excel)</button>
         </div>
 
-        {/* Failed ERP syncs (from the server-side ledger) — retry per order or clear all */}
-        {failedErpSyncs.length > 0 && (
-          <div className="rounded-lg border border-red-200 bg-red-50/40 overflow-hidden">
-            <div className="px-3 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5"><Warning size={13} /> {failedErpSyncs.length} failed ERP sync{failedErpSyncs.length !== 1 ? 's' : ''}</p>
-              <div className="flex gap-2">
-                <button onClick={() => pushToErp(false, failedErpSyncs.map(([n]) => n))} disabled={erpBusy} className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry all</button>
-                <button onClick={clearFailedErp} disabled={erpBusy} className="px-2.5 py-1 border border-red-300 text-red-600 rounded-lg text-[10px] font-semibold hover:bg-red-100 disabled:opacity-50">Clear all errors</button>
+        <div className="p-4 space-y-4">
+          {/* Connection summary */}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5 min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Webhook</p>
+              {erpCfg?.webhook.configured ? (
+                <button onClick={() => copyText(erpCfg.webhook.masked, 'Webhook URL')} title="Copy masked webhook URL" className="flex items-center gap-1.5 text-[11px] font-medium text-gray-700 min-w-0 max-w-full">
+                  <span className="truncate">{erpCfg.webhook.masked}</span>
+                  <Clipboard size={11} className="text-gray-400 shrink-0" />
+                  <span className="text-[9px] text-gray-400 shrink-0">({erpCfg.webhook.source === 'env' ? 'env' : 'attached'})</span>
+                </button>
+              ) : <p className="text-[11px] text-gray-400">Not configured</p>}
+            </div>
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5 min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Token</p>
+              {erpCfg?.token.configured ? (
+                <button onClick={() => copyText(erpCfg.token.masked, 'API token')} title="Copy masked API token" className="flex items-center gap-1.5 text-[11px] font-medium text-gray-700 min-w-0 max-w-full">
+                  <span className="truncate font-mono">••••••••••</span>
+                  <Clipboard size={11} className="text-gray-400 shrink-0" />
+                  <span className="text-[9px] text-gray-400 shrink-0">({erpCfg.token.source === 'env' ? 'env' : 'attached'})</span>
+                </button>
+              ) : <p className="text-[11px] text-gray-400">Not configured</p>}
+            </div>
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5 min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1">Sync count</p>
+              {erpCfg && Object.keys(erpCfg.sync).length > 0 ? (() => {
+                const entries = Object.values(erpCfg.sync);
+                const failed = entries.filter(e => e.status === 'failed').length;
+                return (
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-700">
+                    <ShieldCheck size={12} className={failed ? 'text-amber-500 shrink-0' : 'text-emerald-600 shrink-0'} />
+                    {entries.length - failed} synced · {failed} failed
+                  </p>
+                );
+              })() : <p className="text-[11px] text-gray-400">Nothing synced yet</p>}
+            </div>
+          </div>
+
+          {/* Settings fields + actions — side-by-side on desktop, stacked below */}
+          <div className="grid gap-2 lg:grid-cols-2">
+            <div className="min-w-0">
+              <input value={erpWebhookInput} onChange={(e) => setErpWebhookInput(e.target.value)} placeholder={erpCfg?.webhook.configured ? (erpCfg.webhook.source === 'env' ? 'Webhook is set in the server environment (••••)' : `Update webhook (currently ${erpCfg.webhook.masked})`) : 'ERP webhook URL — e.g. https://erp.example.com/api/luxedge/orders'} className="w-full min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#9a6f16] focus:ring-2 focus:ring-[#9a6f16]/15" />
+              {erpCfg?.webhook.configured && erpCfg.webhook.source === 'attached' && <button onClick={() => clearErpField('webhook')} disabled={erpBusy} className="mt-1 text-[10px] text-gray-400 hover:text-red-500 underline disabled:opacity-50">Remove webhook URL</button>}
+            </div>
+            <div className="min-w-0">
+              <input value={erpTokenInput} onChange={(e) => setErpTokenInput(e.target.value)} type="password" autoComplete="new-password" placeholder={erpCfg?.token.configured ? `Token is set${erpCfg.token.source === 'env' ? ' in the server environment' : ''} (••••) — leave blank to keep` : 'ERP API token (optional)'} className="w-full min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:border-[#9a6f16] focus:ring-2 focus:ring-[#9a6f16]/15" />
+              {erpCfg?.token.configured && erpCfg.token.source === 'attached' && <button onClick={() => clearErpField('token')} disabled={erpBusy} className="mt-1 text-[10px] text-gray-400 hover:text-red-500 underline disabled:opacity-50">Remove token</button>}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={saveErpSettings} disabled={erpBusy} className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"><FloppyDisk size={13} /> Save settings</button>
+            <button onClick={() => pushToErp(true)} disabled={erpBusy} className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors">{erpBusy ? <ArrowClockwise size={13} className="animate-spin" /> : <Shuffle size={13} />}{erpBusy ? 'Working…' : 'Test'}</button>
+            <button onClick={() => pushToErp(false)} disabled={erpBusy} className="btn-glow inline-flex items-center gap-1.5 px-3 py-2 bg-[#1b1f27] hover:bg-[#2b3140] text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition-colors"><CloudArrowUp size={13} /> Push orders</button>
+          </div>
+
+          {/* Failed ERP syncs — compact red error card; stacks on small screens */}
+          {failedErpSyncs.length > 0 && (
+            <div className="rounded-lg border border-red-200 bg-red-50/50 overflow-hidden">
+              <div className="px-3 py-2 bg-red-50 border-b border-red-100 flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5"><Warning size={13} /> {failedErpSyncs.length} failed ERP sync{failedErpSyncs.length !== 1 ? 's' : ''}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => pushToErp(false, failedErpSyncs.map(([n]) => n))} disabled={erpBusy} className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry all</button>
+                  <button onClick={clearFailedErp} disabled={erpBusy} className="px-2.5 py-1 border border-red-300 text-red-600 rounded-lg text-[10px] font-semibold hover:bg-red-100 disabled:opacity-50">Clear all errors</button>
+                </div>
+              </div>
+              <div className="divide-y divide-red-100/70">
+                {failedErpSyncs.map(([orderNumber, e]) => (
+                  <div key={orderNumber} className="px-3 py-2 flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                    <p className="font-mono text-[11px] font-semibold text-gray-800 shrink-0">{orderNumber}</p>
+                    <p className="text-[10px] text-red-600/90 break-words min-w-0 flex-1" title={e.error || ''}>{e.error || 'ERP sync failed'}</p>
+                    <span className="text-[9px] text-gray-400 shrink-0">{e.synced_at ? new Date(e.synced_at).toLocaleString() : ''}</span>
+                    <button onClick={() => pushToErp(false, [orderNumber])} disabled={erpBusy} className="self-start sm:self-auto px-2.5 py-1 bg-white border border-red-300 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry</button>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="divide-y divide-red-100/70">
-              {failedErpSyncs.map(([orderNumber, e]) => (
-                <div key={orderNumber} className="px-3 py-2 flex items-center gap-2 flex-wrap min-w-0">
-                  <p className="font-mono text-[11px] font-semibold text-gray-800 shrink-0">{orderNumber}</p>
-                  <p className="text-[10px] text-red-600/90 break-words min-w-0 flex-1" title={e.error || ''}>{e.error || 'ERP sync failed'}</p>
-                  <span className="text-[9px] text-gray-400 shrink-0">{e.synced_at ? new Date(e.synced_at).toLocaleString() : ''}</span>
-                  <button onClick={() => pushToErp(false, [orderNumber])} disabled={erpBusy} className="px-2.5 py-1 bg-white border border-red-300 text-red-600 hover:bg-red-100 rounded-lg text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1"><ArrowClockwise size={11} /> Retry</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Full ERP sync history — every attempt (created/updated/failed) with timestamps */}
-      {erpCfg?.syncLog?.length ? (
-        <div className="rounded-lg border border-indigo-200 bg-white/60 overflow-hidden mt-3">
-          <div className="px-3 py-2 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between gap-2 flex-wrap">
-            <button onClick={() => setShowErpLog(!showErpLog)} className="text-xs font-semibold text-indigo-800 flex items-center gap-1.5 hover:text-indigo-950">
-              <Clock size={13} /> Sync history ({erpCfg.syncLog.length}) {showErpLog ? <CaretUp size={12} /> : <CaretDown size={12} />}
-            </button>
-            <div className="flex gap-1.5 text-[10px]">
-              {(() => {
-                const c = erpCfg.syncLog!.filter(e => e.status === 'created').length;
-                const u = erpCfg.syncLog!.filter(e => e.status === 'updated' || e.status === 'sent').length;
-                const f = erpCfg.syncLog!.filter(e => e.status === 'failed').length;
-                return (<>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">{c} created</span>
-                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">{u} updated</span>
-                  <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-semibold">{f} failed</span>
-                </>);
-              })()}
-            </div>
-          </div>
-          {showErpLog && (
-            <div className="max-h-56 overflow-y-auto divide-y divide-indigo-100/70">
-              {erpCfg.syncLog.slice(0, 300).map((e, i) => (
-                <div key={i} className="px-3 py-1.5 flex items-start gap-2 min-w-0">
-                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${e.status === 'created' ? 'bg-emerald-100 text-emerald-700' : e.status === 'updated' || e.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`}>{e.status}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-mono text-[10px] font-semibold text-gray-800 break-words">{e.order_number}</p>
-                    {e.error && <p className="text-[9px] text-red-500/90 break-words" title={e.error}>{e.error}</p>}
-                  </div>
-                  <span className="text-[9px] text-gray-400 shrink-0">{e.at ? new Date(e.at).toLocaleString() : ''}</span>
-                </div>
-              ))}
-            </div>
           )}
-        </div>
-      ) : null}
 
-      {erpResult && (
-        <p className={`mt-2 text-[11px] break-words ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
-      )}
-      <p className="mt-2 text-[10px] text-indigo-500/70">Only genuine Stripe-webhook orders are pushed — the demo LX-1001 order and $0 gift-drop claims are never sent. Every order keeps its original order number, so re-pushing reconciles in the ERP instead of duplicating.</p>
-    </div>
+          {/* Full ERP sync history — every attempt (created/updated/failed) with timestamps */}
+          {erpCfg?.syncLog?.length ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50/60 overflow-hidden">
+              <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+                <button onClick={() => setShowErpLog(!showErpLog)} className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 hover:text-gray-950">
+                  <Clock size={13} className="text-[#9a6f16]" /> Sync history ({erpCfg.syncLog.length}) {showErpLog ? <CaretUp size={12} /> : <CaretDown size={12} />}
+                </button>
+                <div className="flex gap-1.5 text-[10px]">
+                  {(() => {
+                    const c = erpCfg.syncLog!.filter(e => e.status === 'created').length;
+                    const u = erpCfg.syncLog!.filter(e => e.status === 'updated' || e.status === 'sent').length;
+                    const f = erpCfg.syncLog!.filter(e => e.status === 'failed').length;
+                    return (<>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">{c} created</span>
+                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">{u} updated</span>
+                      <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-semibold">{f} failed</span>
+                    </>);
+                  })()}
+                </div>
+              </div>
+              {showErpLog && (
+                <div className="max-h-56 overflow-y-auto divide-y divide-gray-100/80">
+                  {erpCfg.syncLog.slice(0, 300).map((e, i) => (
+                    <div key={i} className="px-3 py-1.5 flex items-start gap-2 min-w-0">
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 mt-0.5 ${e.status === 'created' ? 'bg-emerald-100 text-emerald-700' : e.status === 'updated' || e.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`}>{e.status}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[10px] font-semibold text-gray-800 break-words">{e.order_number}</p>
+                        {e.error && <p className="text-[9px] text-red-500/90 break-words" title={e.error}>{e.error}</p>}
+                      </div>
+                      <span className="text-[9px] text-gray-400 shrink-0">{e.at ? new Date(e.at).toLocaleString() : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {erpResult && (
+            <p className={`text-[11px] break-words ${erpResult.ok ? 'text-green-700' : 'text-red-600'}`}>{erpResult.ok ? '✓ ' : '✗ '}{erpResult.msg}</p>
+          )}
+          <p className="text-[10px] text-gray-400">Only genuine Stripe-webhook orders are pushed — the demo LX-1001 order and $0 gift-drop claims are never sent. Every order keeps its original order number, so re-pushing reconciles in the ERP instead of duplicating.</p>
+        </div>
+      </div>
 
     {/* Demo banner */}
     {showDemo && (
@@ -1272,8 +1496,9 @@ function AOrders() {
       </div>
     )}
 
+{/* Orders table — responsive: full table on desktop (container scrolls on tablet), stacked cards on mobile */}
     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-emerald-100">
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-3">
         <div className="flex-1 min-w-0">
           <h2 className="font-semibold text-sm text-gray-800">Orders <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full ml-1">AUTHORITATIVE</span></h2>
           <p className="text-[11px] text-gray-400">Real records from the Stripe webhook + gift drops. Filter by provider or type.</p>
@@ -1302,127 +1527,96 @@ function AOrders() {
           <p className="text-xs text-gray-400">Completed Stripe payments will appear here automatically. A demo order is hidden — press "Show demo" to preview the UI.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto"><table className="w-full">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr><th className="px-6 py-3">Order</th><th className="px-6 py-3">Customer</th><th className="px-6 py-3">Items</th><th className="px-6 py-3">Total</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Tracking</th><th className="px-6 py-3">Actions</th></tr></thead>
-          <tbody>{visibleOrders.map(({ order: o, isDemo, tr }) => (
-            <>
-              <tr key={o.id} className={`border-t hover:bg-gray-50 cursor-pointer ${isDemo ? 'bg-amber-50/40' : ''}`} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
-                <td className="px-6 py-3">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+        <>
+          {/* Desktop table (md+) — the table container scrolls on tablet; the page never overflows */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[880px]">
+              <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase"><tr>
+                <th className="px-6 py-3 w-[190px]">Order</th>
+                <th className="px-6 py-3 w-[200px]">Customer</th>
+                <th className="px-6 py-3 w-[80px]">Items</th>
+                <th className="px-6 py-3 w-[90px]">Total</th>
+                <th className="px-6 py-3 w-[140px]">Status</th>
+                <th className="px-6 py-3 w-[160px]">Tracking</th>
+                <th className="px-6 py-3">Actions</th>
+              </tr></thead>
+              <tbody>{visibleOrders.map(({ order: o, isDemo, tr }) => (
+                <Fragment key={o.id}>
+                  <tr className={`border-t hover:bg-gray-50 cursor-pointer ${isDemo ? 'bg-amber-50/40' : ''}`} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
+                    <td className="px-6 py-3 align-top">
+                      <p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p>
+                      <div className="mt-1">{orderBadges(o, isDemo)}</div>
+                      <p className="text-[10px] text-gray-400 mt-1">{new Date(o.created_at).toLocaleString()}</p>
+                    </td>
+                    <td className="px-6 py-3 text-sm text-gray-600 align-top break-words">{o.customer_email || '—'}</td>
+                    <td className="px-6 py-3 text-xs text-gray-500 align-top">{fmtItems(o.items).length} item(s)</td>
+                    <td className="px-6 py-3 font-semibold align-top">${Number(o.total || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3 align-top">
+                      <select value={String(o.status || '')} onChange={(e) => { const s = e.target.value; if (isDemo) return; setStripeOrders(prev => prev.map(x => x.id === o.id ? { ...x, status: s } : x)); notify(`Order ${o.order_number} → ${s}`); }} className={`text-xs font-semibold px-2 py-1 rounded-full border-0 capitalize cursor-pointer max-w-full ${statusColor(String(o.status || ''))}`}>
+                        {['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-6 py-3 align-top">
+                      {tr && tr.number ? (
+                        <div className="flex items-center gap-1.5 min-w-0"><Truck size={13} className="text-blue-500 shrink-0" /><div className="min-w-0"><p className="font-mono text-[10px] text-gray-700 truncate">{tr.number}</p><p className="text-[9px] text-gray-400 uppercase">{tr.carrier}</p></div></div>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+                    <td className="px-6 py-3 align-top">{orderActions(o)}</td>
+                  </tr>
+                  {expanded === o.id && (
+                    <tr id={`order-detail-${o.id}`} className="border-t bg-gray-50/60">
+                      <td colSpan={7} className="px-6 py-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400">Order detail — {o.order_number}</p>
+                          <button onClick={() => setInvoiceOrder(o)} className="btn-glow px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1.5"><Receipt size={13} /> Maximize — Full Invoice</button>
+                        </div>
+                        {orderDetail(o, isDemo, tr)}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}</tbody>
+            </table>
+          </div>
+
+          {/* Mobile stacked cards (< md) — order number/status top, customer/items/total middle, tracking + actions bottom */}
+          <div className="md:hidden divide-y divide-gray-100">
+            {visibleOrders.map(({ order: o, isDemo, tr }) => (
+              <div key={o.id} className={`p-4 ${isDemo ? 'bg-amber-50/40' : ''}`}>
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="min-w-0">
                     <p className="font-mono text-xs font-semibold text-gray-800">{o.order_number}</p>
-                    {isDemo && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full">DEMO</span>}
-                    {!isDemo && (() => {
-                      const pp = String((o as unknown as Record<string, unknown>).payment_provider || '');
-                      const ot = String((o as unknown as Record<string, unknown>).order_type || 'paid');
-                      if (ot === 'free_gift' || pp === 'none') {
-                        return <span className="text-[9px] font-bold px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">🎁 FREE GIFT</span>;
-                      }
-                      if (pp && pp !== 'stripe' && pp !== 'none') {
-                        return <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full capitalize">{pp}</span>;
-                      }
-                      return null;
-                    })()}
-                    {!isDemo && (() => {
-                      const s = erpSyncFor(o.order_number);
-                      if (!s) return null;
-                      return s.status === 'failed'
-                        ? <span title={s.error || 'ERP sync failed'} className="text-[9px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full">ERP ✗</span>
-                        : <span title={`Synced to ERP ${s.synced_at ? new Date(s.synced_at).toLocaleString() : ''}`} className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">ERP ✓</span>;
-                    })()}
+                    <p className="text-[10px] text-gray-400 mt-0.5">{new Date(o.created_at).toLocaleString()}</p>
                   </div>
-                  <p className="text-[10px] text-gray-400">{new Date(o.created_at).toLocaleString()}</p>
-                </td>
-                <td className="px-6 py-3 text-sm text-gray-600">{o.customer_email || '—'}</td>
-                <td className="px-6 py-3 text-xs text-gray-500">{fmtItems(o.items).length} item(s)</td>
-                <td className="px-6 py-3 font-semibold">${Number(o.total || 0).toFixed(2)}</td>
-                <td className="px-6 py-3">
-                  <select value={String(o.status || '')} onChange={(e) => { const s = e.target.value; if (isDemo) return; setStripeOrders(prev => prev.map(x => x.id === o.id ? { ...x, status: s } : x)); notify(`Order ${o.order_number} → ${s}`); }} className={`text-xs font-semibold px-2 py-1 rounded-full border-0 capitalize cursor-pointer ${statusColor(String(o.status || ''))}`}>
-                    {['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
-                <td className="px-6 py-3">
-                  {tr && tr.number ? (
-                    <div className="flex items-center gap-1.5"><Truck size={13} className="text-blue-500" /><div><p className="font-mono text-[10px] text-gray-700">{tr.number}</p><p className="text-[9px] text-gray-400 uppercase">{tr.carrier}</p></div></div>
-                  ) : <span className="text-xs text-gray-300">—</span>}
-                </td>
-                <td className="px-6 py-3">
-                  <div className="flex gap-1.5">
-                    <button onClick={(e) => { e.stopPropagation(); setInvoiceOrder(o); }} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-medium flex items-center gap-1"><Receipt size={12} /> Invoice</button>
-                    <button onClick={(e) => { e.stopPropagation(); setLabelOrder(o); }} className="px-2.5 py-1 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-[10px] font-medium flex items-center gap-1"><Printer size={12} /> Label</button>
-                    <button onClick={(e) => { e.stopPropagation(); setExpanded(expanded === o.id ? null : o.id); }} className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-[10px] font-medium flex items-center gap-1">{expanded === o.id ? <CaretUp size={12} /> : <CaretDown size={12} />} Detail</button>
+                  <div className="shrink-0">{orderBadges(o, isDemo)}</div>
+                </div>
+                <div className="mt-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between gap-2"><span className="text-gray-400 shrink-0">Customer</span><span className="text-gray-700 text-right break-words min-w-0">{o.customer_email || '—'}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-gray-400">Items</span><span className="text-gray-700">{fmtItems(o.items).length} item(s)</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-gray-400">Total</span><span className="font-semibold text-gray-900">${Number(o.total || 0).toFixed(2)}</span></div>
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+                    <span className="text-gray-400 shrink-0">Status</span>
+                    <select value={String(o.status || '')} onChange={(e) => { const s = e.target.value; if (isDemo) return; setStripeOrders(prev => prev.map(x => x.id === o.id ? { ...x, status: s } : x)); notify(`Order ${o.order_number} → ${s}`); }} className={`text-xs font-semibold px-2 py-1 rounded-full border-0 capitalize cursor-pointer max-w-full ${statusColor(String(o.status || ''))}`}>
+                      {['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
-                </td>
-              </tr>
-              {expanded === o.id && (
-                <tr key={o.id + '-detail'} id={`order-detail-${o.id}`} className="border-t bg-gray-50/60">
-                  <td colSpan={7} className="px-6 py-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Order detail — {o.order_number}</p>
-                      <button onClick={() => setInvoiceOrder(o)} className="btn-glow px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1.5"><Receipt size={13} /> Maximize — Full Invoice</button>
-                    </div>
-                    <div className="grid sm:grid-cols-3 gap-5">
-                      {/* Items */}
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Items</p>
-                        <div className="space-y-2">
-                          {fmtItems(o.items).map((it, i) => (
-                            <div key={i} className="flex justify-between gap-3 bg-white rounded-lg border p-2.5 text-xs">
-                              <div>
-                                <p className="font-medium text-gray-800">{it.name}</p>
-                                <p className="text-gray-400">Qty {it.qty} · ${it.price.toFixed(2)}</p>
-                              </div>
-                              <p className="font-semibold">${(it.qty * it.price).toFixed(2)}</p>
-                            </div>
-                          ))}
-                          {fmtItems(o.items).length === 0 && <p className="text-xs text-gray-300">No line items recorded.</p>}
-                        </div>
-                      </div>
-                      {/* Shipping + tracking */}
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Shipping & Tracking</p>
-                        <div className="space-y-2">
-                          <div className="bg-white rounded-lg border p-2.5 text-xs">
-                            <p className="text-gray-400 mb-1 flex items-center gap-1"><MapPin size={12} /> Address</p>
-                            <p className="text-gray-600">{(o as { shipping_address?: { name?: string; line1?: string; city?: string; state?: string; zip?: string } | null }).shipping_address ? `${(o as { shipping_address: { name?: string; line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.name || ''} · ${(o as { shipping_address: { line1?: string; city?: string; state?: string; zip?: string } }).shipping_address.line1 || ''}, ${(o as { shipping_address: { city?: string; state?: string; zip?: string } }).shipping_address.city || ''} ${(o as { shipping_address: { state?: string; zip?: string } }).shipping_address.state || ''} ${(o as { shipping_address: { zip?: string } }).shipping_address.zip || ''}` : 'Not recorded'}</p>
-                          </div>
-                          <div className="bg-white rounded-lg border p-2.5 text-xs space-y-2">
-                            <p className="text-gray-400">Tracking number</p>
-                            <div className="flex gap-1.5">
-                              <select value={(tr || tracking[o.id] || { carrier: 'USPS', number: '' }).carrier} onChange={(e) => saveTracking(o.id, { carrier: e.target.value, number: (tr || tracking[o.id] || { number: '' }).number })} className="text-[11px] border border-gray-200 rounded px-1.5 py-1">
-                                <option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option>
-                              </select>
-                              <input value={(tr || tracking[o.id] || { number: '' }).number} onChange={(e) => saveTracking(o.id, { carrier: (tr || tracking[o.id] || { carrier: 'USPS' }).carrier, number: e.target.value })} placeholder="e.g. 9400…" className="flex-1 text-[11px] border border-gray-200 rounded px-2 py-1" />
-                            </div>
-                            {tr && tr.number && (
-                              <a href={`https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tr.number)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-[11px] font-medium"><Truck size={12} /> Track on {tr.carrier} →</a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {/* Payment */}
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-gray-400 mb-2">Payment</p>
-                        <div className="bg-white rounded-lg border p-2.5 text-xs space-y-1">
-                          <div className="flex justify-between"><span className="text-gray-400">Subtotal</span><span>${subtotalOf(o).toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span className="text-gray-400">Shipping</span><span>${extrasFor(o).shipping.toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span className="text-gray-400">Tax</span><span>${totalsOf(o).tax.toFixed(2)}</span></div>
-                          <div className="flex justify-between border-t border-gray-100 pt-1"><span className="text-gray-400">Total</span><span className="font-semibold">${totalsOf(o).grand.toFixed(2)}</span></div>
-                          <div className="flex justify-between"><span className="text-gray-400">Currency</span><span>{o.currency || 'USD'}</span></div>
-                          <div className="flex justify-between items-start gap-2"><span className="text-gray-400">Stripe</span><span className="font-mono text-[10px] text-gray-500 break-all">{o.stripe_session_id || '—'}</span></div>
-                          {isDemo && <p className="text-[10px] text-amber-600 pt-1">Demo record — payment not real.</p>}
-                        </div>
-                        <div className="flex gap-1.5 mt-2">
-                          <button onClick={() => setInvoiceOrder(o)} className="btn-glow flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Receipt size={14} /> Invoice</button>
-                          <button onClick={() => setLabelOrder(o)} className="btn-glow flex-1 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5"><Barcode size={14} /> Label</button>
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </>
-          ))}</tbody>
-        </table></div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-gray-400 shrink-0">Tracking</span>
+                    {tr && tr.number ? (
+                      <span className="flex items-center gap-1 min-w-0"><Truck size={12} className="text-blue-500 shrink-0" /><span className="font-mono text-[10px] text-gray-700 truncate">{tr.number}</span></span>
+                    ) : <span className="text-xs text-gray-300">—</span>}
+                  </div>
+                </div>
+                <div className="mt-3">{orderActions(o)}</div>
+                {expanded === o.id && (
+                  <div id={`order-detail-${o.id}`} className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+                    {orderDetail(o, isDemo, tr)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
 
@@ -1527,7 +1721,8 @@ function AOrders() {
         </div>
       )}
     </Modal>
-  </div>;
+  </div>
+  );
 }
 
 function AUsers() {
