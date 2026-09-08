@@ -58,6 +58,8 @@ export interface Product {
   featured?: boolean; newArrival?: boolean; saleEnabled?: boolean;
   /** Manual admin pin — products.sort_order > 0 ranks first (ascending). */
   sortOrder?: number;
+  /** Row creation time — newest-first home merchandising. */
+  createdAt?: string;
   stockStatus?: string; usInventory?: boolean;
   seoTitle?: string; seoDescription?: string; seoKeywords?: string[];
   slug?: string;
@@ -211,6 +213,7 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     newArrival: p.newArrival,
     saleEnabled: p.saleEnabled,
     sortOrder: p.sortOrder,
+    createdAt: p.createdAt,
     stockStatus: p.stockStatus,
     usInventory: p.usInventory,
     commerceReadiness: p.commerceReadiness,
@@ -2034,7 +2037,18 @@ function HomePage() {
   const rankList = useCallback((list: Product[]) => rankProducts(list, { stats: merchStats, explore: false }), [merchStats, visualVersion]);
   const pickBest = (pred: (p: Product) => boolean) => rankedFeatured.find((p) => pred(p) && firstUsableImage(p));
   const topPicks = rankList(homepageVisualProducts.filter(p => p.featured));
-  const newArrivals = rankList(homepageVisualProducts.filter(p => p.newArrival));
+  // New Arrivals = the 4 most recently ADDED active products (created_at desc)
+  // so a product the owner adds today shows up here automatically. The admin
+  // newArrival flag only breaks same-day ties — it must not let old flagged
+  // items crowd out genuinely new listings.
+  const newArrivals = [...homepageVisualProducts]
+    .sort((a, b) => {
+      const ta = Date.parse(a.createdAt || '') || 0;
+      const tb = Date.parse(b.createdAt || '') || 0;
+      if (ta !== tb) return tb - ta;
+      return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
+    })
+    .slice(0, 4);
   // Deals include either a real compare-at saving or an admin-enabled sale.
   // Never invent a discount when the source catalog has no compare-at price.
   const deals = homepageVisualProducts

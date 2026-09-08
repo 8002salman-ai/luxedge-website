@@ -103,16 +103,18 @@ describe('loadStorefrontCatalog', () => {
     expect(byId.get('p2')?.name).toBe('p2'); // name||title||id → id
   });
 
-  it('hides ACTIVE products without a verified purchasing path (commerce readiness gate)', async () => {
+  it('ACTIVE products are owner-approved and visible; PUBLISHED rows still need a verified purchasing path', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
         return Promise.resolve(jsonResponse([
-          // Manufacturer retail-reference page: authenticity proven, but no
-          // wholesale/dropship path and no cost basis → SOURCE_PENDING → hidden.
+          // Admin-activated despite no cost basis — the owner's explicit
+          // "Active" click IS the approval; visible (today's AliExpress adds).
           { id: 'p1', name: 'KONG Classic Toy', status: 'active', price: 8.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0, us_inventory: true, stock_status: 'in_stock', inventory_qty: 25 },
           // Real CJ supply + cost + list-level US inventory → COMMERCE_READY.
           { id: 'p2', name: 'CJ Scratch Board', status: 'active', price: 5.99, supplier_source: 'CJ', supplier_product_ref: 'CJYD2060792', cost_price: 1.99, us_inventory: true, stock_status: 'in_stock', inventory_qty: 4 },
+          // PUBLISHED (legacy/auto path) without a purchasing path stays hidden.
+          { id: 'p3', name: 'Retail-Ref Only', status: 'published', price: 29.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0 },
         ]));
       }
       if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
@@ -120,8 +122,9 @@ describe('loadStorefrontCatalog', () => {
       return Promise.resolve(jsonResponse([]));
     }));
     const cat = await loadStorefrontCatalog();
-    expect(cat!.products.map((p) => p.id)).toEqual(['p2']);
-    expect(cat!.products[0].commerceReadiness).toBe('COMMERCE_READY');
+    expect(cat!.products.map((p) => p.id)).toEqual(['p1', 'p2']);
+    expect(cat!.products[0].commerceReadiness).toBe('SOURCE_PENDING');
+    expect(cat!.products[1].commerceReadiness).toBe('COMMERCE_READY');
   });
 
   it('parses comma-separated STRING tags (the CJ-import rows) into arrays', async () => {

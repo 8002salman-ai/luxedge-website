@@ -66,6 +66,8 @@ export interface CatalogProduct {
   inventorySource?: string;
   /** Manual admin pin (products.sort_order > 0 ranks first, ascending). */
   sortOrder?: number;
+  /** Row creation time — used for newest-first home merchandising. */
+  createdAt?: string;
   variants: CatalogVariant[];
   seoTitle?: string;
   seoDescription?: string;
@@ -161,6 +163,7 @@ interface DbProductRow {
   commerce_readiness?: string | null;
   source_type?: string | null;
   inventory_source?: string | null;
+  created_at?: string | null;
   [k: string]: unknown;
 }
 
@@ -226,7 +229,7 @@ interface DbSettingRow {
 // ============================================================================
 export const CATEGORIES_PUBLIC_SELECT = 'id,name,slug,is_active';
 export const PRODUCTS_PUBLIC_SELECT =
-  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order';
+  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order,created_at';
 export const PRODUCT_IMAGES_PUBLIC_SELECT = 'product_id,url,alt_text,is_primary,sort_order,variant_id';
 export const PRODUCT_VARIANTS_PUBLIC_SELECT = 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty';
 export const COUPONS_PUBLIC_SELECT =
@@ -369,6 +372,7 @@ function mapProductRow(
     supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
     supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
     sortOrder: num(p.sort_order),
+    createdAt: typeof p.created_at === 'string' ? p.created_at : undefined,
   };
 }
 
@@ -467,12 +471,17 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       }));
 
     const published = (prodRows as DbProductRow[])
-      // Storefront visibility = status active/published AND commerce-ready.
-      // The readiness gate is resilient: it uses the stored 0016 column when
-      // present and derives from persisted evidence (real supplier + cost
-      // basis) otherwise, so RETAIL_REFERENCE_ONLY products (e.g. manufacturer
-      // MSRP without a verified purchasing path) can never become visible.
-      .filter((p) => p && typeof p.id === 'string' && (p.status === 'published' || p.status === 'active') && isStorefrontReady(p));
+      // Storefront visibility:
+      //   - status = 'active' → an admin/owner explicitly published the
+      //     product; that human approval IS the business-qualification signal.
+      //     (The scout auto-publish path additionally stamps COMMERCE_READY,
+      //     and the admin editor/quick-status sets active on the owner's
+      //     click — both are deliberate publish actions.)
+      //   - status = 'published' (legacy/auto path) → still requires the
+      //     commerce-readiness gate: the stored 0016 stamp when present, or
+      //     derived evidence (real supplier + cost basis) otherwise, so
+      //     RETAIL_REFERENCE_ONLY rows can never become visible on their own.
+      .filter((p) => p && typeof p.id === 'string' && (p.status === 'active' || (p.status === 'published' && isStorefrontReady(p))));
 
     // Products without any price info are not ready for the storefront.
     const usable = published.filter((p) => !isHeldProduct(p.slug) && (num(p.price) > 0 || num(p.price_amount) > 0));
