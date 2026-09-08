@@ -13,7 +13,7 @@ import AIAssistant from './components/AIAssistant';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
 import { isSupabaseConfigured, updatePassword, updateUserMetadata, getAccessToken, getFreshAccessToken } from './services/supabase';
-import { loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
+import { loadProductByIdOrSlug, loadStorefrontCatalog, loadStorefrontPromotions, type CatalogProduct, type CatalogCategory, type StoreCoupon } from './services/catalog';
 import { rankProducts, probeVisualQuality, markBrokenImage, subscribeVisualQuality, getVisualQualityVersion, type MerchStats } from './features/catalog/merchandising';
 import { loadMerchStats } from './services/merch';
 import { loadPublishedBlogs } from './services/blog';
@@ -1399,7 +1399,25 @@ function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { products, addToCart, user, reviews: allReviews, setReviews, notify } = useApp();
   const nav = useNavigate();
-  const product = products.find(p => p.id === id || p.slug === id);
+  // The storefront catalog only lists commerce-ready products, but the SSR/SEO
+  // layer (and deep links / the admin editor "Preview" button) serve ANY
+  // active product. Resolve those directly so the SPA matches the server
+  // instead of showing "Product Not Found" for a live product.
+  const catalogProduct = products.find(p => p.id === id || p.slug === id);
+  const [directProduct, setDirectProduct] = useState<Product | null>(null);
+  const [resolving, setResolving] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (catalogProduct) { setDirectProduct(null); setResolving(false); return; }
+    setDirectProduct(null); setResolving(true);
+    void loadProductByIdOrSlug(id || '').then((p) => {
+      if (cancelled) return;
+      setDirectProduct(p ? mapCatalogProduct(p) : null);
+      setResolving(false);
+    });
+    return () => { cancelled = true; };
+  }, [id, catalogProduct?.id]);
+  const product = catalogProduct || directProduct;
 
   // ALL hooks MUST be before any return
   const [qty, setQty] = useState(1);
@@ -1539,6 +1557,18 @@ function ProductDetailPage() {
 
   // Now safe to do early return AFTER all hooks
   if (!product) {
+    // Still resolving a direct (non-catalog) lookup — never flash "Not Found"
+    // for a product the SSR layer serves fine.
+    if (resolving) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-luxe-silver border-t-luxe-gold" />
+            <p className="text-sm text-gray-500">Loading product…</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">

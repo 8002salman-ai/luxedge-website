@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { loadStorefrontCatalog, loadStorefrontPromotions } from '../catalog';
+import { loadProductByIdOrSlug, loadStorefrontCatalog, loadStorefrontPromotions } from '../catalog';
 import { resetDbForTests, __setDbConfigForTests } from '../db';
 
 const URL = 'https://project.supabase.co';
@@ -292,5 +292,81 @@ describe('loadStorefrontPromotions', () => {
     const p = await loadStorefrontPromotions();
     expect(p.coupons).toEqual([]);
     expect(p.freeShippingEnabled).toBe(false);
+  });
+});
+
+describe('loadProductByIdOrSlug', () => {
+  beforeEach(() => {
+    resetDbForTests();
+    __setDbConfigForTests({ url: URL, anonKey: ANON });
+  });
+
+  afterEach(() => {
+    __setDbConfigForTests(undefined);
+    resetDbForTests();
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves an ACTIVE product by slug even when it is NOT storefront-ready (admin Preview / SSR deep-link parity)', async () => {
+    // The commerce-readiness gate hides this product from the catalog, but the
+    // SSR layer and the admin editor's "Preview" button still serve it. The
+    // resolver must return it — this is the exact bug reported on live.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([{ id: 'c1', name: 'Pet Beds', slug: 'pet-beds', is_active: true, sort_order: 0 }]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([
+          { id: 'p1', name: 'Dog Bed', slug: 'dog-bed', status: 'active', price: 49.99, category_id: 'c1', inventory_qty: 10, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0 },
+        ]));
+      }
+      if (url.includes('/product_images')) return Promise.resolve(jsonResponse([{ product_id: 'p1', url: 'https://img/bed.jpg', alt_text: 'bed', is_primary: true, sort_order: 0 }]));
+      if (url.includes('/product_variants')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const p = await loadProductByIdOrSlug('dog-bed');
+    expect(p).not.toBeNull();
+    expect(p!.id).toBe('p1');
+    expect(p!.name).toBe('Dog Bed');
+    expect(p!.slug).toBe('dog-bed');
+    expect(p!.price).toBe(49.99);
+    expect(p!.category).toBe('Pet Beds');
+    expect(p!.images).toEqual(['https://img/bed.jpg']);
+    // Commerce-readiness is derived but the resolver does NOT gate on it.
+    expect(p!.commerceReadiness).toBe('SOURCE_PENDING');
+  });
+
+  it('resolves by id as well as slug', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/products')) {
+        return Promise.resolve(jsonResponse([{ id: 'p9', name: 'Cat Toy', slug: 'cat-toy', status: 'active', price: 4.99 }]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    const p = await loadProductByIdOrSlug('p9');
+    expect(p?.id).toBe('p9');
+    expect(p?.name).toBe('Cat Toy');
+  });
+
+  it('returns null for a draft/inactive product (no preview of unpublished rows)', async () => {
+    // Emulate the server: the resolver sends status=in.(active,published), so
+    // the draft row must NOT match that filter.
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
+      const u = new globalThis.URL(url);
+      if (u.pathname.endsWith('/products')) {
+        const statusOk = u.searchParams.get('status') === 'in.(active,published)';
+        return Promise.resolve(statusOk ? jsonResponse([]) : jsonResponse([{ id: 'p3', name: 'Draft', slug: 'draft', status: 'draft', price: 9.99 }]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    }));
+    expect(await loadProductByIdOrSlug('draft')).toBeNull();
+    expect(await loadProductByIdOrSlug('missing-slug')).toBeNull();
+  });
+
+  it('returns null when Supabase is not configured or unreachable (never demo data)', async () => {
+    __setDbConfigForTests(null);
+    expect(await loadProductByIdOrSlug('dog-bed')).toBeNull();
+    __setDbConfigForTests({ url: URL, anonKey: ANON });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    expect(await loadProductByIdOrSlug('dog-bed')).toBeNull();
   });
 });

@@ -273,6 +273,176 @@ function centsToDollars(cents: unknown): number {
  * Returns null only when: not configured, unreachable, schema not
  * provisioned, or the DB query itself failed.
  */
+/**
+ * Map one product row to a storefront CatalogProduct. Shared by the full
+ * catalog load and the single-product resolver below so both produce
+ * byte-identical shapes.
+ */
+function mapProductRow(
+  p: DbProductRow,
+  categories: CatalogCategory[],
+  imagesByProduct: Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>,
+  variantsByProduct: Map<string, DbVariantRow[]>,
+): CatalogProduct | null {
+  if (!p || typeof p.id !== 'string') return null;
+  const catName = (id?: string | null): string => {
+    if (!id) return '';
+    return categories.find((c) => c.id === id)?.name || '';
+  };
+  const rawTagList = (row: DbProductRow): string[] => parseTagList(row.tags);
+  const rawPrice = num(p.price) > 0 ? num(p.price) : centsToDollars(p.price_amount);
+  const rawCompare = num(p.compare_at_price) > 0 ? num(p.compare_at_price) : centsToDollars(p.compare_at_amount);
+  const imgs = imagesByProduct.get(p.id) || (p.image_url ? [{ url: String(p.image_url), alt: '', isPrimary: true }] : []);
+  const images = imgs.map((i) => i.url);
+  const imageAlts = imgs.map((i) => i.alt);
+  const variants: CatalogVariant[] = (variantsByProduct.get(p.id) || []).map((v) => {
+    const attrs = v.attributes && typeof v.attributes === 'object' && !Array.isArray(v.attributes)
+      ? (Object.fromEntries(Object.entries(v.attributes as Record<string, unknown>).filter(([, val]) => typeof val === 'string')) as Record<string, string>)
+      : {};
+    const linked = imgs.find((i) => i.variantId === v.id);
+    return {
+      id: v.id,
+      attributes: attrs,
+      sku: v.sku || '',
+      price: v.price != null ? num(v.price) : null,
+      compareAtPrice: v.compare_at_price != null ? num(v.compare_at_price) : null,
+      inventoryQty: num(v.inventory_qty),
+      image: linked?.url || null,
+    };
+  });
+  const saleEnabled = p.sale_enabled === true && num(p.discount_value) > 0;
+  const salePrice = saleEnabled
+    ? (p.discount_type === 'fixed'
+        ? Math.max(0, rawPrice - num(p.discount_value))
+        : Math.round(rawPrice * (1 - num(p.discount_value) / 100) * 100) / 100)
+    : rawPrice;
+  return {
+    id: p.id,
+    name: String(p.name || p.title || p.id),
+    slug: p.slug || undefined,
+    shortDesc: p.short_description || '',
+    description: p.description || '',
+    price: salePrice,
+    originalPrice: rawCompare > salePrice ? rawCompare : 0,
+    category: catName(p.category_id),
+    categoryId: p.category_id || undefined,
+    stock: Math.max(0, num(p.inventory_qty)),
+    images,
+    imageAlts,
+    isActive: true,
+    brand: p.brand || 'Luxedge',
+    tags: rawTagList(p),
+    featured: p.featured === true,
+    newArrival: p.new_arrival === true,
+    saleEnabled,
+    discountType: typeof p.discount_type === 'string' ? p.discount_type : undefined,
+    discountValue: num(p.discount_value) || undefined,
+    freeShipping: p.free_shipping === true,
+    deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
+    deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
+    stockStatus: typeof p.stock_status === 'string' ? p.stock_status : (num(p.inventory_qty) > 0 ? 'in_stock' : 'out_of_stock'),
+    usInventory: p.us_inventory === true,
+    commerceReadiness: (typeof p.commerce_readiness === 'string' && p.commerce_readiness)
+      ? (p.commerce_readiness as CommerceReadiness)
+      : deriveCommerceReadiness({
+          status: p.status || 'active',
+          supplierSource: p.supplier_source,
+          supplierProductRef: p.supplier_product_ref,
+          costPrice: num(p.cost_price),
+          landedCost: num(p.landed_cost),
+          shippingCost: num(p.shipping_cost),
+          freeShipping: p.free_shipping === true,
+          deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
+          deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
+          usInventory: p.us_inventory === true,
+          stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null,
+          inventoryQty: num(p.inventory_qty),
+        }),
+    sourceType: (typeof p.source_type === 'string' && p.source_type as string) || deriveSourceType({ supplierSource: p.supplier_source, supplierProductRef: p.supplier_product_ref }),
+    inventorySource: (typeof p.inventory_source === 'string' && p.inventory_source as string) || deriveInventorySource({ usInventory: p.us_inventory === true, stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null }),
+    variants,
+    seoTitle: p.seo_title || undefined,
+    seoDescription: p.seo_description || undefined,
+    seoKeywords: parseTagList(p.seo_keywords),
+    sku: typeof p.sku === 'string' ? p.sku : undefined,
+    supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
+    supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
+    supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
+    sortOrder: num(p.sort_order),
+  };
+}
+
+/**
+ * Resolve a single active/published product by id or slug with the SAME
+ * semantics as the SSR/SEO layer (worker/seo-meta.ts serves any active
+ * product — the commerce-readiness gate only controls catalog listing).
+ *
+ * Deep links and the admin product-editor "Preview" button navigate
+ * client-side to /product/:slug; without this resolver the SPA rendered
+ * "Product Not Found" for products that exist and are live, while the same
+ * URL served fine via SSR. Failures return null (page shows the not-found
+ * state) — never demo data.
+ */
+export async function loadProductByIdOrSlug(key: string): Promise<CatalogProduct | null> {
+  if (getDbMode() !== 'supabase' || !key) return null;
+  const db = getDb();
+  try {
+    // Two separate lookups instead of an `or=(id.eq.X,slug.eq.X)` filter:
+    // PostgREST casts every operand to the column type, so a slug value 400s
+    // against the uuid `id` column before slug.eq is ever evaluated.
+    let row: DbProductRow | null = null;
+    const bySlug = await db.list<DbProductRow>('products', {
+      select: PRODUCTS_PUBLIC_SELECT,
+      rawFilters: { slug: `eq.${key}`, status: 'in.(active,published)' },
+      limit: 1,
+    });
+    if (bySlug?.[0]) {
+      row = bySlug[0];
+    } else {
+      const byId = await db.list<DbProductRow>('products', {
+        select: PRODUCTS_PUBLIC_SELECT,
+        rawFilters: { id: `eq.${key}`, status: 'in.(active,published)' },
+        limit: 1,
+      }).catch(() => null); // non-uuid keys 400 here — swallow
+      row = byId?.[0] || null;
+    }
+    if (!row || typeof row.id !== 'string') return null;
+
+    const [catRows, imgRows, varRows] = await Promise.all([
+      db.list<DbCategoryRow>('categories', { select: CATEGORIES_PUBLIC_SELECT, orderBy: 'sort_order' }),
+      db.list<DbImageRow>('product_images', {
+        select: PRODUCT_IMAGES_PUBLIC_SELECT,
+        rawFilters: { product_id: `eq.${row.id}`, url: 'not.like.data:*' },
+        limit: 100,
+      }).catch(() => [] as DbImageRow[]),
+      db.list<DbVariantRow>('product_variants', { select: PRODUCT_VARIANTS_PUBLIC_SELECT, filters: { product_id: row.id }, limit: 200 }).catch(() => [] as DbVariantRow[]),
+    ]);
+
+    const categories: CatalogCategory[] = Array.isArray(catRows)
+      ? (catRows as DbCategoryRow[])
+          .filter((c) => c && typeof c.id === 'string')
+          .map((c) => ({ id: c.id, name: String(c.name || c.id), slug: c.slug || undefined, isActive: c.is_active !== false }))
+      : [];
+    const imagesByProduct = new Map<string, { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[]>();
+    if (Array.isArray(imgRows)) {
+      const list: { url: string; alt: string; isPrimary: boolean; variantId?: string | null }[] = [];
+      for (const img of imgRows as DbImageRow[]) {
+        const url = img.url || img.public_url;
+        if (!img || !url) continue;
+        list.push({ url: String(url), alt: img.alt_text || '', isPrimary: !!img.is_primary, variantId: img.variant_id || null });
+      }
+      list.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+      imagesByProduct.set(row.id, list);
+    }
+    const variantsByProduct = new Map<string, DbVariantRow[]>();
+    if (Array.isArray(varRows)) variantsByProduct.set(row.id, varRows as DbVariantRow[]);
+
+    return mapProductRow(row, categories, imagesByProduct, variantsByProduct);
+  } catch {
+    return null;
+  }
+}
+
 export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null> {
   if (getDbMode() !== 'supabase') return null;
   const cached = readPublicCache<StorefrontCatalog>('luxedge:storefront-catalog:v1');
@@ -363,94 +533,9 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
       /* product variants unavailable */
     }
 
-    const catName = (id?: string | null): string => {
-      if (!id) return '';
-      return categories.find((c) => c.id === id)?.name || '';
-    };
-
-    const rawTagList = (p: DbProductRow): string[] => parseTagList(p.tags);
-    const products: CatalogProduct[] = usable.map((p) => {
-      const rawPrice = num(p.price) > 0 ? num(p.price) : centsToDollars(p.price_amount);
-      const rawCompare = num(p.compare_at_price) > 0 ? num(p.compare_at_price) : centsToDollars(p.compare_at_amount);
-      const imgs = imagesByProduct.get(p.id) || (p.image_url ? [{ url: String(p.image_url), alt: '', isPrimary: true }] : []);
-      const images = imgs.map((i) => i.url);
-      const imageAlts = imgs.map((i) => i.alt);
-      const variants: CatalogVariant[] = (variantsByProduct.get(p.id) || []).map((v) => {
-        const attrs = v.attributes && typeof v.attributes === 'object' && !Array.isArray(v.attributes)
-          ? (Object.fromEntries(Object.entries(v.attributes as Record<string, unknown>).filter(([, val]) => typeof val === 'string')) as Record<string, string>)
-          : {};
-        const linked = imgs.find((i) => i.variantId === v.id);
-        return {
-          id: v.id,
-          attributes: attrs,
-          sku: v.sku || '',
-          price: v.price != null ? num(v.price) : null,
-          compareAtPrice: v.compare_at_price != null ? num(v.compare_at_price) : null,
-          inventoryQty: num(v.inventory_qty),
-          image: linked?.url || null,
-        };
-      });
-      const saleEnabled = p.sale_enabled === true && num(p.discount_value) > 0;
-      const salePrice = saleEnabled
-        ? (p.discount_type === 'fixed'
-            ? Math.max(0, rawPrice - num(p.discount_value))
-            : Math.round(rawPrice * (1 - num(p.discount_value) / 100) * 100) / 100)
-        : rawPrice;
-      return {
-        id: p.id,
-        name: String(p.name || p.title || p.id),
-        slug: p.slug || undefined,
-        shortDesc: p.short_description || '',
-        description: p.description || '',
-        price: salePrice,
-        originalPrice: rawCompare > salePrice ? rawCompare : 0,
-        category: catName(p.category_id),
-        categoryId: p.category_id || undefined,
-        stock: Math.max(0, num(p.inventory_qty)),
-        images,
-        imageAlts,
-        isActive: true,
-        brand: p.brand || 'Luxedge',
-        tags: rawTagList(p),
-        featured: p.featured === true,
-        newArrival: p.new_arrival === true,
-        saleEnabled,
-        discountType: typeof p.discount_type === 'string' ? p.discount_type : undefined,
-        discountValue: num(p.discount_value) || undefined,
-        freeShipping: p.free_shipping === true,
-        deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
-        deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
-        stockStatus: typeof p.stock_status === 'string' ? p.stock_status : (num(p.inventory_qty) > 0 ? 'in_stock' : 'out_of_stock'),
-        usInventory: p.us_inventory === true,
-        commerceReadiness: (typeof p.commerce_readiness === 'string' && p.commerce_readiness)
-          ? (p.commerce_readiness as CommerceReadiness)
-          : deriveCommerceReadiness({
-              status: p.status || 'active',
-              supplierSource: p.supplier_source,
-              supplierProductRef: p.supplier_product_ref,
-              costPrice: num(p.cost_price),
-              landedCost: num(p.landed_cost),
-              shippingCost: num(p.shipping_cost),
-              freeShipping: p.free_shipping === true,
-              deliveryMinDays: p.delivery_min_days != null ? num(p.delivery_min_days) : null,
-              deliveryMaxDays: p.delivery_max_days != null ? num(p.delivery_max_days) : null,
-              usInventory: p.us_inventory === true,
-              stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null,
-              inventoryQty: num(p.inventory_qty),
-            }),
-        sourceType: (typeof p.source_type === 'string' && p.source_type as string) || deriveSourceType({ supplierSource: p.supplier_source, supplierProductRef: p.supplier_product_ref }),
-        inventorySource: (typeof p.inventory_source === 'string' && p.inventory_source as string) || deriveInventorySource({ usInventory: p.us_inventory === true, stockStatus: typeof p.stock_status === 'string' ? p.stock_status : null }),
-        variants,
-        seoTitle: p.seo_title || undefined,
-        seoDescription: p.seo_description || undefined,
-        seoKeywords: parseTagList(p.seo_keywords),
-        sku: typeof p.sku === 'string' ? p.sku : undefined,
-        supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
-        supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
-        supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
-        sortOrder: num(p.sort_order),
-      };
-    });
+    const products: CatalogProduct[] = usable
+      .map((p) => mapProductRow(p, categories, imagesByProduct, variantsByProduct))
+      .filter((x): x is CatalogProduct => x !== null);
 
     const result = { products, categories, source: 'supabase' as const };
     writePublicCache('luxedge:storefront-catalog:v1', result);
