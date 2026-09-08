@@ -3,9 +3,11 @@
 //
 // Server-side Embani ERP sync. The browser NEVER holds the webhook URL token:
 // GET returns only masked values, set/clear never echo secrets, test is a
-// harmless probe, and push sends ONLY authoritative Stripe-webhook orders
-// (gift-drop rows excluded, original order numbers preserved for ERP
-// reconciliation on retry). A source-scan guard proves the client bundle
+// harmless probe, and push sends authoritative persisted rows — paid sales,
+// receipt-only unpaid orders and Gift Drop claims (normalized as $0
+// free_gift orders, never as sales). The demo order (LX-1001, browser-only)
+// stays excluded, original order numbers are preserved for ERP
+// reconciliation on retry. A source-scan guard proves the client bundle
 // cannot leak ERP credentials.
 // ============================================================================
 import { readFileSync } from 'node:fs';
@@ -20,7 +22,7 @@ const { requireAdmin } = await import('../_lib/auth.js');
 const { upsertAppSetting, deleteAppSetting } = await import('../_lib/supabase.js');
 const erpModule = await import('../admin/erp.js');
 const handler = erpModule.default;
-const { autoForwardPaidOrder } = erpModule;
+const { autoForwardPaidOrder, autoForwardGiftClaim } = erpModule;
 // Storage-mode seams: ledger (app_settings) is the default under test so the
 // pre-migration assertions stay valid; column-mode tests opt in explicitly.
 const { __setErpColumnsModeForTests, __resetErpColumnsProbeForTests } = erpModule;
@@ -341,42 +343,86 @@ describe('/api/admin/erp', () => {
     expect(b.message).toContain('Could not reach the ERP server');
   });
 
-  it('push sends ONLY real orders — gift-drop rows excluded, order numbers preserved', async () => {
-    const giftRow = realOrder({ id: '99999999-9999-9999-9999-999999999999', order_number: 'LX-GIFTDROP', coupon_code: 'PET-GIFT-DROP', total: 0, status: 'pending' });
+  it('push sends real paid orders AND gift-drop claims — gifts as $0 free_gift, demo excluded', async () => {
+    const giftRow = realOrder({ id: '99999999-9999-9999-9999-999999999999', order_number: 'LX-GIFTDROP', coupon_code: 'PET-GIFT-DROP', subtotal: 0, shipping: 0, tax: 0, discount: 0, total: 0, status: 'pending', stripe_session_id: null, stripe_payment_intent: null });
+    const demoRow = realOrder({ id: '00000000-0000-0000-0000-000000000001', order_number: 'LX-1001', coupon_code: null });
     let pushedOrders: Array<Record<string, unknown>> | null = null;
     stubFetch({
       settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
-      orders: [giftRow, realOrder()],
+      orders: [giftRow, demoRow, realOrder()],
       erp: (_url, init) => {
         const payload = JSON.parse(String(init?.body)) as { orders: Array<Record<string, unknown>> };
         pushedOrders = payload.orders;
-        return new Response(JSON.stringify({ created: 1, updated: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ created: 2, updated: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       },
     });
     const { captured, server } = makeRes();
     await handler(makeReq('POST', { action: 'push' }), server);
     expect(captured.status).toBe(200);
     expect(pushedOrders).not.toBeNull();
-    expect(pushedOrders!.length).toBe(1);
-    expect(pushedOrders![0].order_number).toBe('LX-ABCD1234');
-    expect(JSON.stringify(pushedOrders)).not.toContain('LX-GIFTDROP');
-    // Normalization contract
-    const o = pushedOrders![0] as Record<string, unknown>;
-    expect(o.source).toBe('luxedge');
-    expect(o.order_id).toBe('11111111-1111-1111-1111-111111111111');
-    expect(o.stripe_session_id).toBe('cs_test_123');
-    expect(o.payment_status).toBe('paid');
-    expect(o.fulfillment_status).toBe('paid');
-    expect(o.total).toBe(61.52);
-    expect((o.customer as { email: string }).email).toBe('buyer@example.com');
-    expect((o.items as unknown[]).length).toBe(2);
-    expect((o.items as Array<{ line_total: number }>)[1].line_total).toBe(25);
+    expect(pushedOrders!.length).toBe(2);
+    expect(JSON.stringify(pushedOrders)).not.toContain('LX-1001'); // demo NEVER pushed
+    const byNumber = new Map(pushedOrders!.map((o) => [String(o.order_number), o]));
+    expect(byNumber.has('LX-ABCD1234')).toBe(true);
+    expect(byNumber.has('LX-GIFTDROP')).toBe(true);
+    // Paid-sale normalization contract
+    const paid = byNumber.get('LX-ABCD1234') as Record<string, unknown>;
+    expect(paid.source).toBe('luxedge');
+    expect(paid.order_id).toBe('11111111-1111-1111-1111-111111111111');
+    expect(paid.order_type).toBe('paid');
+    expect(paid.payment_required).toBe(true);
+    expect(paid.payment_provider).toBe('stripe'); // Stripe reference present → provider identity
+    expect(paid.stripe_session_id).toBe('cs_test_123');
+    expect(paid.payment_status).toBe('paid');
+    expect(paid.fulfillment_status).toBe('paid');
+    expect(paid.total).toBe(61.52);
+    expect((paid.customer as { email: string }).email).toBe('buyer@example.com');
+    expect((paid.items as unknown[]).length).toBe(2);
+    expect((paid.items as Array<{ line_total: number }>)[1].line_total).toBe(25);
+    // Gift normalization contract — $0 promotional claim, never a sale
+    const gift = byNumber.get('LX-GIFTDROP') as Record<string, unknown>;
+    expect(gift.order_type).toBe('free_gift');
+    expect(gift.payment_required).toBe(false);
+    expect(gift.payment_provider).toBe('none');
+    expect(gift.payment_status).toBe('not_required');
+    expect(gift.coupon_code).toBe('PET-GIFT-DROP');
+    expect(gift.subtotal).toBe(0);
+    expect(gift.shipping).toBe(0);
+    expect(gift.tax).toBe(0);
+    expect(gift.discount).toBe(0);
+    expect(gift.total).toBe(0);
+    expect((gift.items as unknown[]).length).toBeGreaterThan(0);
     const b = captured.body as { ok: boolean; sent: number; created: number | null; updated: number | null; message: string };
     expect(b.ok).toBe(true);
-    expect(b.sent).toBe(1);
-    expect(b.created).toBe(1);
-    expect(b.updated).toBe(0);
+    expect(b.sent).toBe(2);
+    expect(b.created).toBe(2);
     expect(b.message).toContain('ERP Sync complete');
+  });
+
+  it('push maps unpaid source statuses to receipt-only payment statuses', async () => {
+    const pendingRow = realOrder({ id: '22222222-2222-2222-2222-222222222222', order_number: 'LX-AWAIT', status: 'pending', stripe_session_id: null, stripe_payment_intent: null });
+    const failedRow = realOrder({ id: '33333333-3333-3333-3333-333333333333', order_number: 'LX-FAILED', status: 'failed', stripe_session_id: null, stripe_payment_intent: null });
+    const cancelledRow = realOrder({ id: '44444444-4444-4444-4444-444444444444', order_number: 'LX-CANCELLED', status: 'cancelled', stripe_session_id: null, stripe_payment_intent: null });
+    let pushedOrders: Array<Record<string, unknown>> | null = null;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      orders: [pendingRow, failedRow, cancelledRow],
+      erp: (_url, init) => {
+        const payload = JSON.parse(String(init?.body)) as { orders: Array<Record<string, unknown>> };
+        pushedOrders = payload.orders;
+        return new Response(JSON.stringify({ created: 3, updated: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    const { captured, server } = makeRes();
+    await handler(makeReq('POST', { action: 'push' }), server);
+    expect(captured.status).toBe(200);
+    expect(pushedOrders!.length).toBe(3);
+    const byNumber = new Map(pushedOrders!.map((o) => [String(o.order_number), o]));
+    expect((byNumber.get('LX-AWAIT') as Record<string, unknown>).payment_status).toBe('awaiting_payment');
+    expect((byNumber.get('LX-FAILED') as Record<string, unknown>).payment_status).toBe('failed');
+    expect((byNumber.get('LX-CANCELLED') as Record<string, unknown>).payment_status).toBe('cancelled');
+    // None of these may carry a Stripe provider — they are not paid sales.
+    for (const o of pushedOrders!) expect(o.payment_provider).toBeUndefined();
   });
 
   it('push is idempotent — a retry sends the SAME stable order number', async () => {
@@ -754,6 +800,72 @@ describe('/api/admin/erp', () => {
     const demo = await autoForwardPaidOrder(realOrder({ order_number: 'LX-1001' }) as never);
     expect(gift.status).toBe('skipped');
     expect(demo.status).toBe('skipped');
+    expect(erpHit).toBe(false);
+  });
+
+  it('autoForwardGiftClaim forwards a real claim as a $0 free_gift order and records status', async () => {
+    let pushed: Array<Record<string, unknown>> | null = null;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      erp: (_url, init) => {
+        const payload = JSON.parse(String(init?.body)) as { orders: Array<Record<string, unknown>> };
+        pushed = payload.orders;
+        return new Response(JSON.stringify({ created: 1, updated: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+    const claim = realOrder({
+      id: '99999999-9999-9999-9999-999999999999',
+      order_number: 'LX-GIFTDROP',
+      coupon_code: 'PET-GIFT-DROP',
+      subtotal: 0,
+      shipping: 0,
+      tax: 0,
+      discount: 0,
+      total: 0,
+      status: 'pending',
+      stripe_session_id: null,
+      stripe_payment_intent: null,
+      shipping_address: { line1: '9 Gift Ln', city: 'Austin', state: 'TX', zip: '78701', country: 'US', _gift: { isTest: false } },
+    }) as never;
+    const result = await autoForwardGiftClaim(claim);
+    expect(result.ok).toBe(true);
+    expect(result.status).toBe('created');
+    expect(pushed!.length).toBe(1);
+    const o = pushed![0] as Record<string, unknown>;
+    expect(o.order_number).toBe('LX-GIFTDROP');
+    expect(o.order_type).toBe('free_gift');
+    expect(o.payment_required).toBe(false);
+    expect(o.payment_provider).toBe('none');
+    expect(o.payment_status).toBe('not_required');
+    expect(o.total).toBe(0);
+    expect((o.shipping_address as Record<string, unknown>).postal_code).toBe('78701'); // zip → postal_code
+    const ledgerWrite = vi.mocked(upsertAppSetting).mock.calls.find(([k]) => k === 'ERP_SYNC_STATUS');
+    expect(JSON.parse(String(ledgerWrite![1]))['LX-GIFTDROP'].status).toBe('created');
+  });
+
+  it('autoForwardGiftClaim skips test claims and the demo order without hitting ERP', async () => {
+    let erpHit = false;
+    stubFetch({
+      settings: { ERP_WEBHOOK_URL: WEBHOOK_ENV, ERP_API_TOKEN: TOKEN_ENV },
+      erp: () => {
+        erpHit = true;
+        return new Response('{}', { status: 200 });
+      },
+    });
+    const testClaim = realOrder({
+      id: '88888888-8888-8888-8888-888888888888',
+      order_number: 'LX-GIFTTEST',
+      coupon_code: 'PET-GIFT-DROP',
+      total: 0,
+      status: 'pending',
+      stripe_session_id: null,
+      stripe_payment_intent: null,
+      shipping_address: { line1: '1 Test Ln', city: 'Austin', state: 'TX', zip: '78701', country: 'US', _gift: { isTest: true } },
+    }) as never;
+    const testResult = await autoForwardGiftClaim(testClaim);
+    expect(testResult.status).toBe('skipped');
+    const demoResult = await autoForwardGiftClaim(realOrder({ order_number: 'LX-1001' }) as never);
+    expect(demoResult.status).toBe('skipped');
     expect(erpHit).toBe(false);
   });
 

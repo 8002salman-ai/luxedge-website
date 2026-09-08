@@ -32,11 +32,24 @@
 //
 //   Order normalization (stable, never re-created):
 //     source, order_id, order_number (STABLE — reused on retry so ERP can
-//     reconcile instead of duplicating), stripe_session_id,
+//     reconcile instead of duplicating), order_type ('paid' | 'free_gift'),
+//     payment_required, payment_provider (identity only — 'stripe' for paid
+//     orders carrying a Stripe reference, 'none' for gifts), stripe_session_id,
 //     stripe_payment_intent, created_at, currency, subtotal, shipping, tax,
 //     discount, total, payment_status, fulfillment_status, coupon_code,
 //     customer { name, email }, shipping_address, items[{ product_id, sku,
 //     name, quantity, unit_price, line_total }]
+//
+//   ORDER TYPES (mapped 1:1 from the source rows):
+//     - Paid sale       → order_type 'paid',  payment_status 'paid' — books
+//                          revenue on the ERP side.
+//     - Awaiting/unpaid → payment_status 'awaiting_payment' (or 'failed' /
+//                          'cancelled') — receipt-only, the ERP books nothing.
+//     - Gift Drop claim → coupon_code PET-GIFT-DROP → order_type 'free_gift',
+//                          payment_required false, payment_provider 'none',
+//                          payment_status 'not_required', all amounts $0. The
+//                          ERP books it as a $0 promotional claim — NEVER as
+//                          sale revenue.
 //
 //   Response parsing (lenient — handles several ERP shapes):
 //     { created: 9, updated: 3 } | { created: [...], updated: [...] } |
@@ -46,8 +59,9 @@
 //   - Secrets live only in server env / app_settings. The GET response masks
 //     everything; set/clear never echo values.
 //   - The webhook target is SSRF-guarded (validateFetchTarget) like fetch-page.
-//   - Only genuinely persisted Stripe-webhook orders are pushed — the demo
-//     order (LX-1001) lives only in the browser UI and can never reach ERP.
+//   - Only genuinely persisted rows are pushed — the demo order (LX-1001)
+//     lives only in the browser UI and can never reach ERP. Test-mode gift
+//     claims (shipping_address._gift.isTest) are never forwarded.
 //   - 12s timeout, sanitized errors (never include the token or full URL).
 // ============================================================================
 
@@ -463,10 +477,13 @@ async function sendErpFailureAlert(
 
 function derivePaymentStatus(status: string): string {
   const s = String(status || '').toLowerCase();
-  if (s === 'awaiting_payment' || s === 'pending' || s === 'failed') return s === 'failed' ? 'failed' : 'pending';
+  // Unpaid / failed / cancelled must NEVER reach the ERP as revenue — they
+  // map to receipt-only statuses so the ERP books nothing for them.
+  if (s === 'awaiting_payment' || s === 'pending') return 'awaiting_payment';
+  if (s === 'failed') return 'failed';
+  if (s === 'cancelled') return 'cancelled';
   if (s === 'paid' || s === 'processing' || s === 'shipped' || s === 'delivered') return 'paid';
   if (s === 'refunded') return 'refunded';
-  if (s === 'cancelled') return 'cancelled';
   return s || 'unknown';
 }
 
@@ -496,6 +513,9 @@ function num(v: unknown): number {
 
 /** Normalize one authoritative Luxedge order into the ERP contract. */
 function normalizeOrder(row: OrderRow): Record<string, unknown> {
+  // Gift Drop claims are identified by their campaign marker exactly as every
+  // other part of the app identifies them — never by guessing from amounts.
+  const isGift = row.coupon_code === 'PET-GIFT-DROP';
   const items = (Array.isArray(row.items) ? row.items : []).map((it) => {
     const r = (it || {}) as Record<string, unknown>;
     const quantity = Math.max(Number(r.quantity || 1), 0);
@@ -509,10 +529,23 @@ function normalizeOrder(row: OrderRow): Record<string, unknown> {
       line_total: Math.round(quantity * unitPrice * 100) / 100,
     };
   });
+  // The storefront stores the address with `zip`; the ERP expects `postal_code`.
+  const rawAddr = row.shipping_address && typeof row.shipping_address === 'object'
+    ? (row.shipping_address as Record<string, unknown>)
+    : null;
+  const shipping_address = rawAddr
+    ? { ...rawAddr, postal_code: rawAddr.postal_code ?? rawAddr.zip ?? null }
+    : null;
   return {
     source: 'luxedge',
     order_id: row.id ?? null,
     order_number: row.order_number, // STABLE — preserved across retries for ERP reconciliation
+    // Order type + provider-neutral payment identity: a Gift Drop claim is a
+    // promotional $0 order (no payment, no provider), a normal order is a
+    // paid sale carrying its payment provider as identity only.
+    order_type: isGift ? 'free_gift' : 'paid',
+    payment_required: isGift ? false : true,
+    payment_provider: isGift ? 'none' : (row.stripe_payment_intent || row.stripe_session_id ? 'stripe' : undefined),
     stripe_session_id: row.stripe_session_id || null,
     stripe_payment_intent: row.stripe_payment_intent || null,
     created_at: row.created_at || null,
@@ -522,14 +555,14 @@ function normalizeOrder(row: OrderRow): Record<string, unknown> {
     tax: num(row.tax),
     discount: num(row.discount),
     total: num(row.total),
-    payment_status: derivePaymentStatus(row.status || ''),
+    payment_status: isGift ? 'not_required' : derivePaymentStatus(row.status || ''),
     fulfillment_status: row.status || 'unknown',
     coupon_code: row.coupon_code || null,
     customer: {
       name: row.customer_name || null,
       email: row.customer_email || null,
     },
-    shipping_address: row.shipping_address || null,
+    shipping_address,
     items,
   };
 }
@@ -583,7 +616,9 @@ function parseErpResponse(body: string): ParsedErpResult {
   return out;
 }
 
-/** Authoritative real orders only — the demo row never exists in the DB. */
+/** Authoritative persisted rows — the demo order never exists in the DB, and
+ *  Gift Drop claims ARE real rows: they sync as $0 free_gift orders, never as
+ *  sales. The LX-1001 defensive exclusion stays in the push filter. */
 async function fetchRealOrders(): Promise<{ ok: boolean; status: number; orders: OrderRow[]; error?: string }> {
   const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -591,7 +626,7 @@ async function fetchRealOrders(): Promise<{ ok: boolean; status: number; orders:
   try {
     const select = 'id,order_number,customer_email,customer_name,shipping_address,items,coupon_code,subtotal,discount,shipping,tax,total,currency,status,stripe_session_id,stripe_payment_intent,created_at';
     const res = await fetch(
-      `${url}/rest/v1/luxedge_orders?coupon_code=not.eq.PET-GIFT-DROP&order=created_at.asc&select=${encodeURIComponent(select)}`,
+      `${url}/rest/v1/luxedge_orders?order=created_at.asc&select=${encodeURIComponent(select)}`,
       { headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) },
     );
     const text = await res.text();
@@ -605,13 +640,13 @@ async function fetchRealOrders(): Promise<{ ok: boolean; status: number; orders:
 }
 
 /**
- * Auto-forward ONE just-paid order to the configured ERP webhook — called by
- * /api/webhook the moment a Stripe payment is confirmed (fresh insert or
- * awaiting_payment → paid promotion). Same normalization, payload contract,
- * idempotency (stable order_number) and ERP_SYNC_STATUS ledger as the manual
- * Push. Best-effort and NEVER throws: when ERP is not configured the order is
- * skipped silently; when the ERP call fails the order lands in the ledger as
- * failed, where Admin → Orders lists it with a Retry button.
+ * Auto-forward ONE order to the configured ERP webhook — the shared forward
+ * used by the just-paid Stripe path AND the Gift Drop claim path. Same
+ * normalization, payload contract, idempotency (stable order_number) and
+ * per-row ERP_SYNC_STATUS state as the manual Push. Best-effort and NEVER
+ * throws: when ERP is not configured the order is skipped silently; when the
+ * ERP call fails the row is marked failed, where Admin → Orders lists it with
+ * a Retry button (the push path now includes gift claims).
  */
 export interface AutoForwardResult {
   attempted: boolean;
@@ -620,53 +655,95 @@ export interface AutoForwardResult {
   reason?: string;
 }
 
+/** The actual ERP call + status write, shared by both forwarders. */
+async function forwardOrderToErp(row: OrderRow, timeoutMs: number): Promise<AutoForwardResult> {
+  const cfg = await effectiveConfig();
+  if (!cfg.webhook) {
+    return { attempted: false, ok: true, status: 'skipped', reason: 'ERP webhook not configured' };
+  }
+  const guard = await validateFetchTarget(cfg.webhook).catch(() => null);
+  if (guard) {
+    return { attempted: true, ok: false, status: 'failed', reason: `Webhook URL rejected: ${guard}` };
+  }
+
+  const orders = [normalizeOrder(row)];
+  const r = await callErp(cfg.webhook, cfg.token, {
+    app: 'luxedge',
+    event: 'orders.sync',
+    sent_at: new Date().toISOString(),
+    orders,
+  }, timeoutMs);
+
+  const now = new Date().toISOString();
+  if (r.ok) {
+    const parsed = parseErpResponse(r.body);
+    const failedEntry = parsed.failed.find((f) => f.order_number === row.order_number);
+    if (failedEntry) {
+      await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: failedEntry.reason || 'ERP rejected order' } });
+      return { attempted: true, ok: false, status: 'failed', reason: failedEntry.reason };
+    }
+    const status: SyncStatus =
+      parsed.created !== null ? 'created'
+      : parsed.updated !== null ? 'updated'
+      : 'sent';
+    await writeErpSyncEntries({ [row.order_number]: { status, synced_at: now } });
+    return { attempted: true, ok: true, status };
+  }
+
+  let reason = 'ERP request failed';
+  if (r.status === 401 || r.status === 403) reason = 'ERP rejected request — HTTP ' + r.status + ' (unauthorized). Check the API token.';
+  else if (r.status === 0) reason = 'ERP request failed — ' + (r.error || 'unreachable');
+  else if (r.status >= 400 && r.status < 600) reason = 'ERP returned HTTP ' + r.status;
+  await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: reason } });
+  return { attempted: true, ok: false, status: 'failed', reason };
+}
+
+/**
+ * Auto-forward ONE just-paid order — called by /api/webhook the moment a
+ * Stripe payment is confirmed (fresh insert or awaiting_payment → paid
+ * promotion). Bounded to 8s because it runs inside the Stripe webhook
+ * response. Gift Drop claims never come through this path (they are never
+ * "paid"); they use autoForwardGiftClaim instead.
+ */
 export async function autoForwardPaidOrder(row: OrderRow): Promise<AutoForwardResult> {
   try {
-    // Defensive: never forward gift-drop $0 claims or the demo order.
+    // Defensive: the demo order never exists in the DB, and gift claims use
+    // their own forwarder — a gift must never arrive as a "paid sale".
     if (row.coupon_code === 'PET-GIFT-DROP' || row.order_number === 'LX-1001') {
       return { attempted: false, ok: true, status: 'skipped', reason: 'not a paid Luxedge sale' };
     }
-    const cfg = await effectiveConfig();
-    if (!cfg.webhook) {
-      return { attempted: false, ok: true, status: 'skipped', reason: 'ERP webhook not configured' };
-    }
-    const guard = await validateFetchTarget(cfg.webhook).catch(() => null);
-    if (guard) {
-      return { attempted: true, ok: false, status: 'failed', reason: `Webhook URL rejected: ${guard}` };
-    }
-
-    const orders = [normalizeOrder(row)];
-    const r = await callErp(cfg.webhook, cfg.token, {
-      app: 'luxedge',
-      event: 'orders.sync',
-      sent_at: new Date().toISOString(),
-      orders,
-    }, 8_000); // bounded — auto-forward runs inside the Stripe webhook response
-
-    const now = new Date().toISOString();
-    if (r.ok) {
-      const parsed = parseErpResponse(r.body);
-      const failedEntry = parsed.failed.find((f) => f.order_number === row.order_number);
-      if (failedEntry) {
-        await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: failedEntry.reason || 'ERP rejected order' } });
-        return { attempted: true, ok: false, status: 'failed', reason: failedEntry.reason };
-      }
-      const status: SyncStatus =
-        parsed.created !== null ? 'created'
-        : parsed.updated !== null ? 'updated'
-        : 'sent';
-      await writeErpSyncEntries({ [row.order_number]: { status, synced_at: now } });
-      return { attempted: true, ok: true, status };
-    }
-
-    let reason = 'ERP request failed';
-    if (r.status === 401 || r.status === 403) reason = 'ERP rejected request — HTTP ' + r.status + ' (unauthorized). Check the API token.';
-    else if (r.status === 0) reason = 'ERP request failed — ' + (r.error || 'unreachable');
-    else if (r.status >= 400 && r.status < 600) reason = 'ERP returned HTTP ' + r.status;
-    await writeErpSyncEntries({ [row.order_number]: { status: 'failed', synced_at: now, error: reason } });
-    return { attempted: true, ok: false, status: 'failed', reason };
+    return await forwardOrderToErp(row, 8_000);
   } catch {
     // Never let ERP forwarding break the payment webhook.
+    return { attempted: true, ok: false, status: 'failed', reason: 'ERP auto-forward error' };
+  }
+}
+
+/**
+ * Auto-forward ONE confirmed Gift Drop claim — called by /api/gift-drop the
+ * moment a claim is durably created. The claim is normalized as a $0
+ * free_gift order (no payment, no provider, revenue $0) and forwarded to the
+ * ERP. Bounded to 4s so ERP/DB trouble adds at most a couple of seconds to
+ * the claim response; the claim itself is already stored and is NEVER revoked
+ * by an ERP failure — the row is simply marked failed and Admin → Orders can
+ * re-push it. Test claims are never forwarded.
+ */
+export async function autoForwardGiftClaim(row: OrderRow, opts?: { timeoutMs?: number }): Promise<AutoForwardResult> {
+  try {
+    // Demo order (never in the DB) and test-mode claims stay local.
+    if (row.order_number === 'LX-1001') {
+      return { attempted: false, ok: true, status: 'skipped', reason: 'demo order — not forwarded' };
+    }
+    const addr = row.shipping_address && typeof row.shipping_address === 'object'
+      ? (row.shipping_address as Record<string, unknown>)
+      : null;
+    const isTest = !!(addr && typeof addr._gift === 'object' && (addr._gift as Record<string, unknown>).isTest === true);
+    if (isTest) {
+      return { attempted: false, ok: true, status: 'skipped', reason: 'test claim — not forwarded to ERP' };
+    }
+    return await forwardOrderToErp(row, opts?.timeoutMs ?? 4_000);
+  } catch {
+    // Never let ERP forwarding affect the claim outcome.
     return { attempted: true, ok: false, status: 'failed', reason: 'ERP auto-forward error' };
   }
 }
@@ -829,11 +906,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       sendJson(res, db.status, { error: db.error });
       return;
     }
-    // Defensive filter on top of the SQL exclusion — gift-drop $0 claims and
-    // the demo LX-1001 order can never be pushed to ERP, even if a query or
-    // data change ever let them through. Requested numbers that don't match a
-    // real order are dropped here (never fabricated).
-    const realOrders = db.orders.filter((o) => o.coupon_code !== 'PET-GIFT-DROP' && o.order_number !== 'LX-1001' && (!requested || requested.has(o.order_number)));
+    // Defensive filter — only the demo LX-1001 order (which never exists in
+    // the DB) is excluded here; Gift Drop claims ARE pushed, normalized as $0
+    // free_gift orders. Requested numbers that don't match a real order are
+    // dropped (never fabricated).
+    const realOrders = db.orders.filter((o) => o.order_number !== 'LX-1001' && (!requested || requested.has(o.order_number)));
     if (realOrders.length === 0) {
       sendJson(res, 200, { ok: true, sent: 0, created: 0, updated: 0, failed: [], message: requested ? 'ERP Retry — no matching real order to push for the requested order numbers.' : 'ERP Sync complete — no orders to push yet.' });
       return;

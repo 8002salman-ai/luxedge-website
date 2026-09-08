@@ -28,6 +28,7 @@ import {
 // Gift Drop uses basic local address validation — Shippo is NOT required.
 // Shippo is only needed for paid-shipping rate calculations.
 import { normalizeShippingAddress, type ShippingAddressInput } from './_lib/shippo.js';
+import { autoForwardGiftClaim } from './admin/erp.js';
 
 /** Basic local address validation for free gift — no external API calls. */
 function basicAddressValidate(addr: ShippingAddressInput): { isValid: boolean; messages: string[] } {
@@ -283,6 +284,20 @@ export async function claimHandler(req: IncomingMessage, res: ServerResponse): P
     }
   } catch {
     /* soft check */
+  }
+
+  // Forward the confirmed claim to the Embani ERP (best-effort, bounded).
+  // The claim is ALREADY durably stored — ERP downtime must never revoke a
+  // legitimate claim. On failure the row's erp_sync_status is marked failed
+  // (or left untouched) and Admin → Orders can re-push it, because the ERP
+  // push path includes gift claims. Test claims are never forwarded. The
+  // call never throws, so the claim response is never affected.
+  if (!isTest && claim && claim.order_number) {
+    try {
+      await autoForwardGiftClaim(claim as never, { timeoutMs: 4_000 });
+    } catch {
+      /* never break the claim response */
+    }
   }
 
   // Confirmation email (best-effort; a send failure never revokes the gift).
