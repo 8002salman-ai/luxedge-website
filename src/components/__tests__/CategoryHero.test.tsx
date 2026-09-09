@@ -13,6 +13,8 @@ describe('category hero public rendering', () => {
     expect(html.match(/<h1>/g)).toHaveLength(1);
     expect(html).toContain('href="#product-grid"');
     expect(html).toContain('aria-label="Breadcrumb"');
+    expect(html).toContain('Buyer guidance');
+    expect(html).toContain(config.buyerNote);
     expect(html).toContain('fetchPriority="high"');
     expect(config.imageAlt.length).toBeGreaterThan(10);
     expect(config.image).toMatch(/^https:\/\//);
@@ -25,6 +27,7 @@ describe('category hero public rendering', () => {
     expect(config.desc).toBe('Useful collection description');
     expect(config.image).toBe('');
     expect(config.chips).toEqual([]);
+    expect(config.buyerNote).toContain('task');
   });
 
   it('sizes known CDN images without rewriting custom image URLs', () => {

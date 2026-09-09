@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
+import { BuyerGuidance } from './BuyerGuidance';
 
 /**
  * CATEGORY HERO CONFIG — one source of truth for every catalog category header.
@@ -32,6 +33,7 @@ export interface CategoryHeroConfig {
   tint: 'dog' | 'cat' | 'horse' | 'bird' | 'cattle' | 'neutral';
   ctaHref: string;        // primary action (scrolls to the product grid)
   ctaLabel: string;
+  buyerNote: string;
   chips: { label: string; href: string }[]; // subcategory shortcuts (real links)
 }
 
@@ -46,6 +48,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     tint: 'dog',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop dog essentials',
+    buyerNote: 'Start with the routine you are shopping for—walking, play, rest, feeding, or grooming—then compare the details shown on each listing.',
     chips: [
       { label: 'Toys', href: '/category/pet-toys' },
       { label: 'Beds', href: '/category/pet-beds' },
@@ -62,6 +65,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     tint: 'cat',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop cat essentials',
+    buyerNote: 'Choose by the space and routine you have in mind, then compare the product details provided for play, rest, feeding, or travel.',
     chips: [
       { label: 'Toys', href: '/category/pet-toys' },
       { label: 'Beds', href: '/category/pet-beds' },
@@ -78,6 +82,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     tint: 'horse',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop horse care',
+    buyerNote: 'For stable and field supplies, begin with the intended task and compare the product’s listed size, materials, and use details.',
     chips: [
       { label: 'Feeding & Water', href: '/category/feeding-water' },
       { label: 'Cattle & Livestock', href: '/category/cattle' },
@@ -94,6 +99,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     tint: 'bird',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop bird supplies',
+    buyerNote: 'Start with the type of feeding, care, or enrichment item you need and use the listing details to compare options.',
     chips: [
       { label: 'Feeding & Water', href: '/category/feeding-water' },
       { label: 'Toys', href: '/category/pet-toys' },
@@ -108,6 +114,7 @@ export const CATEGORY_HERO_CONFIG: Record<string, CategoryHeroConfig> = {
     tint: 'cattle',
     ctaHref: '#product-grid',
     ctaLabel: 'Shop livestock care',
+    buyerNote: 'For livestock supplies, match the item to the intended feeding or care task and review the listed size and materials before ordering.',
     chips: [
       { label: 'Feeding & Water', href: '/category/feeding-water' },
       { label: 'Horse Care', href: '/category/horse' },
@@ -149,7 +156,7 @@ export function categoryImageVariant(source: string, width: number): string {
 }
 
 // Unknown future categories remain usable without a fabricated photo or links.
-const NEUTRAL_CONFIG: Omit<CategoryHeroConfig, 'label' | 'headline' | 'desc'> = {
+const NEUTRAL_CONFIG: Omit<CategoryHeroConfig, 'label' | 'headline' | 'desc' | 'buyerNote'> = {
   image: '',
   imageAlt: '',
   tint: 'neutral',
@@ -166,6 +173,7 @@ export function categoryHeroConfig(name: string, fallbackDesc: string): Category
       label: name,
       headline: name,
       desc: fallbackDesc,
+      buyerNote: 'Start with the task you need to complete, then compare the details supplied on each product listing.',
     }
   );
 }
@@ -182,7 +190,7 @@ interface Props {
  * lightweight — no carousel, no autoplay, no text baked into the image.
  */
 export default function CategoryHero({ config }: Props): JSX.Element {
-  const { label, headline, desc, image, imageAlt, tint, ctaHref, ctaLabel, chips, mobileImage, imagePosition, badge } = config;
+  const { label, headline, desc, image, imageAlt, tint, ctaHref, ctaLabel, buyerNote, chips, mobileImage, imagePosition, badge } = config;
   return (
     <div className={`category-hero category-hero--${tint}`}>
       <nav aria-label="Breadcrumb" className="category-hero__breadcrumb">
@@ -212,6 +220,7 @@ export default function CategoryHero({ config }: Props): JSX.Element {
           <a href={ctaHref} className="category-hero__cta">{ctaLabel}<ArrowDown size={16} aria-hidden="true" /></a>
         </div>
       </div>
+      <div className="px-5 pb-5 sm:px-7"><BuyerGuidance title={`Choosing ${label.toLowerCase()}`} note={buyerNote} categoryHref={ctaHref === '#product-grid' ? '/shop' : ctaHref} /></div>
       {chips.length > 0 && <nav aria-label={`Explore related ${label.toLowerCase()} collections`} className="category-hero__browse">
         <p>Explore more</p>
         <ul>{chips.map(chip => <li key={chip.href}><Link to={chip.href}>{chip.label}<ArrowUpRight size={13} aria-hidden="true" /></Link></li>)}</ul>

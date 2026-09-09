@@ -70,7 +70,7 @@ import aiKeysHandler from '../api/admin/ai-keys';
 import googleFeedHandler from '../api/google-feed';
 import imgProxyHandler from '../api/img-proxy';
 import { maybeInjectSeo } from './seo-meta';
-import { buildSitemap, buildVideoSitemap } from './sitemap';
+import { buildSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
 import adsenseHandler, { setAdSenseRuntimeBindings } from '../api/adsense/index';
 
@@ -321,8 +321,9 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (url.pathname === '/home' || url.pathname === '/home/') {
       return Response.redirect(new URL('/', url.origin).toString(), 301);
     }
-    // Dynamic sitemap from the LIVE database (CMS blogs + products + categories
-    // + media videos) so publishing updates sitemap.xml without a redeploy.
+    // Dynamic sitemap from the LIVE database (CMS blogs + products + categories)
+    // so publishing updates sitemap.xml without a redeploy. Media is noindexed
+    // and deliberately absent from all sitemap feeds.
     // A database outage must not resurrect stale/deleted URLs from a snapshot.
     if (url.pathname === '/sitemap.xml') {
       const sitemap = await buildSitemap();
@@ -340,31 +341,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         headers: { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '300', 'cache-control': 'no-store' },
       });
     }
-    // Google Video sitemap (media library) — real data only. When the DB is
-    // unreachable / media_videos is not yet migrated (buildVideoSitemap
-    // returns null), serve an EMPTY but valid video sitemap — never the SPA
-    // shell, so robots.txt's reference can never hand Google HTML as XML.
     if (url.pathname === '/video-sitemap.xml') {
-      const videoSitemap = await buildVideoSitemap();
-      if (videoSitemap) {
-        return new Response(videoSitemap, {
-          status: 200,
-          headers: {
-            'content-type': 'application/xml; charset=utf-8',
-            'cache-control': 'public, max-age=300',
-          },
-        });
-      }
-      return new Response(
-        '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n</urlset>\n',
-        {
-          status: 200,
-          headers: {
-            'content-type': 'application/xml; charset=utf-8',
-            'cache-control': 'public, max-age=300',
-          },
-        },
-      );
+      return new Response('Video sitemap retired.', { status: 410, headers: { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
     }
     // Google AdSense earnings API (server-side). Routed by path prefix
     // because it has multiple sub-routes (status/auth/oauth/sync/earnings).

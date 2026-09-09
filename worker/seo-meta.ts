@@ -126,7 +126,6 @@ interface ProductImageRow {
 
 const cache = new Map<string, { ts: number; data: unknown }>();
 const TTL_DB = 15 * 60 * 1000;
-const TTL_BLOG = 30 * 60 * 1000;
 
 async function cachedFetch<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T | null> {
   const hit = cache.get(key);
@@ -374,10 +373,10 @@ async function getMediaRegistry(): Promise<MediaEntry[] | null> {
  * Blog registry — source of truth is the Supabase CMS (published only; RLS
  * enforces published + published_at <= now()). Short TTL so a freshly
  * published CMS post gets SEO + indexability on the very next worker requests
- * WITHOUT a redeploy. Falls back to the static blog-seo.json shell when the DB
- * is unreachable / the table is not yet migrated (migration/rollback path).
+ * WITHOUT a redeploy. A CMS failure returns null: legacy static blog content
+ * must never be revived as an indexable fallback.
  */
-async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[] | null> {
+async function getBlogRegistry(_origin: string, _env: SeoEnv): Promise<BlogEntry[] | null> {
   const base = supabaseBase();
   const key = supabaseAnon();
   if (base && key) {
@@ -394,13 +393,7 @@ async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[]
     });
     if (cms) return cms;
   }
-  // Fallback: legacy static registry (used while the DB/migration is not ready).
-  return cachedFetch('seo:blogs', TTL_BLOG, async () => {
-    const res = await env.ASSETS.fetch(new Request(`${origin}/blog-seo.json`));
-    if (!res.ok) return null;
-    const data = (await res.json()) as { posts?: BlogEntry[] };
-    return Array.isArray(data.posts) ? data.posts : null;
-  });
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1192,6 +1185,7 @@ export async function maybeInjectSeo(
       description:
         'Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories, embedded from the official YouTube channel.',
       canonical: `${root}/media`,
+      noindex: true,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -1210,7 +1204,7 @@ export async function maybeInjectSeo(
     const slug = decodeURIComponent(segs[1]);
     const media = await getMediaRegistry();
     if (media === null) {
-      return { html: injectCanonical(html, `${root}/media/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+      return { html: inject(html, { title: 'Media temporarily unavailable | Luxedge', description: 'This media page is temporarily unavailable.', canonical: `${root}/media/${slug}`, noindex: true }), status: 503 };
     }
     const v = media.find((x) => x.slug === slug);
     if (!v) {
@@ -1230,6 +1224,7 @@ export async function maybeInjectSeo(
       title,
       description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
       canonical,
+      noindex: true,
       jsonLd: mediaJsonLd(v, canonical),
     });
     out = await injectMediaBody(out, v);
@@ -1244,6 +1239,8 @@ export async function maybeInjectSeo(
         'Practical buying guides and care tips for dogs, cats, birds, horses, and cattle — sizing, placement, grooming, and product picks from the Luxedge editorial team.',
       canonical: `${root}/blog`,
     });
+    const posts = await getBlogRegistry(origin, env);
+    if (posts === null) return { html: inject(out, { title: 'Blog temporarily unavailable | Luxedge', description: 'The blog is temporarily unavailable. Please retry.', canonical: `${root}/blog`, noindex: true }), status: 503 };
     out = await injectBlogIndexBody(out, origin, env);
     return { html: out, status: 200 };
   }
@@ -1324,7 +1321,7 @@ export async function maybeInjectSeo(
     const slug = decodeURIComponent(segs[1]);
     const posts = await getBlogRegistry(origin, env);
     if (posts === null) {
-      return { html: injectCanonical(html, `${root}/blog/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+      return { html: inject(html, { title: 'Article temporarily unavailable | Luxedge', description: 'This article is temporarily unavailable. Please retry.', canonical: `${root}/blog/${slug}`, noindex: true }), status: 503 };
     }
     const post = posts.find((x) => x.slug === slug);
     if (!post) {

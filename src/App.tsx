@@ -5,6 +5,7 @@ import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import AdsterraAd from './components/AdsterraAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
+import { BuyerGuidance } from './components/BuyerGuidance';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -265,7 +266,7 @@ const INIT_CATEGORIES: AdminCategory[] = [
   { id: 'c7', name: 'Pet Accessories', isActive: true, subs: [] },
 ];
 
-const INIT_BLOGS: BlogPost[] = [
+export const LEGACY_FALLBACK_BLOGS: BlogPost[] = [
   { id:'b1', slug:'essential-supplies-new-puppy', title:'10 Essential Supplies Every New Puppy Needs', excerpt:'From comfy beds to chew-proof toys, here are the must-have products for welcoming a puppy into your home.', content:'Bringing home a puppy is exciting — and a little overwhelming. Here are the essentials every new pet parent needs.\n\n## 1. A Comfortable Bed\nThe Orthopedic Memory Foam Dog Bed supports growing joints and gives your puppy a cozy place to recharge after all that play.\n\n## 2. A No-Pull Harness\nPuppies pull! An Adjustable No-Pull Dog Harness makes walks comfortable and teaches good leash manners from day one.\n\n## 3. Durable Chew Toys\nPuppies teethe — a lot. A set of rope toys gives them something safe to chew instead of your furniture.\n\n## 4. Slow Feeder Bowl\nPuppies eat fast. A slow feeder bowl slows them down and prevents bloating.\n\n## 5. Grooming Basics\nA self-cleaning slicker brush keeps their coat shiny and makes grooming a bonding moment.\n\n## 6. Training Treats & More\nStock up on quality food, treats, and a sturdy collar. Preparation makes the first few weeks smooth and fun for everyone.', image:'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['puppy','dog supplies','new pet','essentials'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-10' },
   { id:'b2', slug:'cozy-corner-for-your-cat', title:'How to Create the Perfect Cozy Corner for Your Cat', excerpt:'Cats love having a place to call their own. Here\u2019s how to build a calming space your feline will adore.', content:'Every cat deserves a sanctuary. Here\u2019s how to design a cozy corner your kitty will love.\n\n## Choose the Right Bed\nCats feel safest when they can curl up with their back protected. A donut-style Cozy Calming Cat Bed with raised edges is perfect.\n\n## Add a Scratching Post\nScratching is instinct. A sturdy Premium Cat Scratching Post keeps claws happy and your sofa safe.\n\n## Include a View\nCats love watching the world go by. Place their bed near a window for hours of gentle entertainment.\n\n## Keep It Quiet\nChoose a corner away from high-traffic areas. Calm, quiet, and warm is the winning formula.\n\n## Fresh Water Close By\nA Stainless Steel Pet Water Fountain encourages hydration and fits beautifully in their new space.', image:'https://images.pexels.com/photos/416160/pexels-photo-416160.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['cat','cat bed','cozy','home'], authorId:'adm', authorName:'Admin', status:'published', date:'2025-03-05' },
   { id:'b3', slug:'grooming-routine-long-haired-pets', title:'A Simple Grooming Routine for Long-Haired Pets', excerpt:'Keep mats, tangles, and shedding under control with this easy weekly grooming routine.', content:'Long-haired pets are gorgeous — and high-maintenance. A simple routine keeps them healthy and comfortable.\n\n## Brush Daily, If You Can\nDaily brushing with a self-cleaning slicker brush removes loose fur before it becomes mats. It also spreads natural oils for a shinier coat.\n\n## Detangle Gently\nWork from the tips toward the skin. Never yank — patience prevents pain and keeps grooming a positive experience.\n\n## Watch the Pads\nLong fur grows between paw pads too. Regular trims prevent slipping and keep paws clean.\n\n## Make It a Ritual\nEnd each session with a treat. Your pet will start looking forward to grooming time instead of dreading it.\n\n## Seasonal Shedding\nExpect heavier shedding in spring and fall. Extra brushing during these months keeps your home much cleaner.', image:'https://images.pexels.com/photos/2173872/pexels-photo-2173872.jpeg?auto=compress&cs=tinysrgb&w=800', images:[], tags:['grooming','long hair','brushing','coat care'], authorId:'u1', authorName:'John Smith', status:'published', date:'2025-02-28' },
@@ -299,7 +300,7 @@ const INIT_BLOGS: BlogPost[] = [
 // The CMS is the live source of truth. This fallback is intentionally limited
 // to the same editorial set retained in the CMS, so a temporary CMS outage
 // cannot bring retired or low-quality articles back into public view.
-const RETAINED_FALLBACK_BLOG_SLUGS = new Set([
+export const RETAINED_FALLBACK_BLOG_SLUGS = new Set([
   'how-to-clean-a-bird-feeder',
   'grooming-routine-long-haired-pets',
   'dog-car-safety-seat-belt-guide',
@@ -311,7 +312,7 @@ const RETAINED_FALLBACK_BLOG_SLUGS = new Set([
   'how-to-fit-no-pull-dog-harness',
   'how-to-choose-a-cat-tunnel',
 ]);
-const SAFE_INIT_BLOGS = INIT_BLOGS.filter((post) => RETAINED_FALLBACK_BLOG_SLUGS.has(post.slug));
+export const SAFE_INIT_BLOGS = LEGACY_FALLBACK_BLOGS.filter((post) => RETAINED_FALLBACK_BLOG_SLUGS.has(post.slug));
 
 export const CAT_LIST = ['All', 'Dog Supplies', 'Cat Supplies', 'Pet Beds', 'Pet Toys', 'Feeding & Water', 'Grooming', 'Pet Accessories', 'Bird Supplies', 'Horse', 'Cattle'];
 const CAT_META: Record<string, { desc: string }> = {
@@ -423,20 +424,17 @@ function AppProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<AppUser[]>(INIT_USERS);
   const [reviews, setReviews] = useState<Review[]>(INIT_REVIEWS);
   const [categories, setCategories] = useState<AdminCategory[]>(INIT_CATEGORIES);
-  const [blogs, setBlogs] = useState<BlogPost[]>(SAFE_INIT_BLOGS);
+  // Published CMS content is the only public blog corpus. Do not revive the
+  // legacy in-bundle posts during an outage.
+  const [blogs, setBlogs] = useState<BlogPost[]>([]);
   const [notif, setNotif] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const notifTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Phase B: blog content lives in the Supabase CMS. Until the CMS is seeded
-  // (or the DB is unreachable / table not migrated) we keep SAFE_INIT_BLOGS as a
-  // migration/rollback fallback; once the CMS returns real posts they become
-  // the source of truth. Publishing from the Admin Blog Manager updates the
-  // DB, and reloadBlogs() refreshes this in-memory list WITHOUT any deploy.
+  // The CMS is the only public source. A failed/empty read clears prior data
+  // rather than displaying legacy fallback articles as if they were reviewed.
   const reloadBlogs = useCallback(async (forceFresh = false) => {
     const posts = await loadPublishedBlogs({ forceFresh });
-    // Only switch to CMS when it returned actual posts — null (failure) or an
-    // empty DB keeps the last-known set so a DB blip never blanks the blog.
-    if (posts && posts.length > 0) setBlogs(posts);
+    setBlogs(posts || []);
   }, []);
   useEffect(() => { void reloadBlogs(); }, [reloadBlogs]);
   // Stable identity: components (e.g. CatalogProductEditor) depend on `notify`
@@ -2165,6 +2163,14 @@ function HomePage() {
       </section>
 
       {/* â•â•â•â•â•â•â•â• Ad: After Hero â•â•â•â•â•â•â•â• */}
+      <section className="bg-luxe-cream py-8 sm:py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <BuyerGuidance
+            title="Shop with the details in view"
+            note="Start with the animal and everyday task you are shopping for, then use each listing’s stated size, materials, price, and availability to narrow the options."
+          />
+        </div>
+      </section>
       <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
 
       {/* â•â•â•â•â•â•â•â• SHOP BY PET — Circular Avatars â•â•â•â•â•â•â•â• */}

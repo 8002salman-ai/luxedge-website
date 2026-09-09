@@ -8,9 +8,8 @@
 //   * active storefront categories (is_active)
 //   * published CMS blog posts (status=published — the RLS-visible set)
 //   * commerce-ready active products, minus editorial holds
-//   * /media hub + published, non-held media pages
 import fs from 'fs';
-import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds.ts';
+import { isHeldProduct } from '../src/content/reviewHolds.ts';
 
 const env = {};
 for (const line of fs.readFileSync('.env', 'utf8').split('\n')) {
@@ -43,18 +42,15 @@ const get = async (path) => {
   return res.json();
 };
 
-const [prods, cats, blogs, media] = await Promise.all([
+const [prods, cats, blogs] = await Promise.all([
   get('products?select=id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness&status=in.(active,published)&limit=500'),
   get('categories?select=slug&is_active=eq.true&limit=200'),
   get('blog_posts?select=slug&status=eq.published&limit=500'),
-  get('media_videos?select=slug&status=eq.published&limit=500'),
 ]);
 
 const urls = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
 for (const c of cats) urls.push(`/category/${c.slug}`);
 for (const b of blogs) urls.push(`/blog/${b.slug}`);
-urls.push('/media');
-for (const m of media) { if (!isHeldMedia(m.slug)) urls.push(`/media/${m.slug}`); }
 for (const p of prods) {
   if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) {
     urls.push(`/product/${p.slug || p.id}`);
@@ -67,4 +63,4 @@ ${urls.map(u => `  <url><loc>https://luxedge.us${u}</loc></url>`).join('\n')}
 </urlset>
 `;
 fs.writeFileSync('public/sitemap.xml', xml);
-console.log(`sitemap: ${urls.length} URLs (${blogs.length} published blogs, ${cats.length} categories, ${media.length} published videos, ${prods.filter(p => commerceReady(p) && !isHeldProduct(p.slug)).length} commerce-ready products)`);
+console.log(`sitemap: ${urls.length} URLs (${blogs.length} published blogs, ${cats.length} categories, ${prods.filter(p => commerceReady(p) && !isHeldProduct(p.slug)).length} commerce-ready products)`);
