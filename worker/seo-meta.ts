@@ -25,7 +25,7 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
-import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia, isHeldBlog } from '../src/content/reviewHolds';
 import {
   CONTACT_INFO,
   CONTACT_INTRO,
@@ -389,7 +389,7 @@ async function getBlogRegistry(_origin: string, _env: SeoEnv): Promise<BlogEntry
       if (!rows) throw new Error('blog_cms unavailable');
       return rows
         .map(mapCmsToBlogEntry)
-        .filter((x): x is BlogEntry => x !== null);
+        .filter((x): x is BlogEntry => x !== null && !isHeldBlog(x.slug));
     });
     if (cms) return cms;
   }
@@ -1078,7 +1078,7 @@ export async function maybeInjectSeo(
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
-  if (segs.length === 2 && ((segs[0] === 'product' && isHeldProduct(segs[1])) || (segs[0] === 'media' && isHeldMedia(segs[1])))) {
+  if (segs.length === 2 && ((segs[0] === 'product' && isHeldProduct(segs[1])) || (segs[0] === 'media' && isHeldMedia(segs[1])) || (segs[0] === 'blog' && isHeldBlog(segs[1])))) {
     return { html: inject(html, { title: 'Page unavailable | Luxedge', description: 'This page is currently unavailable.', canonical: `${root}/${segs.join('/')}`, noindex: true }), status: 404 };
   }
 

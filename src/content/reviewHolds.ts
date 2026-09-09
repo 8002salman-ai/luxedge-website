@@ -11,7 +11,11 @@ const heldMedia = new Set([
   'how-pomegranate-juice-is-made-in-a-1-million-bottle-factory',
   'reality-peel-apartment-to-desert-oasis',
 ]);
+// Legacy article withheld after the production content audit: it is too thin
+// and makes unsupported care claims. The CMS row remains available to admins.
+const heldBlog = new Set(['grooming-routine-long-haired-pets']);
 export function isHeldMedia(slug: string): boolean { return heldMedia.has(slug); }
+export function isHeldBlog(slug: string): boolean { return heldBlog.has(slug); }
 export function isHeldProduct(slug?: string | null): boolean {
   return slug === 'promo-probe-1788640230930';
 }

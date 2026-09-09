@@ -6,6 +6,7 @@ import AdSenseAd from './components/AdSenseAd';
 import AdsterraAd from './components/AdsterraAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
+import { isHeldBlog } from './content/reviewHolds';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -1229,7 +1230,7 @@ function RouteTitle() {
       // permanent index (it will flip to a "fully claimed" state) — still
       // follow links so ad/social traffic and any backlinks pass value on.
       setMeta('robots', 'noindex, follow');
-    } else if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write') {
+    } else if (privateRoutes.includes(segs[0]) || segs[0] === 'media' || pathname === '/blog/write' || (segs[0] === 'blog' && !!segs[1] && isHeldBlog(segs[1]))) {
       setMeta('robots', 'noindex, nofollow');
     } else if (['', 'shop', 'category', 'product', 'blog', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'faq'].includes(segs[0] || '')) {
       setMeta('robots', 'index, follow');

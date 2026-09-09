@@ -124,4 +124,9 @@ describe('loadPublishedBlogs — draft leak regression', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
+
+  it('does not return an editorially held legacy article from a public CMS response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify([{ ...base, slug: 'grooming-routine-long-haired-pets' }]), { status: 200 })));
+    await expect(loadPublishedBlogs({ forceFresh: true })).resolves.toEqual([]);
+  });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildSitemap } from '../sitemap';
 import { maybeInjectSeo } from '../seo-meta';
-import { isHeldMedia, isHeldProduct } from '../../src/content/reviewHolds';
+import { isHeldBlog, isHeldMedia, isHeldProduct } from '../../src/content/reviewHolds';
 import { DEFAULT_CONFIG, isExcludedPath } from '../../src/lib/marketing';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -14,9 +14,10 @@ describe('editorial release boundaries', () => {
     expect(isHeldProduct('dog-bed')).toBe(false);
     expect(isHeldMedia('05-05-hollow-crystal-sphere')).toBe(true);
     expect(isHeldMedia('a-reviewed-dog-guide')).toBe(false);
+    expect(isHeldBlog('grooming-routine-long-haired-pets')).toBe(true);
   });
   it('returns noindex 404 for held pages even during a database outage', async () => {
-    for (const path of ['/product/promo-probe-1788640230930', '/media/05-05-hollow-crystal-sphere']) {
+    for (const path of ['/product/promo-probe-1788640230930', '/media/05-05-hollow-crystal-sphere', '/blog/grooming-routine-long-haired-pets']) {
       const result = await maybeInjectSeo(shell, path, 'https://luxedge.us', env);
       expect(result).toHaveProperty('status', 404);
       expect(result && 'html' in result && result.html).toContain('noindex');

@@ -9,7 +9,7 @@
 //   * published CMS blog posts (status=published — the RLS-visible set)
 //   * commerce-ready active products, minus editorial holds
 import fs from 'fs';
-import { isHeldProduct } from '../src/content/reviewHolds.ts';
+import { isHeldBlog, isHeldProduct } from '../src/content/reviewHolds.ts';
 
 const env = {};
 for (const line of fs.readFileSync('.env', 'utf8').split('\n')) {
@@ -50,7 +50,7 @@ const [prods, cats, blogs] = await Promise.all([
 
 const urls = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
 for (const c of cats) urls.push(`/category/${c.slug}`);
-for (const b of blogs) urls.push(`/blog/${b.slug}`);
+for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${b.slug}`);
 for (const p of prods) {
   if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) {
     urls.push(`/product/${p.slug || p.id}`);

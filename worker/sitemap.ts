@@ -1,5 +1,5 @@
 import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_SELECT } from './selects';
-import { isHeldProduct } from '../src/content/reviewHolds';
+import { isHeldBlog, isHeldProduct } from '../src/content/reviewHolds';
 
 // Dynamic sitemap source. Media routes are noindexed and deliberately excluded.
 const root = 'https://luxedge.us';
@@ -38,7 +38,7 @@ export async function buildSitemap(): Promise<string | null> {
   if (!prods || !cats || !blogs) return null;
   const urls: string[] = [...STATIC_ROUTES];
   for (const c of cats) urls.push(`/category/${xmlEscape(c.slug)}`);
-  for (const b of blogs) urls.push(`/blog/${xmlEscape(b.slug)}`);
+  for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${xmlEscape(b.slug)}`);
   for (const p of prods) {
     if (!isHeldProduct(p.slug) && (p.status === 'active' || p.status === 'published') && commerceReady(p)) urls.push(`/product/${xmlEscape(p.slug || p.id)}`);
   }
