@@ -890,6 +890,8 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
     `<nav aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/shop">Shop</a></li><li>${esc(cat.name)}</li></ol></nav>`,
     `<h1>${esc(cat.name)}</h1>`,
     `<p>${esc(desc)}</p>`,
+    `<h2>Choosing ${esc(cat.name.toLowerCase())}</h2>`,
+    `<p>Start with the task you need to complete, then compare the listed dimensions, materials, availability, and delivery details before choosing.</p>`,
   );
   if (inCategory.length > 0) {
     const items = inCategory
@@ -908,6 +910,8 @@ function injectHomeBody(html: string): string {
     `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
     `<p>Sourced worldwide. Chosen with care.</p>`,
     `<p>We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.</p>`,
+    `<h2>Shop with the details in view</h2>`,
+    `<p>Start with the animal and everyday task you are shopping for, then use each listing’s stated size, materials, price, and availability to narrow the options.</p>`,
     `<p>Shop by pet</p>`,
     `<h2>Who are you shopping for?</h2>`,
     `<ul>` +

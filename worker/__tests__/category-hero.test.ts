@@ -52,6 +52,12 @@ describe('injectCategoryBody — category pet hero image', () => {
     expect(html.indexOf('<img')).toBeLessThan(html.indexOf('<h1>'));
   });
 
+  it('pre-renders the same concise buyer guidance as the category landing', () => {
+    const html = wrap(cat('Dog Supplies', 'dog-supplies'));
+    expect(html).toContain('Choosing dog supplies');
+    expect(html).toContain('listed dimensions, materials, availability, and delivery details');
+  });
+
   it('emits the breadcrumb trail mirroring the client CategoryHero', () => {
     const html = wrap(cat('Cat Supplies', 'cat-supplies'));
     expect(html).toContain('<nav aria-label="Breadcrumb">');
