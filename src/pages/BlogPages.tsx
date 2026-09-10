@@ -10,6 +10,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { BlogPost } from '../App';
 import { useApp } from '../App';
 import { loadPublishedBlogBySlug } from '../services/blog';
+import { isHeldProduct } from '../content/reviewHolds';
 import AdSenseAd from '../components/AdSenseAd';
 import AdsterraAd from '../components/AdsterraAd';
 import { BookOpen01, PencilLine, Calendar, ArrowRight, Send01, Eye, ChevronRight, ArrowLeft, Upload01, Tag01 } from '@untitledui/icons';
@@ -177,6 +178,8 @@ export function BlogDetailPage() {
     return parts.map((part, j) => {
       const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (m) {
+        const productSlug = m[2].match(/^\/product\/([^/?#]+)/)?.[1];
+        if (productSlug && isHeldProduct(productSlug)) return <span key={`${keyBase}-${j}`}>{m[1]}</span>;
         return <Link key={`${keyBase}-${j}`} to={m[2]} className="text-luxe-gold-dark font-semibold underline decoration-luxe-gold/40 underline-offset-2 hover:text-luxe-gold transition-colors">{m[1]}</Link>;
       }
       return <span key={`${keyBase}-${j}`}>{part}</span>;

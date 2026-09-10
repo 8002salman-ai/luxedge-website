@@ -761,7 +761,12 @@ function inlineMarkup(text: string): string {
   return parts
     .map((part) => {
       const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (m) return `<a href="${esc(m[2])}">${esc(m[1])}</a>`;
+      if (m) {
+        const path = m[2];
+        const productSlug = path.match(/^\/product\/([^/?#]+)/)?.[1];
+        if (productSlug && isHeldProduct(productSlug)) return esc(m[1]);
+        return `<a href="${esc(path)}">${esc(m[1])}</a>`;
+      }
       return esc(part);
     })
     .join('');
