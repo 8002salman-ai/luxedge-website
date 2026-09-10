@@ -2,11 +2,16 @@
 export interface PublicProductFacts { id?: string | null; slug?: string | null; name?: string | null; status?: string | null; description?: string | null; short_description?: string | null; shortDesc?: string | null; price?: number | null; image_url?: string | null; images?: string[] | null; product_images?: Array<{ url?: string | null; public_url?: string | null }> | null; commerce_readiness?: string | null; commerceReadiness?: string | null; supplier_source?: string | null; supplierSource?: string | null; cost_price?: number | null; us_inventory?: boolean | null; usInventory?: boolean | null; stock_status?: string | null; stockStatus?: string | null; inventory_qty?: number | null; stock?: number | null; }
 const text = (v: unknown) => String(v || '').replace(/\s+/g, ' ').trim();
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const isOfficialOrManufacturerSource = (p: PublicProductFacts) => /\bofficial\b|\bmanufacturer\b/i.test(text(p.supplier_source || p.supplierSource));
 export function isCommerceReadyForPublicListing(p: PublicProductFacts): boolean {
+  // Manufacturer pages are reference material, not an independently verified
+  // commerce supply. Evaluate this before stored readiness so an accidental
+  // COMMERCE_READY stamp cannot make an official-source row public.
+  if (isOfficialOrManufacturerSource(p)) return false;
   const declared = text(p.commerce_readiness || p.commerceReadiness);
   if (declared) return declared === 'COMMERCE_READY';
   const source = text(p.supplier_source || p.supplierSource).toLowerCase();
-  return !!source && !/kong|official manufacturer|manufacturer page/i.test(source) && num(p.cost_price) > 0 &&
+  return !!source && num(p.cost_price) > 0 &&
     (p.us_inventory === true || p.usInventory === true || (text(p.stock_status || p.stockStatus) === 'in_stock' && num(p.inventory_qty ?? p.stock) > 0));
 }
 export function hasKnownProductContradiction(p: PublicProductFacts): boolean {

@@ -52,11 +52,13 @@ describe('editorial release boundaries', () => {
       url.includes('/products?') ? [
         { slug: 'promo-probe-1788640230930', status: 'active', commerce_readiness: 'COMMERCE_READY' },
         { slug: 'dog-bed', name: 'Verified Dog Bed', status: 'active', price: 49.99, image_url: 'https://example.test/dog-bed.jpg', description: 'A verified catalog description with enough factual detail for a customer to understand this product before purchasing.', commerce_readiness: 'COMMERCE_READY' },
+        { slug: 'kong-classic', name: 'KONG Classic', status: 'active', price: 12.99, image_url: 'https://example.test/kong.jpg', description: 'A factual product description with enough verified catalog detail for a customer to understand the listed item before ordering.', supplier_source: 'KONG Company (official manufacturer)', commerce_readiness: 'COMMERCE_READY' },
       ] : []
     ))));
     const sitemap = await buildSitemap();
     expect(sitemap).toContain('/product/dog-bed');
     expect(sitemap).not.toContain('promo-probe');
+    expect(sitemap).not.toContain('/product/kong-classic');
     expect(sitemap).not.toContain('/media');
     expect(sitemap).not.toContain('<lastmod>');
   });
@@ -66,5 +68,18 @@ describe('editorial release boundaries', () => {
       expect(result).toHaveProperty('status', 503);
       expect(result && 'html' in result && result.html).toContain('noindex');
     }
+  });
+  it('returns a noindex 404 for a declared-ready official-source PDP', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([{
+      id: 'kong-1', slug: 'kong-classic', name: 'KONG Classic', status: 'active', price: 12.99,
+      image_url: 'https://example.test/kong.jpg',
+      description: 'A factual product description with enough verified catalog detail for a customer to understand the listed item before ordering.',
+      supplier_source: 'KONG Company (official manufacturer)', commerce_readiness: 'COMMERCE_READY',
+    }]))));
+    const result = await maybeInjectSeo(shell, '/product/kong-classic', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 404);
+    expect(result && 'html' in result && result.html).toContain('noindex');
   });
 });

@@ -69,7 +69,7 @@ describe('loadStorefrontCatalog', () => {
           { id: 'p1', name: 'Dog Bed', slug: 'dog-bed', status: 'published', price: 49.99, category_id: 'c1', inventory_qty: 10, supplier_source: 'CJ', cost_price: 12, us_inventory: true, stock_status: 'in_stock' },
           { id: 'p2', name: 'Draft Item', slug: 'draft', status: 'draft', price: 9.99 },
           { id: 'p3', name: 'Free Item', slug: 'free', status: 'published', price: 0, price_amount: 0, supplier_source: 'CJ', cost_price: 1 },
-          { id: 'p4', name: 'Retail-Ref Only', slug: 'ref', status: 'published', price: 29.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0 },
+          { id: 'p4', name: 'Retail-Ref Only', slug: 'ref', status: 'published', price: 29.99, supplier_source: 'KONG Company (official manufacturer)', cost_price: 0, commerce_readiness: 'COMMERCE_READY' },
         ]));
       }
       if (url.includes('/product_images')) return Promise.resolve(jsonResponse([]));
@@ -79,7 +79,7 @@ describe('loadStorefrontCatalog', () => {
     expect(cat).not.toBeNull();
     expect(cat!.source).toBe('supabase');
     // p1 (real supplier + cost + US stock) is visible; p3 has no price; p4 is
-    // retail-reference-only (no cost basis) → never storefront-visible.
+    // manufacturer-source and stays storefront-hidden despite COMMERCE_READY.
     expect(cat!.products.map((p) => p.id)).toEqual(['p1']);
     expect(cat!.products[0].name).toBe('Dog Bed');
     expect(cat!.products[0].price).toBe(49.99);

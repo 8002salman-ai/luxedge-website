@@ -8,6 +8,16 @@ describe('public PDP eligibility', () => {
     expect(publicProductIneligibilityReason({ ...qualified, description: 'Too short' })).toBe('insufficient verified product content');
     expect(publicProductIneligibilityReason({ ...qualified, commerce_readiness: 'NEEDS_REVIEW' })).toBe('unverified commerce readiness');
   });
+  it('withholds official/manufacturer sources even when declared commerce ready', () => {
+    const officialSource = {
+      ...qualified,
+      slug: 'kong-classic',
+      supplier_source: 'KONG Company (official manufacturer)',
+      commerce_readiness: 'COMMERCE_READY',
+    };
+    expect(isPubliclyListableProduct(officialSource)).toBe(false);
+    expect(publicProductIneligibilityReason(officialSource)).toBe('unverified commerce readiness');
+  });
   it('withholds audited contradictions rather than choosing a claim', () => {
     expect(isPubliclyListableProduct({ ...qualified, slug: 'horse-halter', description: `${qualified.description} Nylon cowhide horse halter.` })).toBe(false);
     expect(isPubliclyListableProduct({ ...qualified, slug: 'grooming-kit', description: `${qualified.description} 12-piece grooming kit, 10-piece grooming kit.` })).toBe(false);
