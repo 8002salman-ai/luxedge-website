@@ -28,6 +28,8 @@ describe('editorial release boundaries', () => {
     expect(result).toHaveProperty('status', 200);
     expect(result && 'html' in result && result.html).toContain('noindex');
     expect(result && 'html' in result && result.html).toContain('canonical');
+    const missing = await maybeInjectSeo(shell, '/campaigns/not-a-campaign', 'https://luxedge.us', env);
+    expect(missing).toHaveProperty('status', 404);
   });
   it('keeps truly unknown routes as real noindex 404s (no homepage soft-404)', async () => {
     const result = await maybeInjectSeo(shell, '/campaigns', 'https://luxedge.us', env);
@@ -49,7 +51,7 @@ describe('editorial release boundaries', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(
       url.includes('/products?') ? [
         { slug: 'promo-probe-1788640230930', status: 'active', commerce_readiness: 'COMMERCE_READY' },
-        { slug: 'dog-bed', status: 'active', commerce_readiness: 'COMMERCE_READY' },
+        { slug: 'dog-bed', name: 'Verified Dog Bed', status: 'active', price: 49.99, image_url: 'https://example.test/dog-bed.jpg', description: 'A verified catalog description with enough factual detail for a customer to understand this product before purchasing.', commerce_readiness: 'COMMERCE_READY' },
       ] : []
     ))));
     const sitemap = await buildSitemap();

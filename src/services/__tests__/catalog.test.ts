@@ -6,7 +6,20 @@ const URL = 'https://project.supabase.co';
 const ANON = 'anon-key-123';
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  // Mapper-focused fixtures need the independent public-indexability facts.
+  // Individual tests can still override any of them to assert a withholding
+  // condition; category and ancillary-table fixtures do not have `status`.
+  const withPublicFacts = Array.isArray(body) ? body.map((row) => (
+    row && typeof row === 'object' && 'status' in row
+      ? {
+          description: 'A detailed verified product description that gives a shopper enough factual information to evaluate the listed item before ordering.',
+          image_url: 'https://images.example.test/verified-product.jpg',
+          slug: `verified-${String((row as Record<string, unknown>).id || 'product')}`,
+          ...row,
+        }
+      : row
+  )) : body;
+  return new Response(JSON.stringify(withPublicFacts), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
 describe('loadStorefrontCatalog', () => {
@@ -97,13 +110,13 @@ describe('loadStorefrontCatalog', () => {
     const cat = await loadStorefrontCatalog();
     const byId = new Map(cat!.products.map((p) => [p.id, p]));
     expect(byId.get('p1')?.name).toBe('Dog Bed'); // p.name || p.title → name
-    expect(byId.get('p1')?.description).toBe(''); // absent description column → ''
+    expect(byId.get('p1')?.description).toContain('detailed verified product description');
     expect(byId.get('p1')?.price).toBe(49.99); // price (no price_amount present)
     expect(byId.get('p1')?.images).toEqual(['https://img/x.jpg']);
-    expect(byId.get('p2')?.name).toBe('p2'); // name||title||id → id
+    expect(byId.get('p2')).toBeUndefined();
   });
 
-  it('ACTIVE products are owner-approved and visible; PUBLISHED rows still need a verified purchasing path', async () => {
+  it('withholds active rows without a verified purchasing path', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
@@ -122,9 +135,8 @@ describe('loadStorefrontCatalog', () => {
       return Promise.resolve(jsonResponse([]));
     }));
     const cat = await loadStorefrontCatalog();
-    expect(cat!.products.map((p) => p.id)).toEqual(['p1', 'p2']);
-    expect(cat!.products[0].commerceReadiness).toBe('SOURCE_PENDING');
-    expect(cat!.products[1].commerceReadiness).toBe('COMMERCE_READY');
+    expect(cat!.products.map((p) => p.id)).toEqual(['p2']);
+    expect(cat!.products[0].commerceReadiness).toBe('COMMERCE_READY');
   });
 
   it('parses comma-separated STRING tags (the CJ-import rows) into arrays', async () => {
@@ -310,7 +322,7 @@ describe('loadProductByIdOrSlug', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolves an ACTIVE product by slug even when it is NOT storefront-ready (admin Preview / SSR deep-link parity)', async () => {
+  it('withholds an ACTIVE product by slug when public commerce facts are not verified', async () => {
     // The commerce-readiness gate hides this product from the catalog, but the
     // SSR layer and the admin editor's "Preview" button still serve it. The
     // resolver must return it — this is the exact bug reported on live.
@@ -326,28 +338,19 @@ describe('loadProductByIdOrSlug', () => {
       return Promise.resolve(jsonResponse([]));
     }));
     const p = await loadProductByIdOrSlug('dog-bed');
-    expect(p).not.toBeNull();
-    expect(p!.id).toBe('p1');
-    expect(p!.name).toBe('Dog Bed');
-    expect(p!.slug).toBe('dog-bed');
-    expect(p!.price).toBe(49.99);
-    expect(p!.category).toBe('Pet Beds');
-    expect(p!.images).toEqual(['https://img/bed.jpg']);
-    // Commerce-readiness is derived but the resolver does NOT gate on it.
-    expect(p!.commerceReadiness).toBe('SOURCE_PENDING');
+    expect(p).toBeNull();
   });
 
-  it('resolves by id as well as slug', async () => {
+  it('rejects a UUID direct lookup when it has no canonical slug match', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string) => {
       if (url.includes('/categories')) return Promise.resolve(jsonResponse([]));
       if (url.includes('/products')) {
-        return Promise.resolve(jsonResponse([{ id: 'p9', name: 'Cat Toy', slug: 'cat-toy', status: 'active', price: 4.99 }]));
+        return Promise.resolve(jsonResponse([{ id: '00000000-0000-4000-8000-000000000009', name: 'Cat Toy', slug: 'cat-toy', status: 'active', price: 4.99, commerce_readiness: 'COMMERCE_READY' }]));
       }
       return Promise.resolve(jsonResponse([]));
     }));
-    const p = await loadProductByIdOrSlug('p9');
-    expect(p?.id).toBe('p9');
-    expect(p?.name).toBe('Cat Toy');
+    const p = await loadProductByIdOrSlug('00000000-0000-4000-8000-000000000009');
+    expect(p).toBeNull();
   });
 
   it('returns null for a draft/inactive product (no preview of unpublished rows)', async () => {

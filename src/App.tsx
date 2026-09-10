@@ -473,7 +473,7 @@ function AppProvider({ children }: { children: ReactNode }) {
         // Catalog load completed (even with zero products) — the cart can
         // now be safely reconciled against the real customer-visible set.
         setCatalogLoaded(true);
-        if (cat.products.length) setProducts(cat.products.map(mapCatalogProduct));
+        setProducts(cat.products.map(mapCatalogProduct));
         if (cat.categories.length) setCategories(cat.categories.map(mapCatalogCategory));
       }
     });
@@ -744,7 +744,7 @@ function Header() {
     setMob(false);
   };
   useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
-  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/free-pet-gift', l: '🎁 Free Gift' }, { p: '/media', l: 'Media' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
+  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/free-pet-gift', l: '🎁 Free Gift' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
   const catNav = [
     { l: 'Dog', to: '/category/dog-supplies' },
     { l: 'Cat', to: '/category/cat-supplies' },
@@ -859,7 +859,6 @@ function Header() {
           {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
             <Link key={c.l} to={c.to} className="nav-underline px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
           ))}
-          <Link to="/media" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Media</Link>
           <Link to="/blog" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Blog</Link>
           <Link to="/shop?q=deal" className="ml-auto px-4 py-2 text-[13.5px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
         </div>
@@ -974,7 +973,6 @@ function Footer() {
             <ColTitle>Company</ColTitle>
             <nav className="space-y-0" aria-label="Company">
               <Link to="/about" className={FL}>About Us</Link>
-              <Link to="/media" className={FL}>Media</Link>
               <Link to="/blog" className={FL}>Blog</Link>
               <Link to="/privacy" className={FL}>Privacy Policy</Link>
               <Link to="/terms" className={FL}>Terms of Service</Link>

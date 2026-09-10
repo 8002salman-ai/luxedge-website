@@ -80,7 +80,7 @@ export const DEFAULT_CONFIG: MarketingConfig = {
   adsenseEnabled: true,
   adsenseClientId: 'ca-pub-5473713135927706',
   publisherId: 'pub-5473713135927706',
-  autoAdsEnabled: true,
+  autoAdsEnabled: false,
   manualAdsEnabled: false,
   adsterraEnabled: false,
   adsterraZoneUrl: '',
@@ -390,6 +390,9 @@ export function resetPlacementCount(): void {
 
 /** Pure check: is this placement configured and eligible at all? */
 export function placementConfigured(c: MarketingConfig, key: PlacementKey): boolean {
+  // Review recovery policy: public pages intentionally have no manual/header/
+  // category placements until a separate, explicit re-enable is deployed.
+  if (c.autoAdsEnabled === false && c.adsterraEnabled === false && c.manualAdsEnabled === false) return false;
   if (!c.manualAdsEnabled) return false;
   if (!c.adsenseEnabled || !CLIENT_ID_RE.test(c.adsenseClientId.trim())) return false;
   const p = c.placements[key];

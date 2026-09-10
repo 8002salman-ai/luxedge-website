@@ -26,6 +26,7 @@
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
 import { isHeldProduct, isHeldMedia, isHeldBlog } from '../src/content/reviewHolds';
+import { isPubliclyListableProduct } from '../src/content/productEligibility';
 import {
   CONTACT_INFO,
   CONTACT_INTRO,
@@ -92,6 +93,7 @@ export interface ProductRow {
   id: string;
   slug?: string | null;
   name: string;
+  status?: string | null;
   description?: string | null;
   short_description?: string | null;
   seo_title?: string | null;
@@ -103,12 +105,17 @@ export interface ProductRow {
   /** Legacy absolute product image URL (products.image_url). */
   image_url?: string | null;
   stock_status?: string | null;
+  inventory_qty?: number | null;
   us_inventory?: boolean | null;
   free_shipping?: boolean | null;
   shipping_cost?: number | null;
   delivery_min_days?: number | null;
   delivery_max_days?: number | null;
   currency?: string | null;
+  supplier_source?: string | null;
+  supplier_product_ref?: string | null;
+  cost_price?: number | null;
+  commerce_readiness?: string | null;
   /** Embedded category name via categories(name) — the REST key is the
    * relation name `categories`. */
   categories?: { name?: string } | null;
@@ -170,7 +177,7 @@ async function getProducts(): Promise<ProductRow[] | null> {
       fetchJson<ProductRow[]>(
         base,
         key,
-        `products?select=${SEO_PRODUCTS_SELECT}&status=eq.active&limit=500`,
+        `products?select=${SEO_PRODUCTS_SELECT}&status=in.(active,published)&limit=500`,
       ),
       getProductImages(),
     ]);
@@ -875,7 +882,7 @@ const CAT_HERO_IMAGES: Record<string, string> = {
 
 export function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
   const inCategory = products.filter(
-    (p) => p.slug && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
+    (p) => p.slug && isPubliclyListableProduct(p) && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
   );
   // Mirror the client category header exactly (CAT_META in src/App.tsx or the
   // client's `Browse our {category} collection` fallback) so the pre-render and
@@ -1001,7 +1008,7 @@ async function injectShopBody(html: string): Promise<string> {
   ];
   const products = await getProducts();
   if (products) {
-    const ready = products.filter((p) => p.slug && !isHeldProduct(p.slug)).slice(0, 60);
+    const ready = products.filter((p) => p.slug && !isHeldProduct(p.slug) && isPubliclyListableProduct(p)).slice(0, 60);
     if (ready.length > 0) {
       const items = ready.map((p) => `<li><a href="/product/${esc(p.slug!)}">${esc(p.name)}</a></li>`).join('');
       parts.push(`<h2>All Products</h2>`, `<ul>${items}</ul>`);
@@ -1115,6 +1122,9 @@ export async function maybeInjectSeo(
   // the SPA router, so a missing campaign is a real 404 that the client also
   // shows as closed/unavailable.
   if (segs.length === 2 && segs[0] === 'campaigns') {
+    if (!['pet-gift-drop'].includes(segs[1])) {
+      return { html: inject(html, { title: 'Campaign Not Found | Luxedge', description: 'This campaign is no longer available.', canonical: `${root}/campaigns/${encodeURIComponent(segs[1])}`, noindex: true }), status: 404 };
+    }
     return {
       html: inject(html, {
         title: 'Luxedge Campaign',
@@ -1290,7 +1300,7 @@ export async function maybeInjectSeo(
     if (products === null) {
       return { html: injectCanonical(html, `${root}/product/${slug}`), status: 200 }; // DB unavailable — keep canonical correct
     }
-    const p = products.find((x) => x.slug === slug && !isHeldProduct(x.slug));
+    const p = products.find((x) => x.slug === slug && !isHeldProduct(x.slug) && isPubliclyListableProduct(x));
     if (!p) {
       // Legacy UUID product URLs (pre-PR #35 storefront links) — 301 to the
       // canonical slug so the duplicate collapses instead of soft-404ing.

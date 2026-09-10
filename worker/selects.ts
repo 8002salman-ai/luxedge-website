@@ -24,7 +24,7 @@
  * fetches images in a SEPARATE lightweight query filtered to real HTTP URLs
  * (url=not.like.data:*) and merges them back per product. */
 export const SEO_PRODUCTS_SELECT =
-  'id,slug,name,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,categories(name)';
+  'id,slug,name,status,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,inventory_qty,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,supplier_source,supplier_product_ref,cost_price,commerce_readiness,categories(name)';
 
 export const SEO_CATEGORIES_SELECT = 'slug,name';
 
@@ -38,7 +38,7 @@ export const SEO_MEDIA_SELECT =
 /** Sitemap product query (sitemap.ts) — the commerce-ready visibility gate
  * mirror (status + supplier/cost/fulfillment evidence). */
 export const SITEMAP_PRODUCTS_SELECT =
-  'id,slug,status,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness';
+  'id,slug,name,status,description,short_description,price,image_url,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness';
 
 export const SITEMAP_CATEGORIES_SELECT = 'slug';
 

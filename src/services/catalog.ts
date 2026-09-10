@@ -33,6 +33,7 @@ import { getDb, getDbMode } from './db';
 import { deriveCommerceReadiness, deriveInventorySource, deriveSourceType, type CommerceReadiness } from '../features/catalog/commerceReadiness';
 import { parseTagList } from '../features/catalog/tags';
 import { isHeldProduct } from '../content/reviewHolds';
+import { isPubliclyListableProduct } from '../content/productEligibility';
 
 export interface CatalogProduct {
   id: string;
@@ -76,6 +77,7 @@ export interface CatalogProduct {
   supplierSource?: string;
   supplierProductRef?: string;
   supplierUrl?: string | null;
+  status?: string;
 }
 
 export interface CatalogVariant {
@@ -229,7 +231,7 @@ interface DbSettingRow {
 // ============================================================================
 export const CATEGORIES_PUBLIC_SELECT = 'id,name,slug,is_active';
 export const PRODUCTS_PUBLIC_SELECT =
-  'id,slug,name,short_description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order,created_at';
+  'id,slug,name,short_description,description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order,created_at';
 export const PRODUCT_IMAGES_PUBLIC_SELECT = 'product_id,url,alt_text,is_primary,sort_order,variant_id';
 export const PRODUCT_VARIANTS_PUBLIC_SELECT = 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty';
 export const COUPONS_PUBLIC_SELECT =
@@ -371,6 +373,7 @@ function mapProductRow(
     supplierSource: typeof p.supplier_source === 'string' ? p.supplier_source : undefined,
     supplierProductRef: typeof p.supplier_product_ref === 'string' ? p.supplier_product_ref : undefined,
     supplierUrl: typeof p.supplier_url === 'string' ? p.supplier_url : null,
+    status: typeof p.status === 'string' ? p.status : undefined,
     sortOrder: num(p.sort_order),
     createdAt: typeof p.created_at === 'string' ? p.created_at : undefined,
   };
@@ -441,7 +444,8 @@ export async function loadProductByIdOrSlug(key: string): Promise<CatalogProduct
     const variantsByProduct = new Map<string, DbVariantRow[]>();
     if (Array.isArray(varRows)) variantsByProduct.set(row.id, varRows as DbVariantRow[]);
 
-    return mapProductRow(row, categories, imagesByProduct, variantsByProduct);
+    const product = mapProductRow(row, categories, imagesByProduct, variantsByProduct);
+    return product && !isHeldProduct(product.slug) && isPubliclyListableProduct(product) ? product : null;
   } catch {
     return null;
   }
@@ -450,7 +454,7 @@ export async function loadProductByIdOrSlug(key: string): Promise<CatalogProduct
 export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null> {
   if (getDbMode() !== 'supabase') return null;
   const cached = readPublicCache<StorefrontCatalog>('luxedge:storefront-catalog:v1');
-  if (cached) return { ...cached, products: cached.products.filter(p => !isHeldProduct(p.slug)) };
+  if (cached) return { ...cached, products: cached.products.filter((p) => !isHeldProduct(p.slug) && isPubliclyListableProduct(p)) };
   const db = getDb();
 
   try {
@@ -544,7 +548,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
 
     const products: CatalogProduct[] = usable
       .map((p) => mapProductRow(p, categories, imagesByProduct, variantsByProduct))
-      .filter((x): x is CatalogProduct => x !== null);
+      .filter((x): x is CatalogProduct => x !== null && isPubliclyListableProduct(x));
 
     const result = { products, categories, source: 'supabase' as const };
     writePublicCache('luxedge:storefront-catalog:v1', result);
