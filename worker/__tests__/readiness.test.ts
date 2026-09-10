@@ -11,6 +11,9 @@ const env = { ASSETS: { fetch: async () => new Response('{}') } };
 describe('editorial release boundaries', () => {
   it('holds only the identified test product and unrelated imported videos', () => {
     expect(isHeldProduct('promo-probe-1788640230930')).toBe(true);
+    expect(isHeldProduct('kong-classic-durable-natural-rubber-dog-toy')).toBe(true);
+    expect(isHeldProduct('adjustable-nylon-horse-halter-lead-rope')).toBe(true);
+    expect(isHeldProduct('horse-grooming-kit-12-piece')).toBe(true);
     expect(isHeldProduct('dog-bed')).toBe(false);
     expect(isHeldMedia('05-05-hollow-crystal-sphere')).toBe(true);
     expect(isHeldMedia('a-reviewed-dog-guide')).toBe(false);

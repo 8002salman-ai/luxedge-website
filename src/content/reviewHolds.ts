@@ -16,6 +16,14 @@ const heldMedia = new Set([
 const heldBlog = new Set(['grooming-routine-long-haired-pets']);
 export function isHeldMedia(slug: string): boolean { return heldMedia.has(slug); }
 export function isHeldBlog(slug: string): boolean { return heldBlog.has(slug); }
+const heldProduct = new Set([
+  'promo-probe-1788640230930',
+  // Withheld until independently verified product facts replace thin or
+  // contradictory supplier-derived copy. CMS/admin records stay intact.
+  'kong-classic-durable-natural-rubber-dog-toy',
+  'adjustable-nylon-horse-halter-lead-rope',
+  'horse-grooming-kit-12-piece',
+]);
 export function isHeldProduct(slug?: string | null): boolean {
-  return slug === 'promo-probe-1788640230930';
+  return !!slug && heldProduct.has(slug);
 }
