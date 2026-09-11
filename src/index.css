@@ -37,20 +37,32 @@ input[type='submit'],
  */
 
 :root {
-  /* ── Palette (Luxedge blue identity — smoky charcoal variant) ── */
-  --color-luxe-black: #1b1f27;        /* smoky charcoal — text & primary */
-  --color-luxe-dark: #242936;         /* deep smoky                      */
-  --color-luxe-charcoal: #3d4350;     /* muted smoky for surfaces        */
-  --color-luxe-gray: #6b7280;         /* body secondary text             */
-  --color-luxe-silver: #e5e7eb;       /* hairline borders                */
-  --color-luxe-gold: #1769d1;         /* bright ecommerce blue accent    */
-  --color-luxe-gold-light: #2f80ed;   /* hover blue                      */
-  --color-luxe-gold-dark: #0d4fa8;    /* deep blue hover                 */
-  --color-luxe-gold-soft: #eef2f7;    /* blue-gray tint background       */
-  --color-luxe-cream: #f7f7f8;        /* neutral smoke section bg        */
-  --color-luxe-white: #ffffff;
-  --color-luxe-light: #f4f5f7;        /* neutral smoke section bg        */
-  --color-luxe-red: #dc2626;
+  /* ── Luxedge Shared Design Tokens ── */
+  --luxedge-green: #1E4636;
+  --luxedge-green-dark: #143023;
+  --luxedge-green-soft: #EBF3EE;
+  --luxedge-cream: #FAF8F5;
+  --luxedge-surface: #FFFFFF;
+  --luxedge-border: #E5E7EB;
+  --luxedge-text: #111827;
+  --luxedge-muted: #6B7280;
+  --luxedge-gold: #C5A880;
+  --luxedge-gold-dark: #A8895E;
+
+  /* ── Core Semantic Storefront & Admin Mappings ── */
+  --color-luxe-black: #111827;        /* charcoal black — text & primary */
+  --color-luxe-dark: #1F2937;         /* deep dark surface               */
+  --color-luxe-charcoal: #374151;     /* muted charcoal for borders/icons*/
+  --color-luxe-gray: #6B7280;         /* body secondary text             */
+  --color-luxe-silver: #E5E7EB;       /* hairline borders                */
+  --color-luxe-gold: #1E4636;         /* Deep Luxedge Green brand accent */
+  --color-luxe-gold-light: #285A46;   /* hover green                     */
+  --color-luxe-gold-dark: #143023;    /* deep green active/hover         */
+  --color-luxe-gold-soft: #EBF3EE;    /* soft green tint background      */
+  --color-luxe-cream: #FAF8F5;        /* warm cream section bg           */
+  --color-luxe-white: #FFFFFF;
+  --color-luxe-light: #FAF8F5;        /* warm light surface bg           */
+  --color-luxe-red: #DC2626;
 
   /* ── Semantic ── */
   --color-bg-primary: var(--color-luxe-white);
@@ -93,35 +105,46 @@ input[type='submit'],
   --font-serif: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
   --font-brand: 'Space Grotesk Variable', var(--font-sans);
 
-  --color-sale: #dc2626;
-  --color-sale-bg: #fef2f2;
-  --color-star: #f59e0b;
+  --color-sale: #DC2626;
+  --color-sale-bg: #FEF2F2;
+  --color-star: #F59E0B;
 
-  --color-luxe-black: #1b1f27;
-  --color-luxe-dark: #242936;
-  --color-luxe-charcoal: #3d4350;
-  --color-luxe-gray: #6b7280;
-  --color-luxe-silver: #e5e7eb;
-  --color-luxe-gold: #1769d1;
-  --color-luxe-gold-light: #2f80ed;
-  --color-luxe-gold-dark: #0d4fa8;
-  --color-luxe-gold-soft: #eef2f7;
-  --color-luxe-cream: #f7f7f8;
-  --color-luxe-white: #ffffff;
-  --color-luxe-light: #f4f5f7;
-  --color-luxe-accent: #f4f5f7;
-  --color-luxe-success: #15803d;
-  --color-luxe-warning: #d97706;
-  --color-luxe-danger: #dc2626;
-  --color-luxe-info: #0891b2;
+  /* Shared Luxedge Brand Tokens */
+  --color-luxedge-green: #1E4636;
+  --color-luxedge-green-dark: #143023;
+  --color-luxedge-green-soft: #EBF3EE;
+  --color-luxedge-cream: #FAF8F5;
+  --color-luxedge-surface: #FFFFFF;
+  --color-luxedge-border: #E5E7EB;
+  --color-luxedge-text: #111827;
+  --color-luxedge-muted: #6B7280;
+  --color-luxedge-gold: #C5A880;
 
-  --shadow-gold: 0 8px 30px -8px rgb(37 99 235 / 0.35);
+  --color-luxe-black: #111827;
+  --color-luxe-dark: #1F2937;
+  --color-luxe-charcoal: #374151;
+  --color-luxe-gray: #6B7280;
+  --color-luxe-silver: #E5E7EB;
+  --color-luxe-gold: #1E4636;
+  --color-luxe-gold-light: #285A46;
+  --color-luxe-gold-dark: #143023;
+  --color-luxe-gold-soft: #EBF3EE;
+  --color-luxe-cream: #FAF8F5;
+  --color-luxe-white: #FFFFFF;
+  --color-luxe-light: #FAF8F5;
+  --color-luxe-accent: #FAF8F5;
+  --color-luxe-success: #15803D;
+  --color-luxe-warning: #D97706;
+  --color-luxe-danger: #DC2626;
+  --color-luxe-info: #0891B2;
 
-  /* Admin tool palette (unchanged from before) */
-  --color-admin-bg: #f8fafc;
-  --color-admin-sidebar: #1e293b;
-  --color-admin-primary: #3b82f6;
-  --color-admin-primary-dark: #2563eb;
+  --shadow-gold: 0 8px 30px -8px rgb(30 70 54 / 0.25);
+
+  /* Admin tool palette aligned to Luxedge Deep Green brand */
+  --color-admin-bg: #FAF8F5;
+  --color-admin-sidebar: #0F231B;
+  --color-admin-primary: #1E4636;
+  --color-admin-primary-dark: #143023;
 }
 
 /* ── Base ── */
@@ -150,11 +173,11 @@ html {
 body {
   font-family: var(--font-sans);
   color: var(--color-text-primary);
-  background-color: var(--color-luxe-cream);
+  background-color: var(--luxedge-cream, #FAF8F5);
   background-image:
-    radial-gradient(circle at 12% 0%, rgba(148, 163, 184, 0.10), transparent 32%),
-    radial-gradient(circle at 88% 18%, rgba(100, 116, 139, 0.08), transparent 30%),
-    linear-gradient(180deg, #f7f8fa 0%, #f2f4f6 100%);
+    radial-gradient(circle at 12% 0%, rgba(30, 70, 54, 0.04), transparent 32%),
+    radial-gradient(circle at 88% 18%, rgba(197, 168, 128, 0.05), transparent 30%),
+    linear-gradient(180deg, #FAF8F5 0%, #F5F2EC 100%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

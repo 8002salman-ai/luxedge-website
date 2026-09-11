@@ -18,14 +18,14 @@ export default function CookieConsent() {
         <p className="text-sm leading-relaxed text-luxe-white/85">
           We use optional cookies for analytics and personalized advertising only after you accept.
           See our{' '}
-          <Link to="/privacy" className="text-blue-400 underline underline-offset-2 hover:text-blue-300">Privacy Policy</Link>.
+          <Link to="/privacy" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Privacy Policy</Link>.
           {' '}Learn how{' '}
-          <a href="https://business.safety.google/privacy/" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline underline-offset-2 hover:text-blue-300">Google uses data</a>{' '}
+          <a href="https://business.safety.google/privacy/" target="_blank" rel="noopener noreferrer" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Google uses data</a>{' '}
           when you use its partner sites.
         </p>
         <div className="mt-4 flex items-center gap-2.5">
           <button onClick={() => decide('accepted')}
-            className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">
+            className="flex-1 px-4 py-2.5 bg-[#1E4636] hover:bg-[#143023] text-white text-sm font-semibold rounded-xl transition-colors">
             Accept All
           </button>
           <button onClick={() => decide('declined')}

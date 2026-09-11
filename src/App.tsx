@@ -363,8 +363,48 @@ interface Ctx {
   freeShippingEnabled: boolean;
   freeShippingThreshold: number;
 }
-const AC = createContext<Ctx | null>(null);
-export function useApp() { const c = useContext(AC); if (!c) throw new Error('no ctx'); return c; }
+const defaultAppContext: Ctx = {
+  user: null,
+  cart: [],
+  products: [],
+  users: [],
+  reviews: [],
+  categories: [],
+  blogs: [],
+  setBlogs: () => {},
+  reloadBlogs: async () => {},
+  login: async () => null,
+  guestLogin: () => {},
+  logout: () => {},
+  signup: async () => null,
+  changePassword: async () => ({ ok: false, msg: '' }),
+  updateAdminProfile: () => {},
+  addToCart: () => {},
+  removeFromCart: () => {},
+  updateQty: () => {},
+  clearCart: () => {},
+  setProducts: () => {},
+  setUsers: () => {},
+  setReviews: () => {},
+  setCategories: () => {},
+  cartOpen: false,
+  openCart: () => {},
+  closeCart: () => {},
+  notif: null,
+  notify: () => {},
+  merchStats: new Map(),
+  coupon: null,
+  applyCoupon: () => null,
+  removeCoupon: () => {},
+  freeShippingEnabled: false,
+  freeShippingThreshold: 50,
+};
+
+const AC = createContext<Ctx>(defaultAppContext);
+export function useApp(): Ctx {
+  const c = useContext(AC);
+  return c || defaultAppContext;
+}
 
 // Cart persistence uses the catalog-safe v2 key (legacy demo-era payload is
 // purged on load — Phase 4E.2A hotfix behavior, kept on luxedge-v2).
@@ -1340,7 +1380,7 @@ function CheckoutLayout({ children }: { children: ReactNode }) {
             <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="h-10 w-auto transition-transform duration-300 group-hover:scale-105" />
             <span className="flex flex-col leading-none">
               <span className="font-brand text-base font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
-              <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
+              <span className="hidden sm:block text-[7px] font-bold tracking-[0.22em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
             </span>
           </Link>
           <div className="flex items-center gap-1 sm:gap-3">
@@ -3337,13 +3377,17 @@ function LoginPage() {
       {/* Ambient glows — soft blue, light theme */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
       <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #1E4636 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
-          <Link to="/" className="inline-flex items-center justify-center group">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
+          <Link to="/" className="inline-flex items-center gap-3 group" aria-label="Luxedge home">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-12 sm:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+            <span className="flex flex-col leading-none text-left">
+              <span className="font-brand text-2xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
+              <span className="text-[8px] font-bold tracking-[0.22em] text-[#1E4636] mt-1">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+            </span>
           </Link>
         </div>
 
@@ -3456,13 +3500,17 @@ function SignupPage() {
       {/* Ambient glows — soft blue, light theme */}
       <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-luxe-gold/10 blur-[120px]" />
       <div className="absolute -bottom-40 -right-24 w-[28rem] h-[28rem] rounded-full bg-luxe-gold/10 blur-[140px]" />
-      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #2563eb 1px, transparent 0)', backgroundSize: '30px 30px' }} />
+      <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #1E4636 1px, transparent 0)', backgroundSize: '30px 30px' }} />
 
       <div className="relative w-full max-w-md animate-fade-in-up">
         {/* Logo — perfectly centered above card */}
         <div className="flex justify-center mb-7">
-          <Link to="/" className="inline-flex items-center justify-center group">
-            <img src="/luxedge-lockup.svg" alt="Luxedge" className="h-14 sm:h-16 w-auto drop-shadow-[0_6px_24px_rgba(37,99,235,0.18)] transition-transform group-hover:scale-105" />
+          <Link to="/" className="inline-flex items-center gap-3 group" aria-label="Luxedge home">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-12 sm:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+            <span className="flex flex-col leading-none text-left">
+              <span className="font-brand text-2xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
+              <span className="text-[8px] font-bold tracking-[0.22em] text-[#1E4636] mt-1">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+            </span>
           </Link>
         </div>
 
@@ -3548,13 +3596,22 @@ function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <ShieldTick strokeWidth={1.5} className="text-luxe-gold" size={28} />
-          <span className="text-xl font-bold">Admin Login</span>
+    <div className="min-h-screen bg-[#0F231B] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 border border-[#1E4636]/10">
+        <div className="flex flex-col items-center justify-center mb-6 text-center">
+          <Link to="/" className="flex items-center gap-2.5 mb-4 group" aria-label="Luxedge home">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
+            <span className="flex flex-col leading-none text-left">
+              <span className="font-brand text-xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
+              <span className="text-[7.5px] font-bold tracking-[0.22em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+            </span>
+          </Link>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF3EE] text-[#1E4636] text-xs font-semibold mb-1">
+            <ShieldTick strokeWidth={1.5} size={15} />
+            <span>Admin Console</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Authorized store management access</p>
         </div>
-        <p className="text-center text-sm text-gray-500 mb-6">Secure access to admin dashboard</p>
 
         {!isSupabaseConfigured() && (
           <div className="p-3 mb-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
@@ -3643,7 +3700,7 @@ function PrivacyPage() {
       <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Respond to inquiries and operate support tools, including the Luxie AI assistant.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payments"><p>Online payment processing is provided by a third-party payment processor when checkout is enabled. Luxedge does not store complete credit or debit card numbers on its servers. If payment is not enabled, checkout does not create a paid order and no payment is taken.</p></LS>
       <LS t="Cookies and Analytics"><p>Our website uses essential browser storage and similar technologies to keep the cart, maintain an account session, and remember preferences. With your consent, we may load analytics and advertising technologies to understand traffic and show relevant ads. You may decline non-essential analytics and advertising cookies through the consent prompt or your browser settings, although some features may work differently.</p></LS>
-      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-700">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
+      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-[#1E4636] underline hover:text-[#143023]">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-[#1E4636] underline hover:text-[#143023]">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
       <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, analytics services, and AI service providers that help operate the Luxie assistant.</li><li>AI assistant messages may be sent to the configured AI provider and may be stored in our CRM for support and quality purposes. Please do not include passwords, payment details, health records, or other sensitive information in chat messages.</li><li>These providers receive only the information necessary to perform their services and may process it under their own privacy policies.</li></ul></LS>
       <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
       <LS t="Your Privacy Choices"><p>Depending on your location, you may request access to, correction of, or deletion of personal information, ask us to correct inaccurate information, or opt out of promotional communications. We do not sell personal information. To make a privacy request, email hello@luxedge.us with enough information for us to verify and respond to your request.</p><p className="mt-2">Where required by applicable law, you may also have rights to opt out of targeted advertising or certain sharing of information. We will not discriminate against you for exercising rights provided by law.</p></LS>

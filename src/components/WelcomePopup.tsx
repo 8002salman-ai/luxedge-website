@@ -56,7 +56,7 @@ export default function WelcomePopup() {
 
   if (!open) return pathname === '/' || pathname === '/shop' ? (
     <div className="px-4 py-4 text-center bg-white border-t border-gray-100">
-      <button type="button" onClick={() => setOpen(true)} className="text-sm text-blue-700 underline underline-offset-4">
+      <button type="button" onClick={() => setOpen(true)} className="text-sm text-[#1E4636] underline underline-offset-4">
         Get a first-order discount code
       </button>
     </div>
@@ -68,7 +68,7 @@ export default function WelcomePopup() {
       <div className="absolute inset-0 bg-luxe-black/70 backdrop-blur-sm" onClick={dismiss} />
       <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header band */}
-        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-6 pt-7 pb-6 text-center relative">
+        <div className="bg-gradient-to-r from-[#143023] via-[#1E4636] to-[#285A46] px-6 pt-7 pb-6 text-center relative">
           <button onClick={dismiss} aria-label="Close" className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors">
             <X size={16} weight="bold" />
           </button>
@@ -76,7 +76,7 @@ export default function WelcomePopup() {
             <Gift size={26} className="text-white" />
           </div>
           <h2 className="text-xl font-extrabold text-white tracking-tight">Welcome to Luxedge! 🐾</h2>
-          <p className="text-[13px] text-blue-100 mt-1.5">Get <span className="font-bold text-white">10% off</span> your first order</p>
+          <p className="text-[13px] text-emerald-100 mt-1.5">Get <span className="font-bold text-white">10% off</span> your first order</p>
         </div>
 
         <div className="px-6 py-6">
@@ -103,12 +103,12 @@ export default function WelcomePopup() {
                       setMsg('Copy was blocked — select the code and copy it manually.');
                     }
                   }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors">
+                  className="px-3 py-1.5 bg-[#1E4636] hover:bg-[#143023] text-white text-xs font-semibold rounded-lg transition-colors">
                   Copy
                 </button>
               </div>
               <p className="text-[11px] text-gray-400 mt-2">{msg || 'One-time use · applies automatically at checkout'}</p>
-              <button onClick={dismiss} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-bold rounded-xl transition-all">
+              <button onClick={dismiss} className="mt-4 w-full py-3 bg-gradient-to-r from-[#1E4636] to-[#143023] hover:from-[#285A46] hover:to-[#1E4636] text-white text-sm font-bold rounded-xl transition-all">
                 Start Shopping →
               </button>
             </div>
@@ -118,11 +118,11 @@ export default function WelcomePopup() {
               <input
                 type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
                 onKeyDown={(e) => { if (e.key === 'Enter') void claim(); }}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-[#1E4636] transition-all"
               />
               {state === 'error' && <p className="text-[12px] text-red-600 mt-2">{msg}</p>}
               <button onClick={claim} disabled={state === 'busy'}
-                className="mt-3 w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+                className="mt-3 w-full py-3 bg-gradient-to-r from-[#1E4636] to-[#143023] hover:from-[#285A46] hover:to-[#1E4636] disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2">
                 {state === 'busy' ? (
                   <><ArrowCounterClockwise size={16} className="animate-spin" /> Claiming…</>
                 ) : (
@@ -130,7 +130,7 @@ export default function WelcomePopup() {
                 )}
               </button>
               <label className="mt-3 flex items-start gap-2 text-[11px] leading-snug text-gray-500 cursor-pointer">
-                <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} className="mt-0.5 accent-blue-600" />
+                <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} className="mt-0.5 accent-[#1E4636]" />
                 <span>I would like to receive Luxedge product updates and offers. You can unsubscribe anytime.</span>
               </label>
               <p className="text-[11px] text-gray-400 mt-2 text-center flex items-center justify-center gap-1">

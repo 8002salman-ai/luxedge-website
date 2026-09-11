@@ -64,7 +64,7 @@ export default function AIAssistant() {
     <>
       {!open && (
         <button onClick={() => setOpen(true)} aria-label="Open AI assistant"
-          className="fixed bottom-5 right-5 z-[125] w-14 h-14 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-500/30 flex items-center justify-center transition-all hover:scale-110 group">
+          className="fixed bottom-5 right-5 z-[125] w-14 h-14 rounded-full bg-gradient-to-br from-[#1E4636] to-[#143023] hover:from-[#285A46] hover:to-[#1E4636] text-white shadow-xl shadow-emerald-950/30 flex items-center justify-center transition-all hover:scale-110 group">
           <img src="/luxedge-mark.png" alt="Luxedge" className="w-9 h-9 rounded-full bg-white object-contain p-1" />
           <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white" />
         </button>
@@ -73,13 +73,13 @@ export default function AIAssistant() {
       {open && (
         <div className="fixed bottom-5 right-5 z-[125] w-[360px] max-w-[calc(100vw-2rem)] h-[480px] max-h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-100">
           {/* Header */}
-          <div className="px-4 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 flex items-center gap-2.5 shrink-0">
+          <div className="px-4 py-3 bg-gradient-to-r from-[#143023] via-[#1E4636] to-[#285A46] flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-full bg-white border border-white/40 flex items-center justify-center overflow-hidden">
               <img src="/luxedge-mark.png" alt="Luxedge" className="w-full h-full object-contain p-1" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-[13px] font-bold leading-tight">Luxie — AI Assistant</p>
-              <p className="text-[10px] text-blue-100 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Online · answers instantly</p>
+              <p className="text-[10px] text-emerald-100 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-300" /> Online · answers instantly</p>
             </div>
             <button onClick={() => setOpen(false)} aria-label="Close assistant" className="w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors">
               <X size={14} weight="bold" />
@@ -92,7 +92,7 @@ export default function AIAssistant() {
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
                   m.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm'
+                    ? 'bg-[#1E4636] text-white rounded-br-sm'
                     : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm'
                 }`}>
                   {m.content}
@@ -114,10 +114,10 @@ export default function AIAssistant() {
               value={input} onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void send(); }}
               placeholder="Ask about products, shipping, returns…"
-              className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+              className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-[#1E4636] transition-all"
             />
             <button onClick={send} disabled={busy || !input.trim()} aria-label="Send"
-              className="w-10 h-10 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white flex items-center justify-center transition-colors shrink-0">
+              className="w-10 h-10 rounded-xl bg-[#1E4636] hover:bg-[#143023] disabled:opacity-40 text-white flex items-center justify-center transition-colors shrink-0">
               <PaperPlaneRight size={17} weight="fill" />
             </button>
           </div>

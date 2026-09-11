@@ -131,7 +131,7 @@ export default function CampaignLanding() {
     <div className="min-h-screen bg-[#0b1120]">
       {/* Hero */}
       <section className="relative overflow-hidden bg-[#0b1120]">
-        <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full bg-[#1E4636]/20 blur-3xl" aria-hidden />
         <div className="relative mx-auto max-w-5xl px-4 py-12 sm:py-16">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-300">Luxedge · Real promotional campaign</p>
           <h1 className="mt-3 font-serif text-3xl font-black text-white sm:text-5xl">{fullTitle}</h1>
@@ -150,7 +150,7 @@ export default function CampaignLanding() {
         {phase.phase === 'closed' && (
           <div className="rounded-2xl bg-white/5 p-8 text-center ring-1 ring-white/10">
             <p className="text-lg font-black text-white">This campaign is not open right now.</p>
-            <Link to="/shop" className="mt-4 inline-block rounded-full bg-blue-600 px-6 py-2.5 text-xs font-bold text-white">Browse the shop</Link>
+            <Link to="/shop" className="mt-4 inline-block rounded-full bg-[#1E4636] px-6 py-2.5 text-xs font-bold text-white">Browse the shop</Link>
           </div>
         )}
 
@@ -178,7 +178,7 @@ export default function CampaignLanding() {
                 {st.referralEnabled && <p className="mt-1.5 text-[11px] text-emerald-100/50">Share and both of you are eligible for the campaign reward.</p>}
               </div>
             )}
-            <Link to="/shop" className="mt-6 inline-block rounded-full bg-blue-600 px-6 py-2.5 text-xs font-bold text-white">Continue shopping</Link>
+            <Link to="/shop" className="mt-6 inline-block rounded-full bg-[#1E4636] px-6 py-2.5 text-xs font-bold text-white">Continue shopping</Link>
           </div>
         )}
 
@@ -196,7 +196,7 @@ export default function CampaignLanding() {
                   <div className="flex flex-wrap gap-2">
                     {petTypes.map((p) => (
                       <button key={p} type="button" onClick={() => setPetType(p)}
-                        className={`rounded-full px-4 py-2 text-xs font-bold capitalize transition ${petType === p ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        className={`rounded-full px-4 py-2 text-xs font-bold capitalize transition ${petType === p ? 'bg-[#1E4636] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                         {p === 'other' ? 'Other' : p}
                       </button>
                     ))}
@@ -215,7 +215,7 @@ export default function CampaignLanding() {
                   Send me occasional Luxedge pet news (optional — your claim confirmation is sent regardless).
                 </label>
                 {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700" role="alert">{error}</p>}
-                <button disabled={busy} className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-50">
+                <button disabled={busy} className="w-full rounded-xl bg-[#1E4636] py-3.5 text-sm font-black text-white hover:bg-[#143023] disabled:opacity-50">
                   {busy ? 'Reserving…' : selected ? 'CLAIM THIS GIFT' : 'CLAIM MY GIFT'}
                 </button>
                 <p className="text-center text-[10px] text-gray-400">

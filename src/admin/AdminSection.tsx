@@ -146,10 +146,10 @@ function AdminLayout({ children }: { children: ReactNode }) {
 
   const Sidebar = ({ mobile }: { mobile?: boolean }) => (
     <aside className={`flex flex-col shrink-0 ${mobile ? 'w-full h-full' : 'w-60 h-screen sticky top-0 hidden lg:flex'}`}
-      style={{ background: 'linear-gradient(180deg, #0b1120 0%, #111c34 55%, #0b1120 100%)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.04)' }}>
+      style={{ background: 'linear-gradient(180deg, #0f231b 0%, #173629 55%, #0f231b 100%)', boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.05)' }}>
       {/* Brand */}
       <div className="px-3.5 py-4 border-b border-white/[0.06] flex items-center gap-2.5">
-        <img src="/luxedge-mark.png" alt="Luxedge" className="w-9 h-9 rounded-lg object-contain shadow-lg shadow-blue-900/40" />
+        <img src="/luxedge-mark.png" alt="Luxedge" className="w-9 h-9 rounded-lg object-contain shadow-lg shadow-emerald-950/40" />
         <div className="leading-tight">
           <span className="font-bold text-sm text-white tracking-tight block">Luxedge</span>
           <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-medium">Admin Console</span>
@@ -170,8 +170,8 @@ function AdminLayout({ children }: { children: ReactNode }) {
                     className={`group relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[12px] font-medium transition-all duration-200 ${
                       isActive ? 'text-white' : 'text-slate-400 hover:text-white'
                     }`}
-                    style={isActive ? { background: 'linear-gradient(90deg, rgba(59,130,246,0.22), rgba(139,92,246,0.10))', boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.25)' } : undefined}>
-                    {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: 'linear-gradient(180deg,#60a5fa,#a78bfa)' }} />}
+                    style={isActive ? { background: 'linear-gradient(90deg, rgba(30,70,54,0.55), rgba(46,95,73,0.30))', boxShadow: 'inset 0 0 0 1px rgba(197,168,128,0.35)' } : undefined}>
+                    {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ background: 'linear-gradient(180deg,#34d399,#C5A880)' }} />}
                     <span className={`w-6.5 h-6.5 min-w-[26px] min-h-[26px] w-[26px] h-[26px] rounded-md flex items-center justify-center text-white transition-all duration-200 ${isActive ? 'scale-105' : 'opacity-90 group-hover:scale-105 group-hover:opacity-100'}`}
                       style={{ background: l.g, boxShadow: isActive ? `0 2px 10px ${l.dot}40` : '0 1px 4px rgba(0,0,0,0.3)' }}>
                       <Icon size={13} weight="bold" />
@@ -218,16 +218,16 @@ function AdminLayout({ children }: { children: ReactNode }) {
             </span>
             <button className="relative p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors">
               <ShieldCheck size={16} />
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)' }} />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg,#1E4636,#C5A880)' }} />
             </button>
             <div className="flex items-center gap-2 pl-1.5 border-l border-gray-200">
               <span className="text-xs font-medium text-gray-700 hidden sm:block">{user?.name || 'Admin'}</span>
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20 ring-2 ring-white"
-                style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}>{String(user?.name || 'A').charAt(0).toUpperCase()}</div>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md shadow-emerald-950/20 ring-2 ring-white"
+                style={{ background: 'linear-gradient(135deg, #1E4636, #2d634d)' }}>{String(user?.name || 'A').charAt(0).toUpperCase()}</div>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto min-w-0 p-3 pb-24 lg:p-5" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)' }}>{children}</main>
+        <main className="flex-1 overflow-y-auto min-w-0 p-3 pb-24 lg:p-5" style={{ background: 'linear-gradient(180deg, #FAF8F5 0%, #F5F2EC 100%)' }}>{children}</main>
 
         {/* Mobile bottom navigation — the everyday seller tasks stay one tap
             away; the full menu lives behind "More" (drawer). ≥52px tap
@@ -6185,7 +6185,7 @@ class AdminErrorBoundary extends Component<{ children: ReactNode }, { err: strin
             <Warning size={32} className="mx-auto mb-4 text-red-500" />
             <h1 className="text-lg font-bold text-gray-900 mb-2">Something went wrong in the admin area</h1>
             <p className="text-sm text-gray-500 mb-4">{this.state.err}</p>
-            <a href="#/admin" className="inline-block px-5 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white text-sm font-semibold rounded-xl transition-colors">Retry</a>
+            <a href="/admin" className="inline-block px-5 py-2.5 bg-[#1E4636] hover:bg-[#143023] text-white text-sm font-semibold rounded-xl transition-colors">Retry</a>
           </div>
         </div>
       );
