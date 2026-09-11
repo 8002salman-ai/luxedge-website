@@ -798,7 +798,7 @@ function Header() {
 
           {/* Brand Logo */}
           <Link to="/" className="flex items-center gap-3 shrink-0 group">
-            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
+            <img src="/images/redesign/luxedge-emblem.svg" alt="Luxedge" className="h-10 sm:h-11 w-auto transition-transform duration-300 group-hover:scale-105" />
             <span className="flex flex-col leading-none">
               <span className="font-serif text-xl sm:text-2xl font-bold tracking-[0.14em] text-[#111827]">LUXEDGE</span>
               <span className="text-[7.5px] sm:text-[8px] font-bold tracking-[0.24em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
@@ -1002,7 +1002,7 @@ function Footer() {
           {/* Brand Column */}
           <div className="lg:col-span-4 space-y-4">
             <Link to="/" className="flex items-center gap-3 group w-fit">
-              <img src="/luxedge-mark.png" alt="Luxedge" className="w-11 h-11 transition-transform group-hover:scale-105" />
+              <img src="/images/redesign/luxedge-emblem.svg" alt="Luxedge" className="w-10 h-10 transition-transform group-hover:scale-105" />
               <span className="flex flex-col leading-none">
                 <span className="font-serif text-2xl font-bold tracking-[0.14em] text-white">LUXEDGE</span>
                 <span className="text-[7.5px] tracking-[0.24em] text-[#C5A880] mt-1 font-bold">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
@@ -1957,7 +1957,7 @@ function ProductDetailPage() {
 // STORE PAGES
 // ============================================================================
 // Scroll-reveal wrapper — fades content in as it enters the viewport
-function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+export function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -2047,26 +2047,121 @@ function HomePage() {
     });
   }, [products]);
 
-  // Select 5 real bestselling products representing the core animal taxonomy
+  // Initial curated bestsellers so the section renders immediately on SSR/first paint with 0ms delay
+  const defaultBestsellers = [
+    {
+      id: 'b4578bca-f04b-4b15-9a84-0a377755ae24',
+      slug: 'stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs',
+      name: 'Stainless Steel Pet Water Fountain — Filtered Running Water',
+      price: 51.95,
+      originalPrice: 59.95,
+      image: '/images/redesign/products/dog-fountain.jpg',
+      badge: 'Bestseller'
+    },
+    {
+      id: 'cozy-cat-nest-bed-round-plush-mat',
+      slug: 'cozy-cat-nest-bed-round-plush-mat',
+      name: 'Cozy Round Plush Cat Bed & Sleeping Cushion',
+      price: 29.95,
+      originalPrice: 36.95,
+      image: '/images/redesign/products/cat-bed.jpg',
+      badge: 'Popular'
+    },
+    {
+      id: 'f8e12ff5-b9f1-4db5-b82b-8ef94e43e264',
+      slug: 'outdoor-hanging-bird-feeder',
+      name: 'Outdoor Hanging Bird Feeder — Weather-Resistant Seed Station',
+      price: 39.95,
+      originalPrice: 44.95,
+      image: '/images/redesign/products/bird-feeder.jpg',
+      badge: 'Wild Bird'
+    },
+    {
+      id: 'f6859ec4-b5a5-4250-8f5b-7957c9a810dd',
+      slug: 'himalayan-pink-salt-licks-for-horses',
+      name: 'Himalayan Pink Salt Licks for Horses — Essential Trace Minerals',
+      price: 18.95,
+      originalPrice: 24.95,
+      image: '/images/redesign/products/horse-salt-lick.jpg',
+      badge: 'Equine Choice'
+    },
+    {
+      id: 'himalayan-salt-rock-for-cattle',
+      slug: 'himalayan-salt-rock-for-cattle',
+      name: 'Himalayan Pink Salt Block for Cattle — 30 lb Essential Minerals',
+      price: 49.95,
+      originalPrice: 59.95,
+      image: '/images/redesign/products/cattle-salt-block.jpg',
+      badge: 'Farm Choice'
+    }
+  ];
+
+  // Map to live products when catalog data is present
   const bestSellers = useMemo(() => {
     const active = products.filter(p => p.isActive);
-    const findBySlug = (slug: string) => active.find(p => p.slug === slug);
-    const findByCat = (catName: string, fallbackSlug: string) => 
-      findBySlug(fallbackSlug) || active.find(p => p.category?.toLowerCase().includes(catName.toLowerCase()) && p.images?.length > 0) || active[0];
+    if (active.length === 0) return defaultBestsellers;
 
-    const dog = findBySlug('stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs') || findByCat('dog', 'dot-turtleneck-dog-bottoming-shirt');
-    const cat = findBySlug('collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube') || findBySlug('cozy-cat-nest-bed-round-plush-mat') || findByCat('cat', 'cozy-cat-nest-bed-round-plush-mat');
-    const bird = findBySlug('outdoor-hanging-bird-feeder') || findBySlug('solar-bird-bath-fountain') || findByCat('bird', 'outdoor-hanging-bird-feeder');
-    const horse = findBySlug('horse-grooming-kit-12-piece') || findBySlug('himalayan-pink-salt-licks-for-horses') || findByCat('horse', 'himalayan-pink-salt-licks-for-horses');
-    const livestock = findBySlug('heavy-duty-cattle-feed-trough-50-gallon') || findBySlug('himalayan-rock-salt-pouches') || findByCat('cattle', 'himalayan-rock-salt-pouches');
+    const findBySlug = (slug: string) => active.find(p => p.slug === slug);
+    const findByCat = (catName: string) => active.find(p => p.category?.toLowerCase().includes(catName.toLowerCase()) && p.images?.length > 0);
+
+    const dog = findBySlug('stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs') || findByCat('dog') || active[0];
+    const cat = findBySlug('collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube') || findByCat('cat') || active[1];
+    const bird = findBySlug('outdoor-hanging-bird-feeder') || findByCat('bird') || active[2];
+    const horse = findBySlug('himalayan-pink-salt-licks-for-horses') || findByCat('horse') || active[3];
+    const livestock = findBySlug('heavy-duty-cattle-feed-trough-50-gallon') || findByCat('cattle') || active[4];
 
     return [
-      { product: dog, badge: 'Bestseller' },
-      { product: cat, badge: 'Popular' },
-      { product: bird, badge: 'Wild Bird' },
-      { product: horse, badge: 'Equine' },
-      { product: livestock, badge: 'Farm Choice' },
-    ].filter(item => item.product && item.product.id);
+      {
+        id: dog?.id || defaultBestsellers[0].id,
+        slug: dog?.slug || defaultBestsellers[0].slug,
+        name: dog?.name || defaultBestsellers[0].name,
+        price: dog?.price || defaultBestsellers[0].price,
+        originalPrice: dog?.originalPrice || defaultBestsellers[0].originalPrice,
+        image: (dog && firstUsableImage(dog)) || defaultBestsellers[0].image,
+        badge: 'Bestseller',
+        rawProduct: dog
+      },
+      {
+        id: cat?.id || defaultBestsellers[1].id,
+        slug: cat?.slug || defaultBestsellers[1].slug,
+        name: cat?.name || defaultBestsellers[1].name,
+        price: cat?.price || defaultBestsellers[1].price,
+        originalPrice: cat?.originalPrice || defaultBestsellers[1].originalPrice,
+        image: (cat && firstUsableImage(cat)) || defaultBestsellers[1].image,
+        badge: 'Popular',
+        rawProduct: cat
+      },
+      {
+        id: bird?.id || defaultBestsellers[2].id,
+        slug: bird?.slug || defaultBestsellers[2].slug,
+        name: bird?.name || defaultBestsellers[2].name,
+        price: bird?.price || defaultBestsellers[2].price,
+        originalPrice: bird?.originalPrice || defaultBestsellers[2].originalPrice,
+        image: (bird && firstUsableImage(bird)) || defaultBestsellers[2].image,
+        badge: 'Wild Bird',
+        rawProduct: bird
+      },
+      {
+        id: horse?.id || defaultBestsellers[3].id,
+        slug: horse?.slug || defaultBestsellers[3].slug,
+        name: horse?.name || defaultBestsellers[3].name,
+        price: horse?.price || defaultBestsellers[3].price,
+        originalPrice: horse?.originalPrice || defaultBestsellers[3].originalPrice,
+        image: (horse && firstUsableImage(horse)) || defaultBestsellers[3].image,
+        badge: 'Equine Choice',
+        rawProduct: horse
+      },
+      {
+        id: livestock?.id || defaultBestsellers[4].id,
+        slug: livestock?.slug || defaultBestsellers[4].slug,
+        name: livestock?.name || defaultBestsellers[4].name,
+        price: livestock?.price || defaultBestsellers[4].price,
+        originalPrice: livestock?.originalPrice || defaultBestsellers[4].originalPrice,
+        image: (livestock && firstUsableImage(livestock)) || defaultBestsellers[4].image,
+        badge: 'Farm Choice',
+        rawProduct: livestock
+      }
+    ];
   }, [products]);
 
   const handleSubscribe = (e: React.FormEvent) => {
@@ -2323,27 +2418,40 @@ function HomePage() {
 
           {/* 5 Product Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-            {bestSellers.map(({ product, badge }) => {
-              const pImage = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
+            {bestSellers.map((item) => {
+              const pSlug = item.slug;
+              const pImage = item.image || LUXEDGE_IMAGE_FALLBACK;
+              const targetProduct = (item as any).rawProduct || {
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                originalPrice: item.originalPrice,
+                slug: item.slug,
+                images: [item.image],
+                isActive: true,
+                rating: 5,
+                reviews: 12,
+                category: item.badge
+              };
 
               return (
                 <div
-                  key={product.id}
-                  className="group flex flex-col justify-between rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-all relative"
+                  key={item.id}
+                  className="group flex flex-col justify-between rounded-2xl border border-gray-150 bg-white p-3 sm:p-4 shadow-sm hover:shadow-lg transition-all relative"
                 >
                   {/* Top Badges & Wishlist */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900">
-                      {badge}
+                      {item.badge}
                     </span>
-                    <WishlistButton product={product} notify={notify} className="p-1 rounded-full hover:bg-gray-100" />
+                    <WishlistButton product={targetProduct as any} notify={notify} className="p-1 rounded-full hover:bg-gray-100" />
                   </div>
 
                   {/* Product Image */}
-                  <Link to={productPath(product)} className="block aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3">
+                  <Link to={`/product/${pSlug}`} className="block aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3">
                     <img
                       src={pImage}
-                      alt={product.name}
+                      alt={item.name}
                       loading="lazy"
                       onError={onImageError}
                       className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
@@ -2353,18 +2461,18 @@ function HomePage() {
                   {/* Product Info */}
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
-                      <Link to={productPath(product)}>
+                      <Link to={`/product/${pSlug}`}>
                         <h3 className="text-xs sm:text-sm font-semibold text-gray-900 hover:text-[#1E4636] transition-colors line-clamp-2 leading-snug">
-                          {product.name}
+                          {item.name}
                         </h3>
                       </Link>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="font-bold text-sm sm:text-base text-gray-900">
-                          ${Number(product.price).toFixed(2)}
+                          ${Number(item.price).toFixed(2)}
                         </span>
-                        {product.originalPrice > product.price && (
+                        {item.originalPrice > item.price && (
                           <span className="text-xs text-gray-400 line-through">
-                            ${Number(product.originalPrice).toFixed(2)}
+                            ${Number(item.originalPrice).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -2373,8 +2481,8 @@ function HomePage() {
                     {/* Add to Cart Button */}
                     <button
                       onClick={() => {
-                        addToCart(product);
-                        notify(`Added ${product.name.slice(0, 25)}... to cart`);
+                        addToCart(targetProduct as any);
+                        notify(`Added ${item.name.slice(0, 25)}... to cart`);
                       }}
                       className="mt-3 w-full py-2.5 bg-[#1E4636] hover:bg-[#153428] text-white rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow"
                     >
@@ -2398,13 +2506,12 @@ function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
             
             {/* Block 1: A Community of Animal Lovers */}
-            <Reveal className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+            <div className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
               <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
                 <img
                   src="/images/redesign/editorial-community.jpg"
                   alt="Smiling owner hugging golden retriever outdoors"
-                  loading="lazy"
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-cover object-[center_20%] transition-transform duration-500 hover:scale-105"
                 />
               </div>
               <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
@@ -2426,16 +2533,15 @@ function HomePage() {
                   </Link>
                 </div>
               </div>
-            </Reveal>
+            </div>
 
             {/* Block 2: Expert Guides & Tips */}
-            <Reveal delay={60} className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+            <div className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
               <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
                 <img
                   src="/images/redesign/cat-cat.jpg"
                   alt="Gentle domestic cat"
-                  loading="lazy"
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-cover object-center transition-transform duration-500 hover:scale-105"
                 />
               </div>
               <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
@@ -2457,16 +2563,15 @@ function HomePage() {
                   </Link>
                 </div>
               </div>
-            </Reveal>
+            </div>
 
             {/* Block 3: Livestock & Equine Solutions */}
-            <Reveal delay={120} className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+            <div className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
               <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
                 <img
                   src="/images/redesign/editorial-livestock.jpg"
                   alt="Cattle grazing in open farm pasture"
-                  loading="lazy"
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-cover object-[center_60%] transition-transform duration-500 hover:scale-105"
                 />
               </div>
               <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
@@ -2488,7 +2593,7 @@ function HomePage() {
                   </Link>
                 </div>
               </div>
-            </Reveal>
+            </div>
 
           </div>
 
