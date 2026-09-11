@@ -797,11 +797,11 @@ function Header() {
           </button>
 
           {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-3 shrink-0 group">
-            <img src="/images/redesign/luxedge-emblem.svg" alt="Luxedge" className="h-10 sm:h-11 w-auto transition-transform duration-300 group-hover:scale-105" />
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 sm:h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
             <span className="flex flex-col leading-none">
-              <span className="font-serif text-xl sm:text-2xl font-bold tracking-[0.14em] text-[#111827]">LUXEDGE</span>
-              <span className="text-[7.5px] sm:text-[8px] font-bold tracking-[0.24em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+              <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
+              <span className="text-[7px] sm:text-[7.5px] font-bold tracking-[0.22em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
             </span>
           </Link>
 
@@ -1001,10 +1001,12 @@ function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 items-start">
           {/* Brand Column */}
           <div className="lg:col-span-4 space-y-4">
-            <Link to="/" className="flex items-center gap-3 group w-fit">
-              <img src="/images/redesign/luxedge-emblem.svg" alt="Luxedge" className="w-10 h-10 transition-transform group-hover:scale-105" />
+            <Link to="/" className="flex items-center gap-3 group w-fit" aria-label="Luxedge home">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/10 p-1 flex items-center justify-center backdrop-blur-sm border border-white/15 transition-transform group-hover:scale-105">
+                <img src="/luxedge-mark.png" alt="Luxedge" className="w-full h-full object-contain" />
+              </div>
               <span className="flex flex-col leading-none">
-                <span className="font-serif text-2xl font-bold tracking-[0.14em] text-white">LUXEDGE</span>
+                <span className="font-brand text-xl sm:text-2xl font-bold tracking-[0.16em] text-white">LUXEDGE</span>
                 <span className="text-[7.5px] tracking-[0.24em] text-[#C5A880] mt-1 font-bold">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
               </span>
             </Link>
