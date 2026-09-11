@@ -17,7 +17,7 @@ import {
 import Modal from '../components/common/Modal';
 import Popover from '../components/common/Popover';
 import { useApp } from '../App';
-import { getAccessToken, getFreshAccessToken } from '../services/supabase';
+import { getFreshAccessToken, getSession } from '../services/supabase';
 import {
   setDbToken, listProducts, getProduct, createProduct, updateProduct, setProductStatus,
   archiveProduct, hardDeleteProduct, duplicateProduct, saveProductImages, saveProductVariants,
@@ -56,6 +56,7 @@ import {
 } from '../features/catalog/csvImport';
 
 const I = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all';
+const FI = 'w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition-all bg-white h-8 text-gray-700';
 const L = 'block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5';
 const BADGE: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
@@ -690,38 +691,48 @@ export function CatalogProductsPage() {
   if (loading) return <div className="text-center py-20 text-gray-400">Loading catalog…</div>;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Products</h1>
-          <p className="text-sm text-gray-500">{products.length} products · {products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} commerce-ready on storefront · {products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} active but not commerce-ready · {archivedCount} archived</p>
-          {archivedCount > 0 && (
-            <button
-              onClick={() => setFStatus(fStatus === 'archived' ? 'all' : 'archived')}
-              className={`mt-1 inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${fStatus === 'archived' ? 'bg-red-50 text-red-700 border-red-200' : 'text-gray-500 border-gray-200 hover:bg-gray-50'}`}
-              title="Show or hide the archived folder"
-            >
-              {fStatus === 'archived' ? '← Back to all products' : `View archived folder (${archivedCount})`}
-            </button>
-          )}
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 py-0.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-gray-900 leading-none">Products</h1>
+          <span className="text-xs text-gray-300">|</span>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
+            <span className="font-semibold text-gray-800">{products.length} total</span>
+            <span>·</span>
+            <span className="text-emerald-700 font-medium">{products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} storefront</span>
+            <span>·</span>
+            <span className="text-amber-700 font-medium">{products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} pending</span>
+            {archivedCount > 0 && (
+              <>
+                <span>·</span>
+                <button
+                  onClick={() => setFStatus(fStatus === 'archived' ? 'all' : 'archived')}
+                  className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${fStatus === 'archived' ? 'bg-red-50 text-red-700 border-red-200' : 'text-gray-500 border-gray-200 hover:bg-gray-100'}`}
+                  title="Show or hide the archived folder"
+                >
+                  {fStatus === 'archived' ? '← All products' : `Archived (${archivedCount})`}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={autoSeoBulk} disabled={seo.running} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2">
-            <Sparkle size={16} />{seo.running ? `Auto SEO… ${seo.done}/${seo.total}` : 'Auto SEO'}
+        <div className="flex items-center gap-1.5">
+          <button onClick={autoSeoBulk} disabled={seo.running} title="Auto-generate + save SEO for every listed product missing/incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs">
+            <Sparkle size={13} />{seo.running ? `${seo.done}/${seo.total}` : 'Auto SEO'}
           </button>
           <button
             onClick={() => { if (autoPublish === null) return; if (autoPublish) void toggleAutoPublish(false); else setAutoPublishConfirm(true); }}
             disabled={autoPublish === null || autoPublishBusy}
             title={autoPublish ? 'Auto-publish is ON — a saved product that becomes commerce-ready is published automatically. Click to turn off.' : 'When ON, a product saved as commerce-ready is automatically published (status → Active). You will confirm before enabling.'}
-            className={`px-4 py-2 text-white text-sm rounded-lg flex items-center gap-2 disabled:opacity-50 ${autoPublish ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-500 hover:bg-gray-600'}`}
+            className={`px-2.5 py-1.5 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs disabled:opacity-50 ${autoPublish ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-500 hover:bg-gray-600'}`}
           >
-            <Rocket size={16} />{autoPublish === null ? 'Auto-list…' : autoPublish ? 'Auto-list: ON' : 'Auto-list: OFF'}
+            <Rocket size={13} />{autoPublish === null ? 'Auto-list…' : autoPublish ? 'Auto-list: ON' : 'Auto-list: OFF'}
           </button>
-          <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg flex items-center gap-2">
-            <UploadSimple size={16} />CSV Import
+          <button onClick={() => setCsvOpen(true)} title="Import products from a Zeedrop / supplier CSV — saved as drafts" className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs">
+            <UploadSimple size={13} />CSV Import
           </button>
-          <button onClick={() => nav('/admin/products/new')} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg flex items-center gap-2">
-            <Plus size={16} />Add Product
+          <button onClick={() => nav('/admin/products/new')} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs">
+            <Plus size={13} weight="bold" />Add Product
           </button>
         </div>
       </div>
@@ -782,86 +793,90 @@ export function CatalogProductsPage() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-2">
-        <div className="relative lg:col-span-2">
-          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, SKU, tag…" className={`${I} pl-9`} aria-label="Search products" />
+      <div className="bg-white rounded-lg border border-gray-200 p-2 shadow-xs space-y-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+          <div className="relative col-span-2">
+            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, brand, SKU, tag…" className={`${FI} pl-8`} aria-label="Search products" />
+          </div>
+          <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={FI} aria-label="Filter by status">
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="ready">Ready</option>
+            <option value="draft">Draft</option>
+            <option value="inactive">Inactive</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select value={fCat} onChange={(e) => setFCat(e.target.value)} className={FI} aria-label="Filter by category">
+            <option value="all">All categories</option>
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={fReady} onChange={(e) => setFReady(e.target.value)} className={FI} aria-label="Filter by commerce readiness">
+            <option value="all">All readiness</option>
+            <option value="COMMERCE_READY">Commerce Ready</option>
+            <option value="SOURCE_PENDING">Source Pending</option>
+            <option value="ECONOMICS_PENDING">Economics Pending</option>
+            <option value="FULFILLMENT_PENDING">Fulfillment Pending</option>
+            <option value="RISK_REVIEW">Risk Review</option>
+            <option value="DRAFT">Draft</option>
+            <option value="none">Unclassified</option>
+          </select>
+          <select value={sort} onChange={(e) => setSort(e.target.value)} className={FI} aria-label="Sort products">
+            <option value="newest">Sort: Newest</option>
+            <option value="oldest">Sort: Oldest</option>
+            <option value="name">Sort: Name</option>
+            <option value="name-desc">Sort: Name (Z → A)</option>
+            <option value="price-asc">Sort: Price (low → high)</option>
+            <option value="price-desc">Sort: Price (high → low)</option>
+            <option value="margin">Sort: Margin (high → low)</option>
+            <option value="margin-asc">Sort: Margin (low → high)</option>
+            <option value="stock-desc">Sort: Stock (high → low)</option>
+            <option value="stock-asc">Sort: Stock (low → high)</option>
+            <option value="views">Sort: Most viewed</option>
+            <option value="views-asc">Sort: Least viewed</option>
+            <option value="interest">Sort: Most interest</option>
+            <option value="interest-asc">Sort: Least interest</option>
+          </select>
         </div>
-        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={I} aria-label="Filter by status">
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="ready">Ready</option>
-          <option value="draft">Draft</option>
-          <option value="inactive">Inactive</option>
-          <option value="archived">Archived</option>
-        </select>
-        <select value={fCat} onChange={(e) => setFCat(e.target.value)} className={I} aria-label="Filter by category">
-          <option value="all">All categories</option>
-          {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={fFlag} onChange={(e) => setFFlag(e.target.value)} className={I} aria-label="Filter by merchandising flag">
-          <option value="all">All flags</option>
-          <option value="featured">Featured</option>
-          <option value="new">New arrival</option>
-          <option value="sale">On sale</option>
-          <option value="free-shipping">Free shipping</option>
-          <option value="low-stock">Low stock</option>
-        </select>
-        <select value={fReady} onChange={(e) => setFReady(e.target.value)} className={I} aria-label="Filter by commerce readiness">
-          <option value="all">All readiness</option>
-          <option value="COMMERCE_READY">Commerce Ready</option>
-          <option value="SOURCE_PENDING">Source Pending</option>
-          <option value="ECONOMICS_PENDING">Economics Pending</option>
-          <option value="FULFILLMENT_PENDING">Fulfillment Pending</option>
-          <option value="RISK_REVIEW">Risk Review</option>
-          <option value="DRAFT">Draft</option>
-          <option value="none">Unclassified</option>
-        </select>
-        <select value={fSeo} onChange={(e) => setFSeo(e.target.value)} className={I} aria-label="Filter by SEO state">
-          <option value="all">All SEO states</option>
-          <option value="complete">SEO complete</option>
-          <option value="incomplete">SEO incomplete</option>
-          <option value="missing">SEO missing</option>
-        </select>
-        <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={I} aria-label="Filter by source / economics">
-          <option value="all">All sources</option>
-          <option value="kong">KONG</option>
-          <option value="cj">CJ</option>
-          <option value="other">Other source</option>
-          <option value="unknown">Source unknown</option>
-          <option value="cost-unknown">Cost unknown</option>
-          <option value="shipping-unknown">Shipping unknown</option>
-          <option value="low-margin">Low margin (&lt;40%)</option>
-          <option value="stock-unknown">Stock unknown</option>
-        </select>
-        <select value={fSpecies} onChange={(e) => setFSpecies(e.target.value)} className={I} aria-label="Filter by species">
-          <option value="all">All species</option>
-          <option value="DOG">Dog</option>
-          <option value="CAT">Cat</option>
-          <option value="BOTH">Both</option>
-        </select>
-        <select value={fImage} onChange={(e) => setFImage(e.target.value)} className={I} aria-label="Filter by image status">
-          <option value="all">All images</option>
-          <option value="no-image">No images</option>
-          <option value="has-image">Has image</option>
-          <option value="single-image">Single image only</option>
-        </select>
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className={I} aria-label="Sort products">
-          <option value="name">Sort: Name</option>
-          <option value="name-desc">Sort: Name (Z → A)</option>
-          <option value="newest">Sort: Newest</option>
-          <option value="oldest">Sort: Oldest</option>
-          <option value="price-asc">Sort: Price (low → high)</option>
-          <option value="price-desc">Sort: Price (high → low)</option>
-          <option value="margin">Sort: Margin (high → low)</option>
-          <option value="margin-asc">Sort: Margin (low → high)</option>
-          <option value="stock-desc">Sort: Stock (high → low)</option>
-          <option value="stock-asc">Sort: Stock (low → high)</option>
-          <option value="views">Sort: Most viewed</option>
-          <option value="views-asc">Sort: Least viewed</option>
-          <option value="interest">Sort: Most interest</option>
-          <option value="interest-asc">Sort: Least interest</option>
-        </select>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 pt-0.5">
+          <select value={fFlag} onChange={(e) => setFFlag(e.target.value)} className={FI} aria-label="Filter by merchandising flag">
+            <option value="all">All flags</option>
+            <option value="featured">Featured</option>
+            <option value="new">New arrival</option>
+            <option value="sale">On sale</option>
+            <option value="free-shipping">Free shipping</option>
+            <option value="low-stock">Low stock</option>
+          </select>
+          <select value={fSeo} onChange={(e) => setFSeo(e.target.value)} className={FI} aria-label="Filter by SEO state">
+            <option value="all">All SEO states</option>
+            <option value="complete">SEO complete</option>
+            <option value="incomplete">SEO incomplete</option>
+            <option value="missing">SEO missing</option>
+          </select>
+          <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={FI} aria-label="Filter by source / economics">
+            <option value="all">All sources</option>
+            <option value="kong">KONG</option>
+            <option value="cj">CJ</option>
+            <option value="other">Other source</option>
+            <option value="unknown">Source unknown</option>
+            <option value="cost-unknown">Cost unknown</option>
+            <option value="shipping-unknown">Shipping unknown</option>
+            <option value="low-margin">Low margin (&lt;40%)</option>
+            <option value="stock-unknown">Stock unknown</option>
+          </select>
+          <select value={fSpecies} onChange={(e) => setFSpecies(e.target.value)} className={FI} aria-label="Filter by species">
+            <option value="all">All species</option>
+            <option value="DOG">Dog</option>
+            <option value="CAT">Cat</option>
+            <option value="BOTH">Both</option>
+          </select>
+          <select value={fImage} onChange={(e) => setFImage(e.target.value)} className={FI} aria-label="Filter by image status">
+            <option value="all">All images</option>
+            <option value="no-image">No images</option>
+            <option value="has-image">Has image</option>
+            <option value="single-image">Single image only</option>
+          </select>
+        </div>
       </div>
 
       {/* Contextual bulk bar — only when products are selected */}
@@ -911,13 +926,13 @@ export function CatalogProductsPage() {
             the viewport, so the horizontal scrollbar must live in a container
             whose height is capped — otherwise it sits thousands of pixels
             below the fold and "side scroll" appears broken. */}
-        <div className="overflow-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 250px)' }}>
+        <div className="overflow-auto overscroll-contain" style={{ maxHeight: 'calc(100vh - 170px)' }}>
           <table className="w-full min-w-[1240px]">
-            <thead className="bg-gray-50 text-left text-xs text-gray-500 uppercase shadow-sm">
+            <thead className="bg-gray-50 text-left text-[11px] text-gray-500 uppercase tracking-wider shadow-xs">
               <tr>
                 {/* sticky on each th (not thead): pins the column-name bar to the
                     top of the scroll area while side-scrolling the wide table */}
-                <th className="sticky top-0 z-10 bg-gray-50 px-4 py-3 w-8">
+                <th className="sticky top-0 z-10 bg-gray-50 px-3 py-2 w-8">
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -940,7 +955,7 @@ export function CatalogProductsPage() {
                       onDrop={(e) => { e.preventDefault(); if (dragCol) reorderColumns(dragCol, k); setDragCol(null); }}
                       onDragEnd={() => setDragCol(null)}
                       onClick={s ? () => headerSort(k) : undefined}
-                      className={`sticky top-0 z-10 bg-gray-50 px-4 py-3 whitespace-nowrap select-none ${dragCol === k ? 'opacity-40' : ''} ${s ? 'cursor-pointer hover:text-gray-800' : ''}`}
+                      className={`sticky top-0 z-10 bg-gray-50 px-3 py-2 whitespace-nowrap select-none ${dragCol === k ? 'opacity-40' : ''} ${s ? 'cursor-pointer hover:text-gray-800' : ''}`}
                       title={s ? `Click to sort by ${label} — drag to reorder columns` : (COLUMN_TIPS[k] ? `${COLUMN_TIPS[k]} — drag to reorder` : 'Drag to reorder columns')}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -964,10 +979,10 @@ export function CatalogProductsPage() {
                 const justSeoed = seo.running && seo.doneIds.includes(p.id);
                 const cells: Record<CatalogColumnKey, ReactNode> = {
                   product: (
-                    <td className="px-4 py-3 max-w-[280px]">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
-                          <Package size={18} className="shrink-0" />
+                    <td className="px-3 py-1.5 max-w-[280px]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-300 shrink-0 overflow-hidden">
+                          <Package size={16} className="shrink-0" />
                           {p.images[0]?.url?.trim() ? (
                             <img src={p.images[0].url} alt="" loading="lazy"
                               className="absolute inset-0 w-full h-full object-cover"
@@ -980,20 +995,20 @@ export function CatalogProductsPage() {
                           title={`Edit ${p.name}`}
                           className="min-w-0 text-left cursor-pointer group"
                         >
-                          <p className="font-medium text-sm truncate group-hover:text-blue-600 group-hover:underline" title={p.name}>{p.name}</p>
-                          <p className="text-xs text-gray-400 truncate">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
+                          <p className="font-medium text-xs truncate group-hover:text-blue-600 group-hover:underline max-w-[220px]" title={p.name}>{p.name}</p>
+                          <p className="text-[10px] text-gray-400 truncate max-w-[220px]">{p.brand}{p.sku ? ` · ${p.sku}` : ''}</p>
                         </button>
                       </div>
                     </td>
                   ),
                   category: (
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      <div className="flex flex-col gap-0.5 min-w-[120px]">
+                    <td className="px-3 py-1.5 text-xs whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5 min-w-[110px]">
                         <select
                           value={p.categoryId ?? ''}
                           onChange={(e) => void quickCategory(p, e.target.value)}
                           title="Quick-edit category"
-                          className="text-[11px] font-semibold text-gray-600 border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white max-w-[160px]"
+                          className="text-[11px] font-semibold text-gray-600 border rounded px-1.5 py-0.5 cursor-pointer focus:outline-none bg-white max-w-[150px]"
                           aria-label={`Set ${p.name} category`}
                         >
                           <option value="">—</option>
@@ -1004,13 +1019,13 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   status: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       <div className="flex flex-col gap-0.5">
                         <select
                           value={p.status === 'active' ? 'active' : p.status}
                           onChange={(e) => void quickStatus(p, e.target.value as CatalogProduct['status'])}
                           title="Quick-edit status"
-                          className="text-[11px] font-semibold border rounded-md px-1.5 py-1 cursor-pointer focus:outline-none bg-white"
+                          className="text-[11px] font-semibold border rounded px-1.5 py-0.5 cursor-pointer focus:outline-none bg-white"
                           aria-label={`Set ${p.name} status`}
                         >
                           <option value="active">Active</option>
@@ -1026,7 +1041,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   price: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       {priceEdit === p.id ? (
                         <div className="flex items-center gap-1">
                           <input
@@ -1037,11 +1052,11 @@ export function CatalogProductsPage() {
                             value={priceDraft}
                             onChange={(e) => setPriceDraft(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') void savePrice(p); if (e.key === 'Escape') setPriceEdit(null); }}
-                            className="w-20 px-1.5 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            className="w-18 px-1.5 py-0.5 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-200"
                             aria-label={`Edit price for ${p.name}`}
                           />
-                          <button onClick={() => void savePrice(p)} title="Save price" className="p-1 text-green-600 hover:bg-green-50 rounded"><FloppyDisk size={14} /></button>
-                          <button onClick={() => setPriceEdit(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X size={14} /></button>
+                          <button onClick={() => void savePrice(p)} title="Save price" className="p-1 text-green-600 hover:bg-green-50 rounded"><FloppyDisk size={13} /></button>
+                          <button onClick={() => setPriceEdit(null)} title="Cancel" className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X size={13} /></button>
                         </div>
                       ) : (
                         <button
@@ -1050,15 +1065,15 @@ export function CatalogProductsPage() {
                           title="Click to edit price"
                           className="inline-flex items-center gap-1 group"
                         >
-                          <span className="font-semibold text-sm">${p.price.toFixed(2)}</span>
-                          <PencilSimple size={12} className="text-gray-300 group-hover:text-blue-500" />
-                          {p.compareAtPrice > p.price && <span className="text-xs text-gray-400 line-through">${p.compareAtPrice.toFixed(2)}</span>}
+                          <span className="font-semibold text-xs text-gray-900">${p.price.toFixed(2)}</span>
+                          <PencilSimple size={11} className="text-gray-300 group-hover:text-blue-500" />
+                          {p.compareAtPrice > p.price && <span className="text-[10px] text-gray-400 line-through">${p.compareAtPrice.toFixed(2)}</span>}
                         </button>
                       )}
                     </td>
                   ),
                   margin: (
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-xs whitespace-nowrap">
                       {p.costPrice > 0 ? (
                         <span className="text-gray-500">${p.costPrice.toFixed(2)}</span>
                       ) : <span className="text-gray-300">—</span>}
@@ -1068,7 +1083,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   stock: (
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                    <td className="px-3 py-1.5 text-xs whitespace-nowrap">
                       <span className={p.inventoryQty <= p.lowStockThreshold && p.lowStockThreshold > 0 ? 'text-red-600 font-semibold' : ''} title={`${INVENTORY_SOURCE_LABELS[p.inventorySource || 'UNKNOWN']} stock`}>
                         {p.inventoryQty <= 0 ? 'Out of stock' : p.inventoryQty}
                       </span>
@@ -1076,7 +1091,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   views: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       {stats == null ? (
                         <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
                       ) : (
@@ -1094,7 +1109,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   interest: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       {stats == null ? (
                         <span className="text-xs text-gray-300" title={statsNote || 'Loading analytics…'}>—</span>
                       ) : (
@@ -1111,7 +1126,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   age: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       <span className="relative inline-block group cursor-help">
                         <span className="text-xs font-semibold text-gray-700">{ageLabel(ageIso)}</span>
                         {ageIso && <span className="ml-1 text-[10px] text-gray-400">{timeLabel(ageIso)}</span>}
@@ -1120,7 +1135,7 @@ export function CatalogProductsPage() {
                           <span className="block">Listed: {ageIso ? new Date(ageIso).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</span>
                           <span className="block">Age: {ageIso ? `${Math.max(0, Math.floor((Date.now() - new Date(ageIso).getTime()) / 86400000))} days · ${timeLabel(ageIso)}` : '—'}</span>
                           {p.publishedAt && <span className="block text-gray-400">First live: {new Date(p.publishedAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
-                          {p.publishedAt && p.createdAt && p.createdAt !== p.publishedAt && <span className="block text-gray-400">Created: {new Date(p.createdAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
+                          {p.createdAt && p.createdAt !== p.publishedAt && <span className="block text-gray-400">Created: {new Date(p.createdAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
                           {!p.publishedAt && <span className="block text-gray-400">Never published — age from created date ({p.createdAt ? new Date(p.createdAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'})</span>}
                           {p.listingEndsAt && <span className="block">Ends: {new Date(p.listingEndsAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
                         </span>
@@ -1128,7 +1143,7 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   promotion: (
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       <span className="relative inline-block">
                         <button
                           type="button"
@@ -1179,8 +1194,8 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   readiness: (
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
                         <span className="relative inline-block group cursor-help">
                           <ReadinessBadge readiness={p.commerceReadiness ?? null} />
                           <span className="pointer-events-none absolute right-0 top-full mt-1 z-30 hidden whitespace-nowrap rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600 shadow-lg group-hover:block">
@@ -1205,16 +1220,16 @@ export function CatalogProductsPage() {
                     </td>
                   ),
                   actions: (
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-1.5">
                       <span className="relative inline-block">
                         <button
                           type="button"
                           onClick={(e) => { if (rowMenu === p.id) { setRowMenu(null); setRowAnchor(null); } else { setRowMenu(p.id); setRowAnchor(e.currentTarget); } }}
-                          className="p-2 hover:bg-gray-100 rounded text-gray-500"
+                          className="p-1 hover:bg-gray-100 rounded text-gray-500"
                           title="Row actions"
                           aria-label={`Actions for ${p.name}`}
                         >
-                          <DotsThreeVertical size={16} />
+                          <DotsThreeVertical size={14} />
                         </button>
                         <Popover anchor={rowAnchor} open={rowMenu === p.id} onClose={() => setRowMenu(null)} width={192}>
                           <div className="py-1 text-sm">
@@ -1237,8 +1252,8 @@ export function CatalogProductsPage() {
                   ),
                 };
                 return (
-                  <tr key={p.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                  <tr key={p.id} className="border-t hover:bg-blue-50/40 transition-colors">
+                    <td className="px-3 py-1.5">
                       <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} aria-label={`Select ${p.name}`} />
                     </td>
                     {colOrder.map((k) => <Fragment key={k}>{cells[k]}</Fragment>)}
@@ -1246,7 +1261,7 @@ export function CatalogProductsPage() {
                 );
               })}
               {sorted.length === 0 && (
-                <tr><td colSpan={13} className="px-4 py-14 text-center text-gray-400">No products match your filters.</td></tr>
+                <tr><td colSpan={13} className="px-3 py-10 text-center text-gray-400 text-xs">No products match your filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -2546,14 +2561,32 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
 // callers should surface the warning honestly).
 // ---------------------------------------------------------------------------
 async function uploadImageToStorage(dataUrl: string, filename: string, contentType: string): Promise<string> {
-  const token = getAccessToken();
-  const r = await fetch('/api/upload-image', {
+  let token = await getFreshAccessToken();
+  let r = await fetch('/api/upload-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ productId: 'product', filename, contentType, base64: dataUrl }),
   });
+  // If the token expired mid-session (or clock drift), force-refresh and retry once
+  if (r.status === 401 || r.status === 403) {
+    const refreshed = await getSession(true);
+    token = refreshed?.accessToken || null;
+    if (token) {
+      r = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ productId: 'product', filename, contentType, base64: dataUrl }),
+      });
+    }
+  }
   const j = await r.json().catch(() => null);
   if (r.ok && j?.publicUrl) return String(j.publicUrl);
+  if (r.status === 401) {
+    throw new Error('Unauthorized — session expired. Please sign out and sign back in.');
+  }
+  if (r.status === 403) {
+    throw new Error('Forbidden — admin privileges required.');
+  }
   // Fail honestly — never a phantom data-URL row that vanishes after reload.
   throw new Error(j?.error || `Image upload failed (HTTP ${r.status})`);
 }
@@ -2659,7 +2692,10 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
           const stored = await uploadImageToStorage(prep.dataUrl, prep.filename, prep.contentType);
           added.push({ id: uid(), productId: product.id, url: stored, altText: f.name, kind: 'product', isPrimary: startLen === 0 && added.length === 0, sortOrder: startLen + added.length - 1, variantId: null });
         } catch (e) {
-          notify(`Could not upload ${f.name}: ${(e as Error).message}. Try a smaller image or add an image URL instead.`, 'error');
+          const msg = (e as Error).message || 'Upload failed';
+          const isAuth = /unauthorized|expired|forbidden|sign\s*in|session/i.test(msg);
+          const hint = isAuth ? '' : ' Try a smaller image or add an image URL instead.';
+          notify(`Could not upload ${f.name}: ${msg}.${hint}`, 'error');
         }
       }
       if (added.length) {
@@ -2681,10 +2717,19 @@ function ImageManager({ product, onProduct }: { product: CatalogProduct; onProdu
     try {
       // If it's a direct image URL, just add it.
       if (/\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(u)) { addByUrl(); return; }
-      const token = getAccessToken();
-      const r = await fetch(`/api/fetch-page?url=${encodeURIComponent(u)}`, {
+      let token = await getFreshAccessToken();
+      let r = await fetch(`/api/fetch-page?url=${encodeURIComponent(u)}`, {
         headers: { Accept: 'text/plain', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
+      if (r.status === 401 || r.status === 403) {
+        const refreshed = await getSession(true);
+        token = refreshed?.accessToken || null;
+        if (token) {
+          r = await fetch(`/api/fetch-page?url=${encodeURIComponent(u)}`, {
+            headers: { Accept: 'text/plain', Authorization: `Bearer ${token}` },
+          });
+        }
+      }
       if (!r.ok) {
         const j = await r.json().catch(() => null);
         notify(j?.error || `Page fetch failed (HTTP ${r.status})`, 'error');

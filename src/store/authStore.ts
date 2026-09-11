@@ -57,6 +57,25 @@ interface AuthStore {
 }
 
 let initialized = false;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRefresh(expiresAt?: number): void {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  if (!expiresAt) return;
+  // Refresh 2 minutes before expiry, or in 10s if already within 2 minutes
+  const delay = Math.max(10_000, expiresAt - Date.now() - 120_000);
+  refreshTimer = setTimeout(async () => {
+    try {
+      const refreshed = await getSession();
+      if (refreshed) scheduleRefresh(refreshed.expiresAt);
+    } catch {
+      /* handled inside getSession */
+    }
+  }, delay);
+}
 
 export const useAuthStore = create<AuthStore>()((set) => ({
   user: null,
@@ -69,14 +88,36 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     initialized = true;
     onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
+        if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
         set({ user: null, isAuthenticated: false, isAdmin: false });
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         const u = getSessionUserSync();
         applyUser(set, u);
+        const raw = typeof window !== 'undefined' ? window.localStorage.getItem('luxedge_sb_session') : null;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as { expiresAt?: number };
+            if (parsed.expiresAt) scheduleRefresh(parsed.expiresAt);
+          } catch { /* ignore */ }
+        }
       }
     });
+
+    if (typeof window !== 'undefined') {
+      const onActivity = () => {
+        if (document.visibilityState === 'visible') {
+          void getSession().then((s) => {
+            if (s) scheduleRefresh(s.expiresAt);
+          });
+        }
+      };
+      window.addEventListener('focus', onActivity);
+      document.addEventListener('visibilitychange', onActivity);
+    }
+
     const session = await getSession();
     applyUser(set, session?.user || null);
+    if (session) scheduleRefresh(session.expiresAt);
     set({ ready: true });
   },
 
@@ -91,6 +132,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
     try {
       const session = await signInWithPassword(email.trim(), password);
       applyUser(set, session.user);
+      scheduleRefresh(session.expiresAt);
       syncCustomerProfile(session.user);
       return { success: true, message: 'Signed in successfully.', user: session.user };
     } catch (e) {
@@ -110,6 +152,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
       const { session } = await sbSignUp(name.trim(), email.trim(), password);
       if (session) {
         applyUser(set, session.user);
+        scheduleRefresh(session.expiresAt);
         syncCustomerProfile(session.user);
       }
       return {
@@ -123,6 +166,7 @@ export const useAuthStore = create<AuthStore>()((set) => ({
   },
 
   signOut: async () => {
+    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
     await sbSignOut();
     set({ user: null, isAuthenticated: false, isAdmin: false });
   },
