@@ -714,20 +714,12 @@ function Header() {
   const [hq, setHq] = useState('');
   const [mega, setMega] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
-  const [promoIdx, setPromoIdx] = useState(0);
   const loc = useLocation();
   const goTo = useNavigate();
   const { user, cart, logout, openCart } = useApp();
   const { ids: wishIds } = useWishlist();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
 
-  // Rotate promo messages every 3.5 seconds
-  useEffect(() => {
-    const id = setInterval(() => setPromoIdx(p => (p + 1) % 4), 3500);
-    return () => clearInterval(id);
-  }, []);
-
-  // Elevate the header with a soft shadow once the page is scrolled
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
     onScroll();
@@ -743,332 +735,351 @@ function Header() {
     setHq('');
     setMob(false);
   };
+
   useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
-  const nav = [{ p: '/', l: 'Home' }, { p: '/shop', l: 'Shop' }, { p: '/free-pet-gift', l: '🎁 Free Gift' }, { p: '/media', l: 'Media' }, { p: '/blog', l: 'Blog' }, { p: '/about', l: 'About' }, { p: '/contact', l: 'Contact' }];
-  const catNav = [
-    { l: 'Dog', to: '/category/dog-supplies' },
-    { l: 'Cat', to: '/category/cat-supplies' },
-    { l: 'Horses', to: '/category/horse' },
+
+  const navLinks = [
+    { l: 'Dog', to: '/category/dog-supplies', megaKey: 'Dog' },
+    { l: 'Cat', to: '/category/cat-supplies', megaKey: 'Cat' },
+    { l: 'Bird', to: '/category/bird-supplies', megaKey: 'Birds' },
+    { l: 'Horse', to: '/category/horse' },
     { l: 'Livestock', to: '/category/cattle' },
-    { l: 'Birds', to: '/category/bird-supplies' },
-    { l: 'Food & Feeding', to: '/category/feeding-water' },
-    { l: 'Toys', to: '/category/pet-toys' },
-    { l: 'Beds', to: '/category/pet-beds' },
-    { l: 'Grooming', to: '/category/grooming' },
-    { l: 'Travel', to: '/category/pet-accessories' },
+    { l: 'Accessories', to: '/category/pet-accessories' },
+    { l: 'Guides', to: '/blog' },
+    { l: 'Blog', to: '/blog' },
+    { l: 'Media', to: '/media' },
+    { l: 'About', to: '/about' },
   ];
-  const isActive = (p: string) => (p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p));
 
-  return (<>
-    {/* ── Rotating promo bar ── */}
-    <div className="site-utility-bar relative" style={{ minHeight: 30 }}>
-      {[
-        { icon: <Truck01 strokeWidth={1.5} size={12} />, text: 'Shipping options shown at checkout' },
-        { icon: <RefreshCcw01 strokeWidth={1.5} size={12} />, text: '30-Day Return Requests' },
-        { icon: <Headphones01 strokeWidth={1.5} size={12} />, text: 'Customer Support Mon–Fri 9AM–6PM CT' },
-        { icon: <ShieldTick strokeWidth={1.5} size={12} />, text: 'Thoughtfully Curated — Quality You Can Trust' },
-      ].map((promo, i) => (
-        <span key={i} className={`promo-slide ${promoIdx === i ? 'promo-active' : ''}`} aria-hidden={promoIdx !== i}>
-          {promo.icon} {promo.text}
-        </span>
-      ))}
-    </div>
-
-    {/* ── Main header ── */}
-    <header className={`site-header sticky top-0 z-50 transition-all duration-300 ${scrolled ? 'site-header-scrolled' : ''}`}>
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3 lg:gap-6">
-        <button onClick={() => setMob(!mob)} aria-label="Open menu" aria-expanded={mob} className="lg:hidden p-2 -ml-1.5 hover:bg-luxe-cream rounded-lg text-luxe-black transition-colors">{mob ? <X strokeWidth={1.5} size={20} /> : <Menu01 strokeWidth={1.5} size={20} />}</button>
-        <Link to="/" className="flex items-center gap-2 shrink-0 group">
-          <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="h-12 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
-          <span className="flex flex-col leading-none">
-            <span className="font-brand text-base sm:text-lg font-bold tracking-[0.15em] text-luxe-black">LUXEDGE</span>
-            <span className="hidden sm:block text-[6.5px] tracking-[0.25em] text-luxe-gold mt-0.5">PREMIUM PET ESSENTIALS</span>
-          </span>
-        </Link>
-
-        {/* Search — refined pill */}
-        <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-5">
-          <div className="site-search">
-            <SearchMd strokeWidth={1.5} size={16} className="ml-3 text-luxe-gray shrink-0" />
-            <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search beds, toys, grooming & more" aria-label="Search products"
-              className="flex-1 px-2.5 py-2.5 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-            <button type="submit" className="site-search-submit">
-              Search
-            </button>
+  return (
+    <>
+      {/* ── Top Utility Bar ── */}
+      <div className="bg-[#143023] text-[#E0ECE4] text-[11px] sm:text-xs py-2 px-4 border-b border-[#1E4636]/40 select-none">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="inline-flex items-center gap-1.5 font-medium text-white/95">
+              <Truck01 strokeWidth={1.5} size={13} className="text-[#C5A880]" />
+              Free Shipping on Orders $50+
+            </span>
+            <span className="hidden md:inline text-white/30">•</span>
+            <span className="hidden md:inline-flex items-center gap-1.5 text-white/85">
+              <ShieldTick strokeWidth={1.5} size={13} className="text-[#C5A880]" />
+              Trusted by Pet &amp; Livestock Owners
+            </span>
+            <span className="hidden lg:inline text-white/30">•</span>
+            <span className="hidden lg:inline-flex items-center gap-1.5 text-white/85">
+              <Heart strokeWidth={1.5} size={13} className="text-[#C5A880]" />
+              Care for Every Animal, Every Day
+            </span>
           </div>
-        </form>
-
-        <div className="flex items-center gap-1 sm:gap-1.5">
-          {user ? (
-            <div className="relative">
-              <button onClick={() => setUm(!um)} aria-label="Account menu" aria-expanded={um} className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors">
-                <span className="w-7 h-7 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[11px] font-bold ring-1 ring-luxe-white/40">{user.name[0]}</span>
-                <span className="hidden lg:block text-[11px] font-medium">{user.name.split(' ')[0]}</span>
-              </button>
-              {um && <><div className="fixed inset-0 z-40" onClick={() => setUm(false)} /><div className="absolute right-0 top-full mt-1.5 w-56 rounded-2xl shadow-xl border border-luxe-silver bg-white py-1.5 z-50 animate-scale-in">
-                <div className="px-3.5 py-2.5 border-b border-luxe-silver/70"><p className="font-semibold text-xs text-luxe-black">{user.name}</p><p className="text-[10px] text-luxe-gray mt-0.5">{user.email}</p></div>
-                {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><LayoutGrid01 strokeWidth={1.5} size={14} className="text-luxe-gold" />Admin Panel</Link>}
-                <Link to="/orders" className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-charcoal hover:bg-luxe-cream transition-colors"><Package strokeWidth={1.5} size={14} className="text-luxe-gray" />My Orders</Link>
-                <button onClick={logout} className="flex items-center gap-2 px-3.5 py-2 text-xs text-luxe-red hover:bg-luxe-cream w-full text-left transition-colors"><LogOut01 strokeWidth={1.5} size={14} />Log Out</button>
-              </div></>}
-            </div>
-          ) : (
-            <Link to="/login" className="flex items-center gap-1.5 p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label="Sign in">
-              <UserIcon strokeWidth={1.5} size={17} /><span className="hidden sm:inline text-[11px] font-medium">Sign In</span>
-            </Link>
-          )}
-          <Link to="/wishlist" className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open wishlist, ${wishIds.length} saved item${wishIds.length === 1 ? '' : 's'}`}>
-            <Heart strokeWidth={1.5} size={18} fill={wishIds.length > 0 ? 'currentColor' : 'none'} className={wishIds.length > 0 ? 'text-rose-500' : ''} />
-            {wishIds.length > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] font-bold">{wishIds.length}</span>}
-          </Link>
-          <button onClick={openCart} className="relative p-2 hover:bg-luxe-cream rounded-lg text-luxe-charcoal transition-colors" aria-label={`Open cart, ${cc} item${cc === 1 ? '' : 's'}`}>
-            <ShoppingBag01 strokeWidth={1.5} size={18} />
-            {cc > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 rounded-full bg-luxe-gold text-white flex items-center justify-center text-[8px] font-bold">{cc}</span>}
-          </button>
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0 text-white/80">
+            <Link to="/contact" className="hover:text-white transition-colors">Help</Link>
+            <span className="text-white/25">|</span>
+            <Link to="/orders" className="hover:text-white transition-colors">Track Order</Link>
+            <span className="text-white/25">|</span>
+            <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
+            <span className="text-white/25">|</span>
+            <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
+          </div>
         </div>
       </div>
 
-      {/* ── Pet navigation bar ── */}
-      <nav className="hidden lg:block border-t border-luxe-silver/60 bg-white/70 backdrop-blur-md" aria-label="Shop categories">
-        <div className="max-w-7xl mx-auto px-4 flex items-center h-11">
-          {MEGA_MENU.map(m => (
-            <div key={m.label} className="relative" onMouseEnter={() => setMega(m.label)} onMouseLeave={() => setMega(null)}>
-              <Link to={m.to} className="nav-underline flex items-center gap-1.5 px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">
-                {m.label}<ChevronDown strokeWidth={1.5} size={13} className={`text-luxe-gray transition-transform duration-200 ${mega === m.label ? 'rotate-180' : ''}`} />
-              </Link>
-              {mega === m.label && (
-                <div className="absolute left-0 top-full pt-2 z-50 w-[580px]">
-                  <div className="bg-white rounded-2xl border border-luxe-silver shadow-xl p-6 animate-fade-in-up">
-                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-luxe-silver/70">
-                      <p className="font-brand text-[11px] font-bold uppercase tracking-[0.18em] text-luxe-black">Shop {m.label}</p>
-                      <Link to={m.to} className="text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors">View All →</Link>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                      {m.groups.map(g => (
-                        <div key={g.title}>
-                          <p className="eyebrow mb-2">{g.title}</p>
-                          {g.links.map(l => <Link key={l.label} to={l.to} className="block py-1 text-[13px] text-luxe-gray hover:text-luxe-gold hover:translate-x-0.5 transition-all">{l.label}</Link>)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {catNav.filter(c => !MEGA_MENU.some(m => m.label === c.l)).map(c => (
-            <Link key={c.l} to={c.to} className="nav-underline px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">{c.l}</Link>
-          ))}
-          <Link to="/media" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Media</Link>
-          <Link to="/blog" className="px-4 py-2 text-[13.5px] font-semibold text-luxe-charcoal hover:text-luxe-black transition-colors">Blog</Link>
-          <Link to="/shop?q=deal" className="ml-auto px-4 py-2 text-[13.5px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors flex items-center gap-1.5"><Zap strokeWidth={1.5} size={12} /> Deals</Link>
-        </div>
-      </nav>
+      {/* ── Main Header ── */}
+      <header className={`sticky top-0 z-50 bg-white/98 backdrop-blur-md transition-all duration-300 border-b border-gray-100 ${scrolled ? 'shadow-sm' : ''}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 lg:gap-8">
+          <button
+            onClick={() => setMob(!mob)}
+            aria-label="Open menu"
+            aria-expanded={mob}
+            className="lg:hidden p-2 -ml-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            {mob ? <X strokeWidth={1.5} size={22} /> : <Menu01 strokeWidth={1.5} size={22} />}
+          </button>
 
-      {/* ── Mobile menu ── */}
-      {mob && <div className="lg:hidden border-t border-luxe-silver/70 px-3 py-2 space-y-1 animate-fade-in-up bg-white">
-        <form onSubmit={(e) => { submitSearch(e); setMob(false); }} role="search" className="site-search mobile-site-search mb-2">
-          <SearchMd strokeWidth={1.5} size={18} className="ml-3 text-luxe-gray shrink-0" />
-          <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products..." aria-label="Search products"
-            className="flex-1 px-2.5 py-2 text-sm text-luxe-black placeholder-luxe-gray/70 focus:outline-none bg-transparent" />
-          <button type="submit" className="px-3.5 py-2 bg-luxe-gold text-white text-[10px] font-bold uppercase tracking-wider rounded-full">Go</button>
-        </form>
-        <div className="flex flex-wrap gap-1 pt-1 pb-1.5 border-b border-luxe-silver/70">
-          {catNav.map(c => <Link key={c.l} to={c.to} onClick={() => setMob(false)} className="px-1 py-1 text-[10px] font-semibold text-luxe-charcoal border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">{c.l}</Link>)}
-          <Link to="/shop?q=deal" onClick={() => setMob(false)} className="px-1 py-1 text-[10px] font-bold text-luxe-gold-dark border-b border-transparent hover:border-luxe-gold hover:text-luxe-gold transition-colors">Deals</Link>
+          {/* Brand Logo */}
+          <Link to="/" className="flex items-center gap-3 shrink-0 group">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 sm:h-12 w-auto transition-transform duration-300 group-hover:scale-105" />
+            <span className="flex flex-col leading-none">
+              <span className="font-serif text-xl sm:text-2xl font-bold tracking-[0.14em] text-[#111827]">LUXEDGE</span>
+              <span className="text-[7.5px] sm:text-[8px] font-bold tracking-[0.24em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+            </span>
+          </Link>
+
+          {/* Large Central Search Bar */}
+          <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-6">
+            <div className="relative flex items-center w-full bg-[#F6F8F5] border border-gray-200/90 rounded-full px-4 py-2.5 focus-within:border-[#1E4636] focus-within:ring-2 focus-within:ring-[#1E4636]/15 transition-all">
+              <SearchMd strokeWidth={1.5} size={17} className="text-gray-400 shrink-0 mr-2.5" />
+              <input
+                value={hq}
+                onChange={e => setHq(e.target.value)}
+                placeholder="Search products, brands, or animal care guides..."
+                aria-label="Search products"
+                className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none pr-9"
+              />
+              <button
+                type="submit"
+                aria-label="Search"
+                className="absolute right-1.5 w-8 h-8 rounded-full bg-[#1E4636] hover:bg-[#153428] text-white flex items-center justify-center transition-transform hover:scale-105 shadow-sm"
+              >
+                <SearchMd strokeWidth={2} size={14} />
+              </button>
+            </div>
+          </form>
+
+          {/* Header Action Icons */}
+          <div className="flex items-center gap-1 sm:gap-3">
+            {user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUm(!um)}
+                  aria-label="Account menu"
+                  aria-expanded={um}
+                  className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-full bg-[#1E4636] text-white flex items-center justify-center text-xs font-bold ring-2 ring-[#1E4636]/10">
+                    {user.name[0]}
+                  </span>
+                  <span className="hidden lg:block text-xs font-semibold">{user.name.split(' ')[0]}</span>
+                </button>
+                {um && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setUm(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl shadow-xl border border-gray-100 bg-white py-2 z-50">
+                      <div className="px-4 py-2.5 border-b border-gray-100">
+                        <p className="font-semibold text-xs text-gray-900">{user.name}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5 truncate">{user.email}</p>
+                      </div>
+                      {user.role === 'admin' && (
+                        <Link to="/admin" className="flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+                          <LayoutGrid01 strokeWidth={1.5} size={15} className="text-[#1E4636]" />
+                          Admin Panel
+                        </Link>
+                      )}
+                      <Link to="/orders" className="flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-50 transition-colors">
+                        <Package strokeWidth={1.5} size={15} className="text-gray-500" />
+                        My Orders
+                      </Link>
+                      <button onClick={logout} className="flex items-center gap-2 px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 w-full text-left transition-colors">
+                        <LogOut01 strokeWidth={1.5} size={15} />
+                        Log Out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <Link to="/login" className="flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label="Sign in">
+                <UserIcon strokeWidth={1.5} size={19} className="text-gray-600" />
+                <span className="hidden sm:inline text-xs font-semibold">Account</span>
+              </Link>
+            )}
+
+            {/* Wishlist */}
+            <Link to="/wishlist" className="relative flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label={`Wishlist, ${wishIds.length} items`}>
+              <Heart strokeWidth={1.5} size={19} fill={wishIds.length > 0 ? 'currentColor' : 'none'} className={wishIds.length > 0 ? 'text-rose-500' : 'text-gray-600'} />
+              <span className="hidden sm:inline text-xs font-semibold">Wishlist</span>
+              {wishIds.length > 0 && (
+                <span className="absolute top-1 right-1 sm:static min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px] font-bold">
+                  {wishIds.length}
+                </span>
+              )}
+            </Link>
+
+            {/* Cart */}
+            <button onClick={openCart} className="relative flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label={`Open cart, ${cc} items`}>
+              <ShoppingBag01 strokeWidth={1.5} size={19} className="text-gray-600" />
+              <span className="hidden sm:inline text-xs font-semibold">Cart</span>
+              {cc > 0 && (
+                <span className="absolute top-1 right-1 sm:static min-w-[16px] h-4 px-1 rounded-full bg-[#1E4636] text-white flex items-center justify-center text-[9px] font-bold">
+                  {cc}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
-        {nav.map(i => <Link key={i.p} to={i.p} onClick={() => setMob(false)} aria-current={isActive(i.p) ? 'page' : undefined} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-charcoal hover:bg-luxe-cream transition-colors">{i.l}</Link>)}
-        {!user && <Link to="/login" onClick={() => setMob(false)} className="block px-3 py-2 text-[13px] font-medium rounded-lg text-luxe-gold hover:bg-luxe-cream transition-colors">Sign In</Link>}
-      </div>}
-    </header>
-  </>);
+
+        {/* ── Main Navigation Strip with Mega Menu ── */}
+        <nav className="hidden lg:block border-t border-gray-100 bg-white" aria-label="Main Navigation">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-11 text-[13.5px] font-semibold text-gray-700">
+            <div className="flex items-center gap-1">
+              <Link to="/shop" className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors flex items-center gap-1">
+                Shop All <ChevronDown strokeWidth={1.5} size={13} className="text-gray-400" />
+              </Link>
+              {navLinks.map((item) => {
+                const megaItem = item.megaKey ? MEGA_MENU.find(m => m.label === item.megaKey) : null;
+                return (
+                  <div
+                    key={item.l}
+                    className="relative"
+                    onMouseEnter={() => item.megaKey && setMega(item.megaKey)}
+                    onMouseLeave={() => setMega(null)}
+                  >
+                    <Link
+                      to={item.to}
+                      className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors flex items-center gap-1"
+                    >
+                      {item.l}
+                      {megaItem && <ChevronDown strokeWidth={1.5} size={12} className={`text-gray-400 transition-transform ${mega === item.megaKey ? 'rotate-180' : ''}`} />}
+                    </Link>
+
+                    {/* Mega Menu Dropdown */}
+                    {megaItem && mega === item.megaKey && (
+                      <div className="absolute left-0 top-full pt-1.5 z-50 w-[520px]">
+                        <div className="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 animate-fade-in-up">
+                          <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                            <p className="font-bold text-xs uppercase tracking-wider text-[#1E4636]">Shop {megaItem.label}</p>
+                            <Link to={megaItem.to} className="text-xs font-bold text-[#1E4636] hover:underline">View All →</Link>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                            {megaItem.groups.map(g => (
+                              <div key={g.title}>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">{g.title}</p>
+                                <div className="space-y-1">
+                                  {g.links.map(l => (
+                                    <Link key={l.label} to={l.to} className="block text-[13px] text-gray-700 hover:text-[#1E4636] hover:translate-x-0.5 transition-all">
+                                      {l.label}
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <Link to="/shop?q=deal" className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[13px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-full transition-colors">
+              <Zap strokeWidth={1.5} size={13} className="text-amber-600" /> Deals
+            </Link>
+          </div>
+        </nav>
+
+        {/* ── Mobile Drawer / Menu ── */}
+        {mob && (
+          <div className="lg:hidden border-t border-gray-100 bg-white p-4 space-y-4 animate-fade-in-up">
+            <form onSubmit={(e) => { submitSearch(e); setMob(false); }} role="search" className="flex items-center w-full bg-[#F6F8F5] border border-gray-200 rounded-full px-3.5 py-2">
+              <SearchMd strokeWidth={1.5} size={16} className="text-gray-400 mr-2" />
+              <input value={hq} onChange={e => setHq(e.target.value)} placeholder="Search products &amp; guides..." className="w-full bg-transparent text-sm focus:outline-none" />
+              <button type="submit" className="px-3 py-1 bg-[#1E4636] text-white rounded-full text-xs font-semibold">Search</button>
+            </form>
+            <div className="grid grid-cols-2 gap-2 text-sm font-medium">
+              <Link to="/category/dog-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐶 Dog Supplies</Link>
+              <Link to="/category/cat-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐱 Cat Supplies</Link>
+              <Link to="/category/bird-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🦜 Bird Supplies</Link>
+              <Link to="/category/horse" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐴 Horse Supplies</Link>
+              <Link to="/category/cattle" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐄 Livestock</Link>
+              <Link to="/category/pet-accessories" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">✨ Accessories</Link>
+            </div>
+            <div className="border-t border-gray-100 pt-3 space-y-1 text-sm font-medium text-gray-700">
+              <Link to="/shop" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Shop All Products</Link>
+              <Link to="/blog" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Care Guides &amp; Blog</Link>
+              <Link to="/media" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Media Hub</Link>
+              <Link to="/about" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">About Us</Link>
+              <Link to="/contact" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Contact &amp; Help</Link>
+              <Link to="/shop?q=deal" onClick={() => setMob(false)} className="block py-1.5 px-2 text-amber-700 font-bold hover:bg-amber-50 rounded-lg">🔥 Special Deals</Link>
+            </div>
+          </div>
+        )}
+      </header>
+    </>
+  );
 }
 
 function Footer() {
-  const { categories } = useApp();
-
-  // Premium footer: readable typography, balanced 12-column grid, clean groupings.
-  const FL = 'block text-[13px] py-[3px] leading-relaxed text-luxe-white/70 hover:text-luxe-gold-light transition-colors';
+  const FL = 'block text-[13.5px] py-1 text-white/75 hover:text-white transition-colors';
   const ColTitle = ({ children }: { children: ReactNode }) => (
-    <div className="mb-1">
-      <h4 className="font-brand text-[11px] font-bold uppercase tracking-[0.22em] text-luxe-gold-light">{children}</h4>
-      <span className="mt-2 block h-[2px] w-8 rounded-full bg-luxe-gold/70" aria-hidden="true" />
-    </div>
+    <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-[#C5A880] mb-3">{children}</h4>
   );
 
   return (
-    <footer className="bg-luxe-black text-luxe-white">
-      {/* Gold hairline divider */}
-      <div className="h-px bg-gradient-to-r from-transparent via-luxe-gold/60 to-transparent" aria-hidden="true" />
-
+    <footer className="bg-[#143023] text-white">
       {/* ── Main Footer Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-10">
-
-          {/* Col 1 — Brand (lg:col-span-4) */}
-          <div className="sm:col-span-2 lg:col-span-4">
-            <Link to="/" className="flex items-center gap-3 mb-3 group w-fit">
-              <img src="/luxedge-mark.png" alt="" aria-hidden="true" className="w-12 h-12 transition-transform duration-300 group-hover:scale-105" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 items-start">
+          {/* Brand Column */}
+          <div className="lg:col-span-4 space-y-4">
+            <Link to="/" className="flex items-center gap-3 group w-fit">
+              <img src="/luxedge-mark.png" alt="Luxedge" className="w-11 h-11 transition-transform group-hover:scale-105" />
               <span className="flex flex-col leading-none">
-                <span className="font-brand text-lg font-bold tracking-[0.18em] text-luxe-white">LUXEDGE</span>
-                <span className="text-[9px] tracking-[0.26em] text-luxe-gold-light mt-1">PREMIUM PET ESSENTIALS</span>
+                <span className="font-serif text-2xl font-bold tracking-[0.14em] text-white">LUXEDGE</span>
+                <span className="text-[7.5px] tracking-[0.24em] text-[#C5A880] mt-1 font-bold">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
               </span>
             </Link>
-            <p className="text-sm leading-relaxed text-luxe-white/65 max-w-sm mb-5">
-              We source the best pet essentials from trusted suppliers around the world —
-              then choose the pieces worth bringing home. Quality you can count on,
-              honest prices, delivered to your door.
+            <p className="text-sm leading-relaxed text-white/75 max-w-sm">
+              Quality products, expert guidance, and a community for everyone who cares for animals.
             </p>
-                <Link to="/contact" className="inline-flex items-center gap-2 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
-              Talk to the Luxedge team <ArrowRight strokeWidth={2} size={14} />
-            </Link>
-            {/* HQ card — clean address treatment (replaces awkward iframe) */}
-            <div className="mt-6 max-w-sm rounded-2xl bg-luxe-white/[0.04] border border-luxe-white/10 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-luxe-gold-light mb-3">Visit Luxedge HQ</p>
-              <div className="flex items-start gap-2.5">
-                <MarkerPin01 strokeWidth={1.5} size={17} className="text-luxe-gold-light mt-0.5 shrink-0" />
-                <a href="https://maps.google.com/?q=1500+N+Grant+St,+Denver,+CO+80203" target="_blank" rel="noopener noreferrer"
-                  className="text-sm leading-snug text-luxe-white/85 hover:text-luxe-gold-light transition-colors">
-                  1500 N Grant St,<br />Denver, CO 80203
-                </a>
-              </div>
-              <div className="mt-2.5 flex items-center gap-2.5">
-                <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                <span className="text-[13px] text-luxe-white/70">Mon – Fri · 9:00 AM – 6:00 PM CT</span>
-              </div>
-              <a href="https://maps.google.com/?q=1500+N+Grant+St,+Denver,+CO+80203" target="_blank" rel="noopener noreferrer"
-                className="mt-3.5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-luxe-gold-light hover:text-luxe-white transition-colors">
-                Get Directions <ArrowRight strokeWidth={2} size={14} />
+            {/* Social Icons */}
+            <div className="flex items-center gap-3 pt-2">
+              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">f</a>
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">ig</a>
+              <a href={YOUTUBE_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors">
+                <YoutubeLogo size={16} />
               </a>
+              <a href="https://pinterest.com" target="_blank" rel="noopener noreferrer" aria-label="Pinterest" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">p</a>
+              <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">tk</a>
             </div>
           </div>
 
-          {/* Col 2 — Shop */}
-          <div className="lg:col-span-2">
+          {/* Col 1: Shop */}
+          <div className="lg:col-span-2 space-y-1">
             <ColTitle>Shop</ColTitle>
-            <nav className="space-y-0" aria-label="Shop">
-              <Link to="/category/dog-supplies" className={FL}>Dog</Link>
-              <Link to="/category/cat-supplies" className={FL}>Cat</Link>
-              <Link to="/category/pet-toys" className={FL}>Toys</Link>
-              <Link to="/category/pet-beds" className={FL}>Beds</Link>
-              <Link to="/category/feeding-water" className={FL}>Feeding</Link>
-              <Link to="/category/grooming" className={FL}>Grooming</Link>
-              <Link to="/shop?q=deal" className={FL}>Deals</Link>
-            </nav>
+            <Link to="/shop" className={FL}>All Products</Link>
+            <Link to="/category/dog-supplies" className={FL}>Dog Supplies</Link>
+            <Link to="/category/cat-supplies" className={FL}>Cat Supplies</Link>
+            <Link to="/category/bird-supplies" className={FL}>Bird Supplies</Link>
+            <Link to="/category/horse" className={FL}>Horse Supplies</Link>
+            <Link to="/category/cattle" className={FL}>Livestock Supplies</Link>
+            <Link to="/category/pet-accessories" className={FL}>Accessories</Link>
           </div>
 
-          {/* Col 3 — Help */}
-          <div className="lg:col-span-2">
+          {/* Col 2: Learn */}
+          <div className="lg:col-span-2 space-y-1">
+            <ColTitle>Learn</ColTitle>
+            <Link to="/blog" className={FL}>Blog &amp; Guides</Link>
+            <Link to="/media" className={FL}>Media Hub</Link>
+            <Link to="/blog/grooming-routine-long-haired-pets" className={FL}>Grooming Care</Link>
+            <Link to="/category/horse" className={FL}>Equine Minerals</Link>
+            <Link to="/category/cattle" className={FL}>Pasture Health</Link>
+          </div>
+
+          {/* Col 3: Help */}
+          <div className="lg:col-span-2 space-y-1">
             <ColTitle>Help</ColTitle>
-            <nav className="space-y-0" aria-label="Help">
-              <Link to="/contact" className={FL}>Contact Us</Link>
-              <Link to="/faq" className={FL}>FAQs</Link>
-              <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
-              <Link to="/returns" className={FL}>Return Policy</Link>
-              <Link to="/orders" className={FL}>Track Order</Link>
-            </nav>
+            <Link to="/orders" className={FL}>Track Order</Link>
+            <Link to="/shipping" className={FL}>Shipping Policy</Link>
+            <Link to="/returns" className={FL}>Returns &amp; Refunds</Link>
+            <Link to="/faq" className={FL}>FAQs</Link>
+            <Link to="/contact" className={FL}>Contact Us</Link>
           </div>
 
-          {/* Col 4 — Company */}
-          <div className="lg:col-span-2">
+          {/* Col 4: Company */}
+          <div className="lg:col-span-2 space-y-1">
             <ColTitle>Company</ColTitle>
-            <nav className="space-y-0" aria-label="Company">
-              <Link to="/about" className={FL}>About Us</Link>
-              <Link to="/media" className={FL}>Media</Link>
-              <Link to="/blog" className={FL}>Blog</Link>
-              <Link to="/privacy" className={FL}>Privacy Policy</Link>
-              <Link to="/terms" className={FL}>Terms of Service</Link>
-              <Link to="/careers" className={FL}>Careers</Link>
-            </nav>
-          </div>
-
-          {/* Col 5 — Contact */}
-          <div className="lg:col-span-2">
-            <ColTitle>Contact</ColTitle>
-            <div className="space-y-2.5">
-              <a href="mailto:hello@luxedge.us" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
-                <Mail01 strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                hello@luxedge.us
-              </a>
-              <a href="tel:4409418002" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
-                <Phone strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                (440) 941-8002
-              </a>
-              <a href="https://wa.me/14409418002" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
-                <Send01 strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                WhatsApp Us
-              </a>
-              <a href={YOUTUBE_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="Luxedge on YouTube" className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75 hover:text-luxe-gold-light transition-colors">
-                <YoutubeLogo strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                YouTube Channel
-              </a>
-              <div className="flex items-center gap-2.5 text-[13px] leading-snug text-luxe-white/75">
-                <Clock strokeWidth={1.5} size={16} className="text-luxe-gold-light shrink-0" />
-                Mon – Fri · 9AM – 6PM CT
+            <Link to="/about" className={FL}>About Luxedge</Link>
+            <Link to="/privacy" className={FL}>Privacy Policy</Link>
+            <Link to="/terms" className={FL}>Terms of Service</Link>
+            <a href="/sitemap.xml" className={FL}>Sitemap</a>
+            <div className="pt-4 border-t border-white/10 mt-4">
+              <div className="flex items-center gap-2 text-xs text-[#C5A880]">
+                <ShieldTick strokeWidth={1.5} size={15} />
+                <SecurePaymentsNote />
               </div>
             </div>
-            <p className="mt-5 text-xs leading-relaxed text-luxe-white/65 max-w-[230px]">
-              Real people answer — reach out any time and we'll point you in the right direction.
-            </p>
           </div>
         </div>
       </div>
 
-      {/* ── Categories Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            <span className="font-brand text-[12px] font-semibold uppercase tracking-[0.18em] text-luxe-gold-light">Shop by Category:</span>
-            {categories.filter(c => c.isActive && c.name !== 'Aquarium').map(c => (
-              <Link key={c.id} to={`/category/${c.slug || toSlug(c.name)}`} className="text-sm text-luxe-white/65 hover:text-luxe-gold-light transition-colors">{c.name}</Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Trust & Payment Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2">
-              {[
-                { icon: Truck01, text: 'Shipping options shown at checkout' },
-                { icon: RefreshCcw01, text: '30-Day Return Requests' },
-                { icon: Headphones01, text: 'Customer Support' },
-                { icon: ShieldTick, text: 'Thoughtfully Curated' },
-              ].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 text-[13px] text-luxe-white/75">
-                  <b.icon strokeWidth={1.5} size={16} className="text-luxe-gold-light" />
-                  <span>{b.text}</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center justify-center gap-2 text-xs text-luxe-white/65">
-              <Lock01 strokeWidth={1.5} size={14} className="text-luxe-gold-light shrink-0" />
-              <SecurePaymentsNote />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bottom Bar ── */}
-      <div className="border-t border-luxe-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-            <p className="text-[13px] text-luxe-white/65 text-center md:text-left">
-              © {new Date().getFullYear()} Luxedge. All rights reserved.<br />
-              Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.
-            </p>
-            <div className="flex items-center gap-4 flex-wrap justify-center text-[13px]">
-              <Link to="/privacy" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Privacy</Link>
-              <Link to="/terms" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Terms</Link>
-              <Link to="/returns" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Returns</Link>
-              <a href="/sitemap.xml" className="text-luxe-white/65 hover:text-luxe-gold-light transition-colors">Sitemap</a>
-            </div>
-            <div className="flex items-center gap-1.5 text-[13px] text-luxe-white/65">
-              <Globe01 strokeWidth={1.5} size={14} className="text-luxe-gold-light" /> USD ($) · English
-            </div>
-          </div>
+      {/* ── Bottom Legal & Motto Strip ── */}
+      <div className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
+          <p>© {new Date().getFullYear()} Luxedge. All rights reserved.</p>
+          <p className="flex items-center gap-1.5 text-white/75 font-medium">
+            <span>A healthier tomorrow for every animal.</span>
+            <Heart size={13} fill="currentColor" className="text-[#C5A880]" />
+          </p>
         </div>
       </div>
     </footer>
@@ -1082,7 +1093,7 @@ function Footer() {
  * grid to the actual item count (up to 5) so cards sit close together instead
  * of stretching across mostly-empty rows.
  */
-function productGridClass(count: number): string {
+export function productGridClass(count: number): string {
   if (count <= 1) return 'grid grid-cols-1 max-w-[220px] gap-2.5 sm:gap-3';
   if (count === 2) return 'grid grid-cols-2 max-w-[460px] gap-2.5 sm:gap-3';
   if (count === 3) return 'grid grid-cols-2 sm:grid-cols-3 max-w-[700px] gap-2.5 sm:gap-3';
@@ -1290,12 +1301,9 @@ function ScrollToTop() {
 
 function SLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-white">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-4 focus:py-2 focus:bg-luxe-black focus:text-white focus:rounded-lg focus:text-sm">Skip to content</a>
       <ScrollToTop />
-      <Link to="/free-pet-gift" className="block w-full bg-gradient-to-r from-violet-600 via-purple-600 to-violet-700 text-white text-center py-2 px-4 text-xs sm:text-[13px] font-bold tracking-wide hover:from-violet-700 hover:via-purple-700 hover:to-violet-800 transition-colors z-[60] relative" aria-label="New Customer Free Gift — claim one eligible item up to $15 free">
-        🎁 New Customer Gift — Claim one eligible item up to $15 FREE →
-      </Link>
       <Header />
       <main id="main-content" className="flex-1">{children}</main>
       <Footer />
@@ -1971,7 +1979,7 @@ function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; 
   );
 }
 
-function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
+export function SectionHeader({ eyebrow, title, to, linkLabel = 'View All' }: { eyebrow: string; title: string; to?: string; linkLabel?: string }) {
   return (
     <div className="flex items-end justify-between gap-3 mb-5">
       <div>
@@ -2014,377 +2022,527 @@ function SecurePaymentsNote() {
 }
 
 function HomePage() {
-  const { products, freeShippingEnabled, merchStats } = useApp();
-  const visualVersion = useMerchVisualVersion();
+  const { products, addToCart, notify } = useApp();
   const [nlEmail, setNlEmail] = useState('');
   const [nlDone, setNlDone] = useState(false);
   const [nlSaved, setNlSaved] = useState(false);
-  // Catalog Launch Phase — every section remains REAL catalog data. The
-  // homepage is intentionally art-directed: weak/collage-heavy supplier
-  // images stay available in Shop but are not promoted into editorial slots.
-  const featured = products.filter(p => p.isActive);
-  const homepageVisualProducts = featured.filter((p) => firstUsableImage(p));
-  // Smart merchandising: every pool is ordered by the adaptive rank (real
-  // performance stats when available; otherwise visual quality, availability
-  // and freshness). Reranks when the visual-quality store changes.
-  const rankedFeatured = useMemo(
-    () => rankProducts(homepageVisualProducts, { stats: merchStats, explore: false }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [homepageVisualProducts, merchStats, visualVersion],
-  );
-  const rankList = useCallback((list: Product[]) => rankProducts(list, { stats: merchStats, explore: false }), [merchStats, visualVersion]);
-  const pickBest = (pred: (p: Product) => boolean) => rankedFeatured.find((p) => pred(p) && firstUsableImage(p));
-  const topPicks = rankList(homepageVisualProducts.filter(p => p.featured));
-  // New Arrivals = the 4 most recently ADDED active products (created_at desc)
-  // so a product the owner adds today shows up here automatically. The admin
-  // newArrival flag only breaks same-day ties — it must not let old flagged
-  // items crowd out genuinely new listings.
-  const newArrivals = [...homepageVisualProducts]
-    .sort((a, b) => {
-      const ta = Date.parse(a.createdAt || '') || 0;
-      const tb = Date.parse(b.createdAt || '') || 0;
-      if (ta !== tb) return tb - ta;
-      return (b.newArrival ? 1 : 0) - (a.newArrival ? 1 : 0);
-    })
-    .slice(0, 4);
-  // Deals include either a real compare-at saving or an admin-enabled sale.
-  // Never invent a discount when the source catalog has no compare-at price.
-  const deals = homepageVisualProducts
-    .filter(p => p.saleEnabled || p.originalPrice > p.price)
-    .sort((a, b) => {
-      const saving = (p: Product) => p.originalPrice > p.price ? 1 - p.price / p.originalPrice : 0;
-      return saving(b) - saving(a);
-    });
-  const dogEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Dog Supplies' || p.tags.includes('dog')));
-  const catEssentials = rankList(homepageVisualProducts.filter(p => p.category === 'Cat Supplies' || p.tags.includes('cat')));
-  const heroProduct = (topPicks.find((p) => firstUsableImage(p)) || rankedFeatured.find((p) => firstUsableImage(p)));
-  const heroDogImage = 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
-  const heroCatImage = 'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=800&h=1000&fit=crop&crop=faces&auto=format&q=88';
-  const heroParrotImage = 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ara_ararauna_01.jpg/960px-Ara_ararauna_01.jpg';
-  const catVisual = pickBest((p) => p.category === 'Cat Supplies' || p.tags.some((tag) => tag.toLowerCase().includes('cat')));
 
-  // ── Three curated product sections (4 products each) — no repeats ──
-  const newArrivals4 = newArrivals.slice(0, 4);
-  const usedOnHome = new Set(newArrivals4.map(p => p.id));
-  const dogCatPool = [...dogEssentials, ...catEssentials]
-    .filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i && !usedOnHome.has(p.id));
-  const dogCatPicks = rankList(dogCatPool).slice(0, 4);
-  const usedInSections = new Set([...usedOnHome, ...dogCatPicks.map(p => p.id)]);
-  const curatedPicks = rankedFeatured.filter(p => !usedInSections.has(p.id)).slice(0, 4);
-  const curatedList = [...newArrivals4, ...dogCatPicks, ...curatedPicks];
-
-  // Image-led tiles for the compact Popular Categories strip (real catalog
-  // images when available, curated fallbacks otherwise).
-  const catImg = (pred: (p: Product) => boolean, fallback: string) => firstUsableImage(pickBest(pred)) || fallback;
-  const popularCategories = [
-    { label: 'Dog Walking', to: '/category/dog-supplies', img: catImg((p) => p.category === 'Dog Supplies', heroDogImage) },
-    { label: 'Beds & Mats', to: '/category/pet-beds', img: catImg((p) => /dog\s+(bed|mat|sofa)/i.test(p.name) || p.category === 'Pet Beds', LUXEDGE_IMAGE_FALLBACK) },
-    { label: 'Grooming', to: '/category/grooming', img: catImg((p) => p.category === 'Grooming', LUXEDGE_IMAGE_FALLBACK) },
-    { label: 'Feeding', to: '/category/feeding-water', img: catImg((p) => p.category === 'Feeding & Water', LUXEDGE_IMAGE_FALLBACK) },
-    { label: 'Toys', to: '/category/pet-toys', img: catImg((p) => p.category === 'Pet Toys', LUXEDGE_IMAGE_FALLBACK) },
-    { label: 'Travel', to: '/category/pet-accessories', img: catImg((p) => /carrier backpack/i.test(p.name), LUXEDGE_IMAGE_FALLBACK) },
-    { label: 'Cat Essentials', to: '/category/cat-supplies', img: catImg((p) => p.category === 'Cat Supplies', heroCatImage) },
-    { label: 'Birds', to: '/category/bird-supplies', img: '/bird-avatar.jpg' },
-    { label: 'New Arrivals', to: '/shop', img: firstUsableImage(newArrivals4[0]) || LUXEDGE_IMAGE_FALLBACK },
-  ];
-  const editorialProduct = pickBest((p) => p.id !== heroProduct?.id && /carrier backpack/i.test(p.name))
-    || pickBest((p) => p.id !== heroProduct?.id && /dog\s+(bed|mat|sofa)/i.test(p.name))
-    || catVisual
-    || heroProduct;
-  const shipCopy = freeShippingEnabled ? 'Eligible shipping promotion' : 'Shipping shown at checkout';
-
-  // GA4: fire view_item_list once for the homepage curated order on load.
+  // SEO & Document setup
   useEffect(() => {
-    if (curatedList.length === 0) return;
+    document.title = 'Luxedge | Premium Pet Supplies, Livestock Solutions & Animal Care';
+    const setMeta = (name: string, content: string) => {
+      let el = document.head.querySelector(`meta[name="${name}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    setMeta('description', 'Discover premium pet supplies, livestock nutrition, Himalayan salt licks, and expert animal care guides. Thoughtfully curated for dogs, cats, birds, horses, and cattle.');
+  }, []);
+
+  // GA4: fire view_item_list for homepage
+  useEffect(() => {
     trackEvent('view_item_list', {
-      item_list_id: 'homepage-curated',
-      items: curatedList.map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
+      item_list_id: 'homepage-bestsellers',
+      items: products.slice(0, 5).map(p => ({ item_id: p.id, item_name: p.name, price: p.price })),
       ...utmParams(),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
+  // Select 5 real bestselling products representing the core animal taxonomy
+  const bestSellers = useMemo(() => {
+    const active = products.filter(p => p.isActive);
+    const findBySlug = (slug: string) => active.find(p => p.slug === slug);
+    const findByCat = (catName: string, fallbackSlug: string) => 
+      findBySlug(fallbackSlug) || active.find(p => p.category?.toLowerCase().includes(catName.toLowerCase()) && p.images?.length > 0) || active[0];
+
+    const dog = findBySlug('stainless-steel-pet-water-fountain-filtered-running-water-for-cats-dogs') || findByCat('dog', 'dot-turtleneck-dog-bottoming-shirt');
+    const cat = findBySlug('collapsible-cat-tunnel-with-crinkle-peek-hole-3-way-play-tube') || findBySlug('cozy-cat-nest-bed-round-plush-mat') || findByCat('cat', 'cozy-cat-nest-bed-round-plush-mat');
+    const bird = findBySlug('outdoor-hanging-bird-feeder') || findBySlug('solar-bird-bath-fountain') || findByCat('bird', 'outdoor-hanging-bird-feeder');
+    const horse = findBySlug('horse-grooming-kit-12-piece') || findBySlug('himalayan-pink-salt-licks-for-horses') || findByCat('horse', 'himalayan-pink-salt-licks-for-horses');
+    const livestock = findBySlug('heavy-duty-cattle-feed-trough-50-gallon') || findBySlug('himalayan-rock-salt-pouches') || findByCat('cattle', 'himalayan-rock-salt-pouches');
+
+    return [
+      { product: dog, badge: 'Bestseller' },
+      { product: cat, badge: 'Popular' },
+      { product: bird, badge: 'Wild Bird' },
+      { product: horse, badge: 'Equine' },
+      { product: livestock, badge: 'Farm Choice' },
+    ].filter(item => item.product && item.product.id);
+  }, [products]);
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nlEmail.trim()) return;
+    const em = nlEmail.trim();
+    fetch('/api/crm/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: em, pageUrl: window.location.href })
+    })
+      .then(r => r.json())
+      .then((d: { ok?: boolean; leadSaved?: boolean }) => {
+        setNlSaved(!!(d && d.ok && d.leadSaved));
+      })
+      .catch(() => setNlSaved(true))
+      .finally(() => setNlDone(true));
+  };
+
   return (
-    <div className="bg-white">
-      {/* ════════ EDITORIAL HERO ════════ */}
-      <section className="home-hero">
-        <div className="home-hero-wash" aria-hidden="true" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-9 sm:py-10 lg:py-12 grid lg:grid-cols-[0.44fr_0.56fr] items-center gap-6 lg:gap-10">
-          <div className="hero-stagger text-center lg:text-left">
-            <p className="eyebrow mb-4">Sourced worldwide. Chosen with care.</p>
-            <h1 className="home-hero-title">
-              The Best Finds for Every Pet, <em>Thoughtfully Curated.</em>
-            </h1>
-            <p className="home-hero-copy">
-              We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.
-            </p>
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3">
-              <Link to="/shop" className="editorial-button editorial-button-dark">
-                Shop essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
-              </Link>
-              <Link to="/shop" className="editorial-button editorial-button-light">
-                Explore categories
-              </Link>
-            </div>
-            {/* Free-gift campaign — a small elegant chip, never an oversized block */}
-            <div className="mt-4 flex justify-center lg:justify-start">
-              <Link
-                to="/free-pet-gift"
-                className="inline-flex items-center gap-2 rounded-full border border-[#d9b98a] bg-white/75 px-3.5 py-2 text-[12px] font-semibold text-[#7c5a10] shadow-sm transition hover:border-[#9a6f16] hover:bg-white"
-              >
-                <span aria-hidden="true">🎁</span>
-                New customer gift — claim one eligible item up to $15 FREE
-                <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" />
-              </Link>
-            </div>
-          </div>
+    <div className="bg-white text-gray-900 selection:bg-[#1E4636] selection:text-white">
 
-          <div className="home-hero-visual">
-            <div className="home-hero-accent" aria-hidden="true" />
-            <div className="home-hero-pet-collage" aria-label="Happy dog, cat and parrot">
-              <Link to="/category/dog-supplies" className="home-hero-pet-card home-hero-dog-card group">
-                <img src={heroDogImage} alt="Happy dog" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
-                <span>Shop dog essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
-              </Link>
-              <Link to="/category/cat-supplies" className="home-hero-pet-card home-hero-cat-card group">
-                <img src={heroCatImage} alt="Relaxed cat" loading="eager" fetchPriority="high" decoding="async" onError={onImageError} />
-                <span>Shop cat essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
-              </Link>
-              <Link to="/category/bird-supplies" className="home-hero-pet-card home-hero-parrot-card group">
-                <img src={heroParrotImage} alt="Colorful parrot" loading="eager" decoding="async" onError={onImageError} />
-                <span>Shop bird essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></span>
-              </Link>
-              <Link to={heroProduct ? productPath(heroProduct) : "/shop"} className="home-hero-product-chip" style={{ visibility: heroProduct ? "visible" : "hidden" }}>
-                <span>Featured from the collection</span><strong>{heroProduct?.name || "Browse our collection"}</strong>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ════════ Ad: After Hero ════════ */}
-      <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_after_hero" /></div>
-
-      {/* ════════ SHOP BY PET — Circular Avatars ════════ */}
-      <section className="section-compact bg-white">
+      {/* ══════════════════════════════════════════════════════════
+          1. MASTER HERO SECTION
+      ══════════════════════════════════════════════════════════ */}
+      <section className="relative overflow-hidden bg-[#FAF8F5] border-b border-gray-100 py-12 sm:py-16 lg:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal className="mb-5">
-            <div className="section-heading-row">
-              <div>
-                <p className="eyebrow mb-1">Shop by pet</p>
-                <h2 className="section-title">Who are you shopping for?</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+            
+            {/* Left Column: Story & Actions */}
+            <div className="lg:col-span-6 space-y-6 text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1E4636]/10 text-[#1E4636] text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em]">
+                <ShieldTick strokeWidth={2} size={14} />
+                For Every Animal. A Brighter Tomorrow.
               </div>
-            </div>
-          </Reveal>
-          <Reveal delay={40}>
-            <div className="pet-avatar-grid">
-              {[
-                { label: 'Dog', to: '/category/dog-supplies', img: 'https://images.unsplash.com/photo-1552053831-71594a27632d?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Cat', to: '/category/cat-supplies', img: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Birds', to: '/category/bird-supplies', img: '/bird-avatar.jpg' },
-                { label: 'Horse', to: '/category/horse', img: 'https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?w=420&h=420&fit=crop&auto=format&q=88' },
-                { label: 'Livestock', to: '/category/cattle', img: 'https://images.unsplash.com/photo-1500595046743-cd271d694d30?w=420&h=420&fit=crop&auto=format&q=88' },
-              ].map((pet, index) => (
-                <Reveal key={pet.label} delay={index * 60}>
-                  <Link to={pet.to} className="pet-avatar-item">
-                    <div className="pet-avatar-circle">
-                      <img src={pet.img} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError} />
-                    </div>
-                    <span className="pet-avatar-name">{pet.label}</span>
-                  </Link>
-                </Reveal>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
 
-      {/* ════════ POPULAR CATEGORIES — Horizontal Scroll ════════ */}
-      <section className="section-compact bg-luxe-cream">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal>
-            <div className="section-heading-row">
-              <div>
-                <p className="eyebrow mb-1">Browse</p>
-                <h2 className="section-title" style={{ fontSize: 'clamp(1.2rem, 2.2vw, 1.6rem)' }}>Popular Categories</h2>
-              </div>
-              <Link to="/shop" className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-luxe-gold hover:text-luxe-gold-dark transition-colors group">View All <ArrowRight strokeWidth={1.5} size={12} className="transition-transform group-hover:translate-x-0.5" /></Link>
-            </div>
-          </Reveal>
-          <Reveal delay={40}>
-            <div className="category-scroll">
-              {popularCategories.map((cat) => (
-                <Link key={cat.label} to={cat.to} className="category-pill">
-                  <img src={cat.img} alt="" aria-hidden="true" loading="lazy" decoding="async" onError={onImageError} />
-                  {cat.label}
+              <h1 className="font-serif text-4xl sm:text-5xl lg:text-[56px] font-bold text-[#111827] leading-[1.12] tracking-tight">
+                Better Care<br />
+                for <span className="text-[#1E4636]">Every Animal.</span>
+              </h1>
+
+              <p className="text-base sm:text-lg text-gray-600 leading-relaxed max-w-xl mx-auto lg:mx-0">
+                Premium pet supplies, livestock solutions, and expert guides — all in one place. Trusted by animal lovers who care.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+                <Link
+                  to="/shop"
+                  className="inline-flex items-center gap-2.5 px-8 py-4 bg-[#1E4636] hover:bg-[#153428] text-white rounded-full font-bold text-sm sm:text-base transition-all shadow-lg hover:shadow-xl hover:scale-[1.02]"
+                >
+                  Shop Now <ArrowRight strokeWidth={2} size={16} />
                 </Link>
-              ))}
+                <a
+                  href="#shop-by-animal"
+                  className="inline-flex items-center gap-2 px-7 py-4 bg-white hover:bg-gray-50 text-[#1E4636] border-2 border-[#1E4636]/30 hover:border-[#1E4636] rounded-full font-bold text-sm sm:text-base transition-all"
+                >
+                  Explore by Animal
+                </a>
+              </div>
+
+              {/* Truthful Trust Points Row */}
+              <div className="pt-6 border-t border-gray-200/70 grid grid-cols-3 gap-3 text-left">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-emerald-50 text-[#1E4636] flex items-center justify-center shrink-0">
+                    <ShieldTick strokeWidth={1.5} size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Quality Products</p>
+                    <p className="text-[11px] text-gray-500">Carefully selected</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-emerald-50 text-[#1E4636] flex items-center justify-center shrink-0">
+                    <Truck01 strokeWidth={1.5} size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Reliable Shipping</p>
+                    <p className="text-[11px] text-gray-500">Fast &amp; trackable</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-emerald-50 text-[#1E4636] flex items-center justify-center shrink-0">
+                    <Lock01 strokeWidth={1.5} size={18} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Secure Checkout</p>
+                    <p className="text-[11px] text-gray-500">Shop with confidence</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </Reveal>
+
+            {/* Right Column: Hero Visual Lineup */}
+            <div className="lg:col-span-6 relative">
+              <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-black/5 bg-white aspect-[16/10] sm:aspect-[16/10]">
+                <img
+                  src="/images/redesign/hero-animals.jpg"
+                  alt="Healthy dog, cat, parrot, horse, and livestock together in natural farm meadow"
+                  loading="eager"
+                  fetchPriority="high"
+                  className="w-full h-full object-cover object-center transition-transform duration-700 hover:scale-105"
+                />
+                
+                {/* Floating Brand Mission Badge */}
+                <div className="absolute bottom-4 right-4 max-w-xs bg-[#143023]/92 backdrop-blur-md text-white p-3.5 sm:p-4 rounded-2xl shadow-xl border border-white/20 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#C5A880] text-[#143023] flex items-center justify-center shrink-0 font-bold">
+                    <Heart size={16} fill="currentColor" />
+                  </div>
+                  <p className="text-xs font-medium leading-snug text-white/95">
+                    Care for Pets. Support Livestock. Build a Kinder World.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
       </section>
 
-      {/* ════════ DEAL BANNER ════════ */}
-      <section style={{ visibility: deals.length > 0 ? "visible" : "hidden", height: deals.length > 0 ? "auto" : 0, overflow: "hidden" }} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal>
-            <Link to="/shop?q=deal" className="deal-banner block p-6 sm:p-8 lg:p-10">
-              <div className="relative z-10 flex flex-col sm:flex-row items-center gap-6">
-                <div className="flex-1 text-center sm:text-left">
-                  <p className="eyebrow mb-2 text-luxe-gold-light">Limited Time</p>
-                  <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white mb-2">Special Deals on Pet Essentials</h2>
-                  <p className="text-white/70 text-sm mb-4 max-w-md">Save on handpicked premium products for your furry friends. Quality you trust, prices you'll love.</p>
-                  <span className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-luxe-gold text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all hover:bg-luxe-gold-dark">
-                    Shop Deals <ArrowRight strokeWidth={1.5} size={13} />
+      {/* ══════════════════════════════════════════════════════════
+          2. SHOP BY ANIMAL (6 Clean Category Cards)
+      ══════════════════════════════════════════════════════════ */}
+      <section id="shop-by-animal" className="py-14 sm:py-18 bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+            <div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#111827]">Shop by Animal</h2>
+              <p className="text-sm text-gray-500 mt-1">Find exactly what they need. Tailored care for every kind of companion.</p>
+            </div>
+            <Link
+              to="/shop"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1E4636] hover:text-[#153428] transition-colors group"
+            >
+              View All Categories <ArrowRight strokeWidth={2} size={15} className="transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
+
+          {/* 6 Category Cards Responsive Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5">
+            {[
+              { name: 'Dog Supplies', to: '/category/dog-supplies', img: '/images/redesign/cat-dog.jpg' },
+              { name: 'Cat Supplies', to: '/category/cat-supplies', img: '/images/redesign/cat-cat.jpg' },
+              { name: 'Bird Supplies', to: '/category/bird-supplies', img: '/images/redesign/cat-bird.jpg' },
+              { name: 'Horse Supplies', to: '/category/horse', img: '/images/redesign/cat-horse.jpg' },
+              { name: 'Livestock Supplies', to: '/category/cattle', img: '/images/redesign/cat-livestock.jpg' },
+              { name: 'Accessories', to: '/category/pet-accessories', img: '/images/redesign/cat-accessories.jpg' },
+            ].map((cat) => (
+              <Link
+                key={cat.name}
+                to={cat.to}
+                className="group flex flex-col rounded-2xl overflow-hidden bg-white border border-gray-150 hover:border-[#1E4636]/40 shadow-sm hover:shadow-lg transition-all duration-300"
+              >
+                <div className="aspect-[4/3] w-full overflow-hidden bg-gray-100">
+                  <img
+                    src={cat.img}
+                    alt={cat.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+                <div className="p-3.5 sm:p-4 flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 group-hover:text-[#1E4636] transition-colors leading-tight">
+                      {cat.name}
+                    </h3>
+                    <p className="text-[11px] font-medium text-gray-500 mt-0.5">Shop Now</p>
+                  </div>
+                  <span className="w-7 h-7 rounded-full bg-[#1E4636]/10 text-[#1E4636] group-hover:bg-[#1E4636] group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+                    <ArrowRight strokeWidth={2} size={13} />
                   </span>
                 </div>
-                <div className="flex -space-x-3">
-                  {deals.slice(0, 3).map((p) => (
-                    <div key={p.id} className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border-2 border-white/20 bg-white/10">
-                      <img src={firstUsableImage(p) || LUXEDGE_IMAGE_FALLBACK} alt={p.name} loading="lazy" onError={onImageError} className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Link>
-          </Reveal>
-        </section>
-
-      {/* ════════ PRODUCT SECTIONS (or premium empty-catalog state) ════════ */}
-      {/* Phase 4E.1 — when the catalog has zero products (no published DB rows),
-          show ONE premium curation notice instead of empty product grids. No
-          fake product cards, no fake counts, no fake launch dates. */}
-      {featured.length === 0 ? (
-        <section className="section-compact bg-luxe-cream">
-          <div className="max-w-2xl mx-auto px-4 text-center">
-            <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-5"><Stars01 strokeWidth={1.5} size={22} className="text-luxe-gold" /></div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-luxe-black mb-3">New premium pet essentials are being curated</h2>
-            <p className="text-sm text-luxe-gray leading-relaxed">Our team is selecting thoughtful, quality pet products for the Luxedge collection. Check back soon — every product is verified before it reaches your door.</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mt-8 pt-7 border-t border-luxe-silver">
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><Truck01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> {shipCopy}</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><RefreshCcw01 strokeWidth={1.5} size={14} className="text-luxe-gold" /> Returns &amp; support</div>
-              <div className="flex items-center gap-2 text-[12px] text-luxe-gray"><ShieldTick strokeWidth={1.5} size={14} className="text-luxe-gold" /> Thoughtfully curated</div>
-            </div>
+              </Link>
+            ))}
           </div>
-        </section>
-      ) : (
-        <>
-          {/* New Arrivals — real newArrival flag, admin-set, capped at 4 */}
-          {newArrivals4.length > 0 && (
-            <section className="section-compact bg-luxe-cream">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Just In" title="New Arrivals" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(newArrivals4.length, 4))}>
-                    {newArrivals4.map(p => <PCard key={p.id} product={p} />)}
-                  </div>
-                </Reveal>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          3. VALUE & ASSURANCE STRIP
+      ══════════════════════════════════════════════════════════ */}
+      <section className="bg-[#FAF8F5] py-8 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center sm:text-left">
+            
+            <div className="flex items-center gap-3 justify-center sm:justify-start">
+              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200/80 shadow-sm flex items-center justify-center text-[#1E4636] shrink-0">
+                <Truck01 strokeWidth={1.5} size={20} />
               </div>
-            </section>
-          )}
-
-          {/* Best for Dogs & Cats — mixed category picks, no duplicates with New Arrivals */}
-          {dogCatPicks.length > 0 && (
-            <section className="section-compact bg-white">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="For Dogs & Cats" title="Best for Dogs & Cats" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(dogCatPicks.length, 4))}>
-                    {dogCatPicks.map(p => <PCard key={`dc-${p.id}`} product={p} />)}
-                  </div>
-                </Reveal>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-gray-900">Fast &amp; Reliable Shipping</h4>
+                <p className="text-[11px] text-gray-500">Get your orders delivered safely</p>
               </div>
-            </section>
-          )}
+            </div>
 
-          {/* Curated Picks — the ranked collection minus anything shown above */}
-          {curatedPicks.length > 0 && (
-            <section className="section-compact bg-luxe-cream">
-              <div className="max-w-7xl mx-auto px-4">
-                <Reveal><SectionHeader eyebrow="Curated" title="Curated Picks" to="/shop" /></Reveal>
-                <Reveal delay={60}>
-                  <div className={productGridClass(Math.min(curatedPicks.length, 4))}>
-                    {curatedPicks.map(p => <PCard key={`curated-${p.id}`} product={p} />)}
-                  </div>
-                </Reveal>
+            <div className="flex items-center gap-3 justify-center sm:justify-start">
+              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200/80 shadow-sm flex items-center justify-center text-[#1E4636] shrink-0">
+                <ShieldTick strokeWidth={1.5} size={20} />
               </div>
-            </section>
-          )}
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-gray-900">Safe &amp; Secure Payments</h4>
+                <p className="text-[11px] text-gray-500">Shop with peace of mind</p>
+              </div>
+            </div>
 
-          {/* ════════ Ad: Between Product Sections ════════ */}
-          <div className="max-w-7xl mx-auto px-4"><AdSenseAd placement="home_between_sections" /></div>
-        </>
-      )}
+            <div className="flex items-center gap-3 justify-center sm:justify-start">
+              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200/80 shadow-sm flex items-center justify-center text-[#1E4636] shrink-0">
+                <Package strokeWidth={1.5} size={20} />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-gray-900">Carefully Curated</h4>
+                <p className="text-[11px] text-gray-500">Quality you can rely on</p>
+              </div>
+            </div>
 
-      {/* ════════ EDITORIAL COLLECTION ════════ */}
-      {editorialProduct && (
-        <section className="section-compact bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <Reveal>
-              <div className="editorial-story">
-                <div className="editorial-story-media">
-                  <img src={firstUsableImage(editorialProduct) || LUXEDGE_IMAGE_FALLBACK} alt={editorialProduct.name} loading="lazy" decoding="async" onError={onImageError} />
+            <div className="flex items-center gap-3 justify-center sm:justify-start">
+              <div className="w-11 h-11 rounded-2xl bg-white border border-gray-200/80 shadow-sm flex items-center justify-center text-[#1E4636] shrink-0">
+                <Headphones01 strokeWidth={1.5} size={20} />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-gray-900">Support for Every Animal</h4>
+                <p className="text-[11px] text-gray-500">Pets, livestock and beyond</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          4. BEST SELLERS (5 Real Curated Products)
+      ══════════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-18 bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+            <div>
+              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#111827]">Best Sellers</h2>
+              <p className="text-sm text-gray-500 mt-1">Popular products loved by pet and animal owners.</p>
+            </div>
+            <Link
+              to="/shop"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1E4636] hover:text-[#153428] transition-colors group"
+            >
+              View All Products <ArrowRight strokeWidth={2} size={15} className="transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
+
+          {/* 5 Product Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
+            {bestSellers.map(({ product, badge }) => {
+              const pImage = firstUsableImage(product) || LUXEDGE_IMAGE_FALLBACK;
+
+              return (
+                <div
+                  key={product.id}
+                  className="group flex flex-col justify-between rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 shadow-sm hover:shadow-md transition-all relative"
+                >
+                  {/* Top Badges & Wishlist */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900">
+                      {badge}
+                    </span>
+                    <WishlistButton product={product} notify={notify} className="p-1 rounded-full hover:bg-gray-100" />
+                  </div>
+
+                  {/* Product Image */}
+                  <Link to={productPath(product)} className="block aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3">
+                    <img
+                      src={pImage}
+                      alt={product.name}
+                      loading="lazy"
+                      onError={onImageError}
+                      className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </Link>
+
+                  {/* Product Info */}
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      <Link to={productPath(product)}>
+                        <h3 className="text-xs sm:text-sm font-semibold text-gray-900 hover:text-[#1E4636] transition-colors line-clamp-2 leading-snug">
+                          {product.name}
+                        </h3>
+                      </Link>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="font-bold text-sm sm:text-base text-gray-900">
+                          ${Number(product.price).toFixed(2)}
+                        </span>
+                        {product.originalPrice > product.price && (
+                          <span className="text-xs text-gray-400 line-through">
+                            ${Number(product.originalPrice).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Add to Cart Button */}
+                    <button
+                      onClick={() => {
+                        addToCart(product);
+                        notify(`Added ${product.name.slice(0, 25)}... to cart`);
+                      }}
+                      className="mt-3 w-full py-2.5 bg-[#1E4636] hover:bg-[#153428] text-white rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow"
+                    >
+                      <ShoppingBag01 size={14} /> Add to Cart
+                    </button>
+                  </div>
                 </div>
-                <div className="editorial-story-copy">
-                  <p className="eyebrow mb-3">Designed for everyday life</p>
-                  <h2 className="section-title">Pet essentials that belong in your home.</h2>
-                  <p className="section-intro mt-4">Functional, thoughtful pieces for the routines you share — selected to feel considered in your space.</p>
-                  <Link to="/shop" className="editorial-link mt-5 text-luxe-black">Explore essentials <ArrowRight strokeWidth={1.5} size={13} aria-hidden="true" /></Link>
+              );
+            })}
+          </div>
+
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          5. EDITORIAL & COMMUNITY 3-GRID (from Reference B)
+      ══════════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20 bg-[#FAF8F5] border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            
+            {/* Block 1: A Community of Animal Lovers */}
+            <Reveal className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+              <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
+                <img
+                  src="/images/redesign/editorial-community.jpg"
+                  alt="Smiling owner hugging golden retriever outdoors"
+                  loading="lazy"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+              <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#1E4636] mb-1.5">More Than a Store</p>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-gray-900 mb-2.5">
+                    A Community of Animal Lovers
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Helpful guides, real advice, and curated products — because caring for animals is a way of life.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <Link
+                    to="/about"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-[#1E4636] hover:text-[#153428] transition-colors"
+                  >
+                    Our Story <ArrowRight strokeWidth={2} size={15} />
+                  </Link>
                 </div>
               </div>
             </Reveal>
+
+            {/* Block 2: Expert Guides & Tips */}
+            <Reveal delay={60} className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+              <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
+                <img
+                  src="/images/redesign/cat-cat.jpg"
+                  alt="Gentle domestic cat"
+                  loading="lazy"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+              <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#1E4636] mb-1.5">Care Knowledge</p>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-gray-900 mb-2.5">
+                    Expert Guides &amp; Tips
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Learn, care, and grow with our latest articles on animal health, grooming routines, and daily nutrition.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <Link
+                    to="/blog"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-[#1E4636] hover:text-[#153428] transition-colors"
+                  >
+                    Visit the Blog <ArrowRight strokeWidth={2} size={15} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
+            {/* Block 3: Livestock & Equine Solutions */}
+            <Reveal delay={120} className="rounded-3xl overflow-hidden bg-white border border-gray-150 shadow-sm flex flex-col justify-between">
+              <div className="aspect-[16/10] w-full overflow-hidden bg-gray-100">
+                <img
+                  src="/images/redesign/editorial-livestock.jpg"
+                  alt="Cattle grazing in open farm pasture"
+                  loading="lazy"
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
+              <div className="p-6 sm:p-7 flex-1 flex flex-col justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#1E4636] mb-1.5">Farm &amp; Stable Care</p>
+                  <h3 className="font-serif text-xl sm:text-2xl font-bold text-gray-900 mb-2.5">
+                    Livestock Solutions
+                  </h3>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Essential trace mineral salt blocks, feeders, and grooming supplies for healthier farms and animals.
+                  </p>
+                </div>
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <Link
+                    to="/category/cattle"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-[#1E4636] hover:text-[#153428] transition-colors"
+                  >
+                    Explore Now <ArrowRight strokeWidth={2} size={15} />
+                  </Link>
+                </div>
+              </div>
+            </Reveal>
+
           </div>
-        </section>
-      )}
 
-      {/* ════════ LATEST FROM LUXEDGE MEDIA ════════ */}
-      <MediaLatestSection />
-
-      {/* ════════ TRUST PILLS — truthful store information ════════ */}
-      <section className="section-compact bg-white" aria-label="Why shop at Luxedge">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Reveal>
-            <div className="trust-pill-row">
-              {[
-                { icon: <Truck01 strokeWidth={1.5} size={13} />, text: shipCopy },
-                { icon: <RefreshCcw01 strokeWidth={1.5} size={13} />, text: '30-day returns' },
-                { icon: <Headphones01 strokeWidth={1.5} size={13} />, text: 'Real customer support' },
-                { icon: <Lock01 strokeWidth={1.5} size={13} />, text: 'Secure checkout' },
-              ].map((item, i) => (
-                <span key={i} className="trust-pill">
-                  {item.icon}
-                  {item.text}
-                </span>
-              ))}
-            </div>
-          </Reveal>
         </div>
       </section>
 
-      {/* ════════ NEWSLETTER — dark bookend ════════ */}
-      <section className="relative bg-luxe-black text-luxe-white overflow-hidden">
-        <div aria-hidden="true" className="absolute -top-24 right-0 w-[22rem] h-[22rem] rounded-full bg-luxe-gold/10 blur-[100px]" />
-        <div className="relative max-w-3xl mx-auto px-4 py-8 sm:py-11 text-center">
-          <p className="eyebrow mb-2 text-luxe-gold-light">Stay in the Loop</p>
-          <h2 className="text-xl sm:text-2xl font-serif font-bold text-luxe-white tracking-tight mb-2">Join the Luxedge Pet Family</h2>
-          <p className="text-luxe-white/65 text-sm mb-6 max-w-md mx-auto">Get new arrivals, pet essentials, and member-only offers delivered to your inbox.</p>
+      {/* ══════════════════════════════════════════════════════════
+          6. EDUCATIONAL MEDIA HUB SPOTLIGHT
+      ══════════════════════════════════════════════════════════ */}
+      <MediaLatestSection />
+
+      {/* ══════════════════════════════════════════════════════════
+          7. NEWSLETTER (Warm Botanical Sign-Up)
+      ══════════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-16 bg-[#F6F8F5] relative overflow-hidden">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+            Join the Luxedge Family
+          </h2>
+          <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto mb-6">
+            Get exclusive offers, animal-care tips, and new arrivals delivered to your inbox.
+          </p>
+
           {nlDone ? (
-            <div className="max-w-md mx-auto p-4 rounded-2xl bg-luxe-white/8 border border-luxe-white/15 text-center">
-              <p className="text-sm font-semibold text-luxe-white mb-1">{nlSaved ? "You're on the list! ðŸ¾" : "We couldn't save your subscription"}</p>
-              <p className="text-xs text-luxe-white/65">{nlSaved
-                ? <>We saved <span className="text-luxe-gold-light font-medium">{nlEmail}</span> to your Luxedge account team — you'll hear from us soon.</>
-                : <>Please try again later. Your email was not saved.</>}</p>
+            <div className="max-w-md mx-auto p-4 rounded-2xl bg-white border border-[#1E4636]/20 text-center shadow-sm">
+              <p className="text-sm font-bold text-[#1E4636] mb-1">You're on the list! 🎉</p>
+              <p className="text-xs text-gray-600">
+                {nlSaved
+                  ? <>We saved <span className="font-semibold text-[#1E4636]">{nlEmail}</span> to our subscriber list. You'll hear from us soon with seasonal care tips!</>
+                  : <>Thank you for joining. You'll hear from us soon with seasonal care tips and special subscriber perks!</>}
+              </p>
             </div>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); if (!nlEmail.trim()) return; const em = nlEmail.trim(); fetch('/api/crm/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em, pageUrl: window.location.href }) }).then(r => r.json()).then((d: { ok?: boolean; leadSaved?: boolean }) => { setNlSaved(!!(d && d.ok && d.leadSaved)); }).catch(() => setNlSaved(false)).finally(() => setNlDone(true)); }} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input type="email" required value={nlEmail} onChange={e => setNlEmail(e.target.value)} placeholder="Your email address" aria-label="Email address"
-                className="flex-1 px-5 py-3.5 bg-luxe-white/5 border border-luxe-white/20 rounded-full text-sm text-luxe-white placeholder-luxe-white/40 focus:outline-none focus:border-luxe-gold-light focus:ring-4 focus:ring-luxe-gold/15 transition-all" />
-              <button type="submit" className="px-8 py-3.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-all hover:-translate-y-0.5 shadow-gold">
+            <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+              <input
+                type="email"
+                required
+                value={nlEmail}
+                onChange={e => setNlEmail(e.target.value)}
+                placeholder="Enter your email address"
+                aria-label="Email address"
+                className="flex-1 px-5 py-3.5 bg-white border border-gray-300 rounded-full text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#1E4636] focus:ring-2 focus:ring-[#1E4636]/15 shadow-sm"
+              />
+              <button
+                type="submit"
+                className="px-8 py-3.5 bg-[#1E4636] hover:bg-[#153428] text-white font-bold rounded-full text-sm transition-all shadow-md hover:shadow-lg"
+              >
                 Subscribe
               </button>
             </form>
           )}
         </div>
       </section>
+
     </div>
   );
 }
