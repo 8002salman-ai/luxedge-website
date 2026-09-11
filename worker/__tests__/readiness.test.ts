@@ -32,6 +32,31 @@ describe('editorial release boundaries', () => {
     const result = await maybeInjectSeo(shell, '/campaigns', 'https://luxedge.us', env);
     expect(result).toHaveProperty('status', 404);
     expect(result && 'html' in result && result.html).toContain('noindex');
+    expect(result && 'html' in result && result.html).toContain('Page Not Found | Luxedge');
+  });
+  it('keeps the media hub indexable and gives published videos indexable metadata', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([
+      { slug: 'guide', title: 'Published Guide', summary: 'A published video.', youtube_video_id: 'abcdefghijk', thumbnail_url: 'https://example.com/a.jpg' },
+    ]))));
+    for (const path of ['/media', '/media/guide']) {
+      const result = await maybeInjectSeo(shell, path, 'https://luxedge.us', env);
+      expect(result).toHaveProperty('status', 200);
+      expect(result && 'html' in result && result.html).toContain('index, follow');
+      expect(result && 'html' in result && result.html).not.toContain('noindex, nofollow');
+    }
+  });
+  it('handles /blog/write before the general blog slug lookup', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify([])));
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await maybeInjectSeo(shell, '/blog/write', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 200);
+    expect(result && 'html' in result && result.html).toContain('noindex, nofollow');
+    expect(result && 'html' in result && result.html).toContain('Write | Luxedge');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
   it('excludes utility, nested checkout, search and media routes from both ad modes', () => {
     for (const path of ['/admin', '/checkout/success', '/cart', '/account', '/wishlist', '/blog/write', '/media/example', '/404']) {

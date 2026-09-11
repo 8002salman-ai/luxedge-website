@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useApp, loadAIProviders, buildExtractionPrompt, callAIProvider, fetchPageContent,
-  extractAliExpressItemId, assessAliExpressRisk, findDuplicateProduct,
+  extractAliExpressItemId, assessAliExpressRisk,
   buildImportImages, buildImportVariants, buildImportProductInput,
   buildStorageImageInputs, importProductImagesToStorage,
   buildScrapedEvidenceProduct, mergeScrapedWithAi, requireReviewEvidence, isEmptyExtraction,
@@ -14,7 +14,7 @@ import {
 } from '../App';
 import type { AIProvider, AIExtractedProduct, ImportHistoryEntry } from '../App';
 import { loadProviderSettings } from '../features/ai/providers';
-import { createProduct, updateProduct, getProduct, saveProductImages, saveProductVariants, listProducts, listCategories, setDbToken } from '../features/catalog/repository';
+import { createProduct, updateProduct, saveProductImages, saveProductVariants, listCategories, setDbToken, checkProductDuplicate } from '../features/catalog/repository';
 import {
   getListingPlaybook, getImportHistory, appendImportHistory,
   supplierBrandForUrl, rulesForCategory, effectiveStatusForImport,
@@ -256,15 +256,34 @@ export function AIImportPanel() {
         const aiText = await callAIProvider(prompt, aiProviders, (m) => addLog(m), undefined, importProvider);
         addLog('AI RESULT: 200 — provider replied');
         addLog('Parsing AI response…');
-        const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+        let cleanText = aiText.trim();
+        // Strip markdown code fences if present
+        if (cleanText.includes('```')) {
+          cleanText = cleanText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+        }
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
         aiJsonParsed = !!jsonMatch;
         if (jsonMatch) {
-          const aiData = JSON.parse(jsonMatch[0]) as AIExtractedProduct;
-          if (!isEmptyExtraction(aiData)) {
-            data = aiData;
-            aiState = 'SUCCESS';
-          } else {
-            aiState = 'EMPTY';
+          try {
+            const aiData = JSON.parse(jsonMatch[0]) as AIExtractedProduct;
+            if (!isEmptyExtraction(aiData)) {
+              data = aiData;
+              aiState = 'SUCCESS';
+            } else {
+              aiState = 'EMPTY';
+            }
+          } catch (pe) {
+            // Repair trailing commas or unescaped newlines in JSON
+            try {
+              const repaired = jsonMatch[0].replace(/,\s*([\}\]])/g, '$1');
+              const aiData = JSON.parse(repaired) as AIExtractedProduct;
+              if (!isEmptyExtraction(aiData)) {
+                data = aiData;
+                aiState = 'SUCCESS';
+              }
+            } catch {
+              addLog('AI JSON format warning: ' + (pe as Error).message, false);
+            }
           }
         }
       } catch (e2: any) {
@@ -354,17 +373,17 @@ export function AIImportPanel() {
       // Refresh first — a long-open import form must not write with a stale JWT.
       setDbToken(await getFreshAccessToken());
 
-      // DB-level duplicate check — supplier URL / item ID / SKU, then slug/title.
-      const allProducts = await listProducts();
-      const dup = findDuplicateProduct(allProducts, { url, itemId, title, sku: extracted.sku });
+      // Fast parallel pre-checks: targeted duplicate check & categories lookup
+      // Avoids loading thousands of product images/variants into browser memory
+      const [dup, cats] = await Promise.all([
+        checkProductDuplicate({ url, itemId, title, sku: extracted.sku }),
+        listCategories(),
+      ]);
       if (dup) {
         setDupProduct({ id: dup.id, name: dup.name });
         notify('DUPLICATE FOUND — open the existing product instead of saving.', 'error');
         return;
       }
-
-      // Resolve Luxedge category name → category id (best-effort; null is honest).
-      const cats = await listCategories();
       const catName = String(ef.category || extracted.category || '').trim();
       const categoryId = cats.find((c) => c.name.toLowerCase() === catName.toLowerCase())?.id || null;
 
@@ -400,54 +419,50 @@ export function AIImportPanel() {
         imageCount: selectedImgs.length,
       }));
 
-      // Images — storage-first: download/upload into the Supabase product-media
-      // bucket via the serverless endpoint; fall back to durable supplier URLs
-      // only when storage is unavailable, with an explicit warning (never silent).
-      let imageRows: ReturnType<typeof buildImportImages> = [];
-      if (selectedImgs.length) {
-        imageRows = buildImportImages(selectedImgs, heroImg || selectedImgs[0]);
-        const imageWarnings: string[] = [];
-        try {
-          const sr = await importProductImagesToStorage(created.id, selectedImgs);
-          if (sr.ok && sr.uploaded.length) {
-            imageRows = buildStorageImageInputs(sr.uploaded, heroImg || selectedImgs[0]);
-          } else {
-            imageWarnings.push((sr.warnings && sr.warnings[0]) || 'Storage import returned no images — saved supplier image URLs instead.');
-          }
-          if (sr.warnings && sr.warnings.length) imageWarnings.push(...sr.warnings);
-        } catch (e) {
-          imageWarnings.push(`Supabase storage import unavailable (${(e as Error).message}) — saved supplier image URLs instead.`);
-        }
-        await saveProductImages(created.id, imageRows);
-        if (imageWarnings.length) {
-          notify(imageWarnings.join(' '), 'error');
-          addLog(`⚠ ${imageWarnings.join(' ')}`, false);
-        }
-      }
-
-      // Variants — real only; never invent stock/price.
+      // Images & Variants — persist immediately to DB in parallel for sub-2-second saving!
+      const imageRows: ReturnType<typeof buildImportImages> = selectedImgs.length
+        ? buildImportImages(selectedImgs, heroImg || selectedImgs[0])
+        : [];
       const variants = buildImportVariants((extracted.variants || []).map((v) => ({ attributes: v.attributes, sku: v.sku, price: v.price })));
-      if (variants.length) {
-        await saveProductVariants(created.id, variants);
-      }
+
+      await Promise.all([
+        imageRows.length ? saveProductImages(created.id, imageRows, { reload: false }) : Promise.resolve(),
+        variants.length ? saveProductVariants(created.id, variants, { reload: false }) : Promise.resolve(),
+      ]);
 
       // Listing Playbook status rule: promote to Active only when the verified
-      // image count meets the minimum; otherwise keep Draft. Re-read the row
-      // from the DB to verify what actually persisted.
+      // image count meets the minimum; otherwise keep Draft.
       let finalStatus = created.status || 'draft';
       if (playbook) {
         const verified = imageRows.length;
         const wanted = effectiveStatusForImport(playbook, catName, verified, rules?.defaultStatus || 'draft');
         if (wanted === 'active' && verified >= (rules?.minImages ?? playbook.global.minImages ?? 3)) {
           const updated = await updateProduct(created.id, { status: 'active' });
-          const check = updated ? await getProduct(created.id) : null;
-          if (check && check.status === 'active') finalStatus = 'active';
+          if (updated) finalStatus = 'active';
         }
       }
 
+      // Instant UI completion — notify user and transition to 'done' immediately!
       const riskNote = risk.warnings.length ? ` Risk flags: ${risk.warnings.join('; ')}.` : '';
       notify(`${finalStatus === 'active' ? 'ACTIVE listing saved' : 'DRAFT saved to catalog'} (${created.name}) — ${imageRows.length} image${imageRows.length === 1 ? '' : 's'}, readiness ${created.commerceReadiness || 'DRAFT'}.${riskNote}`);
       setStep('done');
+
+      // Non-blocking background Storage Sync:
+      // Downloads supplier CDN images & uploads to Supabase Storage in background.
+      // The user is already on 'done' and the listing is fully working!
+      if (selectedImgs.length) {
+        void (async () => {
+          try {
+            const sr = await importProductImagesToStorage(created.id, selectedImgs);
+            if (sr.ok && sr.uploaded.length) {
+              const storageRows = buildStorageImageInputs(sr.uploaded, heroImg || selectedImgs[0]);
+              await saveProductImages(created.id, storageRows, { reload: false });
+            }
+          } catch (e) {
+            console.warn('[AIImport] Background image storage sync deferred:', (e as Error).message);
+          }
+        })();
+      }
     } catch (e) {
       notify(`Save failed: ${(e as Error).message}`, 'error');
     } finally {

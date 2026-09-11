@@ -1012,3 +1012,9 @@ input[type="number"] { -moz-appearance: textfield; }
   .product-gallery__open { padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .pdp-shell button { transition: none; } }
+
+/* Hide unfilled AdSense units so empty boxes never cause CLS or layout gaps */
+ins.adsbygoogle[data-ad-status="unfilled"],
+.adsense-unit-wrapper:has(ins[data-ad-status="unfilled"]) {
+  display: none !important;
+}

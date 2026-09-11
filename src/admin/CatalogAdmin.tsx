@@ -1519,10 +1519,10 @@ function CsvImportModal({ open, onClose, existing, cats, notify, onImported }: {
         if (row.images.length > 0) {
           await saveProductImages(product.id, row.images.map((url, n) => ({
             url, isPrimary: n === 0, sortOrder: n, kind: 'product' as const,
-          })));
+          })), { reload: false });
         }
         if (row.variants.length > 0) {
-          await saveProductVariants(product.id, row.variants.map((v) => ({ attributes: v.attributes })));
+          await saveProductVariants(product.id, row.variants.map((v) => ({ attributes: v.attributes })), { reload: false });
         }
         created++;
       } catch (e) {
@@ -1871,7 +1871,7 @@ export function CatalogProductEditor() {
         evidenceNotes: p.evidenceNotes,
       };
       const saved = isNew ? await createProduct(input) : (await updateProduct(p.id, input))!;
-      await saveProductImages(saved.id, p.images.map((img, i) => ({
+      const imagePayload = p.images.map((img, i) => ({
         id: img.id || undefined,
         url: img.url,
         altText: img.altText,
@@ -1879,8 +1879,8 @@ export function CatalogProductEditor() {
         isPrimary: img.isPrimary,
         sortOrder: i,
         variantId: img.variantId || null,
-      })));
-      await saveProductVariants(saved.id, p.variants.map((v) => ({
+      }));
+      const variantPayload = p.variants.map((v) => ({
         id: v.id || undefined,
         attributes: v.attributes,
         sku: v.sku,
@@ -1890,7 +1890,13 @@ export function CatalogProductEditor() {
         inventoryQty: v.inventoryQty,
         status: v.status,
         lowStockThreshold: v.lowStockThreshold,
-      })));
+      }));
+
+      // Parallelize image and variant DB writes
+      await Promise.all([
+        saveProductImages(saved.id, imagePayload, { reload: false }),
+        saveProductVariants(saved.id, variantPayload, { reload: false }),
+      ]);
       // Auto-list: if enabled and this save made the product commerce-ready
       // while it was still a draft, publish it (status → active) so it shows
       // on the storefront without a second manual step. The playbook gate
@@ -2480,6 +2486,10 @@ function QuickAddForm({ product, cats, onChange, onAddCategory }: { product: Cat
         <div className="sm:col-span-2">
           <label className={L}>Supplier URL <span className="normal-case font-normal text-gray-400">(marketplace search — replace with the real listing page)</span></label>
           <input value={product.supplierUrl || ''} onChange={(e) => set('supplierUrl', e.target.value)} className={I} placeholder="https://… (picking a source above auto-fills its search for this product)" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={L}>Supplier SKU <span className="normal-case font-normal text-gray-400">(optional — for sourcing traceability)</span></label>
+          <input value={product.supplierProductRef || ''} onChange={(e) => set('supplierProductRef', e.target.value)} className={I} placeholder="e.g. CJ PID or supplier item ID — can be added later in Detail" />
         </div>
         <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <div className="flex items-end"><label className="flex items-center gap-2 text-sm text-gray-700 pb-2"><input type="checkbox" checked={product.freeShipping} onChange={(e) => set('freeShipping', e.target.checked)} className="w-4 h-4" />Free shipping on this product</label></div>

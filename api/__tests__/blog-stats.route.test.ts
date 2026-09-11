@@ -17,6 +17,7 @@ const { requireAdmin } = await import('../_lib/auth.js');
 const handler = (await import('../admin/blog-stats.js')).default;
 
 const HOST = 'https://probe.supabase.co';
+const originalSupabaseUrl = process.env.SUPABASE_URL;
 
 function makeRes(): { captured: { status: number; body: unknown }; server: ServerResponse } {
   const captured = { status: 200, body: null as unknown };
@@ -55,6 +56,9 @@ function iso(daysAgo: number): string {
 describe('/api/admin/blog-stats', () => {
   beforeEach(() => {
     vi.mocked(requireAdmin).mockResolvedValue({ sub: 'admin-1', role: 'admin' } as never);
+    // supabaseAdmin() accepts both VITE_SUPABASE_URL and SUPABASE_URL. Keep the
+    // ambient fallback out of this fixture so each case controls configuration.
+    delete process.env.SUPABASE_URL;
     process.env.VITE_SUPABASE_URL = HOST;
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-probe';
   });
@@ -62,6 +66,8 @@ describe('/api/admin/blog-stats', () => {
     vi.unstubAllGlobals();
     delete process.env.VITE_SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (originalSupabaseUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalSupabaseUrl;
   });
 
   it('returns empty stats when analytics service is not configured', async () => {

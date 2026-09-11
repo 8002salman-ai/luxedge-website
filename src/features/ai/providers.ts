@@ -17,12 +17,12 @@ import type { AIProvider } from './types';
 // CHATGPT_OAUTH_TOKEN is configured on the server).
 // This matches DEFAULT_PROVIDER_SETTINGS (openrouter → deepseek).
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id: 'openrouter', name: 'OpenRouter', models: ['minimax/minimax-m3:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free', 'cohere/north-mini-code:free', 'google/gemma-4-31b-it:free', 'z-ai/glm-5.2:free'], defaultModel: 'minimax/minimax-m3:free', enabled: true, isDefault: true },
-  { id: 'gemini', name: 'Google Gemini', models: ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'], defaultModel: 'gemini-3.5-flash', enabled: true, isDefault: false },
-  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-v4-flash', enabled: true, isDefault: false },
-  { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
+  { id: 'openrouter', name: 'OpenRouter (Multi-Model)', models: ['minimax/minimax-m3:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free'], defaultModel: 'minimax/minimax-m3:free', enabled: true, isDefault: true },
+  { id: 'deepseek', name: 'DeepSeek (Fast & Smart)', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', enabled: true, isDefault: false },
+  { id: 'gemini', name: 'Google Gemini (Flash)', models: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'], defaultModel: 'gemini-2.5-flash', enabled: true, isDefault: false },
   { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: false, isDefault: false },
-  { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-8'], defaultModel: 'claude-haiku-4-5-20251001', enabled: false, isDefault: false },
+  { id: 'anthropic', name: 'Anthropic Claude', models: ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6'], defaultModel: 'claude-haiku-4-5-20251001', enabled: false, isDefault: false },
+  { id: 'codex', name: 'OpenAI Codex', models: ['gpt-5-codex', 'codex-mini-latest'], defaultModel: 'gpt-5-codex', enabled: true, isDefault: false },
 ];
 
 const PROVIDER_IDS = new Set(DEFAULT_AI_PROVIDERS.map((p) => p.id));
@@ -57,11 +57,12 @@ export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[
     // are kept: only flip when deepseek was the marked default and OpenRouter
     // is available/enabled.
     const markedDefault = merged.find((p) => p.isDefault);
-    if (markedDefault && markedDefault.id === 'deepseek' && merged.some((p) => p.id === 'openrouter' && p.enabled)) {
-      const orIdx = merged.findIndex((p) => p.id === 'openrouter');
-      const dsIdx = merged.findIndex((p) => p.id === 'deepseek');
-      if (orIdx >= 0) merged[orIdx] = { ...merged[orIdx], isDefault: true };
-      if (dsIdx >= 0) merged[dsIdx] = { ...merged[dsIdx], isDefault: false };
+    if (markedDefault?.id === 'deepseek') {
+      const or = merged.find((p) => p.id === 'openrouter');
+      if (or && or.enabled) {
+        markedDefault.isDefault = false;
+        or.isDefault = true;
+      }
     }
     // Self-healing: a stale all-disabled config (e.g. from an old save) must
     // never leave the import flow without a provider. The SERVER decides which

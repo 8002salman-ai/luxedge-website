@@ -10,17 +10,16 @@ import {
 } from '../lib/marketing';
 
 /**
- * Shared gate for Luxedge-managed manual ad units (AdSenseAd, AdsterraAd).
+ * Shared gate for Luxedge-managed manual AdSense units.
  *
  * Owns the config load plus the three gates every manual unit shares:
  * consent accepted, route not excluded (admin/cart/checkout/auth/account),
  * and the per-page density budget — consumed idempotently via a ref so
  * React StrictMode double renders never double-count. The budget is shared
- * across ALL manual units, so AdSense + Adsterra together never exceed the
- * configured cap on one page.
+ * across all manual AdSense units, so the configured cap is never exceeded.
  *
  * `eligible(configured)` also requires the caller's unit to be configured
- * (its own AdSense slot / Adsterra zone present). Network mechanics stay in
+ * (its own AdSense slot present). Network mechanics stay in
  * the components — this hook never loads a script or renders a unit.
  */
 export function useAdGate(): { cfg: MarketingConfig | null; eligible: (configured: boolean) => boolean } {

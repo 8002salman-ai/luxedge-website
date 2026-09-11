@@ -94,7 +94,22 @@ describe('listing playbook — defaults & rules', () => {
     expect(res.ok).toBe(false);
     expect(res.errors.join(' ')).toMatch(/placeholder|failed verification/i);
     expect(res.errors.join(' ')).toMatch(/supplier URL/);
-    expect(res.errors.join(' ')).toMatch(/supplier SKU/);
+  });
+
+  it('missing supplier SKU alone is a warning, not a Live blocker', () => {
+    const pb = defaultListingPlaybook();
+    const product = {
+      name: 'X', status: 'active', categoryName: 'Dog',
+      images: [
+        { url: 'https://cdn.example.com/1.jpg' },
+        { url: 'https://cdn.example.com/2.jpg' },
+        { url: 'https://cdn.example.com/3.jpg' },
+      ],
+      supplierUrl: 'https://aliexpress.com/item/1', supplierName: 'AliExpress', supplierSku: null,
+    };
+    const res = validateListingAgainstPlaybook(pb, product);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join(' ')).toMatch(/Supplier SKU is missing/);
   });
 
   it('complete active product passes validation', () => {

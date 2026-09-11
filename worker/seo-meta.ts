@@ -459,18 +459,18 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
 
 /** Directives every page needs regardless of route. Derived from the origins
  * the production site actually loads/calls (audited 2026-09): the SPA bundle,
- * AdSense + Adsterra scripts, GA4 via googletagmanager, Supabase REST/storage
+ * AdSense scripts, GA4 via googletagmanager, Supabase REST/storage
  * + auth, YouTube embeds/thumbnails, the ad networks' creative/pixel hosts,
  * and Wikimedia/Pexels/Unsplash editorial + product imagery. */
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  // 'unsafe-inline' is required by the Adsterra invoke.js and the AdSense
+  // 'unsafe-inline' is required by the AdSense
   // loader; blob:/data: cover media workers and inline previews.
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://*.profitableratecpmnetwork.com https://www.googletagmanager.com https://*.supabase.co",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://www.googletagmanager.com https://*.supabase.co",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  "img-src 'self' data: blob: https://img.cjdropshipping.com https://images.pexels.com https://images.unsplash.com https://upload.wikimedia.org https://i.ytimg.com https://*.supabase.co https://www.google.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com https://*.profitableratecpmnetwork.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://*.profitableratecpmnetwork.com https://pagead2.googlesyndication.com",
+  "img-src 'self' data: blob: https://img.cjdropshipping.com https://images.pexels.com https://images.unsplash.com https://upload.wikimedia.org https://i.ytimg.com https://*.supabase.co https://www.google.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://pagead2.googlesyndication.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://pagead2.googlesyndication.com",
   "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://googleads.g.doubleclick.net",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -1236,6 +1236,20 @@ export async function maybeInjectSeo(
     return { html: out, status: 200 };
   }
 
+  // /blog/write — client-side composition tool; nothing to index. This must
+  // precede /blog/:slug so the reserved path cannot be treated as an article.
+  if (segs.length === 2 && segs[0] === 'blog' && segs[1] === 'write') {
+    return {
+      html: inject(html, {
+        title: 'Write | Luxedge',
+        description: '',
+        canonical: `${root}/blog/write`,
+        noindex: true,
+      }),
+      status: 200,
+    };
+  }
+
   // /blog (index) — pre-render the index with recent post links from the CMS.
   if (segs.length === 1 && segs[0] === 'blog') {
     let out = inject(html, {
@@ -1390,19 +1404,6 @@ export async function maybeInjectSeo(
     const products = await getProducts();
     if (products !== null) out = injectCategoryBody(out, cat, products);
     return { html: out, status: 200 };
-  }
-
-  // /blog/write — client-side composition tool; nothing to index.
-  if (segs.length === 2 && segs[0] === 'blog' && segs[1] === 'write') {
-    return {
-      html: inject(html, {
-        title: 'Write | Luxedge',
-        description: '',
-        canonical: `${root}/blog/write`,
-        noindex: true,
-      }),
-      status: 200,
-    };
   }
 
   // Unknown route: the SPA fallback would otherwise serve an indexable copy of

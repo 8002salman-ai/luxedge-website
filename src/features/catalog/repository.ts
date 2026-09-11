@@ -535,15 +535,55 @@ export async function listProducts(): Promise<CatalogProduct[]> {
 
 export async function getProduct(id: string): Promise<CatalogProduct | null> {
   const db = getDb();
-  const [row, { cats, imgs, vars }] = await Promise.all([db.get<ProductRow>('products', id), loadRefs()]);
+  // Single-product read: fetch ONLY this product's images/variants plus the
+  // category list. rowToProduct filters images/variants by product_id anyway,
+  // so pulling the whole catalog's 2000-row lists here was pure wasted
+  // payload — and one admin Save calls getProduct up to three times.
+  const [row, cats, imgs, vars] = await Promise.all([
+    db.get<ProductRow>('products', id),
+    db.list<CategoryRow>('categories'),
+    // No url filter: the editor must see every image actually saved for THIS
+    // product (including any inline-base64 row), or a hidden row is deleted on
+    // the next Save (replace semantics) and images silently vanish.
+    db.list<ImageRow>('product_images', { limit: 50, filters: { product_id: id } }),
+    db.list<VariantRow>('product_variants', { limit: 200, filters: { product_id: id } }),
+  ]);
   if (!row || typeof row.id !== 'string') return null;
-  // loadRefs skips inline-base64 rows (they bloat bulk loads), but the editor
-  // must see everything actually saved for THIS product — otherwise a hidden
-  // row is deleted on the next Save (replace semantics) and images silently
-  // vanish. Merge the product's own rows back in, keeping bulk loads light.
-  const own = await db.list<ImageRow>('product_images', { limit: 50, filters: { product_id: id } });
-  const merged = Array.isArray(own) && own.length ? [...imgs.filter((i) => i.product_id !== id), ...own] : imgs;
-  return rowToProduct(row, cats, merged, vars);
+  return rowToProduct(
+    row,
+    Array.isArray(cats) ? cats : [],
+    Array.isArray(imgs) ? imgs : [],
+    Array.isArray(vars) ? vars : [],
+  );
+}
+
+/**
+ * Fast duplicate check without loading the entire catalog's images and variants.
+ * Only queries the products table directly (saves 2-5 seconds on save).
+ */
+export async function checkProductDuplicate(params: {
+  url?: string | null;
+  itemId?: string | null;
+  title?: string;
+  sku?: string | null;
+}): Promise<{ id: string; name: string } | null> {
+  const db = getDb();
+  const rows = (await db.list<ProductRow>('products', { limit: 1000 })) || [];
+  const u = (params.url || '').trim();
+  const it = (params.itemId || '').trim();
+  const sk = (params.sku || '').trim();
+  for (const p of rows) {
+    if (u && p.supplier_url && p.supplier_url.trim() === u) return { id: p.id, name: p.name };
+    if (it && (p.supplier_product_ref === it || p.sku === it)) return { id: p.id, name: p.name };
+    if (sk && p.sku && p.sku.trim() === sk) return { id: p.id, name: p.name };
+  }
+  const cleanTitle = (params.title || '').trim().toLowerCase();
+  if (cleanTitle) {
+    for (const p of rows) {
+      if (p.name && p.name.trim().toLowerCase() === cleanTitle) return { id: p.id, name: p.name };
+    }
+  }
+  return null;
 }
 
 async function uniqueSlug(db: DbAdapter, base: string, excludeId?: string): Promise<string> {
@@ -905,37 +945,45 @@ function imageStoragePath(productId: string, url: string, order: number): string
   return `catalog/${productId}/${order}-${base}`;
 }
 
+/** Callers that ignore the returned product should pass `reload: false` —
+ *  each reload is a full product read the save path does not need. */
+export interface SaveRefsOptions {
+  reload?: boolean;
+}
+
 /** Replace the full image set of a product (admin image manager). */
-export async function saveProductImages(productId: string, images: CatalogImageInput[]): Promise<CatalogProduct | null> {
+export async function saveProductImages(productId: string, images: CatalogImageInput[], opts: SaveRefsOptions = {}): Promise<CatalogProduct | null> {
   const db = getDb();
   const legacy = await legacyImageColumns();
-  const all = (await db.list<ImageRow>('product_images', { limit: 2000 })) || [];
-  const existing = all.filter((i) => i.product_id === productId);
+  // Only this product's rows (was: the entire product_images table, then a
+  // client-side filter — a large payload on every Save).
+  const existing = (await db.list<ImageRow>('product_images', { limit: 200, filters: { product_id: productId } })) || [];
   const incomingIds = new Set(images.filter((i) => i.id).map((i) => i.id as string));
-  for (const old of existing) {
-    if (!incomingIds.has(old.id)) await db.remove('product_images', old.id);
-  }
-  let order = 0;
-  for (const img of images) {
+  // Removals + writes are independent of each other (sort_order is explicit on
+  // every row), so they run concurrently instead of one round-trip per image.
+  await Promise.all(existing.filter((old) => !incomingIds.has(old.id)).map((old) => db.remove('product_images', old.id)));
+  const writes: Promise<unknown>[] = [];
+  images.forEach((img, idx) => {
+    const order = img.sortOrder ?? idx;
     const payload: Record<string, unknown> = {
       url: img.url,
       alt_text: img.altText ?? null,
       kind: img.kind ?? 'product',
       is_primary: img.isPrimary ?? false,
-      sort_order: img.sortOrder ?? order,
+      sort_order: order,
       variant_id: img.variantId ?? null,
     };
-    if (legacy.storagePath) payload.storage_path = imageStoragePath(productId, img.url, img.sortOrder ?? order);
+    if (legacy.storagePath) payload.storage_path = imageStoragePath(productId, img.url, order);
     if (legacy.publicUrl) payload.public_url = img.url;
     if (legacy.createdAt) payload.created_at = new Date().toISOString();
     if (img.id && existing.some((e) => e.id === img.id)) {
-      await db.update<{ id: string } & Record<string, unknown>>('product_images', img.id, payload);
+      writes.push(db.update<{ id: string } & Record<string, unknown>>('product_images', img.id, payload));
     } else {
-      await db.insert('product_images', { id: img.id || uid(), product_id: productId, ...payload });
+      writes.push(db.insert('product_images', { id: img.id || uid(), product_id: productId, ...payload }));
     }
-    order += 1;
-  }
-  return getProduct(productId);
+  });
+  await Promise.all(writes);
+  return opts.reload === false ? null : getProduct(productId);
 }
 
 // ---------------------------------------------------------------------------
@@ -972,16 +1020,15 @@ async function legacyVariantColumns(): Promise<{ title?: boolean; priceAmount?: 
 }
 
 /** Replace the full variant set of a product (admin variant manager). */
-export async function saveProductVariants(productId: string, variants: CatalogVariantInput[]): Promise<CatalogProduct | null> {
+export async function saveProductVariants(productId: string, variants: CatalogVariantInput[], opts: SaveRefsOptions = {}): Promise<CatalogProduct | null> {
   const db = getDb();
   const legacy = await legacyVariantColumns();
-  const all = (await db.list<VariantRow>('product_variants', { limit: 2000 })) || [];
-  const existing = all.filter((v) => v.product_id === productId);
+  // Only this product's rows (was: the entire product_variants table).
+  const existing = (await db.list<VariantRow>('product_variants', { limit: 500, filters: { product_id: productId } })) || [];
   const incomingIds = new Set(variants.filter((v) => v.id).map((v) => v.id as string));
-  for (const old of existing) {
-    if (!incomingIds.has(old.id)) await db.remove('product_variants', old.id);
-  }
+  await Promise.all(existing.filter((old) => !incomingIds.has(old.id)).map((old) => db.remove('product_variants', old.id)));
   const now = new Date().toISOString();
+  const writes: Promise<unknown>[] = [];
   for (const v of variants) {
     const attrs = v.attributes ?? {};
     const payload: Record<string, unknown> = {
@@ -1002,12 +1049,13 @@ export async function saveProductVariants(productId: string, variants: CatalogVa
     if (legacy.optionValues) payload.option_values = attrs;
     if (legacy.timestamps) { payload.created_at = now; payload.updated_at = now; }
     if (v.id && existing.some((e) => e.id === v.id)) {
-      await db.update<{ id: string } & Record<string, unknown>>('product_variants', v.id, payload);
+      writes.push(db.update<{ id: string } & Record<string, unknown>>('product_variants', v.id, payload));
     } else {
-      await db.insert('product_variants', { id: v.id || uid(), product_id: productId, ...payload });
+      writes.push(db.insert('product_variants', { id: v.id || uid(), product_id: productId, ...payload }));
     }
   }
-  return getProduct(productId);
+  await Promise.all(writes);
+  return opts.reload === false ? null : getProduct(productId);
 }
 
 // ---------------------------------------------------------------------------

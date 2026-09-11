@@ -33,7 +33,8 @@ describe('worker security headers', () => {
     expect(csp).toContain('frame-ancestors');
     expect(csp).toContain('*.supabase.co');
     expect(csp).toContain('www.googletagmanager.com');
-    expect(csp).toContain('*.profitableratecpmnetwork.com');
+    expect(csp).toContain('pagead2.googlesyndication.com');
+    expect(csp).not.toMatch(/adsterra|profitableratecpmnetwork/i);
     expect(csp).toContain('www.youtube.com');
   });
 

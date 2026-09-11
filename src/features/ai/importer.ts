@@ -323,33 +323,84 @@ export function parseJsonLdProduct(raw: string): JsonLdProduct {
 
 /** Parse raw HTML or text into structured page evidence without a DOM library. */
 export function parseHtmlPage(raw: string): FetchedPage {
-  const isHtml = raw.trimStart().startsWith('<') || raw.includes('<html') || raw.includes('<!doctype');
+  const isHtml = raw.trimStart().startsWith('<') || /<[a-z!][\s\S]*>/i.test(raw);
   if (isHtml) {
-    // Lightweight extraction — enough for product import prompts.
+    // 1. Meta tag extractions
     const ogTitleRaw = matchMeta(raw, 'og:title');
-    // AliExpress appends site noise to og:title (e.g. "…20cm - AliExpress 15");
-    // the real product name is everything before it.
     const ogTitle = ogTitleRaw.replace(/\s+[-–—|]\s+AliExpress(?:\s+\d+)?\s*$/i, '').trim();
-    const ogDescRaw = matchMeta(raw, 'og:description');
+    const docTitle = (raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').replace(/<[^>]+>/g, '').trim();
+    const h1Title = (raw.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || '').replace(/<[^>]+>/g, '').trim();
+    const ogDescRaw = matchMeta(raw, 'og:description') || matchMeta(raw, 'description');
     const ogDesc = isGenericPlatformDescription(ogDescRaw) ? '' : ogDescRaw;
-    const ogImage = matchMeta(raw, 'og:image');
-    // og:url is often protocol-relative ("//www.aliexpress.com/item/…").
-    const ogUrlRaw = matchMeta(raw, 'og:url');
+    const ogImage = matchMeta(raw, 'og:image') || matchMeta(raw, 'og:image:secure_url') || matchMeta(raw, 'twitter:image') || matchMeta(raw, 'twitter:image:src');
+    const ogUrlRaw = matchMeta(raw, 'og:url') || matchMeta(raw, 'canonical');
     const sourceUrl = ogUrlRaw.startsWith('//') ? `https:${ogUrlRaw}` : ogUrlRaw;
     const ld = parseJsonLdProduct(raw);
     const jsonLdRaw = Array.from(raw.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi))
       .map((m) => m[1])
       .join('\n');
-    // AliExpress serves size-suffixed thumbnails (…jpg_220x220q75.jpg_.avif);
-    // normalize them back to the base image URL so the real product image is
-    // usable, not a 220px placeholder.
-    const normalize = (src: string) =>
-      src
-        .replace(/\.avif$/i, '')
-        .replace(/(\.(?:jpe?g|png|webp))_.+$/i, '$1');
-    // AliExpress CSR shells (anti-bot / JS skeleton) contain NO <img> tags at
-    // all — the real gallery lives in window._d_c_.DCData.imagePathList.
-    const dcImages: string[] = [];
+
+    // High-Resolution Normalizer
+    const normalize = (src: string): string => {
+      if (!src) return '';
+      let s = src.trim().replace(/^['"]|['"]$/g, '');
+      if (s.startsWith('//')) s = `https:${s}`;
+      s = s.replace(/\\/g, '');
+      if (!/^https?:\/\//i.test(s)) return '';
+      // Skip tracking pixels, logos, badges, spinners, placeholders
+      if (/(favicon|logo|icon|badge|sprite|loader|spinner|pixel|transparent\.gif|placeholder|1x1)/i.test(s)) return '';
+      // Clean and upscale CDN thumbnails (Shopify, eBay, AliExpress, Amazon)
+      s = s.replace(/\b_(\d{2,3}x\d{2,3}|thumb|small|compact|thumbnail)\b/gi, '_1200x');
+      s = s.replace(/\.avif$/i, '');
+      s = s.replace(/(\.(?:jpe?g|png|webp))_[\w\d.]+$/i, '$1');
+      s = s.replace(/\/s-l\d+\.(jpg|png)/i, '/s-l1600.$1');
+      return s;
+    };
+
+    const imageUrls = new Set<string>();
+
+    // 2. OpenGraph & Twitter image
+    if (ogImage) {
+      const n = normalize(ogImage);
+      if (n) imageUrls.add(n);
+    }
+
+    // 3. JSON-LD images
+    for (const u of ld.images) {
+      const n = normalize(u);
+      if (n) imageUrls.add(n);
+    }
+
+    // 4. Img tags (src, data-src, data-zoom-image, data-large-image, data-original, etc.)
+    const imgTagMatches = raw.matchAll(/(?:src|data-src|data-zoom-image|data-large[-_]image|data-original|data-high[-_]res|data-old-hires|data-full-size-image-url|data-hd-src|data-ks-lazyload)=["']([^"']+)["']/gi);
+    for (const m of imgTagMatches) {
+      const n = normalize(m[1]);
+      if (n && /\.(jpe?g|png|webp|avif)/i.test(n)) imageUrls.add(n);
+    }
+
+    // 5. Srcset attributes (extract highest resolution)
+    const srcsets = raw.matchAll(/srcset=["']([^"']+)["']/gi);
+    for (const ss of srcsets) {
+      const candidates = ss[1].split(',').map((c) => c.trim().split(/\s+/)[0]);
+      for (const c of candidates) {
+        const n = normalize(c);
+        if (n && /\.(jpe?g|png|webp|avif)/i.test(n)) imageUrls.add(n);
+      }
+    }
+
+    // 6. Amazon dynamic image JSON blocks
+    const dynMatches = raw.matchAll(/data-a-dynamic-image=["'](\{[^"']+\})["']/gi);
+    for (const dm of dynMatches) {
+      try {
+        const parsed = JSON.parse(dm[1].replace(/&quot;/g, '"'));
+        for (const k of Object.keys(parsed)) {
+          const n = normalize(k);
+          if (n) imageUrls.add(n);
+        }
+      } catch {}
+    }
+
+    // 7. AliExpress CSR shells & state objects (window._d_c_.DCData or window.runParams)
     const dcData = raw.match(/window\._d_c_\.DCData\s*=\s*(\{[^;]*?\});/);
     if (dcData) {
       const arr = dcData[1].match(/"imagePathList"\s*:\s*(\[[^\]]*\])/);
@@ -358,41 +409,87 @@ export function parseHtmlPage(raw: string): FetchedPage {
           const list = JSON.parse(arr[1]) as unknown;
           if (Array.isArray(list)) {
             for (const u of list) {
-              if (typeof u === 'string' && u.startsWith('http') && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(u)) dcImages.push(u);
+              const n = normalize(String(u));
+              if (n) imageUrls.add(n);
             }
           }
-        } catch { /* malformed shell JSON — ignore */ }
+        } catch {}
       }
     }
-    const images = Array.from(raw.matchAll(/<img[^>]+(?:src|data-src|data-hd-src|data-ks-lazyload)=["'](https?:[^"']+)["']/gi))
-      .map((m) => normalize(m[1]))
-      .filter((src) => src.startsWith('http') && /\.(jpe?g|png|webp|avif)(\?|$)/i.test(src));
-    if (ogImage && ogImage.startsWith('http')) images.unshift(normalize(ogImage));
-    images.push(...dcImages, ...ld.images);
+    const runParamsMatch = raw.match(/imagePathList"\s*:\s*(\[[^\]]*?\])/);
+    if (runParamsMatch) {
+      try {
+        const list = JSON.parse(runParamsMatch[1]) as unknown;
+        if (Array.isArray(list)) {
+          for (const u of list) {
+            const n = normalize(String(u));
+            if (n) imageUrls.add(n);
+          }
+        }
+      } catch {}
+    }
+
+    // 8. General CDN image scanning for any missed product photos
+    const cdnMatches = raw.matchAll(/(?:https?:|\/\/)[a-zA-Z0-9_\-\.\/]+?\.(?:jpe?g|png|webp)(?:\?[a-zA-Z0-9_\-=&;]+)?/gi);
+    for (const cm of cdnMatches) {
+      const n = normalize(cm[0]);
+      if (n && !/(google|facebook|analytics|gtag|ads|doubleclick|clarity|static)/i.test(n) && imageUrls.size < 30) {
+        imageUrls.add(n);
+      }
+    }
+
     const bodyText = stripHtml(raw)
       .replace(/[ \t]+/g, ' ')
       .split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
-    const text = [ogTitle, ogDesc, jsonLdRaw ? `JSON-LD:\n${jsonLdRaw}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
-    const dedupImages = [...new Set(images)].slice(0, 30);
+    const text = [ogTitle || docTitle, ogDesc, jsonLdRaw ? `JSON-LD:\n${jsonLdRaw}` : '', bodyText].filter(Boolean).join('\n').slice(0, 12000);
+    const dedupImages = Array.from(imageUrls).slice(0, 30);
+
+    // Resolve Best Title
+    const resolvedTitle = (ogTitle || ld.name || h1Title || docTitle.replace(/\s+[-–—|]\s+.*$/, '')).trim();
+
+    // Resolve Best Price
+    let resolvedPrice = ld.price;
+    if (resolvedPrice === null) {
+      const priceMeta = matchMeta(raw, 'product:price:amount') || matchMeta(raw, 'og:price:amount');
+      if (priceMeta && !isNaN(Number(priceMeta)) && Number(priceMeta) > 0) resolvedPrice = Number(priceMeta);
+    }
+
     return {
       text,
       images: dedupImages,
-      title: ogTitle || ld.name,
+      title: resolvedTitle,
       description: ogDesc || ld.description,
-      price: ld.price,
-      currency: ld.currency,
-      brand: ld.brand,
+      price: resolvedPrice,
+      currency: ld.currency || 'USD',
+      brand: ld.brand || matchMeta(raw, 'og:site_name'),
       jsonLdProduct: !!(ld.name || ld.description || ld.images.length || ld.price !== null),
       sourceUrl,
     };
   }
+
+  // Fallback for raw text / markdown input
   const images: string[] = [];
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(raw))) {
     if (m[1].match(/\.(jpe?g|png|webp)(\?|$)/i)) images.push(m[1]);
   }
-  return { text: raw.slice(0, 12000), images: [...new Set(images)].slice(0, 30), title: '', description: '', price: null, currency: '', brand: '', jsonLdProduct: false, sourceUrl: '' };
+  const generalMatches = raw.matchAll(/(?:https?:|\/\/)[a-zA-Z0-9_\-\.\/]+?\.(?:jpe?g|png|webp)/gi);
+  for (const gm of generalMatches) {
+    images.push(gm[0].startsWith('//') ? 'https:' + gm[0] : gm[0]);
+  }
+
+  return {
+    text: raw.slice(0, 12000),
+    images: [...new Set(images)].slice(0, 30),
+    title: '',
+    description: '',
+    price: null,
+    currency: 'USD',
+    brand: '',
+    jsonLdProduct: false,
+    sourceUrl: ''
+  };
 }
 
 function matchMeta(raw: string, prop: string): string {

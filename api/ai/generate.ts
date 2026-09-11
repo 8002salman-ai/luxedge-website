@@ -23,7 +23,7 @@ import { requireAdmin } from '../_lib/auth.js';
 export const PROVIDER_PRIORITY: { id: string; model: string }[] = [
   { id: 'openrouter', model: 'minimax/minimax-m3:free' },
   { id: 'gemini', model: 'gemini-3.5-flash' },
-  { id: 'deepseek', model: 'deepseek-v4-flash' },
+  { id: 'deepseek', model: 'deepseek-chat' },
   { id: 'openai', model: 'gpt-4o-mini' },
   { id: 'anthropic', model: 'claude-haiku-4-5-20251001' },
   { id: 'codex', model: 'gpt-5-codex' },

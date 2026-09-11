@@ -297,13 +297,14 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       return text;
     }
     case 'deepseek': {
+      const effectiveModel = !model || model === 'deepseek-v4-flash' ? 'deepseek-chat' : model;
       // Multi-key rotation: tries every configured key (env + DB-attached) in
       // round-robin order, moving to the next key when one fails.
       return generateWithKeyRotation(keys, async (rotKey) => {
         const r = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${rotKey}` },
-          body: JSON.stringify({ model, messages: [
+          body: JSON.stringify({ model: effectiveModel, messages: [
             ...(system ? [{ role: 'system', content: system }] : []),
             { role: 'user', content: prompt },
           ], temperature: 0.2, max_tokens: 4096 }),
@@ -317,7 +318,8 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
       });
     }
     case 'gemini': {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      const effectiveModel = !model || model === 'gemini-3.5-flash' ? 'gemini-2.5-flash' : model;
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:generateContent?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 4096 } }),
@@ -451,9 +453,9 @@ export function defaultModelFor(providerId: string): string {
   switch (providerId) {
     case 'openai': return 'gpt-4o-mini';
     case 'codex': return 'gpt-5-codex';
-    case 'deepseek': return 'deepseek-v4-flash';
+    case 'deepseek': return 'deepseek-chat';
     case 'anthropic': return 'claude-haiku-4-5-20251001';
-    case 'gemini': return 'gemini-3.5-flash';
+    case 'gemini': return 'gemini-2.5-flash';
     case 'openrouter': return 'nvidia/nemotron-3-super-120b-a12b:free';
     default: return '';
   }

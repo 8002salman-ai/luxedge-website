@@ -283,11 +283,17 @@ export function validateListingAgainstPlaybook(
     const missing: string[] = [];
     if (!product.supplierUrl) missing.push('supplier URL');
     if (!product.supplierName) missing.push('supplier name');
-    if (!product.supplierSku) missing.push('supplier SKU');
     if (missing.length) {
       const msg = `Missing supplier data: ${missing.join(', ')}.`;
       if (wantsActive) errors.push(msg);
       else warnings.push(`${msg} Product stays Draft.`);
+    }
+    // Supplier SKU is OPTIONAL metadata — the Quick Add form has no SKU
+    // field, so requiring it here blocks every quick Live save with no way
+    // to satisfy it. URL + name are the real supplier identity; a missing
+    // SKU alone is a warning, never a blocker.
+    if (!product.supplierSku) {
+      warnings.push('Supplier SKU is missing — optional; add it later in Detail for sourcing traceability.');
     }
   }
   return { ok: errors.length === 0, errors, warnings };

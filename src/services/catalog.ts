@@ -550,7 +550,7 @@ export async function loadStorefrontCatalog(): Promise<StorefrontCatalog | null>
     writePublicCache('luxedge:storefront-catalog:v1', result);
     return result;
   } catch {
-    // Unreachable / schema not provisioned / permission denied â†’ null.
+    // Unreachable / schema not provisioned / permission denied → null.
     // The caller must NOT fall back to demo products — the storefront stays
     // empty (Phase 4E.1/4E.2).
     return null;

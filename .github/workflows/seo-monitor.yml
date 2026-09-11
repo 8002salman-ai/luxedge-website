@@ -1,0 +1,66 @@
+# Read-only daily SEO monitor.
+#
+# Runs scripts/seo-monitor.mjs (public GET requests only — no credentials,
+# no authenticated APIs, no writes to the site) every day at 07:00 UTC and on
+# manual dispatch, then files a GitHub issue when the report alerts. Alerts
+# are deduplicated with the `seo-monitor` label: while an alert issue is open,
+# new failures append a comment; when the site recovers, the issue is closed.
+#
+# Replaces the previous local-n8n setup (n8n/luxedge-seo-daily-monitor.json)
+# so monitoring cannot silently lapse when the local machine is off.
+name: SEO monitor (daily)
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC every day
+  workflow_dispatch: {} # manual run: Actions → SEO monitor (daily) → Run workflow
+
+permissions:
+  contents: read
+  issues: write
+
+# Never run two monitors at once (e.g. a manual run overlapping the cron).
+concurrency:
+  group: seo-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The monitor exits non-zero on a hard failure but still writes its
+      # JSON error report to seo-report.json, so the alert steps below run
+      # even then (if: always()) and can file a "monitor run failed" issue.
+      - name: Run read-only SEO monitor
+        run: node scripts/seo-monitor.mjs --site https://luxedge.us > seo-report.json
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-report
+          path: seo-report.json
+          if-no-files-found: error
+
+      - name: Ensure alert label exists
+        if: always()
+        run: gh label create seo-monitor --force
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: File an issue on alert
+        if: always()
+        run: node scripts/file-seo-alert.mjs seo-report.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}

@@ -35,6 +35,7 @@ import omnisendStatusHandler from '../api/omnisend/status';
 import emailSendHandler from '../api/email/send';
 import emailStatusHandler from '../api/email/status';
 import emailRoutesHandler from '../api/email/routes';
+import emailContactHandler from '../api/email/contact';
 import mediaGenerateHandler from '../api/media/generate';
 import mediaSyncHandler, { runMediaSync } from '../api/media/sync';
 import { runSitemapHealth } from './sitemap-health';
@@ -110,6 +111,7 @@ const ROUTES: Route[] = [
   { path: '/api/email/send', handler: emailSendHandler },
   { path: '/api/email/status', handler: emailStatusHandler },
   { path: '/api/email/routes', handler: emailRoutesHandler },
+  { path: '/api/email/contact', handler: emailContactHandler },
   { path: '/api/media/generate', handler: mediaGenerateHandler },
   { path: '/api/media/sync', handler: mediaSyncHandler },
   { path: '/api/media/status', handler: mediaStatusHandler },

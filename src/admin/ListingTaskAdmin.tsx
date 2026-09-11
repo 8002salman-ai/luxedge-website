@@ -158,10 +158,10 @@ export function ListingTaskAdmin() {
                 // supplier URLs stay — surfaced below via imageCount
               }
             }
-            await saveProductImages(created.id, imageRows);
+            await saveProductImages(created.id, imageRows, { reload: false });
 
             const variants = buildImportVariants((scraped as { variants?: { attributes?: Record<string, string>; sku?: string; price?: number }[] }).variants || []);
-            if (variants.length) await saveProductVariants(created.id, variants);
+            if (variants.length) await saveProductVariants(created.id, variants, { reload: false });
 
             // Playbook status: Active only with verified images >= min, else Draft.
             const verifiedCount = imageRows.length;
