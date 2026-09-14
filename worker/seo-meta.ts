@@ -25,7 +25,8 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
-import { isHeldProduct, isHeldMedia } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia, isHeldBlog } from '../src/content/reviewHolds';
+import { isPubliclyListableProduct } from '../src/content/productEligibility';
 import {
   CONTACT_INFO,
   CONTACT_INTRO,
@@ -92,6 +93,7 @@ export interface ProductRow {
   id: string;
   slug?: string | null;
   name: string;
+  status?: string | null;
   description?: string | null;
   short_description?: string | null;
   seo_title?: string | null;
@@ -103,12 +105,17 @@ export interface ProductRow {
   /** Legacy absolute product image URL (products.image_url). */
   image_url?: string | null;
   stock_status?: string | null;
+  inventory_qty?: number | null;
   us_inventory?: boolean | null;
   free_shipping?: boolean | null;
   shipping_cost?: number | null;
   delivery_min_days?: number | null;
   delivery_max_days?: number | null;
   currency?: string | null;
+  supplier_source?: string | null;
+  supplier_product_ref?: string | null;
+  cost_price?: number | null;
+  commerce_readiness?: string | null;
   /** Embedded category name via categories(name) — the REST key is the
    * relation name `categories`. */
   categories?: { name?: string } | null;
@@ -126,7 +133,6 @@ interface ProductImageRow {
 
 const cache = new Map<string, { ts: number; data: unknown }>();
 const TTL_DB = 15 * 60 * 1000;
-const TTL_BLOG = 30 * 60 * 1000;
 
 async function cachedFetch<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T | null> {
   const hit = cache.get(key);
@@ -171,7 +177,7 @@ async function getProducts(): Promise<ProductRow[] | null> {
       fetchJson<ProductRow[]>(
         base,
         key,
-        `products?select=${SEO_PRODUCTS_SELECT}&status=eq.active&limit=500`,
+        `products?select=${SEO_PRODUCTS_SELECT}&status=in.(active,published)&limit=500`,
       ),
       getProductImages(),
     ]);
@@ -374,10 +380,10 @@ async function getMediaRegistry(): Promise<MediaEntry[] | null> {
  * Blog registry — source of truth is the Supabase CMS (published only; RLS
  * enforces published + published_at <= now()). Short TTL so a freshly
  * published CMS post gets SEO + indexability on the very next worker requests
- * WITHOUT a redeploy. Falls back to the static blog-seo.json shell when the DB
- * is unreachable / the table is not yet migrated (migration/rollback path).
+ * WITHOUT a redeploy. A CMS failure returns null: legacy static blog content
+ * must never be revived as an indexable fallback.
  */
-async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[] | null> {
+async function getBlogRegistry(_origin: string, _env: SeoEnv): Promise<BlogEntry[] | null> {
   const base = supabaseBase();
   const key = supabaseAnon();
   if (base && key) {
@@ -390,17 +396,11 @@ async function getBlogRegistry(origin: string, env: SeoEnv): Promise<BlogEntry[]
       if (!rows) throw new Error('blog_cms unavailable');
       return rows
         .map(mapCmsToBlogEntry)
-        .filter((x): x is BlogEntry => x !== null);
+        .filter((x): x is BlogEntry => x !== null && !isHeldBlog(x.slug));
     });
     if (cms) return cms;
   }
-  // Fallback: legacy static registry (used while the DB/migration is not ready).
-  return cachedFetch('seo:blogs', TTL_BLOG, async () => {
-    const res = await env.ASSETS.fetch(new Request(`${origin}/blog-seo.json`));
-    if (!res.ok) return null;
-    const data = (await res.json()) as { posts?: BlogEntry[] };
-    return Array.isArray(data.posts) ? data.posts : null;
-  });
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +761,12 @@ function inlineMarkup(text: string): string {
   return parts
     .map((part) => {
       const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      if (m) return `<a href="${esc(m[2])}">${esc(m[1])}</a>`;
+      if (m) {
+        const path = m[2];
+        const productSlug = path.match(/^\/product\/([^/?#]+)/)?.[1];
+        if (productSlug && isHeldProduct(productSlug)) return esc(m[1]);
+        return `<a href="${esc(path)}">${esc(m[1])}</a>`;
+      }
       return esc(part);
     })
     .join('');
@@ -882,7 +887,7 @@ const CAT_HERO_IMAGES: Record<string, string> = {
 
 export function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
   const inCategory = products.filter(
-    (p) => p.slug && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
+    (p) => p.slug && isPubliclyListableProduct(p) && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
   );
   // Mirror the client category header exactly (CAT_META in src/App.tsx or the
   // client's `Browse our {category} collection` fallback) so the pre-render and
@@ -897,6 +902,8 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
     `<nav aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><a href="/shop">Shop</a></li><li>${esc(cat.name)}</li></ol></nav>`,
     `<h1>${esc(cat.name)}</h1>`,
     `<p>${esc(desc)}</p>`,
+    `<h2>Choosing ${esc(cat.name.toLowerCase())}</h2>`,
+    `<p>Start with the task you need to complete, then compare the listed dimensions, materials, availability, and delivery details before choosing.</p>`,
   );
   if (inCategory.length > 0) {
     const items = inCategory
@@ -915,6 +922,8 @@ function injectHomeBody(html: string): string {
     `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
     `<p>Sourced worldwide. Chosen with care.</p>`,
     `<p>We search trusted sources around the world for well-made essentials, then choose the pieces worth bringing home.</p>`,
+    `<h2>Shop with the details in view</h2>`,
+    `<p>Start with the animal and everyday task you are shopping for, then use each listing’s stated size, materials, price, and availability to narrow the options.</p>`,
     `<p>Shop by pet</p>`,
     `<h2>Who are you shopping for?</h2>`,
     `<ul>` +
@@ -1004,7 +1013,7 @@ async function injectShopBody(html: string): Promise<string> {
   ];
   const products = await getProducts();
   if (products) {
-    const ready = products.filter((p) => p.slug && !isHeldProduct(p.slug)).slice(0, 60);
+    const ready = products.filter((p) => p.slug && !isHeldProduct(p.slug) && isPubliclyListableProduct(p)).slice(0, 60);
     if (ready.length > 0) {
       const items = ready.map((p) => `<li><a href="/product/${esc(p.slug!)}">${esc(p.name)}</a></li>`).join('');
       parts.push(`<h2>All Products</h2>`, `<ul>${items}</ul>`);
@@ -1085,7 +1094,7 @@ export async function maybeInjectSeo(
   const segs = pathname.split('/').filter(Boolean);
   const root = 'https://luxedge.us';
 
-  if (segs.length === 2 && ((segs[0] === 'product' && isHeldProduct(segs[1])) || (segs[0] === 'media' && isHeldMedia(segs[1])))) {
+  if (segs.length === 2 && ((segs[0] === 'product' && isHeldProduct(segs[1])) || (segs[0] === 'media' && isHeldMedia(segs[1])) || (segs[0] === 'blog' && isHeldBlog(segs[1])))) {
     return { html: inject(html, { title: 'Page unavailable | Luxedge', description: 'This page is currently unavailable.', canonical: `${root}/${segs.join('/')}`, noindex: true }), status: 404 };
   }
 
@@ -1118,6 +1127,9 @@ export async function maybeInjectSeo(
   // the SPA router, so a missing campaign is a real 404 that the client also
   // shows as closed/unavailable.
   if (segs.length === 2 && segs[0] === 'campaigns') {
+    if (!['pet-gift-drop'].includes(segs[1])) {
+      return { html: inject(html, { title: 'Campaign Not Found | Luxedge', description: 'This campaign is no longer available.', canonical: `${root}/campaigns/${encodeURIComponent(segs[1])}`, noindex: true }), status: 404 };
+    }
     return {
       html: inject(html, {
         title: 'Luxedge Campaign',
@@ -1192,6 +1204,7 @@ export async function maybeInjectSeo(
       description:
         'Watch Luxedge videos — product education, pet & animal care, how-to guides, buying guides and behind-the-brand stories, embedded from the official YouTube channel.',
       canonical: `${root}/media`,
+      noindex: true,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -1210,7 +1223,7 @@ export async function maybeInjectSeo(
     const slug = decodeURIComponent(segs[1]);
     const media = await getMediaRegistry();
     if (media === null) {
-      return { html: injectCanonical(html, `${root}/media/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+      return { html: inject(html, { title: 'Media temporarily unavailable | Luxedge', description: 'This media page is temporarily unavailable.', canonical: `${root}/media/${slug}`, noindex: true }), status: 503 };
     }
     const v = media.find((x) => x.slug === slug);
     if (!v) {
@@ -1230,6 +1243,7 @@ export async function maybeInjectSeo(
       title,
       description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
       canonical,
+      noindex: true,
       jsonLd: mediaJsonLd(v, canonical),
     });
     out = await injectMediaBody(out, v);
@@ -1258,6 +1272,8 @@ export async function maybeInjectSeo(
         'Practical buying guides and care tips for dogs, cats, birds, horses, and cattle — sizing, placement, grooming, and product picks from the Luxedge editorial team.',
       canonical: `${root}/blog`,
     });
+    const posts = await getBlogRegistry(origin, env);
+    if (posts === null) return { html: inject(out, { title: 'Blog temporarily unavailable | Luxedge', description: 'The blog is temporarily unavailable. Please retry.', canonical: `${root}/blog`, noindex: true }), status: 503 };
     out = await injectBlogIndexBody(out, origin, env);
     return { html: out, status: 200 };
   }
@@ -1303,7 +1319,7 @@ export async function maybeInjectSeo(
     if (products === null) {
       return { html: injectCanonical(html, `${root}/product/${slug}`), status: 200 }; // DB unavailable — keep canonical correct
     }
-    const p = products.find((x) => x.slug === slug && !isHeldProduct(x.slug));
+    const p = products.find((x) => x.slug === slug && !isHeldProduct(x.slug) && isPubliclyListableProduct(x));
     if (!p) {
       // Legacy UUID product URLs (pre-PR #35 storefront links) — 301 to the
       // canonical slug so the duplicate collapses instead of soft-404ing.
@@ -1338,7 +1354,7 @@ export async function maybeInjectSeo(
     const slug = decodeURIComponent(segs[1]);
     const posts = await getBlogRegistry(origin, env);
     if (posts === null) {
-      return { html: injectCanonical(html, `${root}/blog/${slug}`), status: 200 }; // registry unavailable — keep canonical correct
+      return { html: inject(html, { title: 'Article temporarily unavailable | Luxedge', description: 'This article is temporarily unavailable. Please retry.', canonical: `${root}/blog/${slug}`, noindex: true }), status: 503 };
     }
     const post = posts.find((x) => x.slug === slug);
     if (!post) {

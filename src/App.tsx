@@ -4,6 +4,8 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
+import { BuyerGuidance } from './components/BuyerGuidance';
+import { isHeldBlog } from './content/reviewHolds';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -1283,7 +1285,7 @@ function RouteTitle() {
       // permanent index (it will flip to a "fully claimed" state) — still
       // follow links so ad/social traffic and any backlinks pass value on.
       setMeta('robots', 'noindex, follow');
-    } else if (privateRoutes.includes(segs[0]) || pathname === '/blog/write') {
+    } else if (privateRoutes.includes(segs[0]) || pathname === '/blog/write' || (segs[0] === 'blog' && !!segs[1] && isHeldBlog(segs[1]))) {
       setMeta('robots', 'noindex, nofollow');
     } else if (['', 'shop', 'category', 'product', 'blog', 'media', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'faq'].includes(segs[0] || '')) {
       setMeta('robots', 'index, follow');
@@ -2384,6 +2386,15 @@ function HomePage() {
             ))}
           </div>
 
+        </div>
+      </section>
+
+      <section className="bg-[#FAF8F5] py-8 sm:py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <BuyerGuidance
+            title="Shop with the details in view"
+            note="Start with the animal and everyday task you are shopping for, then use each listing’s stated size, materials, price, and availability to narrow the options."
+          />
         </div>
       </section>
 

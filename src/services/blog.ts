@@ -21,6 +21,7 @@ import { getDb } from './db';
 import type { DbAdapter } from './db';
 import { getFreshAccessToken } from './supabase';
 import type { BlogPost } from '../App';
+import { isHeldBlog } from '../content/reviewHolds';
 
 /** Raw Supabase `blog_posts` row (snake_case DB columns). */
 export interface CmsBlogRow {
@@ -135,7 +136,7 @@ export async function loadPublishedBlogs(opts: { forceFresh?: boolean } = {}): P
     }
     const rows = await db.list<CmsBlogRow>('blog_posts', { select: BLOG_LIST_PUBLIC_SELECT, orderBy: 'published_at.desc', filters: { status: 'published' } });
     if (!Array.isArray(rows)) return null;
-    const posts = rows.map(mapRowToBlogPost);
+    const posts = rows.filter((row) => !isHeldBlog(row.slug)).map(mapRowToBlogPost);
     writeBlogCache(posts);
     return posts;
   } catch {
@@ -146,6 +147,7 @@ export async function loadPublishedBlogs(opts: { forceFresh?: boolean } = {}): P
 
 
 export async function loadPublishedBlogBySlug(slug: string): Promise<BlogPost | null> {
+  if (isHeldBlog(slug)) return null;
   const db = getDb();
   try {
     if ('setAccessToken' in db && typeof (db as { setAccessToken: (t: string | null) => void }).setAccessToken === 'function') {

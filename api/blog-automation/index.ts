@@ -11,11 +11,8 @@
 // `Authorization: Bearer …` or `x-automation-secret: …`. If the secret is not
 // configured the endpoint is FAIL-CLOSED (503) — it never opens.
 //
-// AUTO-PUBLISH SAFETY GATE (Phase L/M): `publish` only ever publishes when
-// every quality/safety check passes; otherwise the post is saved as a DRAFT
-// with the reasons listed in the response. Automation can never bypass the
-// gate, never republish a locked/unpublish/archived post, and never exceed the
-// rolling 7-day auto-publish cap (env BLOG_AUTO_MAX_PER_7D, default 3).
+// Automation creates drafts only. Publication is a human editorial action;
+// caller-provided scores, authors, and timestamps are never treated as review.
 // ============================================================================
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -132,6 +129,19 @@ async function countPublishedLast7d(url: string, key: string): Promise<number> {
 
 interface GateResult { ok: boolean; reasons: string[] }
 
+function structuredSources(value: unknown): boolean {
+  const rows = Array.isArray(value) ? value : (value && typeof value === 'object' ? [value] : []);
+  return rows.length > 0 && rows.every((row) => {
+    if (!row || typeof row !== 'object') return false;
+    const r = row as Record<string, unknown>;
+    return typeof r.url === 'string' && /^https:\/\//.test(r.url) && typeof r.title === 'string' && r.title.trim().length > 3;
+  });
+}
+function healthAdjacent(content: string): boolean { return /\b(vet|veterinar|health|disease|illness|symptom|nutrition|diet|dehydrat|medical|treat|cure)\b/i.test(content); }
+function serverReviewState(body: BlogAutomationPayload): Record<string, unknown> {
+  return { submitted_sources: body.source_notes ?? null, review: { state: 'pending_human_approval', submitted_at: new Date().toISOString(), submitted_by: `automation:${String(body.generated_by || 'unknown').slice(0, 80)}`, required: ['named author', 'named editor', 'human approval timestamp'] } };
+}
+
 async function autoPublishGate(url: string, key: string, body: BlogAutomationPayload): Promise<GateResult> {
   const reasons: string[] = [];
   const title = String(body.title || '').trim();
@@ -141,9 +151,6 @@ async function autoPublishGate(url: string, key: string, body: BlogAutomationPay
   if (title.length < 10) reasons.push('Title is too short.');
   if (content.length < 300) reasons.push('Content is too thin (min ~300 chars).');
   if (!slug) reasons.push('No slug could be derived.');
-  if (typeof body.quality_score !== 'number' || body.quality_score < 90) {
-    reasons.push('quality_score is missing or below 90.');
-  }
   if (!body.search_intent && !body.target_keyword) {
     reasons.push('No search_intent or target_keyword supplied.');
   }
@@ -151,6 +158,10 @@ async function autoPublishGate(url: string, key: string, body: BlogAutomationPay
   for (const p of BANNED_PATTERNS) {
     if (p.test(content)) reasons.push('Contains an unsupported medical/veterinary/nutritional claim.');
   }
+  if (healthAdjacent(content) && !structuredSources(body.source_notes)) reasons.push('Health-adjacent content requires structured authoritative sources.');
+  if (body.source_notes != null && !structuredSources(body.source_notes)) reasons.push('Sources must be structured objects with https URL and title.');
+  const duplicate = await pgFetch(url, key, `blog_posts?select=id&title=ilike.${encodeURIComponent(title)}&limit=1`);
+  if (duplicate.ok && Array.isArray(duplicate.data) && duplicate.data.length > 0) reasons.push('Duplicate title/intent already exists; human review required.');
   const links: string[] = Array.isArray(body.internal_links) ? body.internal_links : [];
   if (links.length > 0) {
     const bad = await validateInternalLinks(url, key, links);
@@ -235,7 +246,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
         content: body.content || '',
         hero_image_url: body.hero_image_url || null,
         tags: body.tags || [],
-        author_name: body.author_name || 'Luxedge Editorial Team',
+        author_name: 'Automation submission — editorial attribution pending',
         status: 'draft',
         scheduled_at: body.scheduled_at || null,
         seo_title: body.seo_title || null,
@@ -246,7 +257,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
         faq: body.faq || [],
         internal_links: body.internal_links || [],
         quality_score: body.quality_score ?? null,
-        source_notes: body.source_notes || null,
+        source_notes: serverReviewState(body),
         generated_by: body.generated_by || 'automation',
         automation_run_id: body.automation_run_id || null,
         automation_locked: false,
@@ -270,6 +281,8 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
         return sendJson(res, 409, { error: 'automation_locked — Salman manually owns this post.', slug });
       }
       const gate = await autoPublishGate(sb.url, sb.key, body);
+      gate.reasons.push('Automatic publishing is disabled pending named author/editor approval and server-recorded approval timestamp.');
+      gate.ok = false;
       if (!gate.ok) {
         // Save as DRAFT regardless — automation never bypasses the gate.
         const row = {
@@ -279,7 +292,7 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
           content: body.content || '',
           hero_image_url: body.hero_image_url || null,
           tags: body.tags || [],
-          author_name: body.author_name || 'Luxedge Editorial Team',
+          author_name: 'Automation submission — editorial attribution pending',
           status: 'draft',
           scheduled_at: body.scheduled_at || null,
           seo_title: body.seo_title || null,
@@ -290,12 +303,16 @@ export default async function blogAutomationHandler(req: IncomingMessage, res: S
           faq: body.faq || [],
           internal_links: body.internal_links || [],
           quality_score: body.quality_score ?? null,
-          source_notes: body.source_notes || null,
+          source_notes: serverReviewState(body),
           generated_by: body.generated_by || 'automation',
           automation_run_id: body.automation_run_id || null,
           automation_locked: false,
         };
-        await pgFetch(sb.url, sb.key, 'blog_posts', { method: 'POST', body: JSON.stringify(row) });
+        // Preserve an existing automation draft instead of trying to insert a
+        // duplicate slug. It remains draft-only and records a fresh server
+        // review submission time.
+        if (existing) await pgFetch(sb.url, sb.key, `blog_posts?slug=eq.${encodeURIComponent(slug)}`, { method: 'PATCH', body: JSON.stringify(row) });
+        else await pgFetch(sb.url, sb.key, 'blog_posts', { method: 'POST', body: JSON.stringify(row) });
         return sendJson(res, 200, { status: 'draft', reasons: gate.reasons, message: 'Saved as draft — quality/safety gate not passed. Human review required.' });
       }
 
