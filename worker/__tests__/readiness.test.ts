@@ -40,7 +40,7 @@ describe('editorial release boundaries', () => {
     expect(result && 'html' in result && result.html).toContain('noindex');
     expect(result && 'html' in result && result.html).toContain('Page Not Found | Luxedge');
   });
-  it('keeps the media hub indexable and gives published videos indexable metadata', async () => {
+  it('keeps media out of organic indexing while rendering its published metadata', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([
@@ -49,8 +49,7 @@ describe('editorial release boundaries', () => {
     for (const path of ['/media', '/media/guide']) {
       const result = await maybeInjectSeo(shell, path, 'https://luxedge.us', env);
       expect(result).toHaveProperty('status', 200);
-      expect(result && 'html' in result && result.html).toContain('index, follow');
-      expect(result && 'html' in result && result.html).not.toContain('noindex, nofollow');
+      expect(result && 'html' in result && result.html).toContain('noindex, nofollow');
     }
   });
   it('handles /blog/write before the general blog slug lookup', async () => {
@@ -91,6 +90,8 @@ describe('editorial release boundaries', () => {
     expect(sitemap).not.toContain('<lastmod>');
   });
   it('returns noindex 503 rather than a legacy fallback when the CMS is unavailable', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
     for (const path of ['/blog', '/blog/retired-article', '/media/example']) {
       const result = await maybeInjectSeo(shell, path, 'https://luxedge.us', env);
       expect(result).toHaveProperty('status', 503);
