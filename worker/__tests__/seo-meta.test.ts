@@ -120,7 +120,9 @@ describe('productJsonLd', () => {
     expect(policy.applicableCountry).toBe('US');
     expect(policy.merchantReturnDays).toBe(30);
     expect(policy.returnMethod).toBe('https://schema.org/ReturnByMail');
-    expect(policy.returnFees).toBe('https://schema.org/FreeReturn');
+    // Returns are by mail and the customer pays return shipping — the same
+    // term the published /returns policy states.
+    expect(policy.returnFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
     const sd = offers.shippingDetails as Record<string, any>;
     expect(sd.shippingDestination.addressCountry).toBe('US');
     expect(sd.shippingRate.value).toBe('0'); // free shipping is a real recorded value

@@ -43,10 +43,12 @@ export function merchantOfferExtras(p: {
       returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
       merchantReturnDays: 30,
       merchantReturnLink: `${SITE_URL}/returns`,
-      // GSC merchant-listing subfields: returns are handled by mail with
-      // prepaid return labels, so the customer pays nothing (FreeReturn).
+      // Must match the published Returns policy: "Customers are responsible
+      // for return shipping label, packaging, and all return shipping costs."
+      // Declaring FreeReturn here contradicted the visible policy (GSC
+      // merchant-listing mismatch), so the schema states the real term.
       returnMethod: 'https://schema.org/ReturnByMail',
-      returnFees: 'https://schema.org/FreeReturn',
+      returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
     },
     shippingDetails: {
       '@type': 'OfferShippingDetails',
@@ -143,9 +145,16 @@ export function buildProductJsonLd(p: CatalogProduct, reviews?: ReviewFacts): Re
     name: p.name,
     image: p.images.slice(0, 8).map((i) => i.url),
     description: p.shortDescription || p.description || p.name,
-    brand: { '@type': 'Brand', name: p.brand || 'Luxedge' },
     offers: offer,
   };
+  // brand is emitted ONLY when a real product brand is recorded — and never the
+  // retailer's own name. Most of the catalog is generic third-party goods, and
+  // Luxedge is the store, not their manufacturer, so defaulting the brand to
+  // "Luxedge" put a fabricated brand fact in front of Google and shoppers.
+  // This is the same rule buildFeedRow applies, so JSON-LD and the merchant
+  // feed agree.
+  const brand = (p.brand || '').trim();
+  if (brand && brand.toLowerCase() !== 'luxedge') product.brand = { '@type': 'Brand', name: brand };
   if (p.categoryName) product.category = p.categoryName;
   if (p.sku) product.sku = p.sku;
   if (reviews && reviews.count > 0) {
@@ -193,10 +202,12 @@ export function buildFeedRow(p: CatalogProduct): Record<string, string | number>
     availability,
     condition: 'new',
     // Storewide 30-day mail-return policy in CSV form — the same values as
-    // merchantOfferExtras (ReturnByMail / FreeReturn, merchantReturnDays: 30)
-    // so the feed columns match the JSON-LD on the product page.
+    // merchantOfferExtras (ReturnByMail / ReturnFeesCustomerResponsibility,
+    // merchantReturnDays: 30) so the feed columns match the JSON-LD on the
+    // product page AND the published Returns policy: the customer pays return
+    // shipping.
     return_method: 'by_mail',
-    return_fees: 'free',
+    return_fees: 'customer',
     return_days: 30,
   };
   if (p.brand && p.brand !== 'Luxedge') row.brand = p.brand;

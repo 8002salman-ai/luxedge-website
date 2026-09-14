@@ -25,7 +25,7 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
-import { isHeldProduct, isHeldMedia, isHeldBlog } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia, isHeldBlog, isRetiredPublicPath } from '../src/content/reviewHolds';
 import { isPubliclyListableProduct } from '../src/content/productEligibility';
 import {
   CONTACT_INFO,
@@ -35,6 +35,7 @@ import {
   RETURNS_SECTIONS,
   SHIPPING_SECTIONS,
   FAQ_DATA,
+  COPYRIGHT_SECTIONS,
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
@@ -438,6 +439,11 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
     description:
       'How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it.',
   },
+  '/copyright': {
+    title: 'Copyright & DMCA — Reporting Infringement | Luxedge',
+    description:
+      'How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice.',
+  },
   '/privacy': {
     title: 'Privacy Policy | Luxedge',
     description:
@@ -709,6 +715,7 @@ const FOOTER_NAV =
     ['Shop All', '/shop'], ['Blog', '/blog'], ['Media', '/media'],
     ['About', '/about'], ['Contact', '/contact'], ['FAQ', '/faq'],
     ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
+    ['Copyright & DMCA', '/copyright'],
     ['Privacy Policy', '/privacy'], ['Terms of Service', '/terms'],
   ].map(([label, to]) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
   '</nav>';
@@ -763,6 +770,10 @@ function inlineMarkup(text: string): string {
       const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (m) {
         const path = m[2];
+        // A link to a held product or a deleted route would 404 for the
+        // crawler (and the visitor). Render the anchor text as plain text
+        // instead: the sentence stays readable, the dead link never ships.
+        if (isRetiredPublicPath(path)) return esc(m[1]);
         const productSlug = path.match(/^\/product\/([^/?#]+)/)?.[1];
         if (productSlug && isHeldProduct(productSlug)) return esc(m[1]);
         return `<a href="${esc(path)}">${esc(m[1])}</a>`;
@@ -1307,6 +1318,7 @@ export async function maybeInjectSeo(
     else if (staticKey === '/terms') out = injectLegalBody(out, 'Terms of Service', TERMS_SECTIONS);
     else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS);
     else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS);
+    else if (staticKey === '/copyright') out = injectLegalBody(out, 'Copyright & DMCA', COPYRIGHT_SECTIONS);
     else if (staticKey === '/faq') out = injectFaqBody(out);
     else if (staticKey === '/careers') out = injectCareersBody(out);
     return { html: out, status: 200 };

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildSitemap } from '../sitemap';
 import { maybeInjectSeo } from '../seo-meta';
-import { isHeldBlog, isHeldMedia, isHeldProduct } from '../../src/content/reviewHolds';
+import { isHeldBlog, isHeldMedia, isHeldProduct, isLinkablePublicPath, isRetiredPublicPath } from '../../src/content/reviewHolds';
 import { DEFAULT_CONFIG, isExcludedPath } from '../../src/lib/marketing';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -110,5 +110,51 @@ describe('editorial release boundaries', () => {
     const result = await maybeInjectSeo(shell, '/product/kong-classic', 'https://luxedge.us', env);
     expect(result).toHaveProperty('status', 404);
     expect(result && 'html' in result && result.html).toContain('noindex');
+  });
+  it('exposes one linkability contract for every editorial destination', () => {
+    // Deleted routes: the September 2026 crawl found a live guide linking both
+    // of these from indexable copy.
+    expect(isRetiredPublicPath('/blog/dog-car-safety-seat-belt-guide')).toBe(true);
+    expect(isRetiredPublicPath('/blog/dog-car-safety-seat-belt-guide/')).toBe(true);
+    expect(isRetiredPublicPath('/blog/dog-car-safety-seat-belt-guide#top')).toBe(true);
+    expect(isLinkablePublicPath('/blog/dog-car-safety-seat-belt-guide')).toBe(false);
+    expect(isLinkablePublicPath('/product/2m-pet-dog-leash-with-soft-padded-handle-highly-reflective-dog-rope-for-night-walking-suitable-for-small-medium-and-large-dogs')).toBe(false);
+    // Held products and held articles stay unlinkable too.
+    expect(isLinkablePublicPath('/product/kong-classic-durable-natural-rubber-dog-toy')).toBe(false);
+    expect(isLinkablePublicPath('/blog/grooming-routine-long-haired-pets')).toBe(false);
+    // Real destinations are still linkable.
+    expect(isLinkablePublicPath('/product/dog-bed')).toBe(true);
+    expect(isLinkablePublicPath('/category/dog-supplies')).toBe(true);
+  });
+  it('never pre-renders a link to a deleted route, even from stale CMS copy', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([{
+      slug: 'guide', title: 'Guide', excerpt: 'excerpt', published_at: '2026-09-01T00:00:00Z',
+      content: 'Read the [Car Safety Guide](/blog/dog-car-safety-seat-belt-guide) and the [reflective leash](/product/2m-pet-dog-leash-with-soft-padded-handle-highly-reflective-dog-rope-for-night-walking-suitable-for-small-medium-and-large-dogs), then browse [a live product](/product/dog-bed).',
+    }]))));
+    const result = await maybeInjectSeo(shell, '/blog/guide', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 200);
+    const html = (result && 'html' in result && result.html) || '';
+    expect(html).not.toContain('/blog/dog-car-safety-seat-belt-guide');
+    expect(html).not.toContain('2m-pet-dog-leash');
+    // The sentence survives as plain text; the dead link does not ship.
+    expect(html).toContain('Car Safety Guide');
+    expect(html).toContain('/product/dog-bed');
+  });
+  it('serves /copyright as an indexable page with the notice process pre-rendered, and lists it in the sitemap', async () => {
+    const result = await maybeInjectSeo(shell, '/copyright', 'https://luxedge.us', env);
+    expect(result).toHaveProperty('status', 200);
+    const html = (result && 'html' in result && result.html) || '';
+    expect(html).toContain('Copyright &amp; DMCA');
+    expect(html).toContain('index, follow');
+    expect(html).toContain('<link rel="canonical" href="https://luxedge.us/copyright" />');
+    // The reporting instructions must be in the crawl HTML, not only in the SPA.
+    expect(html).toContain('Copyright Notice');
+    expect(html).toContain('hello@luxedge.us');
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify([]))));
+    expect(await buildSitemap()).toContain('https://luxedge.us/copyright');
   });
 });

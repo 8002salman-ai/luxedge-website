@@ -55,6 +55,11 @@ export interface MarketingConfig {
   publisherId: string;
   autoAdsEnabled: boolean;
   manualAdsEnabled: boolean;
+  /** Disabled Adsterra sentinel. The ad network's zone URL and container id
+   * were removed from site-config.json (and its runtime/CSP access), but the
+   * flag stays so the config keeps validating and the review-recovery policy
+   * in placementConfigured can see that no ad system is live. */
+  adsterraEnabled: boolean;
   density: Density;
   showAdsOnMobile: boolean;
   mobileDensity: MobileDensity;
@@ -79,6 +84,7 @@ export const DEFAULT_CONFIG: MarketingConfig = {
   publisherId: 'pub-5473713135927706',
   autoAdsEnabled: false,
   manualAdsEnabled: false,
+  adsterraEnabled: false,
   density: 'balanced',
   showAdsOnMobile: true,
   mobileDensity: 'balanced',

@@ -16,6 +16,7 @@ import {
   buildProductJsonLd, buildFeedRow, buildFeedCsv, buildProductMeta, altTextFor, productUrl, productPath,
 } from '../seo';
 import type { CatalogProduct, CatalogStatus } from '../types';
+import { RETURNS_SECTIONS } from '../../../content/policies';
 
 function reset() {
   // LocalStorageAdapter reads window.localStorage — install an in-memory
@@ -363,11 +364,39 @@ describe('seo + feed', () => {
     expect(policy.merchantReturnDays).toBe(30);
     expect(policy.applicableCountry).toBe('US');
     // GSC merchant-listing subfields (returnMethod + returnFees) — returns are
-    // by mail with prepaid labels, so fees are free.
+    // by mail and the customer pays the return shipping, exactly as the
+    // published Returns policy states.
     expect(policy.returnMethod).toBe('https://schema.org/ReturnByMail');
-    expect(policy.returnFees).toBe('https://schema.org/FreeReturn');
+    expect(policy.returnFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
     const sd = offer.shippingDetails as Record<string, unknown>;
     expect((sd.shippingDestination as Record<string, unknown>).addressCountry).toBe('US');
+  });
+
+  it('return-policy schema agrees with the published Returns policy', () => {
+    // Regression guard: the schema used to declare FreeReturn while /returns
+    // said the customer pays return shipping — a visible-vs-structured-data
+    // contradiction that GSC merchant listings flag.
+    const policyText = RETURNS_SECTIONS.map((s) => `${s.title} ${s.body}`).join(' ');
+    const customerPays = /customers? (are|is) responsible for return shipping/i.test(policyText);
+    const ld = buildProductJsonLd(p);
+    const offer = (ld.find((x) => x['@type'] === 'Product') as Record<string, unknown>)['offers'] as Record<string, unknown>;
+    const schemaFees = (offer.hasMerchantReturnPolicy as Record<string, unknown>).returnFees;
+    expect(customerPays, 'Returns policy must state who pays return shipping').toBe(true);
+    expect(schemaFees).toBe('https://schema.org/ReturnFeesCustomerResponsibility');
+    expect(String(schemaFees)).not.toContain('FreeReturn');
+  });
+
+  it('never claims the retailer name as the product brand', () => {
+    const product = (brand?: string) => {
+      const ld = buildProductJsonLd({ ...p, brand } as CatalogProduct);
+      return ld.find((x) => x['@type'] === 'Product') as Record<string, unknown>;
+    };
+    // Generic third-party goods: no brand recorded, or the store's own name.
+    expect(product('').brand).toBeUndefined();
+    expect(product('Luxedge').brand).toBeUndefined();
+    expect(product(undefined).brand).toBeUndefined();
+    // A real recorded brand is still published.
+    expect(product('Himalayan Koh').brand).toEqual({ '@type': 'Brand', name: 'Himalayan Koh' });
   });
 
   it('productPath always resolves to the canonical slug form (GSC merchant-listing contract)', () => {
@@ -398,15 +427,20 @@ describe('seo + feed', () => {
 
   it('feed rows carry the return policy in CSV form (Meta/Pinterest parity with merchantOfferExtras)', () => {
     const row = buildFeedRow(p);
-    // Same storewide policy as the JSON-LD offer: 30-day returns by mail with
-    // prepaid labels — CSV tokens mirror the schema.org terms
-    // (ReturnByMail / FreeReturn / 30).
+    // Same storewide policy as the JSON-LD offer and the published Returns
+    // page: 30-day returns by mail, customer pays return shipping.
     expect(row.return_method).toBe('by_mail');
-    expect(row.return_fees).toBe('free');
+    expect(row.return_fees).toBe('customer');
     expect(row.return_days).toBe(30);
     const csv = buildFeedCsv([p]);
     expect(csv).toContain('return_method,return_fees,return_days');
-    expect(csv).toContain('by_mail,free,30');
+    expect(csv).toContain('by_mail,customer,30');
+  });
+
+  it('feed rows omit the retailer name as a brand (same rule as JSON-LD)', () => {
+    expect(buildFeedRow({ ...p, brand: 'Luxedge' } as CatalogProduct).brand).toBeUndefined();
+    expect(buildFeedRow({ ...p, brand: '' } as CatalogProduct).brand).toBeUndefined();
+    expect(buildFeedRow({ ...p, brand: 'Himalayan Koh' } as CatalogProduct).brand).toBe('Himalayan Koh');
   });
 
   it('alt text is deterministic and never invented', () => {

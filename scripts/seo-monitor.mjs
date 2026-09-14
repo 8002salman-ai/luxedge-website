@@ -1,4 +1,7 @@
-#!/usr/bin/env node
+// Usage: node scripts/seo-monitor.mjs [--site https://luxedge.us] [--json]
+// (Invoked via `node`, never as an executable: a leading "#!" line makes
+// Vitest's SSR transform fail with "Invalid or unexpected token", because the
+// shebang survives esbuild and lands inside the generated function body.)
 /** Read-only live SEO monitor. Public HTTP GET requests only; JSON stdout. */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';

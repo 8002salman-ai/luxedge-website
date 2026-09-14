@@ -34,6 +34,7 @@ import {
   speciesOf,
 } from '../features/catalog/types';
 import { buildFeedCsv, buildProductJsonLd, buildProductMeta, productPath } from '../features/catalog/seo';
+import { adminPublicVisibility } from '../features/catalog/visibility';
 import {
   COMMERCE_READINESS_LABELS, SOURCE_TYPE_LABELS, INVENTORY_SOURCE_LABELS,
   type CommerceReadiness,
@@ -109,6 +110,48 @@ function seoExplain(p: CatalogProduct): string {
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${BADGE[status] || BADGE.draft}`}>{status}</span>;
+}
+
+/** Groups every hidden row by its reason so the header count explains itself on
+ * hover (for example "52 unverified commerce readiness · 11 missing usable
+ * product image"). */
+function publicVisibilitySummary(products: CatalogProduct[]): string {
+  const counts = new Map<string, number>();
+  for (const p of products) {
+    const v = adminPublicVisibility(p);
+    if (v.listable) continue;
+    const key = v.reason || 'unknown reason';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, n]) => `${n} ${reason}`)
+    .join(' · ');
+}
+
+/** Distinguishes ACTIVE (owner approved the listing) from PUBLIC (the
+ * storefront will actually serve it). Uses the same contract the storefront
+ * applies, so the operator sees the real reason instead of a misleading badge. */
+function VisibilityBadge({ product }: { product: CatalogProduct }) {
+  // Only rows the owner has put forward for sale need a public/not-public
+  // verdict; draft/ready/archived rows are not expected to be live.
+  if (product.status !== 'active') return null;
+  const { listable, reason } = adminPublicVisibility(product);
+  if (listable) {
+    return (
+      <a href={productPath(product)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 hover:underline" title="Publicly listable — this PDP is served and in the sitemap">
+        <Eye size={10} /> LIVE
+      </a>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
+      title={`Active, but NOT publicly listable — ${reason || 'unknown reason'}. The storefront returns 404 for this PDP and it is excluded from the sitemap.`}
+    >
+      NOT PUBLIC
+    </span>
+  );
 }
 
 function ReadinessBadge({ readiness }: { readiness?: CommerceReadiness | null }) {
@@ -699,9 +742,19 @@ export function CatalogProductsPage() {
           <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
             <span className="font-semibold text-gray-800">{products.length} total</span>
             <span>·</span>
-            <span className="text-emerald-700 font-medium">{products.filter((p) => p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY').length} storefront</span>
+            <span
+              className="text-emerald-700 font-medium"
+              title="Rows the storefront actually serves: the shared public-listing contract, not just the commerce-readiness column."
+            >
+              {products.filter((p) => adminPublicVisibility(p).listable).length} publicly listable
+            </span>
             <span>·</span>
-            <span className="text-amber-700 font-medium">{products.filter((p) => p.status === 'active' && p.commerceReadiness !== 'COMMERCE_READY').length} pending</span>
+            <span
+              className="text-amber-700 font-medium"
+              title={publicVisibilitySummary(products) || 'Nothing hidden'}
+            >
+              {products.filter((p) => !adminPublicVisibility(p).listable).length} not publicly listable
+            </span>
             {archivedCount > 0 && (
               <>
                 <span>·</span>
@@ -1034,9 +1087,7 @@ export function CatalogProductsPage() {
                           <option value="inactive">Inactive</option>
                           <option value="archived">Archived</option>
                         </select>
-                        {p.status === 'active' && p.commerceReadiness === 'COMMERCE_READY' && (
-                          <a href={productPath(p)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-600 hover:underline"><Eye size={10} /> LIVE</a>
-                        )}
+                        <VisibilityBadge product={p} />
                       </div>
                     </td>
                   ),

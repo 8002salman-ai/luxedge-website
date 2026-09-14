@@ -6,6 +6,7 @@ import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { isHeldBlog } from './content/reviewHolds';
+import { COPYRIGHT_SECTIONS } from './content/policies';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -274,17 +275,22 @@ const INIT_BLOGS: BlogPost[] = [
 ];
 
 // The CMS is the live source of truth. This fallback is intentionally limited
-// to the same editorial set retained in the CMS, so a temporary CMS outage
-// cannot bring retired or low-quality articles back into public view.
+// so a temporary CMS outage cannot bring retired or low-quality articles back
+// into public view.
+//
+// It lists EXACTLY the guides that have bundled fallback content in INIT_BLOGS
+// (asserted by src/content/__tests__/fallback-blog-parity.test.ts). Four of the
+// eight live guides — how-to-clean-a-bird-feeder,
+// how-to-choose-cattle-trough-feed-water-setup, how-to-fit-no-pull-dog-harness
+// and how-to-choose-a-cat-tunnel — exist only in the CMS, and deliberately have
+// no bundled copy: while the CMS is unreachable the worker serves the blog
+// routes as a noindex 503 rather than stale HTML, so an offline duplicate would
+// only risk serving superseded text.
 const RETAINED_FALLBACK_BLOG_SLUGS = new Set([
-  'how-to-clean-a-bird-feeder',
-  'how-to-choose-cattle-trough-feed-water-setup',
   'best-bird-feeder-buyers-guide',
   'horse-grooming-kit-buyers-guide',
   'horse-halter-lead-rope-buyers-guide',
   'horse-fly-mask-buyers-guide',
-  'how-to-fit-no-pull-dog-harness',
-  'how-to-choose-a-cat-tunnel',
 ]);
 const SAFE_INIT_BLOGS = INIT_BLOGS.filter((post) => RETAINED_FALLBACK_BLOG_SLUGS.has(post.slug));
 
@@ -1077,6 +1083,7 @@ function Footer() {
           <div className="lg:col-span-2 space-y-1">
             <ColTitle>Company</ColTitle>
             <Link to="/about" className={FL}>About Luxedge</Link>
+            <Link to="/copyright" className={FL}>Copyright &amp; DMCA</Link>
             <Link to="/privacy" className={FL}>Privacy Policy</Link>
             <Link to="/terms" className={FL}>Terms of Service</Link>
             <a href="/sitemap.xml" className={FL}>Sitemap</a>
@@ -1261,7 +1268,7 @@ function RouteTitle() {
       setMeta('robots', 'noindex, follow');
     } else if (privateRoutes.includes(segs[0]) || pathname === '/blog/write' || (segs[0] === 'blog' && !!segs[1] && isHeldBlog(segs[1]))) {
       setMeta('robots', 'noindex, nofollow');
-    } else if (['', 'shop', 'category', 'product', 'blog', 'media', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'faq'].includes(segs[0] || '')) {
+    } else if (['', 'shop', 'category', 'product', 'blog', 'media', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'copyright', 'faq'].includes(segs[0] || '')) {
       setMeta('robots', 'index, follow');
     }
     if (segs.length === 0) { full("Luxedge — Premium Pet & Animal Essentials"); desc("Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge."); }
@@ -1285,6 +1292,7 @@ function RouteTitle() {
     else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
     else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }      else if (segs[0] === "terms") { set("Terms of Service"); desc("The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language."); }      else if (segs[0] === "returns") { set("Returns & Replacement Policy"); desc("How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it."); }
     else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — delivery estimates, shipping costs, and applicable promotions."); }
+    else if (segs[0] === "copyright") { full("Copyright & DMCA — Reporting Infringement | Luxedge"); desc("How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
     else if (segs[0] === "blog") {
@@ -3747,6 +3755,20 @@ function ShippingPolicyPage() {
   );
 }
 
+/** Rendered from the same COPYRIGHT_SECTIONS the worker pre-renders, so the
+ * crawl HTML and the hydrated page cannot drift apart. */
+function CopyrightPage() {
+  return (
+    <LegalPage title="Copyright & DMCA" updated="September 14, 2026">
+      {COPYRIGHT_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
+    </LegalPage>
+  );
+}
+
 function FAQPage() {
   const [open, setOpen] = useState<string | null>(null);
   const faqs = [
@@ -4079,6 +4101,7 @@ export default function App() {
           <Route path="/terms" element={<SLayout><TermsPage /></SLayout>} />
           <Route path="/returns" element={<SLayout><ReturnsPage /></SLayout>} />
           <Route path="/shipping-policy" element={<SLayout><ShippingPolicyPage /></SLayout>} />
+          <Route path="/copyright" element={<SLayout><CopyrightPage /></SLayout>} />
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />
           {/* Blog */}

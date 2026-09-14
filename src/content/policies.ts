@@ -62,6 +62,21 @@ export const SHIPPING_SECTIONS: PolicySection[] = [
   { title: 'Address Accuracy', body: 'Please double-check your shipping address before checkout. Luxedge is not responsible for orders shipped to incorrect addresses provided by the customer.' },
 ];
 
+/** Copyright / DMCA page — one page, not four. Deliberately conservative:
+ * it states what we own, what we use with permission, how to send a notice,
+ * what a notice should contain, and that false notices are not acceptable. It
+ * does not claim any registration, legal-agent designation or statutory
+ * obligation the business has not established. */
+export const COPYRIGHT_SECTIONS: PolicySection[] = [
+  { title: 'Copyright', body: 'The original content published on luxedge.us — our product write-ups, buying guides, page copy, the site design and layout, and the Luxedge name and logo — is owned by Embani LLC (operating as Luxedge) or used with permission. Copyright \u00a9 2026 Embani LLC. All rights reserved. Product names, brand names and supplier photography that appear in a listing stay the property of their respective owners.' },
+  { title: 'Using Our Content', body: 'You are welcome to quote a short excerpt of a guide or product description if you link back to the page you took it from. Republishing an article in full, reselling our images, or presenting our content as your own is not permitted without written permission from us. If you are unsure whether your intended use is allowed, email us before you publish.' },
+  { title: 'Reporting Infringing Material', body: 'If you believe material published on luxedge.us infringes a copyright you own or represent, email hello@luxedge.us with the subject line \u201cCopyright Notice\u201d. Include the page address (URL) of the material so we can find it, and we will review the notice and remove or disable access to material that is properly identified.' },
+  { title: 'What a Notice Should Include', body: 'To let us act quickly, a notice should contain:\n\u2022 identification of the copyrighted work you say is infringed;\n\u2022 the exact URL of the material you are asking us to remove;\n\u2022 your name, address, telephone number and email address;\n\u2022 a statement that you have a good-faith belief the use is not authorised by the owner, its agent, or the law;\n\u2022 a statement that the information in your notice is accurate and that you are the owner or are authorised to act for the owner;\n\u2022 your physical or electronic signature.\nWe may ask for clarification if a notice is incomplete.' },
+  { title: 'If Your Material Was Removed', body: 'If we remove material that you published and you believe the removal was a mistake, you can reply to the same address with your contact details, the URL concerned, and an explanation of why the material should be restored. We will review it and may restore the material where the law allows.' },
+  { title: 'Misleading or Abusive Notices', body: 'Please do not send notices you know to be false or misleading, and do not use this process to remove legitimate criticism or a competitor\u2019s genuine listing. We may decline to act on notices that are incomplete, that are not about copyright, or that appear to be an attempt to misuse the process. Sending a knowingly false notice can carry legal consequences for the sender.' },
+  { title: 'Contact', body: 'Copyright questions and notices: hello@luxedge.us or (440) 941-8002, Monday to Friday, 9AM\u20136PM CT. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
+];
+
 export interface FaqItem {
   q: string;
   a: string;

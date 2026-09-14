@@ -4,7 +4,7 @@ import { isPubliclyListableProduct } from '../src/content/productEligibility';
 
 // Dynamic sitemap source. Media routes are noindexed and deliberately excluded.
 const root = 'https://luxedge.us';
-const STATIC_ROUTES = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/faq'];
+const STATIC_ROUTES = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/copyright', '/faq'];
 function supabaseBase(): string { return (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, ''); }
 function supabaseAnon(): string { return (process.env.VITE_SUPABASE_ANON_KEY || '').trim(); }
 async function fetchRows<T>(path: string): Promise<T | null> {

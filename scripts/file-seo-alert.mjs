@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+// Invoked via `node` (never as an executable) — see the note in
+// scripts/seo-monitor.mjs: a shebang line breaks Vitest's SSR transform.
 /**
  * File a GitHub issue when the SEO monitor report alerts.
  *

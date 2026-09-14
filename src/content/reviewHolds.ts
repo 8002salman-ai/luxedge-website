@@ -27,3 +27,34 @@ const heldProduct = new Set([
 export function isHeldProduct(slug?: string | null): boolean {
   return !!slug && heldProduct.has(slug);
 }
+
+/** Public routes that were permanently deleted or withdrawn from the catalog.
+ * EDITORIAL COPY MUST NEVER LINK TO THESE AGAIN: a crawler following a link
+ * from an indexable article to a 404 is a real quality defect (and the
+ * September 2026 audit found exactly that — a live guide still linked a
+ * deleted article and a delisted product). Both renderers (the client
+ * markdown renderer and the worker's article pre-render) degrade a markdown
+ * link whose destination is in this set to plain text, so a stale CMS body
+ * can never emit a dead link. Add a path here when content is deleted; the
+ * anchor text stays readable, only the <a> disappears. */
+const retiredPublicPaths = new Set([
+  '/blog/dog-car-safety-seat-belt-guide',
+  '/product/2m-pet-dog-leash-with-soft-padded-handle-highly-reflective-dog-rope-for-night-walking-suitable-for-small-medium-and-large-dogs',
+]);
+export function isRetiredPublicPath(path?: string | null): boolean {
+  if (!path) return false;
+  const clean = path.split(/[?#]/)[0].replace(/\/+$/, '');
+  return !!clean && retiredPublicPaths.has(clean);
+}
+
+/** Every destination a markdown link in public editorial content may point to
+ * without risking a 404: not held, not retired. */
+export function isLinkablePublicPath(path?: string | null): boolean {
+  if (!path) return false;
+  if (isRetiredPublicPath(path)) return false;
+  const productSlug = String(path).match(/^\/product\/([^/?#]+)/)?.[1];
+  if (productSlug && isHeldProduct(productSlug)) return false;
+  const blogSlug = String(path).match(/^\/blog\/([^/?#]+)/)?.[1];
+  if (blogSlug && isHeldBlog(blogSlug)) return false;
+  return true;
+}

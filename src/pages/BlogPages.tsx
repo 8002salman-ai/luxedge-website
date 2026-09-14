@@ -10,7 +10,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { BlogPost } from '../App';
 import { useApp } from '../App';
 import { loadPublishedBlogBySlug } from '../services/blog';
-import { isHeldProduct } from '../content/reviewHolds';
+import { isHeldProduct, isLinkablePublicPath } from '../content/reviewHolds';
 import AdSenseAd from '../components/AdSenseAd';
 import { BookOpen01, PencilLine, Calendar, ArrowRight, Send01, Eye, ChevronRight, ArrowLeft, Upload01, Tag01 } from '@untitledui/icons';
 
@@ -178,7 +178,11 @@ export function BlogDetailPage() {
       const m = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (m) {
         const productSlug = m[2].match(/^\/product\/([^/?#]+)/)?.[1];
-        if (productSlug && isHeldProduct(productSlug)) return <span key={`${keyBase}-${j}`}>{m[1]}</span>;
+        // Held products and retired routes are rendered as plain text so a
+        // stale CMS body can never link a reader to a 404.
+        if ((productSlug && isHeldProduct(productSlug)) || !isLinkablePublicPath(m[2])) {
+          return <span key={`${keyBase}-${j}`}>{m[1]}</span>;
+        }
         return <Link key={`${keyBase}-${j}`} to={m[2]} className="text-luxe-gold-dark font-semibold underline decoration-luxe-gold/40 underline-offset-2 hover:text-luxe-gold transition-colors">{m[1]}</Link>;
       }
       return <span key={`${keyBase}-${j}`}>{part}</span>;
