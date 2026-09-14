@@ -6,7 +6,7 @@ import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { isHeldBlog } from './content/reviewHolds';
-import { COPYRIGHT_SECTIONS } from './content/policies';
+import { COPYRIGHT_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
@@ -822,17 +822,19 @@ function Header() {
             {mob ? <X strokeWidth={1.5} size={22} /> : <Menu01 strokeWidth={1.5} size={22} />}
           </button>
 
-          {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-2.5 shrink-0 group" aria-label="Luxedge home">
-            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 sm:h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105" />
-            <span className="flex flex-col leading-none">
-              <span className="font-brand text-lg sm:text-xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
-              <span className="text-[7px] sm:text-[7.5px] font-bold tracking-[0.22em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
+          {/* Brand Logo — the wordmark and tagline drop away as the screen gets
+              narrower so the right-hand controls (sign in / wishlist / cart) can
+              never be pushed off the viewport on a phone. */}
+          <Link to="/" className="flex items-center gap-2 sm:gap-2.5 min-w-0 group" aria-label="Luxedge home">
+            <img src="/luxedge-mark.png" alt="Luxedge" className="h-11 sm:h-12 w-auto object-contain shrink-0 transition-transform duration-300 group-hover:scale-105" />
+            <span className="hidden min-[375px]:flex flex-col leading-none min-w-0">
+              <span className="font-brand text-base sm:text-xl font-bold tracking-[0.16em] text-gray-900">LUXEDGE</span>
+              <span className="hidden md:block text-[7px] sm:text-[7.5px] font-bold tracking-[0.22em] text-[#1E4636] mt-0.5">PETS • LIVESTOCK • A BRIGHTER TOMORROW</span>
             </span>
           </Link>
 
           {/* Large Central Search Bar */}
-          <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-6">
+          <form onSubmit={submitSearch} role="search" className="hidden md:flex flex-1 min-w-0 max-w-xl mx-2 lg:mx-6">
             <div className="relative flex items-center w-full bg-[#F6F8F5] border border-gray-200/90 rounded-full px-4 py-2.5 focus-within:border-[#1E4636] focus-within:ring-2 focus-within:ring-[#1E4636]/15 transition-all">
               <SearchMd strokeWidth={1.5} size={17} className="text-gray-400 shrink-0 mr-2.5" />
               <input
@@ -840,7 +842,7 @@ function Header() {
                 onChange={e => setHq(e.target.value)}
                 placeholder="Search products, brands, or animal care guides..."
                 aria-label="Search products"
-                className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none pr-9"
+                className="flex-1 min-w-0 bg-transparent text-sm text-gray-800 placeholder-gray-400 focus:outline-none pr-9"
               />
               <button
                 type="submit"
@@ -852,8 +854,8 @@ function Header() {
             </div>
           </form>
 
-          {/* Header Action Icons */}
-          <div className="flex items-center gap-1 sm:gap-3">
+          {/* Header Action Icons — shrink-0 so the primary CTAs keep their space. */}
+          <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             {user ? (
               <div className="relative">
                 <button
@@ -896,16 +898,16 @@ function Header() {
             ) : (
               <Link to="/login" className="flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label="Sign in">
                 <UserIcon strokeWidth={1.5} size={19} className="text-gray-600" />
-                <span className="hidden sm:inline text-xs font-semibold">Account</span>
+                <span className="hidden lg:inline text-xs font-semibold">Account</span>
               </Link>
             )}
 
             {/* Wishlist */}
             <Link to="/wishlist" className="relative flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label={`Wishlist, ${wishIds.length} items`}>
               <Heart strokeWidth={1.5} size={19} fill={wishIds.length > 0 ? 'currentColor' : 'none'} className={wishIds.length > 0 ? 'text-rose-500' : 'text-gray-600'} />
-              <span className="hidden sm:inline text-xs font-semibold">Wishlist</span>
+              <span className="hidden lg:inline text-xs font-semibold">Wishlist</span>
               {wishIds.length > 0 && (
-                <span className="absolute top-1 right-1 sm:static min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px] font-bold">
+                <span className="absolute top-1 right-1 lg:static min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white flex items-center justify-center text-[9px] font-bold">
                   {wishIds.length}
                 </span>
               )}
@@ -914,9 +916,9 @@ function Header() {
             {/* Cart */}
             <button onClick={openCart} className="relative flex items-center gap-1.5 py-2 px-2.5 hover:bg-gray-50 rounded-lg text-gray-700 transition-colors" aria-label={`Open cart, ${cc} items`}>
               <ShoppingBag01 strokeWidth={1.5} size={19} className="text-gray-600" />
-              <span className="hidden sm:inline text-xs font-semibold">Cart</span>
+              <span className="hidden lg:inline text-xs font-semibold">Cart</span>
               {cc > 0 && (
-                <span className="absolute top-1 right-1 sm:static min-w-[16px] h-4 px-1 rounded-full bg-[#1E4636] text-white flex items-center justify-center text-[9px] font-bold">
+                <span className="absolute top-1 right-1 lg:static min-w-[16px] h-4 px-1 rounded-full bg-[#1E4636] text-white flex items-center justify-center text-[9px] font-bold">
                   {cc}
                 </span>
               )}
@@ -3110,7 +3112,7 @@ function CartPage() {
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center">
         <div className="w-16 h-16 mx-auto rounded-full bg-luxe-gold-soft ring-1 ring-luxe-gold/20 flex items-center justify-center mb-4"><ShoppingBag01 strokeWidth={1.5} size={28} className="text-luxe-gold" /></div>
-        <h2 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h2>
+        <h1 className="font-serif text-2xl font-bold text-luxe-black mb-2">Your cart is empty</h1>
         <p className="text-luxe-gray text-sm mb-6">Discover handpicked essentials your pet will love.</p>
         <Link to="/shop" className="btn-glow inline-block px-6 py-3 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-bold rounded-full text-sm transition-colors">Shop Now</Link>
       </div>
@@ -3715,7 +3717,7 @@ function AboutPage() {
 
 function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="August 26, 2026">
+    <LegalPage title="Privacy Policy" updated={POLICY_LAST_UPDATED['/privacy']}>
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
       <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through support forms, WhatsApp inquiries, or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
@@ -3738,7 +3740,7 @@ function PrivacyPage() {
 
 function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="August 26, 2026">
+    <LegalPage title="Terms of Service" updated={POLICY_LAST_UPDATED['/terms']}>
       <LS t="Using Luxedge"><p>By using this website, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use the website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
       <LS t="Products, Pricing, and Availability"><p>Product availability, pricing, images, specifications, and descriptions may change as inventory and supplier information are updated. We work to keep details accurate, but occasional errors may occur. We may correct an error or cancel an affected order before shipment, and will notify you if that happens.</p></LS>
       <LS t="Orders and Payment"><p>Submitting checkout information is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends an order confirmation. If payment is unavailable, the checkout action remains disabled and no paid order is created.</p></LS>
@@ -3756,7 +3758,7 @@ function TermsPage() {
 
 function ReturnsPage() {
   return (
-    <LegalPage title="Returns & Replacement Policy" updated="August 26, 2026">
+    <LegalPage title="Returns & Replacement Policy" updated={POLICY_LAST_UPDATED['/returns']}>
       <LS t="Our Promise"><p>At Luxedge, we take pride in the quality of our pet essentials. If you receive a product that is damaged, defective, or incorrect, please contact us within 30 days of your order date. We will work with you to resolve the issue as quickly as possible.</p></LS>
       <LS t="Return Eligibility"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Return requests must be made within 30 days of the original order date.</li><li>Products must be unused, unopened, and returned in their original packaging.</li><li>Returns require prior approval from Luxedge before being shipped.</li></ul></LS>
       <LS t="Replacement Policy"><p>Once we receive and inspect your returned product, we will process a replacement if the return meets our policy requirements.</p><p className="mt-2">Replacement items will be shipped after the returned product has been received and approved.</p></LS>
@@ -3770,7 +3772,7 @@ function ReturnsPage() {
 
 function ShippingPolicyPage() {
   return (
-    <LegalPage title="Shipping Policy" updated="August 26, 2026">
+    <LegalPage title="Shipping Policy" updated={POLICY_LAST_UPDATED['/shipping-policy']}>
       <LS t="Where We Ship"><p>Luxedge currently offers shipping within the United States where the destination is supported by the product, supplier, and carrier. Available destinations and any exclusions are shown during checkout. International shipping is not currently offered. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
       <LS t="Processing Time"><p>Delivery timing is confirmed during order processing. You will receive shipment and tracking information when available.</p></LS>
       <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Delivery estimates are estimates, not guarantees. Processing and carrier times can vary by product and destination. Express shipping is not currently offered unless specifically shown at checkout.</p></div></LS>
@@ -3788,7 +3790,7 @@ function ShippingPolicyPage() {
  * crawl HTML and the hydrated page cannot drift apart. */
 function CopyrightPage() {
   return (
-    <LegalPage title="Copyright & DMCA" updated="September 14, 2026">
+    <LegalPage title="Copyright & DMCA" updated={POLICY_LAST_UPDATED['/copyright']}>
       {COPYRIGHT_SECTIONS.map((s) => (
         <LS key={s.title} t={s.title}>
           {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}

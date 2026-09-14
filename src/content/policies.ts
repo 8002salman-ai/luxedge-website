@@ -77,6 +77,20 @@ export const COPYRIGHT_SECTIONS: PolicySection[] = [
   { title: 'Contact', body: 'Copyright questions and notices: hello@luxedge.us or (440) 941-8002, Monday to Friday, 9AM\u20136PM CT. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
+/**
+ * Last-updated label per policy route. ONE source, read by both the worker's
+ * pre-rendered HTML and the React page, so the crawl copy and the hydrated copy
+ * cannot disagree about when a policy last changed. /copyright is dated to the
+ * day it was published rather than inheriting an earlier revision date.
+ */
+export const POLICY_LAST_UPDATED: Record<string, string> = {
+  '/privacy': 'August 26, 2026',
+  '/terms': 'August 26, 2026',
+  '/returns': 'August 26, 2026',
+  '/shipping-policy': 'August 26, 2026',
+  '/copyright': 'September 14, 2026',
+};
+
 export interface FaqItem {
   q: string;
   a: string;

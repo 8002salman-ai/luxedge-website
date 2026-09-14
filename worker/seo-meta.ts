@@ -36,6 +36,7 @@ import {
   SHIPPING_SECTIONS,
   FAQ_DATA,
   COPYRIGHT_SECTIONS,
+  POLICY_LAST_UPDATED,
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
@@ -1001,9 +1002,10 @@ function injectContactBody(html: string): string {
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
-/** Pre-renders a legal/policy page from shared section data. */
-function injectLegalBody(html: string, title: string, sections: { title: string; body: string }[]): string {
-  const parts: string[] = [`<h1>${esc(title)}</h1>`, `<p>Last updated: August 26, 2026</p>`];
+/** Pre-renders a legal/policy page from shared section data. The date comes
+ * from POLICY_LAST_UPDATED so the crawl HTML matches the React page. */
+function injectLegalBody(html: string, title: string, sections: { title: string; body: string }[], updated: string): string {
+  const parts: string[] = [`<h1>${esc(title)}</h1>`, `<p>Last updated: ${esc(updated)}</p>`];
   for (const s of sections) {
     parts.push(`<h2>${esc(s.title)}</h2>`, `<p>${esc(s.body)}</p>`);
   }
@@ -1332,11 +1334,11 @@ export async function maybeInjectSeo(
     // substantive material, not an empty SPA shell.
     if (staticKey === '/about') out = injectAboutBody(out);
     else if (staticKey === '/contact') out = injectContactBody(out);
-    else if (staticKey === '/privacy') out = injectLegalBody(out, 'Privacy Policy', PRIVACY_SECTIONS);
-    else if (staticKey === '/terms') out = injectLegalBody(out, 'Terms of Service', TERMS_SECTIONS);
-    else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS);
-    else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS);
-    else if (staticKey === '/copyright') out = injectLegalBody(out, 'Copyright & DMCA', COPYRIGHT_SECTIONS);
+    else if (staticKey === '/privacy') out = injectLegalBody(out, 'Privacy Policy', PRIVACY_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/terms') out = injectLegalBody(out, 'Terms of Service', TERMS_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/copyright') out = injectLegalBody(out, 'Copyright & DMCA', COPYRIGHT_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/faq') out = injectFaqBody(out);
     else if (staticKey === '/careers') out = injectCareersBody(out);
     return { html: out, status: 200 };

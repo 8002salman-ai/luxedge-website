@@ -25,9 +25,9 @@ const xmlEscape = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, 
 /** Returns null on DB failure so the caller can respond with an honest 503. */
 export async function buildSitemap(): Promise<string | null> {
   const [prods, cats, blogs] = await Promise.all([
-    fetchRows<ProductRow[]>(`products?select=${SITEMAP_PRODUCTS_SELECT}&status=in.(active,published)&limit=500`),
-    fetchRows<CategoryRow[]>(`categories?select=${SITEMAP_CATEGORIES_SELECT}&is_active=eq.true&limit=200`),
-    fetchRows<BlogRow[]>(`blog_posts?select=${SITEMAP_BLOG_POSTS_SELECT}&status=eq.published&limit=500`),
+    fetchRows<ProductRow[]>(`products?select=${SITEMAP_PRODUCTS_SELECT}&status=in.(active,published)&order=slug.asc&limit=500`),
+    fetchRows<CategoryRow[]>(`categories?select=${SITEMAP_CATEGORIES_SELECT}&is_active=eq.true&order=slug.asc&limit=200`),
+    fetchRows<BlogRow[]>(`blog_posts?select=${SITEMAP_BLOG_POSTS_SELECT}&status=eq.published&order=slug.asc&limit=500`),
   ]);
   if (!prods || !cats || !blogs) return null;
   const urls: string[] = [...STATIC_ROUTES];

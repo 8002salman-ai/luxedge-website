@@ -45,10 +45,12 @@ const PRODUCT_FIELDS = [
   'inventory_qty', 'commerce_readiness',
 ].join(',');
 
+// Every query is explicitly ordered: PostgREST does not guarantee row order
+// without one, which made the generated file churn between identical runs.
 const [prods, cats, blogs] = await Promise.all([
-  get(`products?select=${PRODUCT_FIELDS}&status=in.(active,published)&limit=500`),
-  get('categories?select=slug&is_active=eq.true&limit=200'),
-  get('blog_posts?select=slug&status=eq.published&limit=500'),
+  get(`products?select=${PRODUCT_FIELDS}&status=in.(active,published)&order=slug.asc&limit=500`),
+  get('categories?select=slug&is_active=eq.true&order=slug.asc&limit=200'),
+  get('blog_posts?select=slug&status=eq.published&order=slug.asc&limit=500'),
 ]);
 
 const listable = prods.filter((p) => !isHeldProduct(p.slug) && isPubliclyListableProduct(p));
