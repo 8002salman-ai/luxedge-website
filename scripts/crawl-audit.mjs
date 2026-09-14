@@ -43,6 +43,27 @@ async function get(url) {
 
 const attr = (html, re) => (html.match(re) || [])[1];
 
+/** Unsupported-claim classes (same list as scripts/product-claim-audit.mjs).
+ * Scanning the SERVED HTML covers product copy, guide bodies and category
+ * intros in one pass — the same text Google and AdSense receive. */
+const CLAIMS = [
+  ['airline-approval', /\bairline[- ]approved\b|\bTSA[- ]approved\b|\bIATA[- ]approved\b/i],
+  ['crash-test', /\bcrash[- ]test(ed|ing)?\b|\bsafety[- ]certified\b/i],
+  ['certification', /\bCertiPUR[- ]US\b|\bOEKO[- ]TEX\b|\bFDA[- ]approved\b|\bCE[- ]marked\b/i],
+  ['medical-outcome', /\bcures?\b|\bprevents? (pain|disease|infection)\b|\bjoint support\b|\brelieves? (pain|joint)\b|\btreats? (pain|disease)\b/i],
+  ['decibels', /\b\d{2}\s?dB\b/i],
+  ['uv-protection', /\bUV[- ]?(protection|resistant|blocking|proof)\b|\bUPF\s?\d+/i],
+  ['biodegradable-timeline', /\bbiodegrades?[^.]{0,40}\b(year|month|day)/i],
+  ['third-party-brand', /\b3M\b|\bGore[- ]?Tex\b/,],
+];
+const stripTags = (html) => html
+  .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 function metaRobots(html) {
   const raw = attr(html, /<meta\s+name="robots"\s+content="([^"]*)"/i) || '';
   return raw.toLowerCase();
@@ -90,7 +111,13 @@ const pageReports = await pool(sitemapPaths, async (path) => {
   if (canonical.replace(/\/$/, '') !== expectedCanonical.replace(/\/$/, '')) problems.push(`canonical "${canonical}"`);
   if (h1s !== 1) problems.push(`${h1s} h1`);
   if ((body.length || 0) < 1500) problems.push(`thin HTML (${body.length}b)`);
-  return { path, status, robots, canonical, h1s, title, links, problems };
+  const text = stripTags(body);
+  const claims = [];
+  for (const [label, re] of CLAIMS) {
+    const hit = text.match(re);
+    if (hit) claims.push({ label, text: hit[0] });
+  }
+  return { path, status, robots, canonical, h1s, title, links, problems, claims };
 });
 
 const internalLinks = new Set();
@@ -106,6 +133,7 @@ const linkReports = await pool(linkList, async (href) => {
   return { href, status, location };
 });
 
+const claimPages = pageReports.filter((p) => (p.claims || []).length);
 const brokenLinks = linkReports.filter((l) => l.status === 0 || l.status >= 400);
 const redirectedLinks = linkReports.filter((l) => l.status >= 300 && l.status < 400);
 const badPages = pageReports.filter((p) => p.problems.length);
@@ -133,6 +161,10 @@ if (AS_JSON) {
   console.log(`sitemap: ${locs.length} URLs (${sitemapPaths.length} own-origin paths)\n`);
   console.log(`SITEMAP PAGE HEALTH: ${pageReports.length - badPages.length}/${pageReports.length} clean`);
   for (const p of badPages) console.log(`  FAIL ${p.path} — ${p.problems.join('; ')}`);
+  console.log(`\nUNSUPPORTED-CLAIM SCAN: ${claimPages.length} page(s) with a flagged claim`);
+  for (const p of claimPages) {
+    console.log(`  ${p.path} — ${p.claims.map((c) => `${c.label}: "${c.text}"`).join(' · ')}`);
+  }
   console.log(`\nINTERNAL LINKS: ${linkList.length} checked, ${brokenLinks.length} broken, ${redirectedLinks.length} redirected`);
   for (const b of brokenLinks) console.log(`  BROKEN ${b.href} (${b.status || 'ERR'}) from: ${(srcByLink.get(b.href) || []).join(', ')}`);
   for (const r of redirectedLinks) console.log(`  REDIRECT ${r.href} -> ${r.location}`);

@@ -39,6 +39,7 @@ import {
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
+import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 
 export interface SeoEnv {
   ASSETS: {
@@ -908,7 +909,12 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
   // client's `Browse our {category} collection` fallback) so the pre-render and
   // the hydrated page show the same line. The DB description column is ignored
   // here because the client does not render it. Keep CATEGORY_DESC in sync.
-  const desc = CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
+  // Shared with the client collection page (src/content/categoryContent.ts) so
+  // the crawl HTML carries the same intro, considerations and guide links the
+  // hydrated page shows. CATEGORY_DESC stays as the fallback for a slug that has
+  // no shared entry yet.
+  const content = CATEGORY_CONTENT[cat.slug];
+  const desc = content?.desc || CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
   const hero = CAT_HERO_IMAGES[cat.name] || '';
   const parts: string[] = [];
   if (hero) parts.push(`<img src="${esc(hero)}" alt="${esc(cat.name)} essentials" />`);
@@ -920,6 +926,14 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
     `<h2>Choosing ${esc(cat.name.toLowerCase())}</h2>`,
     `<p>Start with the task you need to complete, then compare the listed dimensions, materials, availability, and delivery details before choosing.</p>`,
   );
+  if (content && content.considerations.length) {
+    parts.push(`<h2>What to look for in ${esc(cat.name.toLowerCase())}</h2>`);
+    parts.push(`<ul>${content.considerations.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`);
+  }
+  if (content && content.guides.length) {
+    parts.push(`<h2>Related guides</h2>`);
+    parts.push(`<ul>${content.guides.map((g) => `<li><a href="${esc(g.href)}">${esc(g.label)}</a></li>`).join('')}</ul>`);
+  }
   if (inCategory.length > 0) {
     const items = inCategory
       .slice(0, 12)

@@ -7,6 +7,7 @@ import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS } from './content/policies';
+import { categoryContentFor } from './content/categoryContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -2765,7 +2766,11 @@ function ShopPage() {
   const pageTitle = isDeals ? 'Deals' : (cat === 'All' ? 'Shop All Products' : cat);
   const pageDesc = isDeals
     ? (hasRealDeals ? 'Real catalog offers and sale picks, updated as new deals land.' : 'Featured pet essentials selected from the current collection.')
-    : (cat === 'All' ? 'Handpicked for quality, comfort, and value.' : CAT_META[cat]?.desc || `Browse our ${cat} collection`);
+    : (cat === 'All' ? 'Handpicked for quality, comfort, and value.'
+      : categoryContentFor(cat)?.desc || CAT_META[cat]?.desc || `Browse our ${cat} collection`);
+  // Per-category buying guidance, shared with the worker's pre-rendered category
+  // page (src/content/categoryContent.ts) so both surfaces show the same copy.
+  const catContent = cat === 'All' || isDeals ? null : categoryContentFor(cat);
   const activeFilters = (cat !== 'All' ? 1 : 0) + (maxPrice > 0 ? 1 : 0) + (onlyInStock ? 1 : 0) + (onlyFreeShipping ? 1 : 0) + (onlyNew ? 1 : 0);
 
   const clearAll = () => { setCat('All'); setQ(''); setMaxPrice(0); setOnlyInStock(false); setOnlyFreeShipping(false); setOnlyNew(false); nav('/shop'); };
@@ -2834,6 +2839,25 @@ function ShopPage() {
               <div className="h-1 w-14 bg-luxe-gold rounded-full mt-3" aria-hidden="true" />
               <p className="text-luxe-gray text-xs sm:text-sm mt-3">{pageDesc}</p>
             </div>
+            {catContent && catContent.considerations.length > 0 && (
+              <div className="mt-6 max-w-3xl">
+                <h2 className="font-serif text-lg font-bold text-luxe-black">What to look for in {cat.toLowerCase()}</h2>
+                <ul className="mt-3 space-y-2 list-disc pl-5 text-xs sm:text-sm text-luxe-gray leading-relaxed">
+                  {catContent.considerations.map((c) => (<li key={c}>{c}</li>))}
+                </ul>
+                {catContent.guides.length > 0 && (
+                  <p className="mt-4 text-xs sm:text-sm text-luxe-gray">
+                    Related guides:{' '}
+                    {catContent.guides.map((g, i) => (
+                      <Fragment key={g.href}>
+                        {i > 0 && ' · '}
+                        <Link to={g.href} className="text-luxe-gold-dark font-semibold underline decoration-luxe-gold/40 underline-offset-2 hover:text-luxe-gold">{g.label}</Link>
+                      </Fragment>
+                    ))}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>
