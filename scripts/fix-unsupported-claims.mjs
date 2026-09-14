@@ -121,6 +121,32 @@ const FIXES = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Brand cleanup: the retailer's own name is not a product brand.
+// ---------------------------------------------------------------------------
+// Luxedge is the store (operated by Embani LLC), not the manufacturer of the
+// third-party goods it sells, yet eighteen rows carried brand = "Luxedge" and
+// the storefront displayed it as the product's brand. Where a third-party
+// supplier is recorded for the row, the value is not evidence of a real product
+// brand, so it is cleared: the page then shows no brand (and no schema brand)
+// instead of a fabricated one. Any genuinely own-branded item keeps its value
+// by having its real brand name recorded in the catalog.
+let brandsCleared = 0;
+{
+  const res = await fetch(`${BASE}/rest/v1/products?select=slug,brand,supplier_source&brand=ilike.Luxedge&limit=500`, { headers: HEAD });
+  if (!res.ok) throw new Error(`brand scan -> ${res.status}`);
+  const rows = await res.json();
+  const targets = rows.filter((r) => String(r.supplier_source || '').trim().length > 0);
+  for (const r of targets) {
+    const put = await fetch(`${BASE}/rest/v1/products?slug=eq.${encodeURIComponent(r.slug)}`, {
+      method: 'PATCH', headers: HEAD, body: JSON.stringify({ brand: '' }),
+    });
+    if (!put.ok) throw new Error(`${r.slug} brand PATCH -> ${put.status} ${await put.text()}`);
+    brandsCleared++;
+  }
+  console.log(`brand = "Luxedge" on a third-party row: ${rows.length} found, ${brandsCleared} cleared (evidence: ${targets.map((r) => String(r.supplier_source).slice(0, 40)).filter((v, i, a) => a.indexOf(v) === i).slice(0, 3).join(' | ') || 'n/a'})`);
+}
+
 const FIELDS = ['name', 'short_description', 'description', 'seo_title', 'seo_description'];
 let totalChanged = 0;
 
@@ -146,4 +172,4 @@ for (const [slug, fields] of Object.entries(FIXES)) {
   totalChanged += keys.length;
   console.log(`  ${slug}: rewrote ${keys.join(', ')}`);
 }
-console.log(`\n${totalChanged} product field(s) rewritten.`);
+console.log(`\n${totalChanged} product field(s) rewritten, ${brandsCleared} fabricated brand value(s) cleared.`);

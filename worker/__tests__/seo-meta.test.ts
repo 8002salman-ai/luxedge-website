@@ -130,6 +130,16 @@ describe('productJsonLd', () => {
     expect(sd.deliveryTime.transitTime.maxValue).toBe(7);
   });
 
+  it('never publishes the retailer name as a product brand', () => {
+    // Luxedge is the store, not the manufacturer of these third-party goods.
+    expect((productJsonLd(row({ brand: 'Luxedge' }), canonical) as Record<string, unknown>)['brand']).toBeUndefined();
+    expect((productJsonLd(row({ brand: '' }), canonical) as Record<string, unknown>)['brand']).toBeUndefined();
+    expect((productJsonLd(row({ brand: '  ' }), canonical) as Record<string, unknown>)['brand']).toBeUndefined();
+    // A real recorded brand is still published.
+    expect((productJsonLd(row({ brand: 'Himalayan Koh' }), canonical) as Record<string, unknown>)['brand'])
+      .toEqual({ '@type': 'Brand', name: 'Himalayan Koh' });
+  });
+
   it('omits shippingRate and transitTime when unknown — never fabricated', () => {
     const ld = productJsonLd(
       row({ free_shipping: false, shipping_cost: null, delivery_min_days: null, delivery_max_days: null }),

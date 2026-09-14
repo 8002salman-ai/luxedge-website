@@ -203,7 +203,10 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     rating: 0,
     reviews: 0,
     isActive: p.isActive,
-    brand: p.brand || 'Luxedge',
+    // No brand is claimed when the catalog has none: Luxedge is the store, not
+    // the manufacturer of these third-party goods, so a default here would be a
+    // fabricated brand fact shown on the page (and now omitted from JSON-LD).
+    brand: p.brand || '',
     condition: 'New',
     tags: p.tags,
     weight: '',
@@ -1809,7 +1812,9 @@ function ProductDetailPage() {
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Sold by</p>
-                <p className="text-sm font-bold text-luxe-black">{product.brand || 'Luxedge Store'}</p>
+                {/* The seller is always the store — a product's brand is not its
+                    seller, so this must not fall back to (or show) the brand. */}
+                <p className="text-sm font-bold text-luxe-black">Luxedge</p>
                 <p className="text-[11px] text-luxe-gray truncate">Curated pet essentials · Embani LLC</p>
               </div>
               <Link to="/contact" className="ml-auto shrink-0 px-3 py-2 text-[11px] font-bold text-luxe-gold border border-luxe-gold/40 rounded-lg hover:bg-luxe-gold-soft transition-colors">

@@ -568,7 +568,11 @@ export function productJsonLd(p: ProductRow, canonical: string): Record<string, 
   };
   const images = productImageUrls(p);
   if (images.length) product.image = images.slice(0, 8);
-  if (p.brand) product.brand = { '@type': 'Brand', name: p.brand };
+  // Brand is published only when the catalog records a real product brand, and
+  // never the retailer's own name — the store is not the manufacturer of these
+  // third-party goods. Matches the client JSON-LD and the merchant feed.
+  const brand = (p.brand || '').trim();
+  if (brand && brand.toLowerCase() !== 'luxedge') product.brand = { '@type': 'Brand', name: brand };
   return product;
 }
 
