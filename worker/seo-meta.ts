@@ -42,6 +42,7 @@ import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_
 import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
+import { productContentFor } from '../src/content/productContent';
 
 export interface SeoEnv {
   ASSETS: {
@@ -886,6 +887,26 @@ function injectProductBody(html: string, p: ProductRow): string {
   if (p.description && p.description.trim() && p.description.trim() !== lead) {
     parts.push(`<h2>Description</h2>`);
     parts.push(...p.description.split(/\n+/).filter((l) => l.trim()).map((l) => `<p>${esc(l)}</p>`));
+  }
+  // Buyer content shared with the client product page
+  // (src/content/productContent.ts) so the crawl HTML carries the same
+  // summary, pre-purchase checks, care/safety notes and guide link the visitor
+  // sees after hydration. Absent for a product with no entry — nothing is
+  // invented, the page just stays as short as its catalog data is.
+  const content = productContentFor(p.slug);
+  if (content) {
+    parts.push(`<h2>About this product</h2>`, `<p>${esc(content.summary)}</p>`);
+    if (content.confirm.length) {
+      parts.push(`<h2>What to check before ordering</h2>`);
+      parts.push(`<ul>${content.confirm.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`);
+    }
+    if (content.care.length) {
+      parts.push(`<h2>Care and safety</h2>`);
+      parts.push(`<ul>${content.care.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`);
+    }
+    if (content.guide) {
+      parts.push(`<p><a href="${esc(content.guide.href)}">${esc(content.guide.label)}</a></p>`);
+    }
   }
   const links: string[] = [];
   if (p.categories && p.categories.name) {

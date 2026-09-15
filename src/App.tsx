@@ -8,6 +8,7 @@ import { BuyerGuidance } from './components/BuyerGuidance';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
+import { productContentFor } from './content/productContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
@@ -1486,6 +1487,10 @@ function ProductDetailPage() {
   const [selSize, setSelSize] = useState('');
   const [ctaVisible, setCtaVisible] = useState(true);
   const ctaRef = useRef<HTMLDivElement>(null);
+  // Buyer content shared with the server pre-render (worker/seo-meta.ts) so the
+  // crawl HTML and the hydrated page carry the same summary, pre-purchase checks
+  // and care/safety notes. Undefined for a product with no entry.
+  const pdpContent = productContentFor(product?.slug);
 
   // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
   useEffect(() => {
@@ -1879,6 +1884,37 @@ function ProductDetailPage() {
       {tab === 'desc' && (
         <div className="max-w-3xl">
           <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description || product.shortDesc || 'Please contact us for additional product information before ordering.'}</p>
+
+          {pdpContent && (
+            <div className="mt-8 space-y-6 border-t border-gray-100 pt-6">
+              <section>
+                <h2 className="text-base font-bold text-luxe-black">About this product</h2>
+                <p className="mt-2 text-[15px] text-luxe-gray leading-relaxed">{pdpContent.summary}</p>
+              </section>
+              {pdpContent.confirm.length > 0 && (
+                <section>
+                  <h2 className="text-base font-bold text-luxe-black">What to check before ordering</h2>
+                  <ul className="mt-2 space-y-1.5 list-disc pl-5 text-[15px] text-luxe-gray leading-relaxed">
+                    {pdpContent.confirm.map(c => <li key={c}>{c}</li>)}
+                  </ul>
+                </section>
+              )}
+              {pdpContent.care.length > 0 && (
+                <section>
+                  <h2 className="text-base font-bold text-luxe-black">Care and safety</h2>
+                  <ul className="mt-2 space-y-1.5 list-disc pl-5 text-[15px] text-luxe-gray leading-relaxed">
+                    {pdpContent.care.map(c => <li key={c}>{c}</li>)}
+                  </ul>
+                </section>
+              )}
+              {pdpContent.guide && (
+                <p className="text-[15px] leading-relaxed">
+                  <Link to={pdpContent.guide.href} className="text-luxe-gold font-semibold hover:underline">{pdpContent.guide.label}</Link>
+                </p>
+              )}
+            </div>
+          )}
+
           {product.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
               {product.tags.map(t => <span key={t} className="text-xs text-luxe-gold hover:underline cursor-pointer">#{t}</span>)}
