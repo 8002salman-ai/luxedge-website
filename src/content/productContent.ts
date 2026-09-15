@@ -310,7 +310,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     confirm: [
       'Head size and shape — fit matters more than size label, since a loose mask rubs and a tight one presses.',
       'Whether your horse will tolerate ear covers, which some dislike at first.',
-      'UV protection wording: the listing title mentions UV protection, and this page has no test report behind that, so treat it as a mesh cover rather than a measured UV rating.',
+      'What it does and does not do: this page states no measured sun-protection rating, so treat the mask as a physical mesh cover against flies rather than a rated barrier.',
     ],
     care: [
       'Check daily for rubbing behind the ears and along the cheekbones, especially in the first week.',
@@ -327,7 +327,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     confirm: [
       'That it attaches to a harness, not a collar. A tether on a collar is the wrong place to restrain a pet in a car.',
       'The buckle your car uses — seatbelt fittings vary, so check the listing photos against your vehicle.',
-      'What it is not: this is a restraint for keeping a pet in place, not a crash-tested safety device.',
+      'What it is: a restraint that keeps a pet in the seat area during a journey. It is not a protective device, so treat it as a way to stop your pet climbing through, not as protection in a collision.',
     ],
     care: [
       'Check the clip and stitching before each trip.',
@@ -341,7 +341,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     confirm: [
       'Harness attachment rather than collar, for the same reason as any car restraint.',
       'Length: an elastic tether still has to be short enough to keep your pet off the front seats and away from the pedals.',
-      'That it is a restraint for journeys, not a crash-tested restraint system.',
+      'That it is a restraint for journeys rather than a protective device, and that its job is to keep your pet in place.',
     ],
     care: [
       'Inspect the elastic and the clips for wear, since stretched elastic is the part that fails.',
