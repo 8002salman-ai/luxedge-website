@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUpRight } from '@phosphor-icons/react';
 import { BuyerGuidance } from './BuyerGuidance';
+import { categoryContentFor } from '../content/categoryContent';
 
 /**
  * CATEGORY HERO CONFIG — one source of truth for every catalog category header.
@@ -191,6 +192,10 @@ interface Props {
  */
 export default function CategoryHero({ config }: Props): JSX.Element {
   const { label, headline, desc, image, imageAlt, tint, ctaHref, ctaLabel, buyerNote, chips, mobileImage, imagePosition, badge } = config;
+  // Selection considerations and guide links come from the shared content the
+  // crawl pre-render already emits for this collection, so both surfaces show
+  // the same guidance.
+  const shared = categoryContentFor(label);
   return (
     <div className={`category-hero category-hero--${tint}`}>
       <nav aria-label="Breadcrumb" className="category-hero__breadcrumb">
@@ -220,7 +225,7 @@ export default function CategoryHero({ config }: Props): JSX.Element {
           <a href={ctaHref} className="category-hero__cta">{ctaLabel}<ArrowDown size={16} aria-hidden="true" /></a>
         </div>
       </div>
-      <div className="px-5 pb-5 sm:px-7"><BuyerGuidance title={`Choosing ${label.toLowerCase()}`} note={buyerNote} categoryHref={ctaHref === '#product-grid' ? '/shop' : ctaHref} /></div>
+      <div className="px-5 pb-5 sm:px-7"><BuyerGuidance title={`Choosing ${label.toLowerCase()}`} note={buyerNote} topic={label.toLowerCase()} items={shared?.considerations} guides={shared?.guides} categoryHref={ctaHref === '#product-grid' ? '/shop' : ctaHref} /></div>
       {chips.length > 0 && <nav aria-label={`Explore related ${label.toLowerCase()} collections`} className="category-hero__browse">
         <p>Explore more</p>
         <ul>{chips.map(chip => <li key={chip.href}><Link to={chip.href}>{chip.label}<ArrowUpRight size={13} aria-hidden="true" /></Link></li>)}</ul>
