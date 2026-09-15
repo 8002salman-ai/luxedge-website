@@ -43,6 +43,14 @@ import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 import { productContentFor } from '../src/content/productContent';
+import {
+  HOME_SECTIONS,
+  HOME_FAQ,
+  CONTACT_SECTIONS,
+  CONTACT_FAQ,
+  type SiteSection,
+  type SiteFaqItem,
+} from '../src/content/sitePages';
 
 export interface SeoEnv {
   ASSETS: {
@@ -982,7 +990,41 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
 
 /** Pre-renders the homepage hero + category navigation into the SPA shell.
  * Mirrors the HomePage section copy and every link the client renders. */
-function injectHomeBody(html: string): string {
+/**
+ * Serialises the shared site-page copy (src/content/sitePages.ts) into crawl
+ * HTML. The React pages render the same module via src/components/SiteContent,
+ * so the pre-rendered and hydrated copies cannot drift apart.
+ */
+function renderSiteSections(sections: SiteSection[]): string[] {
+  const parts: string[] = [];
+  for (const s of sections) {
+    parts.push(`<h2>${esc(s.heading)}</h2>`);
+    for (const p of s.paragraphs || []) parts.push(`<p>${esc(p)}</p>`);
+    if (s.bullets?.length) {
+      parts.push(`<ul>${s.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>`);
+    }
+    if (s.links?.length) {
+      parts.push(`<p>${s.links.map((l) => `<a href="${esc(l.href)}">${esc(l.label)}</a>`).join(' | ')}</p>`);
+    }
+  }
+  return parts;
+}
+
+function renderSiteFaq(items: SiteFaqItem[], title = 'Common questions'): string[] {
+  const parts: string[] = [`<h2>${esc(title)}</h2>`];
+  for (const f of items) {
+    parts.push(`<h3>${esc(f.q)}</h3>`, `<p>${esc(f.a)}</p>`);
+  }
+  // Same trailing line the React component renders, so the crawl HTML carries
+  // the same onward links a visitor sees (and the parity test stays honest).
+  parts.push(
+    `<p>More detail lives on the <a href="/faq">FAQ page</a> and on the ` +
+    `<a href="/shipping-policy">Shipping</a> and <a href="/returns">Returns</a> policies.</p>`,
+  );
+  return parts;
+}
+
+export function injectHomeBody(html: string): string {
   const parts: string[] = [
     `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
     `<p>Sourced worldwide. Chosen with care.</p>`,
@@ -1011,6 +1053,8 @@ function injectHomeBody(html: string): string {
       `<li><a href="/category/cat-supplies">Cat essentials</a></li>` +
       `<li><a href="/category/bird-supplies">Bird supplies</a></li>` +
       `</ul>`,
+    ...renderSiteSections(HOME_SECTIONS),
+    ...renderSiteFaq(HOME_FAQ),
   ];
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
@@ -1026,7 +1070,9 @@ function injectAboutBody(html: string): string {
 }
 
 /** Pre-renders the /contact page with contact info and intro. */
-function injectContactBody(html: string): string {
+/** Exported so the site-pages test can assert the crawl HTML carries every
+ * shared string the React page renders (renderer parity). */
+export function injectContactBody(html: string): string {
   const cards = CONTACT_INFO.map((c) => `<li><strong>${esc(c.label)}:</strong> ${esc(c.value)} (${esc(c.sub)})</li>`).join('');
   const parts: string[] = [
     `<h1>Contact Us</h1>`,
@@ -1037,6 +1083,8 @@ function injectContactBody(html: string): string {
     // into the crawl HTML.
     `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Hours: Mon-Fri, 9AM-6PM CT</p>`,
     `<p>Phone support is available to customers with an order — sign in and open your account to view it.</p>`,
+    ...renderSiteSections(CONTACT_SECTIONS),
+    ...renderSiteFaq(CONTACT_FAQ, 'Common contact questions'),
   ];
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }

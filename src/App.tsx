@@ -5,6 +5,8 @@ import MarketingManager from './components/MarketingManager';
 import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
+import { SiteSections, SiteFaq } from './components/SiteContent';
+import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS, CONTACT_FAQ } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
@@ -2698,6 +2700,11 @@ function HomePage() {
       ══════════════════════════════════════════════════════════ */}
       <MediaLatestSection />
 
+      {/* Shared site copy (src/content/sitePages.ts) — the worker pre-renders
+          these same strings, so the crawler and the visitor see one page. */}
+      <SiteSections sections={HOME_SECTIONS} />
+      <SiteFaq items={HOME_FAQ} />
+
       {/* ══════════════════════════════════════════════════════════
           7. NEWSLETTER (Warm Botanical Sign-Up)
       ══════════════════════════════════════════════════════════ */}
@@ -4122,6 +4129,10 @@ function ContactPage() {
           )}
         </div>
       </div></section>
+
+      {/* Same shared copy the worker pre-renders for /contact. */}
+      <SiteSections sections={CONTACT_SECTIONS} />
+      <SiteFaq items={CONTACT_FAQ} title="Common contact questions" />
     </div>
   );
 }
