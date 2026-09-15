@@ -21,7 +21,7 @@ import { rankProducts, probeVisualQuality, markBrokenImage, subscribeVisualQuali
 import { loadMerchStats } from './services/merch';
 import { loadPublishedBlogs } from './services/blog';
 import { MediaLatestSection } from './media/MediaHub';
-import { YOUTUBE_CHANNEL_URL } from './media/MediaHub';
+import { SOCIAL_PROFILES } from './content/socialProfiles';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
@@ -1016,6 +1016,11 @@ function Header() {
   );
 }
 
+/** Text glyphs for the footer social buttons. YouTube renders a real icon
+ * instead, so it is absent here. Only consulted for profiles listed in
+ * SOCIAL_PROFILES (src/content/socialProfiles.ts). */
+const SOCIAL_GLYPHS: Record<string, string> = { Facebook: 'f', Instagram: 'ig', Pinterest: 'p', TikTok: 'tk' };
+
 function Footer() {
   const FL = 'block text-[13.5px] py-1 text-white/75 hover:text-white transition-colors';
   const ColTitle = ({ children }: { children: ReactNode }) => (
@@ -1041,16 +1046,21 @@ function Footer() {
             <p className="text-sm leading-relaxed text-white/75 max-w-sm">
               Quality products, expert guidance, and a community for everyone who cares for animals.
             </p>
-            {/* Social Icons */}
-            <div className="flex items-center gap-3 pt-2">
-              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">f</a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">ig</a>
-              <a href={YOUTUBE_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors">
-                <YoutubeLogo size={16} />
-              </a>
-              <a href="https://pinterest.com" target="_blank" rel="noopener noreferrer" aria-label="Pinterest" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">p</a>
-              <a href="https://tiktok.com" target="_blank" rel="noopener noreferrer" aria-label="TikTok" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">tk</a>
-            </div>
+            {/* Social Icons — rendered from SOCIAL_PROFILES, which is empty until
+                real Luxedge accounts exist. The previous hardcoded buttons opened
+                bare platform homepages, so they advertised accounts we do not
+                have; an empty list renders nothing, and the URLs live in
+                src/content/socialProfiles.ts rather than in this file.
+                Deliberately not replaced with "coming soon" placeholders. */}
+            {SOCIAL_PROFILES.length > 0 && (
+              <div className="flex items-center gap-3 pt-2">
+                {SOCIAL_PROFILES.map((p) => (
+                  <a key={p.label} href={p.href} target="_blank" rel="noopener noreferrer" aria-label={p.label} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors text-xs font-bold">
+                    {p.label === 'YouTube' ? <YoutubeLogo size={16} /> : SOCIAL_GLYPHS[p.label]}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Col 1: Shop */}

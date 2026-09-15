@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, ReactNode, Component, Fragment } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom';
 import { useApp, Modal, CAT_LIST, loadAIProviders, saveAIProviders, callAIProvider, fetchPageContent, serverTestProvider, serverOpenRouterCredits, serverProviderStatus } from '../App';
+import { SOCIAL_PROFILES } from '../content/socialProfiles';
 import { useAuthStore } from '../store/authStore';
 import { getAccessToken } from '../services/supabase';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
@@ -3399,7 +3400,12 @@ function _genOrgSchema(): string {
     "logo": { "@type": "ImageObject", "url": "https://luxedge.us/logo.png" },
     "contactPoint": { "@type": "ContactPoint", "contactType": "customer service", "email": "support@luxedge.us", "availableLanguage": "English" },
     "address": { "@type": "PostalAddress", "addressCountry": "US" },
-    "sameAs": ["https://twitter.com/luxedge", "https://facebook.com/luxedge", "https://instagram.com/luxedge"]
+    // sameAs is emitted ONLY for profiles that actually exist. This helper used
+    // to hardcode three invented Luxedge handles on Twitter, Facebook and
+    // Instagram — none of which is a real account, so copying this schema
+    // published a false claim about the business. It now reads the single list
+    // in src/content/socialProfiles.ts and omits the key entirely when empty.
+    ...(SOCIAL_PROFILES.length > 0 ? { "sameAs": SOCIAL_PROFILES.map((p) => p.href) } : {}),
   }, null, 2);
 }
 
