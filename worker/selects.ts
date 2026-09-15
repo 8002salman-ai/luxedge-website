@@ -24,7 +24,7 @@
  * fetches images in a SEPARATE lightweight query filtered to real HTTP URLs
  * (url=not.like.data:*) and merges them back per product. */
 export const SEO_PRODUCTS_SELECT =
-  'id,slug,name,status,description,short_description,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,inventory_qty,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,supplier_source,supplier_product_ref,cost_price,commerce_readiness,categories(name)';
+  'id,slug,name,status,description,short_description,long_description,features,specifications,weight_oz,seo_title,seo_description,seo_keywords,price,compare_at_price,brand,image_url,stock_status,inventory_qty,us_inventory,free_shipping,shipping_cost,delivery_min_days,delivery_max_days,supplier_source,supplier_product_ref,cost_price,commerce_readiness,categories(name)';
 
 export const SEO_CATEGORIES_SELECT = 'slug,name';
 

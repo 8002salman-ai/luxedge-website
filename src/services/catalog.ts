@@ -73,6 +73,11 @@ export interface CatalogProduct {
   seoTitle?: string;
   seoDescription?: string;
   seoKeywords: string[];
+  /** Raw owner-editable detail columns — formatted by src/content/productFacts.ts. */
+  longDescription?: string | null;
+  features?: unknown;
+  specifications?: unknown;
+  weightOz?: number | null;
   sku?: string;
   supplierSource?: string;
   supplierProductRef?: string;
@@ -166,6 +171,13 @@ interface DbProductRow {
   source_type?: string | null;
   inventory_source?: string | null;
   created_at?: string | null;
+  // Owner-editable detail columns. Kept raw here: formatting (and the
+  // "empty means nothing" rule) lives in one place, src/content/productFacts.ts,
+  // which BOTH the React page and the worker pre-render read.
+  long_description?: string | null;
+  features?: unknown;
+  specifications?: unknown;
+  weight_oz?: number | null;
   [k: string]: unknown;
 }
 
@@ -231,7 +243,7 @@ interface DbSettingRow {
 // ============================================================================
 export const CATEGORIES_PUBLIC_SELECT = 'id,name,slug,is_active';
 export const PRODUCTS_PUBLIC_SELECT =
-  'id,slug,name,short_description,description,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order,created_at';
+  'id,slug,name,short_description,description,long_description,features,specifications,weight_oz,price,compare_at_price,category_id,inventory_qty,status,brand,tags,featured,new_arrival,free_shipping,us_inventory,sale_enabled,discount_type,discount_value,stock_status,delivery_min_days,delivery_max_days,seo_title,seo_description,seo_keywords,supplier_source,supplier_product_ref,supplier_url,cost_price,landed_cost,shipping_cost,commerce_readiness,source_type,inventory_source,sku,sort_order,created_at';
 export const PRODUCT_IMAGES_PUBLIC_SELECT = 'product_id,url,alt_text,is_primary,sort_order,variant_id';
 export const PRODUCT_VARIANTS_PUBLIC_SELECT = 'id,product_id,attributes,sku,price,compare_at_price,inventory_qty';
 export const COUPONS_PUBLIC_SELECT =
@@ -327,6 +339,10 @@ function mapProductRow(
     slug: p.slug || undefined,
     shortDesc: p.short_description || '',
     description: p.description || '',
+    longDescription: p.long_description ?? null,
+    features: p.features,
+    specifications: p.specifications,
+    weightOz: p.weight_oz != null ? num(p.weight_oz) : null,
     price: salePrice,
     originalPrice: rawCompare > salePrice ? rawCompare : 0,
     category: catName(p.category_id),

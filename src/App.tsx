@@ -7,6 +7,8 @@ import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { SiteSections, SiteFaq } from './components/SiteContent';
 import { FaqContent } from './components/FaqContent';
+import { ProductFactSections, ProductSpecRows } from './components/ProductFacts';
+import { productFacts } from './content/productFacts';
 import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
@@ -60,6 +62,9 @@ export interface Product {
   images: string[]; imageAlts: string[]; rating: number; reviews: number; isActive: boolean;
   brand: string; condition: string; tags: string[];
   weight: string; dimensions: string; origin: string;
+  /** Raw owner-editable detail columns — formatted by src/content/productFacts.ts
+   *  so the page and the worker pre-render publish the same rows. */
+  longDescription?: string | null; features?: unknown; specifications?: unknown; weightOz?: number | null;
   freeShipping: boolean; shippingCost: string;
   variants: ProductVariant[];
   // Catalog Launch Phase — real merchandising data from the DB (never fake).
@@ -218,6 +223,10 @@ function mapCatalogProduct(p: CatalogProduct): Product {
     weight: '',
     dimensions: '',
     origin: '',
+    longDescription: p.longDescription ?? null,
+    features: p.features,
+    specifications: p.specifications,
+    weightOz: p.weightOz ?? null,
     freeShipping: p.freeShipping,
     shippingCost: '',
     featured: p.featured,
@@ -1494,6 +1503,16 @@ function ProductDetailPage() {
   // crawl HTML and the hydrated page carry the same summary, pre-purchase checks
   // and care/safety notes. Undefined for a product with no entry.
   const pdpContent = productContentFor(product?.slug);
+  // Owner-editable catalog detail (features / long description / specifications /
+  // weight) — the same formatter the worker pre-renders, so crawler and visitor
+  // see identical rows and an empty field adds nothing.
+  const pdpFacts = productFacts({
+    features: product?.features,
+    specifications: product?.specifications,
+    longDescription: product?.longDescription,
+    weightOz: product?.weightOz,
+    description: product?.description,
+  });
 
   // Hide the sticky mobile Add to Cart bar while the inline CTA is on screen.
   useEffect(() => {
@@ -1888,6 +1907,8 @@ function ProductDetailPage() {
         <div className="max-w-3xl">
           <p className="text-[15px] text-luxe-gray leading-relaxed whitespace-pre-line">{product.description || product.shortDesc || 'Please contact us for additional product information before ordering.'}</p>
 
+          <ProductFactSections facts={pdpFacts} />
+
           {pdpContent && (
             <div className="mt-8 space-y-6 border-t border-gray-100 pt-6">
               <section>
@@ -1929,13 +1950,20 @@ function ProductDetailPage() {
       {/* Specs */}
       {tab === 'specs' && (
         <table className="w-full text-xs max-w-3xl">
+          {/* Names the table for screen readers. Only when owner facts exist, so
+              a product with empty fields keeps exactly the markup it had. */}
+          {pdpFacts.specifications.length > 0 && <caption className="sr-only">Specifications</caption>}
           <tbody>
+            {/* Owner facts first (weight + specifications), then the commerce
+                rows the catalog genuinely holds. Condition is deliberately not
+                listed: it was hardcoded "New" in this component with nothing in
+                the catalog behind it. */}
+            <ProductSpecRows facts={pdpFacts} />
             {[
-              ['Brand', product.brand], ['Category', product.category], ['Condition', product.condition],
-              ['Weight', product.weight], ['Dimensions', product.dimensions],
-              ['Origin', product.origin], ['Shipping', product.freeShipping ? 'Free' : product.shippingCost ? `$${product.shippingCost}` : 'Shown at checkout'],
+              ['Brand', product.brand], ['Category', product.category],
+              ['Shipping', product.freeShipping ? 'Free' : product.shippingCost ? `$${product.shippingCost}` : 'Shown at checkout'],
             ].filter(([, v]) => v).map(([k, v], i) => (
-              <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
+              <tr key={k} className={i % 2 === 0 ? 'bg-gray-50' : ''}>
                 <td className="px-3 py-2.5 font-medium text-gray-600 w-1/3">{k}</td>
                 <td className="px-3 py-2.5 text-gray-900">{v}</td>
               </tr>

@@ -43,6 +43,7 @@ import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 import { productContentFor } from '../src/content/productContent';
+import { productFacts } from '../src/content/productFacts';
 import {
   HOME_SECTIONS,
   HOME_FAQ,
@@ -108,6 +109,11 @@ export interface ProductRow {
   status?: string | null;
   description?: string | null;
   short_description?: string | null;
+  /** Owner-editable detail columns. Raw jsonb — formatted by productFacts(). */
+  long_description?: string | null;
+  features?: unknown;
+  specifications?: unknown;
+  weight_oz?: number | null;
   seo_title?: string | null;
   seo_description?: string | null;
   seo_keywords?: string | null;
@@ -875,7 +881,9 @@ function money(value: number | null | undefined): string {
  * price, stock/shipping facts, description and category link the Product
  * detail page renders after hydration. Only real catalog columns are used —
  * nothing is invented. */
-function injectProductBody(html: string, p: ProductRow): string {
+/** Exported so the product-facts test can render the crawl copy and compare it
+ * to the React rows string-for-string. */
+export function injectProductBody(html: string, p: ProductRow): string {
   const parts: string[] = [`<h1>${esc(p.name)}</h1>`];
   const price = money(p.price);
   const compare = money(p.compare_at_price);
@@ -894,6 +902,31 @@ function injectProductBody(html: string, p: ProductRow): string {
   if (p.description && p.description.trim() && p.description.trim() !== lead) {
     parts.push(`<h2>Description</h2>`);
     parts.push(...p.description.split(/\n+/).filter((l) => l.trim()).map((l) => `<p>${esc(l)}</p>`));
+  }
+  // Owner-editable catalog detail (src/content/productFacts.ts), rendered by the
+  // same formatter the React product page uses so the crawler and the visitor
+  // get the same rows. A product whose fields are empty gets no new markup —
+  // no empty sections, no placeholder values, nothing guessed.
+  const ownerFacts = productFacts({
+    features: p.features,
+    specifications: p.specifications,
+    longDescription: p.long_description,
+    weightOz: p.weight_oz,
+    description: p.description,
+  });
+  if (ownerFacts.longDescription) {
+    parts.push(`<h2>Full description</h2>`);
+    parts.push(...ownerFacts.longDescription.split(/\n+/).filter((l) => l.trim()).map((l) => `<p>${esc(l)}</p>`));
+  }
+  if (ownerFacts.features.length) {
+    parts.push(`<h2>Features</h2>`);
+    parts.push(`<ul>${ownerFacts.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>`);
+  }
+  if (ownerFacts.specifications.length) {
+    parts.push(`<h2>Specifications</h2>`);
+    parts.push(
+      `<ul>${ownerFacts.specifications.map((s) => `<li><strong>${esc(s.label)}:</strong> ${esc(s.value)}</li>`).join('')}</ul>`,
+    );
   }
   // Buyer content shared with the client product page
   // (src/content/productContent.ts) so the crawl HTML carries the same
