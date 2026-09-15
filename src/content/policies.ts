@@ -121,34 +121,61 @@ export interface FaqCategory {
   items: FaqItem[];
 }
 
+/**
+ * The /faq page — ONE source, read by BOTH the worker pre-render
+ * (injectFaqBody) and the React page (FAQPage in src/App.tsx).
+ *
+ * There used to be a second, hand-maintained copy of these questions inside the
+ * React component. The two drifted, and the crawl HTML ended up telling Google
+ * something the page did not tell visitors: that online payment is "handled by
+ * the configured third-party provider" while checkout — correctly — reports
+ * that payment is not enabled (GET /api/checkout/onsite returns
+ * anyProviderReady:false, and the checkout page shows its "temporarily
+ * unavailable, nothing will be charged" state). Serving crawlers different
+ * answers than visitors is misleading content, so the duplicate list was
+ * deleted rather than synced.
+ *
+ * Rules for this array:
+ *  - Every answer must agree with the policy page that owns the fact
+ *    (SHIPPING_SECTIONS, RETURNS_SECTIONS, PRIVACY_SECTIONS) and with what the
+ *    code actually does (checkout provider state, cancellation window, support
+ *    channels).
+ *  - No claim about certifications, supplier verification, reviews, or a
+ *    feature the site does not have — see the notes on the answers below.
+ *  - The payments answers are deliberately written to be true in BOTH states:
+ *    they never assert that a provider is connected, and they never promise a
+ *    method the checkout cannot show.
+ */
 export const FAQ_DATA: FaqCategory[] = [
   { category: 'Orders & Shipping', items: [
-    { q: 'How long does shipping take?', a: 'Delivery timing is confirmed during order processing. Tracking is shared when available.' },
-    { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility is shown in the cart or at checkout.' },
-    { q: 'How can I track my order?', a: 'Once your order ships, you will receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders."' },
-    { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States. International shipping is not currently offered.' },
-    { q: 'Can I change my shipping address after ordering?', a: 'If your order has not shipped yet, contact us immediately at hello@luxedge.us.' },
+    { q: 'How long does shipping take?', a: 'Delivery timing is confirmed during order processing, and tracking is shared when it becomes available. Express shipping is not currently offered unless it is specifically shown as an option at checkout.' },
+    { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility, exclusions, and the final shipping charge are shown in the cart or at checkout.' },
+    { q: 'How can I track my order?', a: 'Once your order ships you will receive an email with a tracking number, and the current status is always available under "My Orders" in your account.' },
+    { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States where the destination is supported by the product, supplier, and carrier. International shipping is not currently offered.' },
+    { q: 'Can I change my shipping address after ordering?', a: 'If your order has not shipped yet, contact us immediately at hello@luxedge.us and we will update it if we can. Once it has shipped, the address cannot be changed.' },
   ]},
   { category: 'Returns & Refunds', items: [
-    { q: 'What is your return policy?', a: 'We offer a 30-day return and replacement policy. Products must be unused, unopened, and in original packaging. Email hello@luxedge.us within 30 days.' },
-    { q: 'How does the replacement process work?', a: 'Once we receive and inspect your return, we normally ship a replacement of the same product. Change-of-mind refunds are not standard.' },
-    { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping costs and packaging. We recommend using a trackable service.' },
-    { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging.' },
+    { q: 'What is your return policy?', a: 'Our 30-day return window covers products that arrive damaged, defective, or incorrect. Return requests need prior approval, and the product must be unused, unopened, and in its original packaging. Email hello@luxedge.us within 30 days of your order date.' },
+    { q: 'How does the replacement process work?', a: 'Once we receive and inspect the returned product, we process a replacement if the return meets policy requirements. Change-of-mind refunds and exchanges for different products are not standard; rights that cannot be waived still apply.' },
+    { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping label, packaging, and all return shipping costs \u2014 the same wording as our Returns & Refunds policy. We recommend using a trackable service.' },
+    { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We will review the request and, where it meets the policy, arrange a replacement.' },
   ]},
   { category: 'Payment & Security', items: [
-    { q: 'What payment methods do you accept?', a: 'Online payment is handled by the configured third-party provider. Luxedge does not store complete card details.' },
-    { q: 'Is my payment information secure?', a: 'Payment is handled by the third-party provider and Luxedge does not store complete card details.' },
-    { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, contact us at hello@luxedge.us.' },
+    { q: 'Can I pay online right now?', a: 'Not currently. Online payment is not enabled, so checkout takes no payment and no order is created through it: nothing is charged, your cart is preserved, and the page points you to support so we can help you order another way.' },
+    { q: 'What payment methods do you accept?', a: 'When a payment provider is connected, the options it supports appear at checkout and the card form is provided by that provider. The amount displayed immediately before you pay is the amount that applies to your order.' },
+    { q: 'Is my payment information secure?', a: 'Card details are entered in the payment processor\u2019s own secure form and never touch Luxedge servers. Luxedge does not store complete card numbers.' },
+    { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that the order enters processing — email hello@luxedge.us as soon as possible and we will tell you where it stands.' },
   ]},
   { category: 'Products & Quality', items: [
-    { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Check the product label, ingredients, intended species, and warnings before use. Follow the label for product-specific guidance.' },
-    { q: 'How do you select your products?', a: 'Every product goes through a curation process. We evaluate quality, design, value, and supplier information before listing.' },
-    { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is reviewed before listing.' },
-    { q: 'Do you offer warranties?', a: 'Warranty coverage varies by product and manufacturer. Check the product description for specific details. Our 30-day return policy covers general quality issues.' },
+    { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, and lot or expiry information before use. Do not use animal products as human food. For product-specific questions, follow the label or ask an appropriate qualified professional.' },
+    { q: 'How do you select your products?', a: 'Every product goes through a curation process before it is listed. We consider quality, design, value, and the supplier information we hold; where a specification cannot be confirmed, the product page says so instead of stating it.' },
+    { q: 'Are your products authentic?', a: 'We aim to source products from manufacturers and authorized distributors, and every item is reviewed before it is listed. If a listing cannot confirm a brand, size, or material, the product page says so.' },
+    { q: 'Do you offer warranties?', a: 'Warranty coverage varies by product and manufacturer. Check the product description for specific details; our 30-day return policy covers general quality issues.' },
   ]},
   { category: 'Account & Support', items: [
-    { q: 'Do I need an account to shop?', a: 'No. Guest checkout is available. You can also create an account to view order history and manage your profile.' },
-    { q: 'How do I contact customer support?', a: 'Email hello@luxedge.us — we reply within 24 hours, Monday through Friday. Customers with an order can also find a phone line for their order in their account.' },
+    { q: 'Do I need an account to shop?', a: 'No. You can browse, add items to the cart, and check out without creating an account \u2014 orders are placed with the email address you provide. Creating an account lets you view your order history and manage your profile.' },
+    { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us — we reply within 24 hours, Monday to Friday. If you have already placed an order, a phone line for order support is shown in your account.' },
+    { q: 'I forgot my password. What do I do?', a: 'Email us at hello@luxedge.us from the address on your account and we will help you regain access.' },
   ]},
 ];
 

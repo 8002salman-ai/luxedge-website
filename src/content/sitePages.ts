@@ -160,6 +160,7 @@ export const CONTACT_SECTIONS: SiteSection[] = [
       'Luxedge is operated by Embani LLC, Denver, CO 80203, United States. Our policies explain how we handle orders, returns, privacy and site content, and they are written to match how we actually operate.',
     ],
     links: [
+      { label: 'FAQ', href: '/faq' },
       { label: 'Privacy Policy', href: '/privacy' },
       { label: 'Terms of Service', href: '/terms' },
       { label: 'Shipping Policy', href: '/shipping-policy' },
@@ -182,7 +183,7 @@ export const HOME_FAQ: SiteFaqItem[] = [
   },
   {
     q: 'Do you sell pet food or animal feed?',
-    a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Check the product label, ingredients, intended species, and warnings before use, and follow the label for product-specific guidance.',
+    a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, and lot or expiry information before use, and follow the label for product-specific guidance.',
   },
   {
     q: 'Do you offer warranties?',
@@ -190,17 +191,8 @@ export const HOME_FAQ: SiteFaqItem[] = [
   },
 ];
 
-export const CONTACT_FAQ: SiteFaqItem[] = [
-  {
-    q: 'Can I cancel an order?',
-    a: 'Orders can be canceled within 2 hours of placement. After that the order enters processing — email hello@luxedge.us as soon as possible and we will tell you where it stands.',
-  },
-  {
-    q: 'Can I change my shipping address after ordering?',
-    a: 'If your order has not shipped yet, contact us immediately at hello@luxedge.us and we will update it if we still can. Once it has shipped, the address cannot be changed.',
-  },
-  {
-    q: 'Where is my order?',
-    a: 'Once your order ships you will receive an email with a tracking number, and the current status is always on the Track Order page in your account.',
-  },
-];
+// The contact page has NO FAQ block on purpose: its sections already answer the
+// contact questions (cancellations, address changes, where an order is, what we
+// can and cannot help with) and everything longer belongs on /faq. A block here
+// previously repeated three /faq answers almost verbatim — duplicate content
+// across two indexed URLs — so the sections link to /faq instead.

@@ -6,9 +6,10 @@ import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { SiteSections, SiteFaq } from './components/SiteContent';
-import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS, CONTACT_FAQ } from './content/sitePages';
+import { FaqContent } from './components/FaqContent';
+import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
-import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
+import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
 import { productContentFor } from './content/productContent';
 import ProductGallery from './components/ProductGallery';
@@ -3956,62 +3957,16 @@ function CopyrightPage() {
 }
 
 function FAQPage() {
-  const [open, setOpen] = useState<string | null>(null);
-  const faqs = [
-    { c: 'Orders & Shipping', qs: [
-      { q: 'How long does shipping take?', a: 'Delivery timing is confirmed during order processing and tracking is shared when available. Express shipping is not currently offered unless specifically shown at checkout.' },
-      { q: 'Do you offer free shipping?', a: 'Some products or orders may qualify for a free-shipping promotion. Eligibility, exclusions, and the final shipping charge are shown in the cart or at checkout.' },
-      { q: 'How can I track my order?', a: 'Once your order ships, you\'ll receive an email with a tracking number. You can also log into your Luxedge account and check "My Orders" for real-time tracking updates.' },
-      { q: 'Do you ship internationally?', a: 'Currently, Luxedge offers shipping within the United States where the product and carrier support the destination. International shipping is not currently offered.' },
-      { q: 'Can I change my shipping address after ordering?', a: 'If your order hasn\'t shipped yet, contact us immediately at hello@luxedge.us and we\'ll do our best to update the address. Once shipped, address changes are not possible.' },
-    ]},
-    { c: 'Returns & Refunds', qs: [
-      { q: 'What is your return policy?', a: 'We offer a 30-day return & replacement policy. Products must be unused, unopened, and in their original packaging. Email hello@luxedge.us within 30 days for a return authorization.' },
-      { q: 'How does the replacement process work?', a: 'Once we receive and inspect your approved return, we normally ship a replacement of the same product. Change-of-mind refunds and exchanges for different products are not standard; legal rights that cannot be waived still apply.' },
-      { q: 'Who pays for return shipping?', a: 'Customers are responsible for return shipping costs and for packaging the product safely. We recommend using a trackable shipping service.' },
-      { q: 'What if I receive a damaged or incorrect item?', a: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging. We\'ll review your request and arrange a replacement.' },
-    ]},
-    { c: 'Payment & Security', qs: [
-      { q: 'What payment methods do you accept?', a: 'Online payment is not currently enabled. No payment is taken and no paid order is created until a payment provider is connected and checkout confirms a successful transaction.' },
-      { q: 'Is my payment information secure?', a: 'When checkout is enabled, payment is handled by the configured third-party provider and Luxedge does not store complete card details. Payment is not currently available and no charge is made until a successful transaction is confirmed.' },
-      { q: 'Can I cancel an order?', a: 'Orders can be canceled within 2 hours of placement. After that, the order enters processing and cannot be canceled. Contact us at hello@luxedge.us as soon as possible if you need to cancel.' },
-    ]},      { c: 'Products & Quality', qs: [
-      { q: 'Do you sell pet food or animal feed?', a: 'Some listings may be animal food, feed, treats, seed, supplements, or mineral products. Review the product label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and shipping eligibility before use. Do not use animal products as human food. For product-specific questions, follow the label or contact an appropriate qualified professional.' },
-      { q: 'How do you select your products?', a: 'Every product on Luxedge goes through a rigorous curation process. We evaluate quality, design, value, and customer reviews before listing any item. Only products that meet our standards make it to our store.' },
-      { q: 'Are your products authentic?', a: 'We aim to source products from verified manufacturers and authorized distributors. Every item is carefully selected and reviewed before it\'s listed on our store.' },
-      { q: 'Do you offer warranties?', a: 'Individual warranty coverage varies by product and manufacturer. Check the product description for specific warranty details. For general quality issues, our 30-day return policy has you covered.' },
-    ]},
-    { c: 'Account & Support', qs: [
-      { q: 'Do I need an account to shop?', a: 'You can browse the store as a guest. Account availability and whether an account is required to place an order may depend on the checkout configuration; the checkout screen will show the current requirement.' },
-      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us — we reply within 24 hours, Monday to Friday. If you have already placed an order, a phone line for order support is shown in your account.' },
-      { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
-    ]},
-  ];
-
+  // The questions come from src/content/policies.ts (FAQ_DATA) through
+  // FaqContent. The hand-maintained second copy that used to sit here was
+  // deleted rather than synced: it told visitors payment was unavailable while
+  // the crawl HTML told Google it was "handled by the configured third-party
+  // provider", and nothing kept the two in step.
   return (
     <div className="bg-gray-50 min-h-screen">
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12"><div className="max-w-4xl mx-auto px-4 text-center"><h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Frequently Asked Questions</h1><p className="text-luxe-gray text-sm">Quick answers to common questions about shopping at Luxedge.</p></div></section>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
-        {faqs.map(section => (
-          <div key={section.c}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ChevronRight strokeWidth={1.5} size={16} className="text-luxe-gold" />{section.c}</h2>
-            <div className="space-y-2">
-              {section.qs.map(faq => {
-                const key = faq.q;
-                const isOpen = open === key;
-                return (
-                  <div key={key} className="bg-white rounded-xl border overflow-hidden">
-                    <button onClick={() => setOpen(isOpen ? null : key)} className="w-full flex items-center justify-between px-5 py-4 text-left">
-                      <span className="text-sm font-medium text-gray-900 pr-4">{faq.q}</span>
-                      <ChevronDown strokeWidth={1.5} size={16} className={`text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                    {isOpen && <div className="px-5 pb-4 text-sm text-gray-600 leading-relaxed border-t pt-3">{faq.a}</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <FaqContent faqs={FAQ_DATA} />
         <div className="text-center pt-6">
           <p className="text-gray-500 text-sm mb-3">Still have questions?</p>
           <Link to="/contact" className="px-6 py-2.5 bg-luxe-gold hover:bg-luxe-gold-dark text-white font-semibold rounded-lg text-sm inline-flex items-center gap-2 transition-colors"><Mail01 strokeWidth={1.5} size={16} />Contact Support</Link>
@@ -4130,9 +4085,10 @@ function ContactPage() {
         </div>
       </div></section>
 
-      {/* Same shared copy the worker pre-renders for /contact. */}
+      {/* Same shared copy the worker pre-renders for /contact. No FAQ block
+          here: the sections answer the contact questions, and /faq owns the
+          long-form answers (linked from the sections). */}
       <SiteSections sections={CONTACT_SECTIONS} />
-      <SiteFaq items={CONTACT_FAQ} title="Common contact questions" />
     </div>
   );
 }

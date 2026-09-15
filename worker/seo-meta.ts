@@ -47,7 +47,6 @@ import {
   HOME_SECTIONS,
   HOME_FAQ,
   CONTACT_SECTIONS,
-  CONTACT_FAQ,
   type SiteSection,
   type SiteFaqItem,
 } from '../src/content/sitePages';
@@ -1084,7 +1083,6 @@ export function injectContactBody(html: string): string {
     `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Hours: Mon-Fri, 9AM-6PM CT</p>`,
     `<p>Phone support is available to customers with an order — sign in and open your account to view it.</p>`,
     ...renderSiteSections(CONTACT_SECTIONS),
-    ...renderSiteFaq(CONTACT_FAQ, 'Common contact questions'),
   ];
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
@@ -1100,7 +1098,9 @@ function injectLegalBody(html: string, title: string, sections: { title: string;
 }
 
 /** Pre-renders the /faq page with categories and questions. */
-function injectFaqBody(html: string): string {
+/** Exported so the FAQ drift test can render the crawl copy and compare it to
+ * the React page string-for-string. */
+export function injectFaqBody(html: string): string {
   const parts: string[] = [`<h1>Frequently Asked Questions</h1>`];
   for (const cat of FAQ_DATA) {
     parts.push(`<h2>${esc(cat.category)}</h2>`);

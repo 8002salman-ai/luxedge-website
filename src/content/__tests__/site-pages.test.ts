@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS, CONTACT_FAQ } from '../sitePages';
+import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from '../sitePages';
 import type { SiteFaqItem, SiteSection } from '../sitePages';
 import { SHIPPING_SECTIONS, RETURNS_SECTIONS, FAQ_DATA } from '../policies';
 import { CATEGORY_CONTENT } from '../categoryContent';
@@ -42,7 +42,9 @@ function pageParts(sections: SiteSection[], faq: SiteFaqItem[]): string[] {
 }
 
 const HOME_PARTS = pageParts(HOME_SECTIONS, HOME_FAQ);
-const CONTACT_PARTS = pageParts(CONTACT_SECTIONS, CONTACT_FAQ);
+// The contact page deliberately has no FAQ block — its sections answer the
+// contact questions and /faq owns the long-form answers (faq-source test).
+const CONTACT_PARTS = pageParts(CONTACT_SECTIONS, []);
 const countWords = (parts: string[]) => parts.reduce((n, p) => n + words(p), 0);
 
 /** Undo HTML entity escaping so a rendered page can be compared to the source. */
@@ -125,7 +127,7 @@ describe('homepage / contact copy — substance', () => {
   it('does not pad a page by repeating itself, and a FAQ answer never restates a section', () => {
     for (const [page, sections, faq] of [
       ['home', HOME_SECTIONS, HOME_FAQ],
-      ['contact', CONTACT_SECTIONS, CONTACT_FAQ],
+      ['contact', CONTACT_SECTIONS, []],
     ] as const) {
       const bodies = sections.flatMap((s) => [...(s.paragraphs || []), ...(s.bullets || [])]);
       for (const f of faq) {
@@ -176,24 +178,24 @@ describe('homepage / contact copy — honesty', () => {
 
   it('every reused shipping / return / FAQ fact still matches the page that owns it', () => {
     const policyText = [...SHIPPING_SECTIONS, ...RETURNS_SECTIONS].map((s) => s.body).join('\n');
+    // FAQ_DATA is now the only FAQ copy on the site — the React page reads it
+    // too, so there is no second source left to disagree with.
     const faqText = FAQ_DATA.flatMap((c) => c.items.map((i) => `${i.q} ${i.a}`)).join('\n');
-    const reactFaqSource = readFileSync('src/App.tsx', 'utf8');
-    const ourFaq = [...HOME_FAQ, ...CONTACT_FAQ].map((f) => f.a).join('\n');
-    const ourText = [...HOME_PARTS, ...CONTACT_PARTS].join('\n');
+    const ourFaq = HOME_FAQ.map((f) => f.a).join('\n');
 
+    // Only the facts THIS module still reuses. Cancellations, address changes
+    // and order tracking moved back to /faq (the contact page used to restate
+    // them, which duplicated /faq on a second indexed URL); their consistency is
+    // pinned by the faq-source suite, which owns FAQ_DATA.
     const pins: Array<[string, string]> = [
       ['express shipping', 'Express shipping is not currently offered unless it is specifically shown as an option at checkout'],
-      ['feed and label guidance', 'Check the product label, ingredients, intended species, and warnings before use'],
+      ['feed and label guidance', 'Review the product label, ingredients, intended species, warnings'],
       ['warranty coverage', 'Warranty coverage varies by product and manufacturer'],
-      ['cancellation window', 'Orders can be canceled within 2 hours of placement'],
-      ['address change', 'contact us immediately at hello@luxedge.us'],
-      ['tracking email', 'Once your order ships'],
     ];
     for (const [label, phrase] of pins) {
-      const ownerHas = policyText.includes(phrase) || faqText.includes(phrase) || reactFaqSource.includes(phrase);
+      const ownerHas = policyText.includes(phrase) || faqText.includes(phrase);
       expect(ownerHas, `${label}: the owning page no longer says "${phrase}"`).toBe(true);
-      const ours = label === 'tracking email' || label === 'address change' ? ourText : ourFaq;
-      expect(ours.includes(phrase), `${label}: our copy drifted from "${phrase}"`).toBe(true);
+      expect(ourFaq.includes(phrase), `${label}: our copy drifted from "${phrase}"`).toBe(true);
     }
   });
 
@@ -224,7 +226,6 @@ describe('homepage / contact copy — renderer parity', () => {
   ) as ReactElement;
   const contactNode = createElement('div', null,
     createElement(SiteSections, { sections: CONTACT_SECTIONS }),
-    createElement(SiteFaq, { items: CONTACT_FAQ, title: 'Common contact questions' }),
   ) as ReactElement;
 
   it.each([['home', HOME_PARTS], ['contact', CONTACT_PARTS]] as const)(
@@ -268,7 +269,6 @@ describe('homepage / contact copy — renderer parity', () => {
       '<SiteSections sections={HOME_SECTIONS} />',
       '<SiteFaq items={HOME_FAQ} />',
       '<SiteSections sections={CONTACT_SECTIONS} />',
-      '<SiteFaq items={CONTACT_FAQ}',
     ]) {
       expect(app.includes(needle), `App.tsx missing: ${needle}`).toBe(true);
     }
@@ -276,18 +276,19 @@ describe('homepage / contact copy — renderer parity', () => {
       'renderSiteSections(HOME_SECTIONS)',
       'renderSiteFaq(HOME_FAQ)',
       'renderSiteSections(CONTACT_SECTIONS)',
-      "renderSiteFaq(CONTACT_FAQ, 'Common contact questions')",
     ]) {
       expect(worker.includes(needle), `worker/seo-meta.ts missing: ${needle}`).toBe(true);
     }
+    // The contact page's FAQ block is gone on BOTH sides — neither renderer may
+    // keep a copy, or the duplication the faq-source suite forbids returns.
+    expect(app.includes('CONTACT_FAQ')).toBe(false);
+    expect(worker.includes('CONTACT_FAQ')).toBe(false);
   });
 
-  it('gives each page the same FAQ heading in the crawl HTML and the hydrated DOM', () => {
+  it('gives the homepage FAQ the same heading in the crawl HTML and the hydrated DOM', () => {
     // A heading that only exists on one side is exactly how the two copies
     // silently diverge, so it is pinned literally.
     expect(homeHtml).toContain('<h2>Common questions</h2>');
     expect(render(homeNode)).toContain('Common questions');
-    expect(contactHtml).toContain('<h2>Common contact questions</h2>');
-    expect(render(contactNode)).toContain('Common contact questions');
   });
 });
