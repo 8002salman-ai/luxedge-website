@@ -40,8 +40,11 @@ export const SEO_MEDIA_SELECT =
 export const SITEMAP_PRODUCTS_SELECT =
   'id,slug,name,status,description,short_description,price,image_url,supplier_source,supplier_product_ref,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness';
 
-export const SITEMAP_CATEGORIES_SELECT = 'slug';
+// `name`/`title` are read so the HTML sitemap (/sitemap) can label each link
+// with the real category or article name instead of deriving it from the slug.
+// Both columns are already read by SEO_CATEGORIES_SELECT / SEO_BLOG_POSTS_SELECT.
+export const SITEMAP_CATEGORIES_SELECT = 'slug,name';
 
-export const SITEMAP_BLOG_POSTS_SELECT = 'slug';
+export const SITEMAP_BLOG_POSTS_SELECT = 'slug,title';
 
 export const SITEMAP_MEDIA_SELECT = 'slug';

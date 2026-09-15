@@ -55,7 +55,11 @@ const [prods, cats, blogs] = await Promise.all([
 
 const listable = prods.filter((p) => !isHeldProduct(p.slug) && isPubliclyListableProduct(p));
 
-const urls = ['/', '/shop', '/blog', '/about', '/contact', '/privacy', '/terms', '/returns', '/shipping-policy', '/copyright', '/faq'];
+// Must stay identical (order included) to STATIC_ROUTES in worker/sitemap.ts —
+// the live /sitemap.xml is served by the worker while this file ships in the
+// build output, and the two are expected to diff to zero.
+// src/content/__tests__/sitemap-parity.test.ts enforces that.
+const urls = ['/', '/shop', '/blog', '/about', '/contact', '/faq', '/shipping-policy', '/returns', '/copyright', '/privacy', '/terms', '/sitemap'];
 for (const c of cats) urls.push(`/category/${c.slug}`);
 for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${b.slug}`);
 for (const p of listable) urls.push(`/product/${p.slug || p.id}`);

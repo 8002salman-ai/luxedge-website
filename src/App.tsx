@@ -1092,7 +1092,7 @@ function Footer() {
             <Link to="/copyright" className={FL}>Copyright &amp; DMCA</Link>
             <Link to="/privacy" className={FL}>Privacy Policy</Link>
             <Link to="/terms" className={FL}>Terms of Service</Link>
-            <a href="/sitemap.xml" className={FL}>Sitemap</a>
+            <Link to="/sitemap" className={FL}>Sitemap</Link>
             <div className="pt-4 border-t border-white/10 mt-4">
               <div className="flex items-center gap-2 text-xs text-[#C5A880]">
                 <ShieldTick strokeWidth={1.5} size={15} />
@@ -1274,7 +1274,7 @@ function RouteTitle() {
       setMeta('robots', 'noindex, follow');
     } else if (privateRoutes.includes(segs[0]) || pathname === '/blog/write' || (segs[0] === 'blog' && !!segs[1] && isHeldBlog(segs[1]))) {
       setMeta('robots', 'noindex, nofollow');
-    } else if (['', 'shop', 'category', 'product', 'blog', 'media', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'copyright', 'faq'].includes(segs[0] || '')) {
+    } else if (['', 'shop', 'category', 'product', 'blog', 'media', 'about', 'contact', 'privacy', 'terms', 'returns', 'shipping-policy', 'copyright', 'faq', 'sitemap'].includes(segs[0] || '')) {
       setMeta('robots', 'index, follow');
     }
     if (segs.length === 0) { full("Luxedge — Premium Pet & Animal Essentials"); desc("Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge."); }
@@ -1300,6 +1300,7 @@ function RouteTitle() {
     else if (segs[0] === "shipping-policy" || segs[0] === "shipping") { set("Shipping Policy"); desc("How Luxedge ships orders: where we deliver, how shipping is priced, what affects your delivery estimate, delays, and lost-package help."); }
     else if (segs[0] === "copyright") { full("Copyright & DMCA — Reporting Infringement | Luxedge"); desc("How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
+    else if (segs[0] === "sitemap") { full("Sitemap — Every Page on Luxedge"); desc("Browse every page on Luxedge in one place: the full product catalog, shop categories, care guides, and our shipping, returns, privacy and terms pages."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
     else if (segs[0] === "blog") {
       // Only published posts are ever served to visitors (defense in depth:
@@ -3805,6 +3806,85 @@ function ShippingPolicyPage() {
   );
 }
 
+/**
+ * Visitor-facing sitemap.
+ *
+ * The footer used to link straight to /sitemap.xml, so the "Sitemap" link dumped
+ * raw XML into the browser. This page is the readable version: the same four
+ * groups the worker pre-renders and the same URL set the XML feed publishes, so
+ * a person browsing here sees exactly what we ask search engines to index.
+ */
+function SitemapPage() {
+  const { products, categories, blogs } = useApp();
+  const pageLinks: { to: string; label: string }[] = [
+    { to: '/', label: 'Home' },
+    { to: '/shop', label: 'Shop all products' },
+    { to: '/blog', label: 'Guides & articles' },
+    { to: '/about', label: 'About Luxedge' },
+    { to: '/contact', label: 'Contact us' },
+    { to: '/faq', label: 'Frequently asked questions' },
+    { to: '/shipping-policy', label: 'Shipping policy' },
+    { to: '/returns', label: 'Returns & refunds' },
+    { to: '/copyright', label: 'Copyright & DMCA' },
+    { to: '/privacy', label: 'Privacy policy' },
+    { to: '/terms', label: 'Terms of service' },
+    // Kept in step with STATIC_ROUTES in worker/sitemap.ts (which also drives
+    // the XML feed). Listing this page here too is what stops the pre-rendered
+    // crawl body and the hydrated page from advertising different link sets.
+    { to: '/sitemap', label: 'Sitemap' },
+  ];
+  // Held and unpublished records are excluded here exactly as they are from the
+  // XML feed — a sitemap must never advertise a URL that returns 404.
+  const groups: { title: string; links: { to: string; label: string }[] }[] = [
+    { title: 'Main pages', links: pageLinks },
+    {
+      title: 'Shop by category',
+      links: categories.filter((c) => c.isActive).map((c) => ({ to: `/category/${c.slug || toSlug(c.name)}`, label: c.name })),
+    },
+    {
+      title: 'Guides & articles',
+      links: blogs.filter((b) => b.status === 'published' && !isHeldBlog(b.slug)).map((b) => ({ to: `/blog/${b.slug}`, label: b.title })),
+    },
+    {
+      title: 'Products',
+      links: products.map((p) => ({ to: `/product/${p.slug || p.id}`, label: p.name })),
+    },
+  ].filter((g) => g.links.length > 0);
+  const total = groups.reduce((n, g) => n + g.links.length, 0);
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      <section className="bg-gradient-to-b from-luxe-light to-white border-b border-luxe-silver/60 py-12">
+        <div className="max-w-5xl mx-auto px-4 text-center">
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black">Sitemap</h1>
+          <p className="text-gray-500 mt-3 max-w-2xl mx-auto text-sm">
+            Every page we currently publish, in one place — {total} links across the storefront, our care guides, categories and products. This is the same list our{' '}
+            <a href="/sitemap.xml" className="text-luxe-gold hover:underline">XML sitemap</a> gives search engines.
+          </p>
+        </div>
+      </section>
+      <div className="max-w-5xl mx-auto px-4 py-10 space-y-8">
+        {groups.map((g) => (
+          <section key={g.title} className="bg-white rounded-2xl border p-6 sm:p-8">
+            <h2 className="font-serif text-xl font-bold text-luxe-black mb-4">
+              {g.title} <span className="text-sm font-normal text-gray-400">({g.links.length})</span>
+            </h2>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+              {g.links.map((l) => (
+                <li key={l.to}>
+                  <Link to={l.to} className="text-sm text-gray-600 hover:text-luxe-gold transition-colors break-words">{l.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        <p className="text-sm text-gray-500 text-center">
+          Looking for something specific? Try <Link to="/shop" className="text-luxe-gold hover:underline">searching the shop</Link> or <Link to="/contact" className="text-luxe-gold hover:underline">contacting us</Link>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Rendered from the same COPYRIGHT_SECTIONS the worker pre-renders, so the
  * crawl HTML and the hydrated page cannot drift apart. */
 function CopyrightPage() {
@@ -4157,6 +4237,7 @@ export default function App() {
           <Route path="/shipping" element={<Navigate to="/shipping-policy" replace />} />
           <Route path="/copyright" element={<SLayout><CopyrightPage /></SLayout>} />
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
+          <Route path="/sitemap" element={<SLayout><SitemapPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />
           {/* Blog */}
           <Route path="/media" element={<SLayout><Suspense fallback={<PageFallback />}><MediaHubPage /></Suspense></SLayout>} />

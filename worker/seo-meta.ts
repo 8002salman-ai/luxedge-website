@@ -39,6 +39,7 @@ import {
   POLICY_LAST_UPDATED,
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
+import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 
@@ -431,6 +432,14 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
     description:
       'Answers to common questions about Luxedge — shipping times, order tracking, returns, and how our curated pet essentials are sourced.',
   },
+  '/sitemap': {
+    // The visitor-facing HTML sitemap. It exists so the footer's "Sitemap" link
+    // opens a readable page instead of dumping raw XML in the browser, and so a
+    // human can reach every published URL without relying on the XML feed.
+    title: 'Sitemap — Every Page on Luxedge',
+    description:
+      'Browse every page on Luxedge in one place: the full product catalog, shop categories, care guides, and our shipping, returns, privacy and terms pages.',
+  },
   '/shipping-policy': {
     // Describes what the page actually contains. The retired description
     // advertised site-wide delivery windows drawn from sourcing data,
@@ -727,6 +736,7 @@ const FOOTER_NAV =
     ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
     ['Copyright & DMCA', '/copyright'],
     ['Privacy Policy', '/privacy'], ['Terms of Service', '/terms'],
+    ['Sitemap', '/sitemap'],
   ].map(([label, to]) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
   '</nav>';
 
@@ -1026,6 +1036,18 @@ function injectFaqBody(html: string): string {
     }
   }
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
+}
+
+/**
+ * Pre-renders the /sitemap page from the SAME groups the XML feed is built
+ * from, so the page a visitor browses and the URL list we hand Google cannot
+ * disagree. On a DB outage the shell is left as-is (no link list we cannot
+ * vouch for) rather than publishing stale or unverified URLs.
+ */
+async function injectSitemapBody(html: string): Promise<string> {
+  const groups = await buildSitemapGroups();
+  if (!groups) return html;
+  return html.replace('<div id="ssr-body"></div>', renderHtmlSitemapBody(groups));
 }
 
 /** Pre-renders the /shop page: category navigation plus direct links to the
@@ -1344,6 +1366,7 @@ export async function maybeInjectSeo(
     else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/copyright') out = injectLegalBody(out, 'Copyright & DMCA', COPYRIGHT_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/faq') out = injectFaqBody(out);
+    else if (staticKey === '/sitemap') out = await injectSitemapBody(out);
     else if (staticKey === '/careers') out = injectCareersBody(out);
     return { html: out, status: 200 };
   }
