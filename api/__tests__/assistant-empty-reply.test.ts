@@ -14,7 +14,7 @@ vi.mock('../_lib/providers.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../_lib/providers.js')>();
   return {
     ...actual,
-    generateWithFallback: vi.fn(async () => ({ text: '', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false })),
+    generateWithFallback: vi.fn(async () => ({ text: '', provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free', fallbackUsed: false })),
     isConfiguredFull: vi.fn(async (p: string) => p === 'openrouter'),
   };
 });
@@ -55,7 +55,7 @@ describe('/api/crm/assistant — empty model output', () => {
   const original = { VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL };
   beforeEach(() => {
     delete process.env.VITE_SUPABASE_URL;
-    vi.mocked(generateWithFallback).mockResolvedValue({ text: '', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false });
+    vi.mocked(generateWithFallback).mockResolvedValue({ text: '', provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free', fallbackUsed: false });
   });
   afterEach(() => {
     if (original.VITE_SUPABASE_URL === undefined) delete process.env.VITE_SUPABASE_URL;
@@ -73,11 +73,11 @@ describe('/api/crm/assistant — empty model output', () => {
   });
 
   it('passes real model output through with the serving provider', async () => {
-    vi.mocked(generateWithFallback).mockResolvedValue({ text: '  Hi there! How can I help?  ', provider: 'openrouter', model: 'minimax/minimax-m3:free', fallbackUsed: false });
+    vi.mocked(generateWithFallback).mockResolvedValue({ text: '  Hi there! How can I help?  ', provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free', fallbackUsed: false });
     const { captured, server } = makeRes();
     await assistantHandler(makeReq('hi'), server);
     expect(captured.status).toBe(200);
-    expect(captured.body).toMatchObject({ reply: 'Hi there! How can I help?', provider: 'openrouter', model: 'minimax/minimax-m3:free' });
+    expect(captured.body).toMatchObject({ reply: 'Hi there! How can I help?', provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' });
   });
 
   it('falls back to DeepSeek when OpenRouter is not configured but DeepSeek is', async () => {

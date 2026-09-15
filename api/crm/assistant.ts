@@ -12,7 +12,7 @@
 // Falls back to a friendly canned reply if every provider fails so the
 // visitor never sees a broken widget.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readJsonBody, sendJson, rateLimited, clientIp, generateWithFallback, isConfiguredFull } from '../_lib/providers.js';
+import { readJsonBody, sendJson, rateLimited, clientIp, generateWithFallback, isConfiguredFull, defaultModelFor } from '../_lib/providers.js';
 import { supabaseConfig, supabaseFetch, uid, isMissingTable } from './_lib.js';
 
 const SYSTEM = `You are Luxie, the friendly AI assistant for LUXEDGE (luxedge.us), a premium pet essentials store based in Denver, Colorado, USA and operated by Embani LLC.
@@ -109,7 +109,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       openrouterReady && deepseekReady ? 'deepseek' : null,
       {
         prompt,
-        model: 'minimax/minimax-m3:free',
+        // Always the provider's current registry default — a hardcoded slug
+        // here silently rotted when OpenRouter retired it (HTTP 404), which
+        // sent every customer a canned reply instead of a real answer.
+        model: defaultModelFor(openrouterReady ? 'openrouter' : 'deepseek'),
         system: SYSTEM,
       },
     );

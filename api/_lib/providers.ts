@@ -259,9 +259,30 @@ export function classifyProviderStatus(
   }
 }
 
-function sanitizeError(providerId: string, status: number, raw?: string): string {
-  // Never include raw provider error bodies — they may echo request headers/keys.
-  return classifyProviderStatus(providerId, status, raw).message;
+/**
+ * A provider HTTP failure that also carries WHY it failed, so callers can react
+ * to the category (e.g. swap a retired model) instead of string-matching our
+ * own error text.
+ */
+export interface ProviderError extends Error {
+  problem: ProviderProblem;
+}
+
+/**
+ * Build a typed provider error. The message is always server-authored: raw
+ * provider bodies are only sniffed for classification, never echoed, because
+ * they can contain request headers or keys.
+ */
+export function providerError(providerId: string, status: number, raw?: string): ProviderError {
+  const { problem, message } = classifyProviderStatus(providerId, status, raw);
+  const err = new Error(message) as ProviderError;
+  err.problem = problem;
+  return err;
+}
+
+/** True when a failure means "this provider does not serve that model id". */
+export function isModelProblem(err: unknown): boolean {
+  return (err as ProviderError | null)?.problem === 'model';
 }
 
 export interface GenerateOptions {
@@ -291,7 +312,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
+      if (!r.ok) throw providerError(providerId, r.status, JSON.stringify(d));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error(`${PROVIDER_NAMES[providerId]} returned no text`);
       return text;
@@ -311,7 +332,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
           signal,
         });
         const d = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(sanitizeError('deepseek', r.status, JSON.stringify(d)));
+        if (!r.ok) throw providerError('deepseek', r.status, JSON.stringify(d));
         const text = d?.choices?.[0]?.message?.content;
         if (typeof text !== 'string') throw new Error('DeepSeek returned no text');
         return text;
@@ -326,7 +347,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
+      if (!r.ok) throw providerError(providerId, r.status, JSON.stringify(d));
       const text = d?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Gemini returned no text');
       return text;
@@ -342,7 +363,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
+      if (!r.ok) throw providerError(providerId, r.status, JSON.stringify(d));
       const text = d?.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error('OpenRouter returned no text');
       return text;
@@ -355,7 +376,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
+      if (!r.ok) throw providerError(providerId, r.status, JSON.stringify(d));
       const text = d?.content?.[0]?.text;
       if (typeof text !== 'string') throw new Error('Anthropic returned no text');
       return text;
@@ -369,7 +390,7 @@ export async function generate(providerId: string, opts: GenerateOptions): Promi
         signal,
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(sanitizeError(providerId, r.status, JSON.stringify(d)));
+      if (!r.ok) throw providerError(providerId, r.status, JSON.stringify(d));
       let text: string | undefined;
       if (typeof d?.output_text === 'string') text = d.output_text;
       else if (Array.isArray(d?.output)) {
@@ -420,6 +441,20 @@ export async function generateWithFallback(
     const text = await generateWithRetry(providerId, opts);
     return { text, provider: providerId, model: opts.model, fallbackUsed: false };
   } catch (primaryErr) {
+    // Providers retire model ids without notice (OpenRouter drops a `:free`
+    // tag, Google renames a preview). A stale id would otherwise dead-end every
+    // AI feature until someone edits the UI, so on a MODEL-level failure retry
+    // the SAME provider with its known-good default before switching providers.
+    // Auth/quota failures are left untouched — swapping the model can't help.
+    const healedModel = defaultModelFor(providerId);
+    if (isModelProblem(primaryErr) && healedModel && healedModel !== opts.model) {
+      try {
+        const text = await generateWithRetry(providerId, { ...opts, model: healedModel });
+        return { text, provider: providerId, model: healedModel, fallbackUsed: false };
+      } catch (healErr) {
+        primaryErr = healErr;
+      }
+    }
     if (fallbackProviderId && fallbackProviderId !== providerId && (await isConfiguredFull(fallbackProviderId))) {
       try {
         const fallbackModel = defaultModelFor(fallbackProviderId) || opts.model;

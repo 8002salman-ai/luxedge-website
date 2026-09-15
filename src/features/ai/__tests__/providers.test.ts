@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets, loadProviderSettings, saveProviderSettings, resolveProviderChain, DEFAULT_PROVIDER_SETTINGS } from '../providers';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets, loadProviderSettings, saveProviderSettings, resolveProviderChain, DEFAULT_PROVIDER_SETTINGS, OPENROUTER_DEFAULT_MODEL, RETIRED_MODEL_SLUGS } from '../providers';
 import type { AIProvider } from '../types';
 
 function memoryStorage(initial: Record<string, string> = {}): Pick<Storage, 'getItem' | 'setItem'> {
@@ -8,6 +10,17 @@ function memoryStorage(initial: Record<string, string> = {}): Pick<Storage, 'get
     getItem: (k) => map.get(k) ?? null,
     setItem: (k, v) => void map.set(k, v),
   };
+}
+
+/** Recursively collect text-bearing source files under a repo-relative dir. */
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === 'dist' || entry === '.git') continue;
+    const p = join(dir, entry);
+    if (statSync(p).isDirectory()) sourceFiles(p, out);
+    else if (/\.(ts|tsx|js|mjs)$/.test(entry)) out.push(p);
+  }
+  return out;
 }
 
 describe('sanitizeProvider', () => {
@@ -68,7 +81,7 @@ describe('loadAIProviders', () => {
   it('defaults to OpenRouter as the default provider (owner chain: openrouter only, no paid fallbacks)', () => {
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.isDefault)?.id).toBe('openrouter');
     const or = DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter');
-    expect(or?.defaultModel).toBe('minimax/minimax-m3:free');
+    expect(or?.defaultModel).toBe(OPENROUTER_DEFAULT_MODEL);
     expect(or?.enabled).toBe(true);
     // DeepSeek enabled by default (server-side key is commonly configured);
     // Codex is available on demand (still never the default).
@@ -87,6 +100,48 @@ describe('loadAIProviders', () => {
     // OpenRouter is the default; every provider has at least one model
     expect(DEFAULT_AI_PROVIDERS.find((p) => p.id === 'openrouter')?.isDefault).toBe(true);
     expect(DEFAULT_AI_PROVIDERS.every((p) => p.models.length > 0 && p.defaultModel)).toBe(true);
+  });
+
+  it('rewrites a RETIRED default model saved by an older build', () => {
+    // The regression that broke AI SEO: OpenRouter retired the shipped default
+    // id, and the stored config keeps winning over shipped defaults forever.
+    const storage = memoryStorage({
+      luxedge_ai_providers: JSON.stringify([
+        { id: 'openrouter', name: 'OpenRouter', models: ['minimax/minimax-m3:free', 'openrouter/free'], defaultModel: 'minimax/minimax-m3:free', enabled: true, isDefault: true },
+      ]),
+    });
+    const or = loadAIProviders(storage).find((p) => p.id === 'openrouter');
+    expect(or?.defaultModel).toBe(OPENROUTER_DEFAULT_MODEL);
+    expect(RETIRED_MODEL_SLUGS['minimax/minimax-m3:free']).toBe(OPENROUTER_DEFAULT_MODEL);
+    // the dropdown must not keep offering the dead id either
+    expect(or?.models).toContain(OPENROUTER_DEFAULT_MODEL);
+    expect(or?.models).not.toContain('minimax/minimax-m3:free');
+  });
+
+  it('never exposes the shared default model arrays to callers', () => {
+    const first = loadAIProviders(memoryStorage({}));
+    first.find((p) => p.id === 'openrouter')!.models.push('pushed-by-a-caller');
+    const second = loadAIProviders(memoryStorage({}));
+    expect(second.find((p) => p.id === 'openrouter')!.models).not.toContain('pushed-by-a-caller');
+  });
+
+  it('ships no retired model ids outside the retirement map', () => {
+    // A retired id anywhere else (a provider list, an admin help string, an API
+    // handler) is a 404 waiting to happen. The map itself is the one allowed
+    // mention, plus the labels in the admin help text and these tests.
+    const offenders: string[] = [];
+    for (const dir of ['src', 'api', 'worker']) {
+      for (const file of sourceFiles(dir)) {
+        if (file.includes('__tests__')) continue;
+        const text = readFileSync(file, 'utf8');
+        for (const retired of Object.keys(RETIRED_MODEL_SLUGS)) {
+          if (text.includes(retired) && !file.endsWith(join('features', 'ai', 'providers.ts'))) {
+            offenders.push(`${file}: ${retired}`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('self-heals a stale all-disabled stored config back to defaults', () => {

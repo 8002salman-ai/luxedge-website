@@ -8,26 +8,29 @@
 // 401/403. Defense in depth on top: body size cap, prompt length cap, model
 // allowlist regex, per-instance rate limit.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { generateWithFallback, isConfiguredFull, isValidModel, readJsonBody, sendJson, rateLimited, clientIp } from '../_lib/providers.js';
+import { generateWithFallback, isConfiguredFull, isValidModel, readJsonBody, sendJson, rateLimited, clientIp, defaultModelFor } from '../_lib/providers.js';
 import { requireAdmin } from '../_lib/auth.js';
 
 /**
- * Server-side provider priority — the ORDER of keys that actually work for
- * this deployment. When the client asks for a provider whose key is NOT
- * attached (e.g. DeepSeek before any DeepSeek key existed), the server routes
- * to the first CONFIGURED provider in this chain instead of failing, so admin
- * AI features (SEO, marketing, imports) always work as long as ANY key exists.
- * openrouter (MiniMax M3 free) and gemini (gemini-3.5-flash free) are the two
- * verified-working keys; the rest follow as fallbacks when attached later.
+ * Server-side provider priority — the ORDER of providers this deployment
+ * prefers. When the client asks for a provider whose key is NOT attached (e.g.
+ * DeepSeek before any DeepSeek key existed), the server routes to the first
+ * CONFIGURED provider in this chain instead of failing, so admin AI features
+ * (SEO, marketing, imports) always work as long as ANY key exists.
+ *
+ * Models come from `defaultModelFor()` rather than being written out here: a
+ * hardcoded slug in this list once pointed at a model the provider had since
+ * retired, so every AI SEO run answered HTTP 404 "does not offer the requested
+ * model". Deriving from the single registry means this list cannot drift again.
  */
 export const PROVIDER_PRIORITY: { id: string; model: string }[] = [
-  { id: 'openrouter', model: 'minimax/minimax-m3:free' },
-  { id: 'gemini', model: 'gemini-3.5-flash' },
-  { id: 'deepseek', model: 'deepseek-chat' },
-  { id: 'openai', model: 'gpt-4o-mini' },
-  { id: 'anthropic', model: 'claude-haiku-4-5-20251001' },
-  { id: 'codex', model: 'gpt-5-codex' },
-];
+  'openrouter',
+  'gemini',
+  'deepseek',
+  'openai',
+  'anthropic',
+  'codex',
+].map((id) => ({ id, model: defaultModelFor(id) }));
 
 /**
  * Resolve the provider this request should actually use. Returns the requested

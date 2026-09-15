@@ -5265,8 +5265,8 @@ const providerIcons: Record<string, string> = {
               </div>
               {provider.id === 'openrouter' && (
                 <p className="text-xs text-gray-400 mt-2">
-                  Free models: minimax/minimax-m3:free (default — 1M context, fast), nvidia/nemotron-3-super-120b-a12b:free, openrouter/free, cohere/north-mini-code:free (Google/GLM free pools are often rate-limited)
-                  <br />Paid models require credits. <a href="https://openrouter.ai/docs" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Docs</a>
+                  Free models: nvidia/nemotron-3-super-120b-a12b:free (default — 262k context, general purpose), nvidia/nemotron-3.5-lightning:free (1M context, fast), google/gemma-4-31b-it:free, cohere/north-mini-code:free (coding), openrouter/free (auto-routes to whichever free model is available)
+                  <br />Paid models require credits. OpenRouter retires free model ids without notice — if a run fails with “does not offer the requested model”, pick another id here (the server also retries the provider default automatically). <a href="https://openrouter.ai/docs" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">Docs</a>
                 </p>
               )}
               {provider.id === 'gemini' && (

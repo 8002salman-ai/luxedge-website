@@ -16,8 +16,28 @@ import type { AIProvider } from './types';
 // (enable it as default/fallback in AI Hub when its CODEX_API_KEY or
 // CHATGPT_OAUTH_TOKEN is configured on the server).
 // This matches DEFAULT_PROVIDER_SETTINGS (openrouter → deepseek).
+//
+// Every OpenRouter id below was checked against GET
+// https://openrouter.ai/api/v1/models. Keep it to ids that endpoint actually
+// returns: OpenRouter retires `:free` ids without notice, and a retired id
+// fails the whole request with HTTP 404 instead of degrading gracefully.
+export const OPENROUTER_DEFAULT_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
+
+/**
+ * Model ids upstream providers have RETIRED, mapped to a live replacement.
+ *
+ * A browser that saved one of these as its default would keep sending a dead id
+ * after every deploy, so `loadAIProviders` rewrites it on load. The server
+ * heals the same failure on its own side (see `generateWithFallback`), so this
+ * map is about keeping the UI and the stored config honest rather than keeping
+ * requests working. Add an entry whenever a provider drops a model.
+ */
+export const RETIRED_MODEL_SLUGS: Record<string, string> = {
+  'minimax/minimax-m3:free': OPENROUTER_DEFAULT_MODEL,
+};
+
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
-  { id: 'openrouter', name: 'OpenRouter (Multi-Model)', models: ['minimax/minimax-m3:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'openrouter/free'], defaultModel: 'minimax/minimax-m3:free', enabled: true, isDefault: true },
+  { id: 'openrouter', name: 'OpenRouter (Multi-Model)', models: [OPENROUTER_DEFAULT_MODEL, 'nvidia/nemotron-3.5-lightning:free', 'google/gemma-4-31b-it:free', 'cohere/north-mini-code:free', 'openrouter/free'], defaultModel: OPENROUTER_DEFAULT_MODEL, enabled: true, isDefault: true },
   { id: 'deepseek', name: 'DeepSeek (Fast & Smart)', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', enabled: true, isDefault: false },
   { id: 'gemini', name: 'Google Gemini (Flash)', models: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'], defaultModel: 'gemini-2.5-flash', enabled: true, isDefault: false },
   { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], defaultModel: 'gpt-4o-mini', enabled: false, isDefault: false },
@@ -26,6 +46,11 @@ export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
 ];
 
 const PROVIDER_IDS = new Set(DEFAULT_AI_PROVIDERS.map((p) => p.id));
+
+/** Fresh copy of the shipped defaults — never hand out the shared `models` array. */
+function defaultProviders(): AIProvider[] {
+  return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p, models: [...p.models] }));
+}
 
 /** Strip any secret fields (e.g. legacy apiKey) from a provider object. */
 export function sanitizeProvider(p: Partial<AIProvider> & Record<string, unknown>): AIProvider {
@@ -45,12 +70,22 @@ export function sanitizeProvider(p: Partial<AIProvider> & Record<string, unknown
 export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[] {
   try {
     const raw = (storage || window.localStorage).getItem('luxedge_ai_providers');
-    if (!raw) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    if (!raw) return defaultProviders();
     const stored = JSON.parse(raw);
-    if (!Array.isArray(stored)) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    if (!Array.isArray(stored)) return defaultProviders();
     const merged: AIProvider[] = stored.map((p) => sanitizeProvider(p || {}));
     for (const def of DEFAULT_AI_PROVIDERS) {
-      if (!merged.some((p) => p.id === def.id)) merged.push({ ...def });
+      if (!merged.some((p) => p.id === def.id)) merged.push({ ...def, models: [...def.models] });
+    }
+    // Heal retired model ids saved by an older build. Without this a stored
+    // config keeps a dead slug forever, because stored values win over shipped
+    // defaults — the exact way AI SEO broke when OpenRouter retired a model.
+    for (const p of merged) {
+      const replacement = RETIRED_MODEL_SLUGS[p.defaultModel];
+      if (replacement) p.defaultModel = replacement;
+      p.models = Array.from(new Set(p.models.map((m) => RETIRED_MODEL_SLUGS[m] || m)));
+      // A model that is not in its own dropdown would render as a blank select.
+      if (!p.models.includes(p.defaultModel)) p.models.push(p.defaultModel);
     }
     // Migrate the previous shipped default (deepseek) to OpenRouter in stored
     // configs so an upgrade can't pin a stale default. Explicit owner choices
@@ -67,10 +102,10 @@ export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[
     // Self-healing: a stale all-disabled config (e.g. from an old save) must
     // never leave the import flow without a provider. The SERVER decides which
     // providers actually have keys; client toggles only affect routing.
-    if (!merged.some((p) => p.enabled)) return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    if (!merged.some((p) => p.enabled)) return defaultProviders();
     return merged;
   } catch {
-    return DEFAULT_AI_PROVIDERS.map((p) => ({ ...p }));
+    return defaultProviders();
   }
 }
 

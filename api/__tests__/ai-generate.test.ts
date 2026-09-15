@@ -26,8 +26,14 @@ vi.mock('../_lib/providers.js', async (importOriginal) => {
 });
 
 const { requireAdmin } = await import('../_lib/auth.js');
-const { isConfiguredFull, generateWithFallback } = await import('../_lib/providers.js');
+const { isConfiguredFull, generateWithFallback, defaultModelFor } = await import('../_lib/providers.js');
 const handler = (await import('../ai/generate.js')).default;
+
+// Assert against the model REGISTRY rather than a literal: PROVIDER_PRIORITY
+// derives its models from defaultModelFor(), so a hardcoded expectation here
+// would just re-introduce the drift that broke AI SEO with HTTP 404.
+const GEMINI_MODEL = defaultModelFor('gemini');
+const OPENROUTER_MODEL = defaultModelFor('openrouter');
 
 function makeRes(): { captured: { status: number; body: unknown }; server: ServerResponse } {
   const captured = { status: 200, body: null as unknown };
@@ -69,24 +75,25 @@ describe('/api/ai/generate provider routing', () => {
   it('uses the requested provider and its model when configured', async () => {
     vi.mocked(isConfiguredFull).mockImplementation(async (p: string) => p === 'openrouter');
     const { captured, server } = makeRes();
-    await handler(makeReq({ provider: 'openrouter', model: 'minimax/minimax-m3:free', prompt: 'Write SEO' }), server);
+    await handler(makeReq({ provider: 'openrouter', model: 'some/model:v9', prompt: 'Write SEO' }), server);
     expect(captured.status).toBe(200);
-    expect(generateWithFallback).toHaveBeenCalledWith('openrouter', undefined, { prompt: 'Write SEO', model: 'minimax/minimax-m3:free', system: undefined });
+    expect(generateWithFallback).toHaveBeenCalledWith('openrouter', undefined, { prompt: 'Write SEO', model: 'some/model:v9', system: undefined });
     const b = captured.body as { provider: string; model: string };
     expect(b.provider).toBe('openrouter');
-    expect(b.model).toBe('minimax/minimax-m3:free');
+    expect(b.model).toBe('some/model:v9');
   });
 
   it('routes an unconfigured requested provider to the first CONFIGURED provider (working key first)', async () => {
     vi.mocked(isConfiguredFull).mockImplementation(async (p: string) => p === 'gemini');
     const { captured, server } = makeRes();
-    // Client asked for deepseek (no DeepSeek key) → server must use gemini with gemini-3.5-flash.
+    // Client asked for deepseek (no DeepSeek key) → server must use gemini with
+    // gemini's registry default model.
     await handler(makeReq({ provider: 'deepseek', model: 'deepseek-v4-flash', prompt: 'Write SEO' }), server);
     expect(captured.status).toBe(200);
-    expect(generateWithFallback).toHaveBeenCalledWith('gemini', undefined, { prompt: 'Write SEO', model: 'gemini-3.5-flash', system: undefined });
+    expect(generateWithFallback).toHaveBeenCalledWith('gemini', undefined, { prompt: 'Write SEO', model: GEMINI_MODEL, system: undefined });
     const b = captured.body as { provider: string; model: string };
     expect(b.provider).toBe('gemini');
-    expect(b.model).toBe('gemini-3.5-flash');
+    expect(b.model).toBe(GEMINI_MODEL);
   });
 
   it('prioritizes openrouter before gemini when both are configured and the requested one is not', async () => {
@@ -94,7 +101,15 @@ describe('/api/ai/generate provider routing', () => {
     const { captured, server } = makeRes();
     await handler(makeReq({ provider: 'deepseek', model: 'deepseek-v4-flash', prompt: 'Write SEO' }), server);
     expect(captured.status).toBe(200);
-    expect(generateWithFallback).toHaveBeenCalledWith('openrouter', undefined, { prompt: 'Write SEO', model: 'minimax/minimax-m3:free', system: undefined });
+    expect(generateWithFallback).toHaveBeenCalledWith('openrouter', undefined, { prompt: 'Write SEO', model: OPENROUTER_MODEL, system: undefined });
+  });
+
+  it('shipped provider priority carries a model for every provider it can route to', async () => {
+    const { PROVIDER_PRIORITY } = await import('../ai/generate.js');
+    for (const p of PROVIDER_PRIORITY) {
+      expect(defaultModelFor(p.id)).toBeTruthy();
+      expect(p.model).toBe(defaultModelFor(p.id));
+    }
   });
 
   it('answers 501 only when NO provider has a key', async () => {
