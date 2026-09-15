@@ -36,6 +36,20 @@ export const RETIRED_MODEL_SLUGS: Record<string, string> = {
   'minimax/minimax-m3:free': OPENROUTER_DEFAULT_MODEL,
 };
 
+/**
+ * Replace a retired model id with its live replacement, or return it unchanged.
+ *
+ * The own-property check is load-bearing: `defaultModel` comes from storage a
+ * user can edit, and a plain `RETIRED_MODEL_SLUGS[model]` lookup would resolve
+ * "toString" / "constructor" to an Object.prototype FUNCTION and assign that as
+ * a model id. Only a non-empty string may ever be substituted.
+ */
+export function liveModelFor(model: string): string {
+  if (!Object.prototype.hasOwnProperty.call(RETIRED_MODEL_SLUGS, model)) return model;
+  const replacement = RETIRED_MODEL_SLUGS[model];
+  return typeof replacement === 'string' && replacement ? replacement : model;
+}
+
 export const DEFAULT_AI_PROVIDERS: AIProvider[] = [
   { id: 'openrouter', name: 'OpenRouter (Multi-Model)', models: [OPENROUTER_DEFAULT_MODEL, 'nvidia/nemotron-3.5-lightning:free', 'google/gemma-4-31b-it:free', 'cohere/north-mini-code:free', 'openrouter/free'], defaultModel: OPENROUTER_DEFAULT_MODEL, enabled: true, isDefault: true },
   { id: 'deepseek', name: 'DeepSeek (Fast & Smart)', models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat', enabled: true, isDefault: false },
@@ -81,9 +95,8 @@ export function loadAIProviders(storage?: Pick<Storage, 'getItem'>): AIProvider[
     // config keeps a dead slug forever, because stored values win over shipped
     // defaults — the exact way AI SEO broke when OpenRouter retired a model.
     for (const p of merged) {
-      const replacement = RETIRED_MODEL_SLUGS[p.defaultModel];
-      if (replacement) p.defaultModel = replacement;
-      p.models = Array.from(new Set(p.models.map((m) => RETIRED_MODEL_SLUGS[m] || m)));
+      p.defaultModel = liveModelFor(p.defaultModel);
+      p.models = Array.from(new Set(p.models.map((m) => liveModelFor(m))));
       // A model that is not in its own dropdown would render as a blank select.
       if (!p.models.includes(p.defaultModel)) p.models.push(p.defaultModel);
     }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets, loadProviderSettings, saveProviderSettings, resolveProviderChain, DEFAULT_PROVIDER_SETTINGS, OPENROUTER_DEFAULT_MODEL, RETIRED_MODEL_SLUGS } from '../providers';
+import { sanitizeProvider, loadAIProviders, DEFAULT_AI_PROVIDERS, resolveActiveProvider, scrubLegacySecrets, loadProviderSettings, saveProviderSettings, resolveProviderChain, DEFAULT_PROVIDER_SETTINGS, OPENROUTER_DEFAULT_MODEL, RETIRED_MODEL_SLUGS, liveModelFor } from '../providers';
 import type { AIProvider } from '../types';
 
 function memoryStorage(initial: Record<string, string> = {}): Pick<Storage, 'getItem' | 'setItem'> {
@@ -116,6 +116,23 @@ describe('loadAIProviders', () => {
     // the dropdown must not keep offering the dead id either
     expect(or?.models).toContain(OPENROUTER_DEFAULT_MODEL);
     expect(or?.models).not.toContain('minimax/minimax-m3:free');
+  });
+
+  it('never substitutes an Object.prototype member as a model id', () => {
+    // A plain lookup would resolve "toString"/"constructor" to a prototype
+    // FUNCTION and assign that as the model — the storied prototype-chain bug.
+    const storage = memoryStorage({
+      luxedge_ai_providers: JSON.stringify([
+        { id: 'openrouter', name: 'OpenRouter', models: ['toString', 'constructor', 'valueOf'], defaultModel: 'toString', enabled: true, isDefault: true },
+      ]),
+    });
+    const or = loadAIProviders(storage).find((p) => p.id === 'openrouter');
+    expect(typeof or?.defaultModel).toBe('string');
+    expect(or?.defaultModel).toBe('toString');
+    expect(or?.models.every((m) => typeof m === 'string')).toBe(true);
+    expect(or?.models).toEqual(['toString', 'constructor', 'valueOf']);
+    expect(liveModelFor('__proto__')).toBe('__proto__');
+    expect(liveModelFor('minimax/minimax-m3:free')).toBe(OPENROUTER_DEFAULT_MODEL);
   });
 
   it('never exposes the shared default model arrays to callers', () => {
