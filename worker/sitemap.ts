@@ -138,7 +138,9 @@ export function renderHtmlSitemapBody(groups: SitemapGroups): string {
     `<p>Every page we currently publish, in one place — ${total} URLs across the storefront, our ${groups.guides.length} care guides, ${groups.categories.length} categories and ${groups.products.length} products. This is the same list our XML sitemap at <a href="/sitemap.xml">/sitemap.xml</a> gives search engines.</p>`,
     section('Main pages', groups.pages),
     section('Shop by category', groups.categories),
-    section('Guides &amp; articles', groups.guides),
+    // Plain text: htmlEscape() handles the ampersand. Passing a pre-escaped
+    // entity here double-escaped it into "Guides &amp;amp; articles".
+    section('Guides & articles', groups.guides),
     section('Products', groups.products),
     '<p>Looking for something specific? Try <a href="/shop">searching the shop</a> or <a href="/contact">contacting us</a>.</p>',
     '</article>',

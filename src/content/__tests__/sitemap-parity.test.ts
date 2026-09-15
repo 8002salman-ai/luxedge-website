@@ -94,6 +94,15 @@ describe('sitemap — XML and the visitor-facing page share one source', () => {
     }
   });
 
+  it('escapes section headings exactly once', async () => {
+    const groups = await buildSitemapGroups();
+    const html = renderHtmlSitemapBody(groups!);
+    // "Guides &amp;amp; articles" rendered into the crawl HTML as a literal
+    // "&amp;amp;" for every visitor and crawler until this was pinned.
+    expect(html).toContain('Guides &amp; articles');
+    expect(html).not.toContain('&amp;amp;');
+  });
+
   it('labels links with the real record name, not a slug-derived guess', async () => {
     const groups = await buildSitemapGroups();
     const html = renderHtmlSitemapBody(groups!);
