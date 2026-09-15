@@ -2122,7 +2122,7 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
                 receive it from the server (set the SUPPORT_PHONE binding to
                 change it without a code change). */}
             <div><label className={L}>Phone (customers only)</label><p className="text-xs text-gray-500 mt-1">Not published. Released to signed-in customers who have placed an order. Configure it with the SUPPORT_PHONE server binding.</p></div>
-            <div><label className={L}>Address</label><input defaultValue="1500 N Grant St, Denver, CO 80203" className={I} /></div>
+            <div><label className={L}>Address</label><input defaultValue="Denver, CO 80203" className={I} /></div>
             <div className="sm:col-span-2">
               <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
                 <FloppyDisk size={16} />FloppyDisk Store GearSix

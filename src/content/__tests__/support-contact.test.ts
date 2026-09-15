@@ -140,6 +140,34 @@ describe('support phone — customer gating', () => {
   });
 });
 
+describe('public address — street line not published', () => {
+  it('is gone from every file that ships', () => {
+    const offenders: string[] = [];
+    for (const file of ['index.html', ...filesUnder('src'), ...filesUnder('worker'), ...filesUnder('public')]) {
+      const normalised = file.replace(/\\/g, '/');
+      if (normalised.includes('__tests__')) continue;
+      // Any street-style line for the business's own address: a leading number
+      // followed by a street name, which is what the owner asked to withdraw.
+      if (/1500 N Grant|\b\d+\s+N\s+Grant\b/.test(readFileSync(file, 'utf8'))) offenders.push(normalised);
+    }
+    expect(offenders, `the street address must not ship:\n${offenders.join('\n')}`).toEqual([]);
+  });
+
+  it('keeps city/state/ZIP so the business is still identified', () => {
+    const address = CONTACT_INFO.find((c) => c.label === 'Address');
+    expect(address?.value).toBe('Denver, CO 80203');
+    expect(PRIVACY_SECTIONS[0].body).toContain('Embani LLC, Denver, CO 80203');
+  });
+
+  it('publishes no streetAddress in structured data', () => {
+    expect(readFileSync('index.html', 'utf8')).not.toContain('streetAddress');
+    expect(workerSeoMeta).not.toContain('streetAddress');
+    // The PostalAddress is still valid and complete enough to identify the business.
+    expect(workerSeoMeta).toContain("addressLocality: 'Denver'");
+    expect(readFileSync('index.html', 'utf8')).toContain('"addressLocality": "Denver"');
+  });
+});
+
 describe('WhatsApp button — removed', () => {
   it('no longer exists as a component', () => {
     expect(existsSync('src/components/WhatsAppButton.tsx')).toBe(false);

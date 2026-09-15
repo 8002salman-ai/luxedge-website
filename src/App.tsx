@@ -3732,7 +3732,7 @@ function AboutPage() {
 function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" updated={POLICY_LAST_UPDATED['/privacy']}>
-      <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
+      <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, Denver, CO 80203, United States.</p></LS>
       <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through the contact form or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
       <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Respond to inquiries and operate support tools, including the Luxie AI assistant.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
@@ -3755,7 +3755,7 @@ function PrivacyPage() {
 function TermsPage() {
   return (
     <LegalPage title="Terms of Service" updated={POLICY_LAST_UPDATED['/terms']}>
-      <LS t="Using Luxedge"><p>By using this website, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use the website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
+      <LS t="Using Luxedge"><p>By using this website, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use the website. Luxedge is operated by Embani LLC, Denver, CO 80203, United States.</p></LS>
       <LS t="Products, Pricing, and Availability"><p>Product availability, pricing, images, specifications, and descriptions may change as inventory and supplier information are updated. We work to keep details accurate, but occasional errors may occur. We may correct an error or cancel an affected order before shipment, and will notify you if that happens.</p></LS>
       <LS t="Orders and Payment"><p>Submitting checkout information is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends an order confirmation. If payment is unavailable, the checkout action remains disabled and no paid order is created.</p></LS>
       <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
@@ -3779,7 +3779,7 @@ function ReturnsPage() {
       <LS t="Refunds and Legal Rights"><p>Luxedge does not offer change-of-mind refunds, exchanges for different products, or store credit as a standard policy. Eligible damaged, defective, or incorrect products are normally handled by replacement. Where applicable law or a payment-provider rule requires a refund or another remedy, that right is not limited by this policy.</p></LS>
       <LS t="Return Shipping"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers are responsible for purchasing their own return shipping label.</li><li>Customers are responsible for properly packaging the product to prevent damage during transit.</li><li>Customers are responsible for all return shipping costs.</li><li>We recommend using a trackable shipping service, as Luxedge is not responsible for returns that are lost or damaged during shipping.</li></ul></LS>
       <LS t="Damaged or Incorrect Orders"><p>If your order arrives damaged or you received the wrong product, please contact us within 30 days of delivery. Include your order number and photos of the product and packaging so we can review your request promptly.</p></LS>
-      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us by email at hello@luxedge.us and we will reply within 24 hours.<br />Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
+      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us by email at hello@luxedge.us and we will reply within 24 hours.<br />Luxedge is operated by Embani LLC, Denver, CO 80203, United States.</p></LS>
     </LegalPage>
   );
 }
@@ -4028,7 +4028,7 @@ function ContactPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {[
             { i: Mail01, l: 'Email', v: SUPPORT_EMAIL, s: 'Send support requests by email' },
-            { i: MarkerPin01, l: 'Address', v: '1500 N Grant St, Denver, CO 80203', s: 'United States' },
+            { i: MarkerPin01, l: 'Address', v: 'Denver, CO 80203', s: 'United States' },
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
             <div key={i} className="text-center p-5 bg-gray-50 rounded-xl border border-gray-100">
@@ -4103,7 +4103,7 @@ function CareersPage() {
         <div className="bg-white rounded-2xl border p-6 sm:p-10">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Why Work at Luxedge?</h2>
           <p className="text-gray-600 leading-relaxed mb-4">At Luxedge, we're building more than an online store — we're creating a trusted destination for people who value quality. Based in Denver, Colorado, our small but passionate team is obsessed with finding the best products in the world and delivering an exceptional shopping experience.</p>
-          <p className="text-gray-600 leading-relaxed mb-4">Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p>
+          <p className="text-gray-600 leading-relaxed mb-4">Luxedge is operated by Embani LLC, Denver, CO 80203, United States.</p>
           <p className="text-gray-600 leading-relaxed mb-6">We value curiosity, ownership, and a genuine desire to make customers happy. If you thrive in a fast-paced environment and want to grow alongside a brand that's just getting started, we'd love to hear from you.</p>
 
           <h2 className="text-xl font-bold text-gray-900 mb-4">Our Culture</h2>

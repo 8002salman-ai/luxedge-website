@@ -1236,7 +1236,6 @@ export async function maybeInjectSeo(
           url: root,
           address: {
             '@type': 'PostalAddress',
-            streetAddress: '1500 N Grant St',
             addressLocality: 'Denver',
             addressRegion: 'CO',
             postalCode: '80203',

@@ -57,7 +57,7 @@ export const useSettingsStore = create<SettingsStore>()(
       storeConfig: {
         storeName: 'Luxedge',
         contactEmail: 'hello@luxedge.us',
-        address: '1500 N Grant St, Denver, CO 80203, USA',
+        address: 'Denver, CO 80203, USA',
         freeShippingThreshold: 50,
         shippingFee: 4.99,
       },
