@@ -11,7 +11,6 @@ import { categoryContentFor } from './content/categoryContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
 import WelcomePopup from './components/WelcomePopup';
-import WhatsAppButton from './components/WhatsAppButton';
 import AIAssistant from './components/AIAssistant';
 import { trackEvent, utmParams } from './lib/marketing';
 import { useAuthStore } from './store/authStore';
@@ -25,6 +24,8 @@ import { SOCIAL_PROFILES } from './content/socialProfiles';
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from './content/about';
 import { parseStoredCart, reconcileCart, CART_STORAGE_KEY } from './services/cartSafety';
 import { fetchCheckoutSessionStatus, type CheckoutSessionStatus } from './services/checkout';
+import { SUPPORT_EMAIL, SUPPORT_CUSTOMER_ONLY_NOTE, supportMailto } from './services/support';
+import { useSupportContact } from './hooks/useSupportContact';
 import { verifyOnsitePayment as verifyOnsitePaymentApi } from './services/checkoutOnsite';
 import { useWishlist, WishlistButton, configureWishlistAccount } from './features/wishlist/wishlist';
 // On-site (PaymentElement) checkout — lazy so Stripe + the card form only load
@@ -32,7 +33,7 @@ import { useWishlist, WishlistButton, configureWishlistAccount } from './feature
 const CheckoutOnsitePage = lazy(() => import('./features/checkout/CheckoutOnsitePage').then((m) => ({ default: m.default })));
 import {
   ShoppingBag01, Menu01, X, SearchMd, User01 as UserIcon, LogOut01, Package, Building01,
-  ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01, Phone,
+  ShieldTick, Star01, Truck01, RefreshCcw01, Zap, ArrowRight, Mail01,
   MarkerPin01,  Plus, Minus, Trash01, Lock01, Loading01, CheckCircle,
   LayoutGrid01, AlertTriangle, Eye,
   ChevronDown, ChevronRight,
@@ -1354,7 +1355,9 @@ function SLayout({ children }: { children: ReactNode }) {
       <CookieConsent />
       <WelcomePopup />
       <CampaignPopup />
-      <WhatsAppButton />
+      {/* WhatsAppButton was removed: it exposed the owner's personal WhatsApp
+          number publicly, and public contact is now email-only. Do not render
+          a chat button that publishes a direct line. */}
       <AIAssistant />
     </div>
   );
@@ -1364,7 +1367,7 @@ function SLayout({ children }: { children: ReactNode }) {
 // CHECKOUT LAYOUT — deliberately calmer than the storefront.
 //
 // Only the logo, a secure-checkout indicator and the cart count stay; the
-// announcement bar, full navigation, footer, popups, cookie banner, WhatsApp
+// announcement bar, full navigation, footer, popups, cookie banner, AI chat
 // button and AI assistant are all excluded so nothing distracts from (or
 // overlaps) the payment form.
 // ============================================================================
@@ -3730,7 +3733,7 @@ function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" updated={POLICY_LAST_UPDATED['/privacy']}>
       <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
-      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through support forms, WhatsApp inquiries, or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
+      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through the contact form or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
       <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
       <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Respond to inquiries and operate support tools, including the Luxie AI assistant.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
       <LS t="Payments"><p>Online payment processing is provided by a third-party payment processor when checkout is enabled. Luxedge does not store complete credit or debit card numbers on its servers. If payment is not enabled, checkout does not create a paid order and no payment is taken.</p></LS>
@@ -3744,7 +3747,7 @@ function PrivacyPage() {
       <LS t="Email Marketing"><p>If you opt in to newsletters or promotional messages, you can unsubscribe using the link in the message or by contacting us. Transactional messages about an order or support request may still be sent when necessary.</p></LS>
       <LS t="Third-Party Links"><p>Our website may contain links to third-party websites. We are not responsible for the privacy practices or content of those websites.</p></LS>
       <LS t="Changes to This Privacy Policy"><p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date.</p></LS>
-      <LS t="Contact Us"><p>If you have any questions about this Privacy Policy or how we handle your information, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
+      <LS t="Contact Us"><p>If you have any questions about this Privacy Policy or how we handle your information, please contact us by email at hello@luxedge.us. We reply within 24 hours, Monday to Friday.</p></LS>
     </LegalPage>
   );
 }
@@ -3762,7 +3765,7 @@ function TermsPage() {
       <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
       <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
       <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
-      <LS t="Changes and Contact"><p>We may update these Terms from time to time by posting a revised version with a new effective date. Questions may be sent to hello@luxedge.us or (440) 941-8002.</p></LS>
+      <LS t="Changes and Contact"><p>We may update these Terms from time to time by posting a revised version with a new effective date. Questions may be sent to hello@luxedge.us.</p></LS>
     </LegalPage>
   );
 }
@@ -3776,7 +3779,7 @@ function ReturnsPage() {
       <LS t="Refunds and Legal Rights"><p>Luxedge does not offer change-of-mind refunds, exchanges for different products, or store credit as a standard policy. Eligible damaged, defective, or incorrect products are normally handled by replacement. Where applicable law or a payment-provider rule requires a refund or another remedy, that right is not limited by this policy.</p></LS>
       <LS t="Return Shipping"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers are responsible for purchasing their own return shipping label.</li><li>Customers are responsible for properly packaging the product to prevent damage during transit.</li><li>Customers are responsible for all return shipping costs.</li><li>We recommend using a trackable shipping service, as Luxedge is not responsible for returns that are lost or damaged during shipping.</li></ul></LS>
       <LS t="Damaged or Incorrect Orders"><p>If your order arrives damaged or you received the wrong product, please contact us within 30 days of delivery. Include your order number and photos of the product and packaging so we can review your request promptly.</p></LS>
-      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002<br />Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
+      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us by email at hello@luxedge.us and we will reply within 24 hours.<br />Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
     </LegalPage>
   );
 }
@@ -3807,7 +3810,7 @@ function ShippingPolicyPage() {
             <ul className="list-disc pl-5 mt-2 space-y-1">
               <li><Link to="/returns" className="text-luxe-gold hover:underline">Returns &amp; Refunds</Link> — damaged, defective, or incorrect items.</li>
               <li><Link to="/faq" className="text-luxe-gold hover:underline">Frequently Asked Questions</Link> — delivery, tracking, and order questions.</li>
-              <li><Link to="/contact" className="text-luxe-gold hover:underline">Contact Us</Link> — hello@luxedge.us or (440) 941-8002.</li>
+              <li><Link to="/contact" className="text-luxe-gold hover:underline">Contact Us</Link> — email hello@luxedge.us; we reply within 24 hours.</li>
             </ul>
           )}
         </LS>
@@ -3937,7 +3940,7 @@ function FAQPage() {
     ]},
     { c: 'Account & Support', qs: [
       { q: 'Do I need an account to shop?', a: 'You can browse the store as a guest. Account availability and whether an account is required to place an order may depend on the checkout configuration; the checkout screen will show the current requirement.' },
-      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us or call (440) 941-8002. Our support team is available Monday-Friday, 9 AM - 6 PM CT. We typically respond to emails within 24 hours.' },
+      { q: 'How do I contact customer support?', a: 'Email us at hello@luxedge.us — we reply within 24 hours, Monday to Friday. If you have already placed an order, a phone line for order support is shown in your account.' },
       { q: 'I forgot my password. What do I do?', a: 'Use the password reset option on the login page. If you continue to have trouble, contact our support team and we\'ll help you regain access to your account.' },
     ]},
   ];
@@ -3977,6 +3980,9 @@ function FAQPage() {
 
 function ContactPage() {
   const { notify } = useApp();
+  // Customer-only support line: resolves to null for visitors and for signed-in
+  // users who have not ordered yet, so nothing is rendered for them.
+  const support = useSupportContact();
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -4004,25 +4010,24 @@ function ContactPage() {
       } else {
         setStatus('error');
         setErrorMsg(data.error || 'We could not send your message right now.');
-        notify('Message not sent — please email hello@luxedge.us or call (440) 941-8002.', 'error');
+        notify('Message not sent — please email hello@luxedge.us.', 'error');
       }
     } catch {
       setStatus('error');
       setErrorMsg('Network error — please try again or email hello@luxedge.us.');
-      notify('Message not sent — please email hello@luxedge.us or call (440) 941-8002.', 'error');
+      notify('Message not sent — please email hello@luxedge.us.', 'error');
     }
   };
   return (
     <div>
       <section className="bg-gradient-to-b from-luxe-light to-white border-b border-gray-100 py-10"><div className="max-w-4xl mx-auto px-4 text-center">
         <h1 className="font-serif text-3xl sm:text-4xl font-bold text-luxe-black mb-2">Contact Us</h1>
-        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question or concern? Use the support email or phone number below.</p>
+        <p className="text-gray-500 text-sm max-w-lg mx-auto">Have a question or concern? Email is the fastest way to reach us — we reply within 24 hours.</p>
       </div></section>
       <section className="py-10"><div className="max-w-4xl mx-auto px-4">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           {[
-            { i: Mail01, l: 'Email', v: 'hello@luxedge.us', s: 'Send support requests by email' },
-            { i: Phone, l: 'Phone', v: '(440) 941-8002', s: 'Mon-Fri, 9AM-6PM CT' },
+            { i: Mail01, l: 'Email', v: SUPPORT_EMAIL, s: 'Send support requests by email' },
             { i: MarkerPin01, l: 'Address', v: '1500 N Grant St, Denver, CO 80203', s: 'United States' },
             { i: Clock, l: 'Hours', v: 'Mon - Fri', s: '9:00 AM - 6:00 PM CT' },
           ].map((x, i) => (
@@ -4035,6 +4040,19 @@ function ContactPage() {
           ))}
         </div>
 
+        {/* Phone support is deliberately not public. It appears only once the
+            server confirms this session belongs to a customer with an order. */}
+        {support.contact && (
+          <div className="mb-8 rounded-xl border border-luxe-gold/30 bg-luxe-gold-soft p-5 text-center">
+            <p className="text-[10px] text-luxe-gold-dark font-semibold uppercase tracking-wider">Your order support line</p>
+            <p className="font-bold text-lg mt-1">{support.contact.phone}</p>
+            <p className="text-xs text-gray-600 mt-1">{support.contact.hours} — shown because you have an order with us. For anything else, email works too.</p>
+          </div>
+        )}
+        {support.customerOnly && (
+          <p className="mb-8 text-center text-xs text-gray-500">{SUPPORT_CUSTOMER_ONLY_NOTE}</p>
+        )}
+
         <div className="max-w-2xl mx-auto">
           {status === 'sent' ? (
             <div className="text-center py-16 bg-green-50 rounded-2xl border border-green-200">
@@ -4046,7 +4064,7 @@ function ContactPage() {
             <div className="text-center py-16 bg-amber-50 rounded-2xl border border-amber-200">
               <AlertTriangle strokeWidth={1.5} className="mx-auto text-amber-600 mb-4" size={48} />
               <h2 className="text-xl font-bold mb-2">Message not sent</h2>
-              <p className="text-sm text-gray-600">{errorMsg} Please email <a className="text-luxe-gold-dark font-semibold underline" href="mailto:hello@luxedge.us">hello@luxedge.us</a> or call (440) 941-8002.</p>
+              <p className="text-sm text-gray-600">{errorMsg} Please email <a className="text-luxe-gold-dark font-semibold underline" href={supportMailto()}>hello@luxedge.us</a> instead.</p>
               <button onClick={() => setStatus('idle')} className="mt-4 px-4 py-2 text-xs font-semibold text-luxe-gold border border-luxe-gold/40 rounded-lg hover:bg-luxe-gold-soft transition-colors">Try again</button>
             </div>
           ) : (

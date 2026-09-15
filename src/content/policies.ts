@@ -6,9 +6,17 @@
 // content in the initial HTML. Every fact is drawn from the live policies.
 // ============================================================================
 
+/**
+ * Public contact details.
+ *
+ * EMAIL ONLY, deliberately. The support phone number is not published: it is
+ * released to signed-in customers who have placed an order (see
+ * api/support/contact.ts). Do not add the number here — this array is
+ * pre-rendered into the crawl HTML on every page, so anything listed becomes
+ * public and scrapable.
+ */
 export const CONTACT_INFO = [
   { label: 'Email', value: 'hello@luxedge.us', sub: 'We reply within 24hrs' },
-  { label: 'Phone', value: '(440) 941-8002', sub: 'Mon-Fri, 9AM-6PM CT' },
   { label: 'Address', value: '1500 N Grant St, Denver, CO 80203', sub: 'United States' },
   { label: 'Hours', value: 'Mon - Fri', sub: '9:00 AM - 6:00 PM CT' },
 ];
@@ -27,7 +35,7 @@ export const PRIVACY_SECTIONS: PolicySection[] = [
   { title: 'Data Security', body: 'We use reasonable administrative, technical, and physical safeguards. While no method of transmission is completely secure, we strive to use industry-standard practices.' },
   { title: 'Your Privacy Choices', body: 'You may request access to, correction of, or deletion of personal information. We do not sell personal information. To make a privacy request, email hello@luxedge.us.' },
   { title: 'Children\'s Privacy', body: 'Luxedge is not directed to children under 13, and we do not knowingly collect personal information from children under 13.' },
-  { title: 'Contact Us', body: 'Questions about this Privacy Policy? Email hello@luxedge.us or call (440) 941-8002.' },
+  { title: 'Contact Us', body: 'Questions about this Privacy Policy? Email hello@luxedge.us and we will reply within 24 hours. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
 export const TERMS_SECTIONS: PolicySection[] = [
@@ -38,7 +46,7 @@ export const TERMS_SECTIONS: PolicySection[] = [
   { title: 'Returns, Replacements, and Refunds', body: 'Returns and replacements are governed by our Return & Replacement Policy. Luxedge does not offer change-of-mind refunds as a standard remedy.' },
   { title: 'Product Information', body: 'Product information is for general shopping purposes. Follow product labels, instructions, intended species, and warnings. Animal food and feed: check the label, ingredients, intended species, and warnings before use.' },
   { title: 'Disclaimers and Liability', body: 'The website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses except where liability cannot be limited.' },
-  { title: 'Changes and Contact', body: 'We may update these Terms by posting a revised version. Questions: hello@luxedge.us or (440) 941-8002.' },
+  { title: 'Changes and Contact', body: 'We may update these Terms by posting a revised version. Questions: email hello@luxedge.us.' },
 ];
 
 export const RETURNS_SECTIONS: PolicySection[] = [
@@ -48,7 +56,7 @@ export const RETURNS_SECTIONS: PolicySection[] = [
   { title: 'Refunds and Legal Rights', body: 'Luxedge does not offer change-of-mind refunds or store credit as a standard policy. Eligible damaged, defective, or incorrect products are handled by replacement. Where applicable law requires a refund, that right is not limited.' },
   { title: 'Return Shipping', body: 'Customers are responsible for return shipping label, packaging, and all return shipping costs. We recommend using a trackable shipping service.' },
   { title: 'Damaged or Incorrect Orders', body: 'Contact us within 30 days of delivery with your order number and photos of the product and packaging.' },
-  { title: 'Contact Us', body: 'Questions about returns? Email hello@luxedge.us or call (440) 941-8002. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
+  { title: 'Contact Us', body: 'Questions about returns? Email hello@luxedge.us and we will reply within 24 hours. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
 /**
@@ -86,7 +94,7 @@ export const COPYRIGHT_SECTIONS: PolicySection[] = [
   { title: 'What a Notice Should Include', body: 'To let us act quickly, a notice should contain:\n\u2022 identification of the copyrighted work you say is infringed;\n\u2022 the exact URL of the material you are asking us to remove;\n\u2022 your name, address, telephone number and email address;\n\u2022 a statement that you have a good-faith belief the use is not authorised by the owner, its agent, or the law;\n\u2022 a statement that the information in your notice is accurate and that you are the owner or are authorised to act for the owner;\n\u2022 your physical or electronic signature.\nWe may ask for clarification if a notice is incomplete.' },
   { title: 'If Your Material Was Removed', body: 'If we remove material that you published and you believe the removal was a mistake, you can reply to the same address with your contact details, the URL concerned, and an explanation of why the material should be restored. We will review it and may restore the material where the law allows.' },
   { title: 'Misleading or Abusive Notices', body: 'Please do not send notices you know to be false or misleading, and do not use this process to remove legitimate criticism or a competitor\u2019s genuine listing. We may decline to act on notices that are incomplete, that are not about copyright, or that appear to be an attempt to misuse the process. Sending a knowingly false notice can carry legal consequences for the sender.' },
-  { title: 'Contact', body: 'Copyright questions and notices: hello@luxedge.us or (440) 941-8002, Monday to Friday, 9AM\u20136PM CT. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
+  { title: 'Contact', body: 'Copyright questions and notices: email hello@luxedge.us. We monitor this inbox Monday to Friday, 9AM\u20136PM CT. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
 /**
@@ -140,7 +148,7 @@ export const FAQ_DATA: FaqCategory[] = [
   ]},
   { category: 'Account & Support', items: [
     { q: 'Do I need an account to shop?', a: 'No. Guest checkout is available. You can also create an account to view order history and manage your profile.' },
-    { q: 'How do I contact customer support?', a: 'Email hello@luxedge.us or call (440) 941-8002, Monday through Friday, 9AM to 6PM CT.' },
+    { q: 'How do I contact customer support?', a: 'Email hello@luxedge.us — we reply within 24 hours, Monday through Friday. Customers with an order can also find a phone line for their order in their account.' },
   ]},
 ];
 

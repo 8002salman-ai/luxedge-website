@@ -25,7 +25,12 @@ export interface OpenRouterCredits {
 export interface StoreConfig {
   storeName: string;
   contactEmail: string;
-  phone: string;
+  /**
+   * No phone field. The support number is not a public store setting: this
+   * module ships in the browser bundle, so a number stored here would be public
+   * regardless of what the UI renders. Phone support is released server-side to
+   * customers with an order (api/support/contact.ts, SUPPORT_PHONE).
+   */
   address: string;
   freeShippingThreshold: number;
   shippingFee: number;
@@ -52,7 +57,6 @@ export const useSettingsStore = create<SettingsStore>()(
       storeConfig: {
         storeName: 'Luxedge',
         contactEmail: 'hello@luxedge.us',
-        phone: '(440) 941-8002',
         address: '1500 N Grant St, Denver, CO 80203, USA',
         freeShippingThreshold: 50,
         shippingFee: 4.99,

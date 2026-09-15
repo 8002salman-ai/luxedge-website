@@ -49,7 +49,7 @@ export function getBearerToken(req: IncomingMessage): string {
  * access token is validated by Supabase itself; the admin role claim is read
  * from the returned user record's app_metadata. Never exposes secrets.
  */
-async function remoteVerifyAdmin(token: string): Promise<AuthDecision> {
+async function remoteVerifyAdmin(token: string, requireAdmin = true): Promise<AuthDecision> {
   const url = (process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
   const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
   if (!url || !anonKey) {
@@ -81,7 +81,7 @@ async function remoteVerifyAdmin(token: string): Promise<AuthDecision> {
   if (!user?.id) {
     return { ok: false, status: 502, error: 'Auth service returned an invalid response.' };
   }
-  if (user.app_metadata?.role !== 'admin') {
+  if (requireAdmin && user.app_metadata?.role !== 'admin') {
     return { ok: false, status: 403, error: 'Forbidden — admin role required.' };
   }
   return {
@@ -110,6 +110,32 @@ export async function adminAuth(req: IncomingMessage): Promise<AuthDecision> {
     return { ok: true, payload };
   }
   return remoteVerifyAdmin(token);
+}
+
+/**
+ * Verify that the request carries ANY valid signed-in session (customer or
+ * admin) and return the verified identity.
+ *
+ * Same two verification strategies as adminAuth(), minus the admin role
+ * requirement. The identity comes from the verified token (or from Supabase's
+ * own /auth/v1/user response), never from a browser-supplied field — callers
+ * that read a customer's email MUST use the returned payload, not a query
+ * parameter, or anyone could claim someone else's order history.
+ */
+export async function userAuth(req: IncomingMessage): Promise<AuthDecision> {
+  const token = getBearerToken(req);
+  if (!token) {
+    return { ok: false, status: 401, error: 'Unauthorized — sign in to continue.' };
+  }
+  const secret = (process.env.SUPABASE_JWT_SECRET || '').trim();
+  if (secret) {
+    try {
+      return { ok: true, payload: verifyJwtHs256(token, secret) };
+    } catch (e) {
+      return { ok: false, status: 401, error: `Unauthorized — ${(e as Error).message}.` };
+    }
+  }
+  return remoteVerifyAdmin(token, false);
 }
 
 /** Convenience: enforce admin auth and send the failure response if denied. */

@@ -1011,7 +1011,11 @@ function injectContactBody(html: string): string {
     `<h1>Contact Us</h1>`,
     `<p>${esc(CONTACT_INTRO)}</p>`,
     `<ul>${cards}</ul>`,
-    `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Phone: (440) 941-8002 | Hours: Mon-Fri, 9AM-6PM CT</p>`,
+    // Email only. The support phone is released to signed-in customers who
+    // have placed an order (api/support/contact.ts) and must never be written
+    // into the crawl HTML.
+    `<p>Email: <a href="mailto:hello@luxedge.us">hello@luxedge.us</a> | Hours: Mon-Fri, 9AM-6PM CT</p>`,
+    `<p>Phone support is available to customers with an order — sign in and open your account to view it.</p>`,
   ];
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
@@ -1238,10 +1242,12 @@ export async function maybeInjectSeo(
             postalCode: '80203',
             addressCountry: 'US',
           },
+          // Email only. No phone property: the support number is not public, and
+          // structured data that published it would both expose it and
+          // contradict the public contact policy, which is email-only.
           contactPoint: {
             '@type': 'ContactPoint',
             email: 'hello@luxedge.us',
-            telephone: '+1-440-941-8002',
             contactType: 'customer service',
             availableLanguage: 'English',
           },

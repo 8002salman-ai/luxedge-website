@@ -300,7 +300,13 @@ describe('/api/crm/assistant', () => {
     await assistantHandler(makeReq('POST', { message: 'Do you ship to Texas?' }), server);
     expect(captured.status).toBe(200);
     expect(captured.body).toMatchObject({ provider: 'canned' });
-    expect(JSON.stringify(captured.body)).toMatch(/WhatsApp|sales@luxedge\.us/);
+    // The reply must still give the visitor a real way to reach the store, but
+    // the public contact channel is email only now: no WhatsApp link and no
+    // phone number (the support number is released only to customers with an
+    // order, via /api/support/contact).
+    expect(JSON.stringify(captured.body)).toMatch(/hello@luxedge\.us/);
+    expect(JSON.stringify(captured.body)).not.toMatch(/WhatsApp|wa\.me/i);
+    expect(JSON.stringify(captured.body)).not.toMatch(/\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/);
     expect(JSON.stringify(captured.body)).not.toMatch(/deepseek.*(sk-|key)/i);
   });
 });

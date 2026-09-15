@@ -2117,7 +2117,11 @@ const [open, setOpen] = useState<Record<string, boolean>>({ ai: false, pricing: 
           <form onSubmit={e => { e.preventDefault(); notify('Store settings saved!'); }} className="grid sm:grid-cols-2 gap-4">
             <div><label className={L}>Store Name</label><input defaultValue="Luxedge" className={I} /></div>
             <div><label className={L}>Contact Email</label><input defaultValue="hello@luxedge.us" className={I} /></div>
-            <div><label className={L}>Phone</label><input defaultValue="(440) 941-8002" className={I} /></div>
+            {/* No public phone field on purpose: the support number is not
+                published and is not a store setting. Customers with an order
+                receive it from the server (set the SUPPORT_PHONE binding to
+                change it without a code change). */}
+            <div><label className={L}>Phone (customers only)</label><p className="text-xs text-gray-500 mt-1">Not published. Released to signed-in customers who have placed an order. Configure it with the SUPPORT_PHONE server binding.</p></div>
             <div><label className={L}>Address</label><input defaultValue="1500 N Grant St, Denver, CO 80203" className={I} /></div>
             <div className="sm:col-span-2">
               <button type="submit" className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors">
