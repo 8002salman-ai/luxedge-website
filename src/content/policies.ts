@@ -51,15 +51,27 @@ export const RETURNS_SECTIONS: PolicySection[] = [
   { title: 'Contact Us', body: 'Questions about returns? Email hello@luxedge.us or call (440) 941-8002. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
 ];
 
+/**
+ * Shipping policy, in reading order. This array is the single source of truth:
+ * the worker pre-renders these exact strings into the crawl HTML and the React
+ * page renders the same section titles, so a crawler and a visitor cannot be
+ * shown different shipping terms. Facts stay deliberately conservative — we do
+ * not publish a delivery window, carrier or processing time the checkout does
+ * not actually stand behind. Nothing here may promise a number the storefront
+ * cannot show.
+ */
 export const SHIPPING_SECTIONS: PolicySection[] = [
-  { title: 'Where We Ship', body: 'Luxedge offers shipping within the United States where the destination is supported by the product, supplier, and carrier. International shipping is not currently offered. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
-  { title: 'Processing Time', body: 'Delivery timing is confirmed during order processing. Tracking is shared when available.' },
-  { title: 'Shipping Methods & Times', body: 'Shipping methods and estimated delivery are shown per product and at checkout. Delivery estimates are estimates, not guarantees. Express shipping is not currently offered unless shown at checkout.' },
-  { title: 'Shipping Promotions', body: 'Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout.' },
-  { title: 'Order Tracking', body: 'Once your order ships, you will receive a confirmation email with a tracking number. You can also check order status by logging into your Luxedge account.' },
-  { title: 'Delivery Delays', body: 'Delays may occasionally occur due to high order volume, carrier issues, weather, or other circumstances beyond our control.' },
-  { title: 'Missing or Lost Packages', body: 'If tracking shows "delivered" but you have not received your package, check with neighbors, building management, or your local post office. If still missing after 48 hours, contact hello@luxedge.us.' },
-  { title: 'Address Accuracy', body: 'Please double-check your shipping address before checkout. Luxedge is not responsible for orders shipped to incorrect addresses provided by the customer.' },
+  { title: 'Overview', body: 'This page explains how Luxedge orders are shipped: where we deliver, how shipping is priced, what affects your delivery estimate, and what to do if something goes wrong with a shipment. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.' },
+  { title: 'Where We Ship', body: 'Luxedge offers shipping within the United States where the destination is supported by the product, supplier, and carrier. International shipping is not currently offered.' },
+  { title: 'Shipping Costs', body: 'Shipping cost is calculated for your specific cart, products, and destination, and is shown in the cart and again at checkout before you pay. The amount displayed immediately before payment is the amount that applies to your order. Some orders qualify for a free-shipping promotion. Any such offer applies only to eligible products, destinations, and order values as displayed in the cart or checkout, may have exclusions, and can change or end without notice.' },
+  { title: 'Processing Time', body: 'Orders are prepared for dispatch once payment is confirmed. Because different products may be fulfilled from different supplier locations, preparation time can vary between items in the same order. You will receive shipment and tracking information when it becomes available.' },
+  { title: 'Shipping Methods & Times', body: 'Shipping methods and estimated delivery windows are shown on the product page and at checkout. Delivery estimates are estimates, not guarantees. Express shipping is not currently offered unless it is specifically shown as an option at checkout.' },
+  { title: 'Order Tracking', body: 'Once your order ships, you will receive a confirmation email with a tracking number that you can use on the carrier\u2019s website. You can also check your order status at any time from your Luxedge account.' },
+  { title: 'Delivery Delays', body: 'Delays can occasionally occur because of high order volume, supplier or carrier issues, weather events, public holidays, or other circumstances outside our control. Delivery estimates can be affected by your destination, the fulfilment location of each item, and carrier load during peak periods. If your order is significantly delayed, contact us and we will investigate.' },
+  { title: 'Missing or Lost Packages', body: 'If tracking shows "delivered" but you have not received your package, check with neighbours, building management, or your local post office. If you still cannot locate your package after 48 hours, contact hello@luxedge.us and we will work with the carrier to resolve it.' },
+  { title: 'Address Accuracy', body: 'Please double-check your shipping address before completing checkout. Luxedge is not responsible for orders shipped to an incorrect address provided by the customer. Address correction fees charged by carriers are the customer\u2019s responsibility.' },
+  { title: 'P.O. Boxes & Military Addresses', body: 'P.O. Box and APO/FPO/DPO destinations are supported where a carrier can deliver to them, and the available options are shown at checkout. Delivery times to military addresses may vary, and express services may not be available for these destinations.' },
+  { title: 'Related Information', body: 'See our Returns & Refunds policy for damaged, defective, or incorrect items, the FAQ for common delivery and tracking questions, or contact us and we will help.' },
 ];
 
 /** Copyright / DMCA page — one page, not four. Deliberately conservative:
@@ -87,7 +99,7 @@ export const POLICY_LAST_UPDATED: Record<string, string> = {
   '/privacy': 'August 26, 2026',
   '/terms': 'August 26, 2026',
   '/returns': 'August 26, 2026',
-  '/shipping-policy': 'August 26, 2026',
+  '/shipping-policy': 'September 15, 2026',
   '/copyright': 'September 14, 2026',
 };
 

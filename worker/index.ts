@@ -277,6 +277,20 @@ export interface Env {
 }
 
 /**
+ * Retired public paths → the canonical URL that replaced them.
+ *
+ * These are legacy aliases that real traffic still uses (the storefront footer
+ * linked /shipping before /shipping-policy became the canonical route, so Google
+ * was recording a 404 for every footer click). Each entry gets a permanent
+ * redirect so the old URL merges into the canonical one instead of dead-ending.
+ * This is deliberately NOT a catch-all: only a path with a genuinely equivalent
+ * replacement belongs here, and deleted content must keep returning 404/410.
+ */
+const LEGACY_PATH_REDIRECTS: Record<string, string> = {
+  '/shipping': '/shipping-policy',
+};
+
+/**
  * The API modules were originally written for a Node/Vercel runtime and read
  * configuration from process.env. Cloudflare provides bindings on `env` per
  * request, so expose string bindings to those compatible handlers without
@@ -322,6 +336,12 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     // and /home/) into a single canonical URL with a permanent redirect.
     if (url.pathname === '/home' || url.pathname === '/home/') {
       return Response.redirect(new URL('/', url.origin).toString(), 301);
+    }
+    // Legacy path aliases (see LEGACY_PATH_REDIRECTS). Trailing slashes are
+    // normalised first so /shipping and /shipping/ resolve identically.
+    const legacyTarget = LEGACY_PATH_REDIRECTS[url.pathname.replace(/\/+$/, '') || '/'];
+    if (legacyTarget) {
+      return Response.redirect(new URL(legacyTarget + url.search, url.origin).toString(), 301);
     }
     // Dynamic sitemap from the LIVE database (CMS blogs + products + categories)
     // so publishing updates sitemap.xml without a redeploy. Media is noindexed

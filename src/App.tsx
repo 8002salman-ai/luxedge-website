@@ -6,7 +6,7 @@ import AdSenseAd from './components/AdSenseAd';
 import CategoryHero, { categoryHeroConfig } from './components/CategoryHero';
 import { BuyerGuidance } from './components/BuyerGuidance';
 import { isHeldBlog } from './content/reviewHolds';
-import { COPYRIGHT_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
+import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
@@ -1079,7 +1079,7 @@ function Footer() {
           <div className="lg:col-span-2 space-y-1">
             <ColTitle>Help</ColTitle>
             <Link to="/orders" className={FL}>Track Order</Link>
-            <Link to="/shipping" className={FL}>Shipping Policy</Link>
+            <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
             <Link to="/returns" className={FL}>Returns &amp; Refunds</Link>
             <Link to="/faq" className={FL}>FAQs</Link>
             <Link to="/contact" className={FL}>Contact Us</Link>
@@ -1297,7 +1297,7 @@ function RouteTitle() {
     else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
     else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
     else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }      else if (segs[0] === "terms") { set("Terms of Service"); desc("The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language."); }      else if (segs[0] === "returns") { set("Returns & Replacement Policy"); desc("How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it."); }
-    else if (segs[0] === "shipping-policy") { set("Shipping Policy"); desc("Luxedge shipping policy — delivery estimates, shipping costs, and applicable promotions."); }
+    else if (segs[0] === "shipping-policy" || segs[0] === "shipping") { set("Shipping Policy"); desc("How Luxedge ships orders: where we deliver, how shipping is priced, what affects your delivery estimate, delays, and lost-package help."); }
     else if (segs[0] === "copyright") { full("Copyright & DMCA — Reporting Infringement | Luxedge"); desc("How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
     else if (segs[0] === "careers") { set("Careers"); desc("Join the Luxedge team."); }
@@ -3773,15 +3773,34 @@ function ReturnsPage() {
 function ShippingPolicyPage() {
   return (
     <LegalPage title="Shipping Policy" updated={POLICY_LAST_UPDATED['/shipping-policy']}>
-      <LS t="Where We Ship"><p>Luxedge currently offers shipping within the United States where the destination is supported by the product, supplier, and carrier. Available destinations and any exclusions are shown during checkout. International shipping is not currently offered. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
-      <LS t="Processing Time"><p>Delivery timing is confirmed during order processing. You will receive shipment and tracking information when available.</p></LS>
-      <LS t="Shipping Methods & Times"><div className="mt-3 overflow-x-auto"><table className="w-full text-sm border-collapse"><thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead><tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody></table><p className="mt-2 text-sm text-gray-500">Delivery estimates are estimates, not guarantees. Processing and carrier times can vary by product and destination. Express shipping is not currently offered unless specifically shown at checkout.</p></div></LS>
-      <LS t="Shipping Promotions"><p>Any free-shipping offer applies only to eligible products, destinations, and orders as displayed in the cart or checkout. The final shipping charge shown before payment is the controlling amount. Promotions may have exclusions and can change or end without notice.</p></LS>
-      <LS t="Order Tracking"><p>Once your order ships, you'll receive a confirmation email with a tracking number. You can use this number to track your package through the carrier's website. You can also check your order status by logging into your Luxedge account and visiting the "My Orders" section.</p></LS>
-      <LS t="Delivery Delays"><p>While we strive to meet all estimated delivery windows, delays may occasionally occur due to high order volume, carrier issues, weather events, or other circumstances beyond our control. If your order is significantly delayed, please contact us and we'll investigate immediately.</p></LS>
-      <LS t="Missing or Lost Packages"><p>If your tracking shows "delivered" but you haven't received your package, please check with neighbors, building management, or your local post office. If you still can't locate your package after 48 hours, contact us at hello@luxedge.us and we'll work with the carrier to resolve the issue.</p></LS>
-      <LS t="Address Accuracy"><p>Please double-check your shipping address before completing checkout. Luxedge is not responsible for orders shipped to incorrect addresses provided by the customer. Address correction fees charged by carriers will be the customer's responsibility.</p></LS>
-      <LS t="P.O. Boxes & Military Addresses"><p>We ship to P.O. Boxes and APO/FPO/DPO addresses via USPS. Delivery times to military addresses may vary. Express shipping is not available for P.O. Box or military addresses.</p></LS>
+      {/* Rendered from the same SHIPPING_SECTIONS the worker pre-renders, so the
+          crawl HTML and the hydrated page cannot drift apart. The table and the
+          in-page links below are the only React-only extras; a parity test keeps
+          the two section lists identical. */}
+      {SHIPPING_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+          {s.title === 'Shipping Methods & Times' && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead><tr className="bg-gray-50"><th className="text-left px-4 py-2 border">Method</th><th className="text-left px-4 py-2 border">Estimated Delivery</th><th className="text-left px-4 py-2 border">Cost</th></tr></thead>
+                <tbody><tr><td className="px-4 py-2 border">Available shipping option</td><td className="px-4 py-2 border">Shown per product and at checkout</td><td className="px-4 py-2 border">Shown at checkout</td></tr></tbody>
+              </table>
+              <p className="mt-2 text-sm text-gray-500">The shipping charge shown immediately before you pay is the amount that applies.</p>
+            </div>
+          )}
+          {s.title === 'Order Tracking' && (
+            <p className="mt-2">Check it any time on the <Link to="/orders" className="text-luxe-gold hover:underline">Track Order</Link> page.</p>
+          )}
+          {s.title === 'Related Information' && (
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              <li><Link to="/returns" className="text-luxe-gold hover:underline">Returns &amp; Refunds</Link> — damaged, defective, or incorrect items.</li>
+              <li><Link to="/faq" className="text-luxe-gold hover:underline">Frequently Asked Questions</Link> — delivery, tracking, and order questions.</li>
+              <li><Link to="/contact" className="text-luxe-gold hover:underline">Contact Us</Link> — hello@luxedge.us or (440) 941-8002.</li>
+            </ul>
+          )}
+        </LS>
+      ))}
     </LegalPage>
   );
 }
@@ -4132,6 +4151,10 @@ export default function App() {
           <Route path="/terms" element={<SLayout><TermsPage /></SLayout>} />
           <Route path="/returns" element={<SLayout><ReturnsPage /></SLayout>} />
           <Route path="/shipping-policy" element={<SLayout><ShippingPolicyPage /></SLayout>} />
+          {/* Legacy alias: /shipping was in the footer before the canonical
+              /shipping-policy route existed, so it must never 404 again. The
+              worker issues a 301 for crawlers; this covers client-side nav. */}
+          <Route path="/shipping" element={<Navigate to="/shipping-policy" replace />} />
           <Route path="/copyright" element={<SLayout><CopyrightPage /></SLayout>} />
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />

@@ -23,6 +23,23 @@ const original = {
   jwtSecret: process.env.SUPABASE_JWT_SECRET,
 };
 
+/**
+ * A local timestamp `n` days back, at the given hour.
+ *
+ * computeOrderStats buckets its 7-day chart by calendar day relative to the
+ * CURRENT date, so an order fixture written as a literal ISO date silently ages
+ * out of the window: the revenue/paidCount assertions keep passing (they cover
+ * the full order set) while the `days` assertion collapses to 0 days later. The
+ * fixtures were pinned to 2026-09-08 and started failing exactly seven days
+ * after they were written, with no code change.
+ */
+function daysAgo(n: number, hour = 10): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(hour, 0, 0, 0);
+  return d.toISOString();
+}
+
 const PRODUCT = { id: '11111111-1111-4111-8111-111111111111', slug: 'test-product', name: 'Test Product', price: 25, status: 'active', inventory_qty: 10, image_url: 'https://img.test/x.jpg' };
 const WELCOME10 = { code: 'WELCOME10', discount_type: 'percent', discount_value: 10, min_cart_value: 0, is_active: true, start_at: null, end_at: null };
 const SETTINGS = { key: 'free_shipping', value: { freeShippingEnabled: true, freeShippingThreshold: 50 } };
@@ -275,10 +292,10 @@ describe('/api/checkout', () => {
 
   it('GET action=orders returns paid-only stats: pending rows never inflate revenue/orders', async () => {
     const orderRows = [
-      { id: '1', order_number: 'LX-1', total: 100, status: 'paid', created_at: '2026-09-08T10:00:00Z' },
-      { id: '2', order_number: 'LX-2', total: 50, status: 'paid', created_at: '2026-09-08T11:00:00Z' },
-      { id: '3', order_number: 'LX-3', total: 9999, status: 'pending', created_at: '2026-09-08T12:00:00Z' },
-      { id: '4', order_number: 'LX-4', total: 8888, status: 'awaiting_payment', created_at: '2026-09-08T13:00:00Z' },
+      { id: '1', order_number: 'LX-1', total: 100, status: 'paid', created_at: daysAgo(0, 10) },
+      { id: '2', order_number: 'LX-2', total: 50, status: 'paid', created_at: daysAgo(0, 11) },
+      { id: '3', order_number: 'LX-3', total: 9999, status: 'pending', created_at: daysAgo(0, 12) },
+      { id: '4', order_number: 'LX-4', total: 8888, status: 'awaiting_payment', created_at: daysAgo(0, 13) },
     ];
     makeEnv({ orderRows });
     const { server, cap } = res();
@@ -295,9 +312,9 @@ describe('/api/checkout', () => {
 
   it('GET action=orders deducts refunded totals and excludes fully refunded orders', async () => {
     const orderRows = [
-      { id: '1', order_number: 'LX-1', total: 100, refunded_amount: 30, status: 'partially_refunded', created_at: '2026-09-08T10:00:00Z' },
-      { id: '2', order_number: 'LX-2', total: 100, refunded_amount: 100, status: 'refunded', created_at: '2026-09-08T11:00:00Z' },
-      { id: '3', order_number: 'LX-3', total: 40, status: 'paid', created_at: '2026-09-08T12:00:00Z' },
+      { id: '1', order_number: 'LX-1', total: 100, refunded_amount: 30, status: 'partially_refunded', created_at: daysAgo(0, 10) },
+      { id: '2', order_number: 'LX-2', total: 100, refunded_amount: 100, status: 'refunded', created_at: daysAgo(0, 11) },
+      { id: '3', order_number: 'LX-3', total: 40, status: 'paid', created_at: daysAgo(0, 12) },
     ];
     makeEnv({ orderRows });
     const { server, cap } = res();
@@ -310,7 +327,7 @@ describe('/api/checkout', () => {
 
   it('GET action=orders aggregates over the FULL order set (>50 rows), not a truncated page', async () => {
     const orderRows = Array.from({ length: 75 }, (_, i) => ({
-      id: String(i), order_number: `LX-${i}`, total: 10, status: 'paid', created_at: '2026-09-08T10:00:00Z',
+      id: String(i), order_number: `LX-${i}`, total: 10, status: 'paid', created_at: daysAgo(0, 10),
     }));
     makeEnv({ orderRows });
     const { server, cap } = res();

@@ -432,9 +432,13 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
       'Answers to common questions about Luxedge — shipping times, order tracking, returns, and how our curated pet essentials are sourced.',
   },
   '/shipping-policy': {
-    title: 'Shipping Policy — Delivery Times & Costs | Luxedge',
+    // Describes what the page actually contains. The retired description
+    // advertised site-wide delivery windows drawn from sourcing data,
+    // but the policy deliberately shows each window per product and at checkout
+    // rather than publishing one number, so the old copy overstated the page.
+    title: 'Shipping Policy — Delivery, Costs & Tracking | Luxedge',
     description:
-      'How Luxedge ships pet essentials — expected delivery windows, processing time, and free shipping details, based on verified supplier estimates.',
+      'How Luxedge ships: where we deliver, how shipping is calculated before payment, what affects your delivery estimate, and what to do about a missing package.',
   },
   '/returns': {
     title: 'Returns & Replacement Policy | Luxedge',

@@ -14,6 +14,41 @@ async function call(path: string) {
   return worker.fetch(req, env);
 }
 
+describe('worker fetch — legacy path aliases', () => {
+  // The storefront footer linked /shipping for months before /shipping-policy
+  // became the canonical route, so Google recorded a 404 for every crawl of
+  // that link. The alias must stay a permanent redirect, not a 404 and not a
+  // second indexable copy of the policy.
+  it('/shipping → 301 to the canonical policy URL', async () => {
+    const res = await call('/shipping');
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(
+      'https://luxedge-production.8002salman.workers.dev/shipping-policy',
+    );
+  });
+
+  it('/shipping/ resolves the same way as /shipping', async () => {
+    const res = await call('/shipping/');
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(
+      'https://luxedge-production.8002salman.workers.dev/shipping-policy',
+    );
+  });
+
+  it('preserves the query string across the alias redirect', async () => {
+    const res = await call('/shipping?utm_source=newsletter');
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(
+      'https://luxedge-production.8002salman.workers.dev/shipping-policy?utm_source=newsletter',
+    );
+  });
+
+  it('does not redirect the canonical policy URL itself', async () => {
+    const res = await call('/shipping-policy');
+    expect(res.status).not.toBe(301);
+  });
+});
+
 describe('worker fetch — legacy UUID product URL redirect', () => {
   it('known UUID param → 301 with slug Location', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co');
