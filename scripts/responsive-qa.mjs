@@ -139,7 +139,10 @@ const MEASURE = `(async () => {
       const text = floating ? (floating.innerText || '').slice(0, 120) : (hit.innerText || '').slice(0, 120);
       const kind = /cookie|consent|privacy choices/i.test(text) ? 'consent-banner' : (floating ? 'floating-widget' : 'in-flow');
       const hcls = (typeof hit.className === 'string' ? hit.className : '').split(/\\s+/).slice(0, 2).join('.');
-      covered.push(kind + ':' + a.getAttribute('href') + '<-' + hit.tagName.toLowerCase() + (hcls ? '.' + hcls : ''));
+      // Include a snippet of the covering element: a failure that names only
+      // "button.absolute.inset-0" cannot be acted on without knowing which one.
+      const snippet = (hit.outerHTML || '').replace(/\\s+/g, ' ').slice(0, 110);
+      covered.push(kind + ':' + a.getAttribute('href') + '<-' + hit.tagName.toLowerCase() + (hcls ? '.' + hcls : '') + ' [' + snippet + ']');
     }
   }
 
