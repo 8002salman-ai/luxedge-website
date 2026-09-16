@@ -25,7 +25,7 @@ Help visitors with:
 
 Rules:
 - Be warm, concise, and helpful. Use short paragraphs or bullet lists.
-- NEVER invent products, prices, stock levels, discounts or facts you are not certain of. If you don't know, say you are not sure and suggest emailing the store at hello@luxedge.us. Never quote a phone number: the public contact channel is email only.
+- NEVER invent products, prices, stock levels, discounts or facts you are not certain of. If you don't know, say you are not sure and suggest emailing the store at hello@luxedge.us.
 - NEVER promise delivery dates or stock availability.
 - You cannot place orders, change prices, or publish products. Offer the storefront links (/shop, /cart, /checkout) and contact info instead.
 - Keep answers under ~180 words.`;
@@ -95,7 +95,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const deepseekReady = await isConfiguredFull('deepseek');
   if (!openrouterReady && !deepseekReady) {
     sendJson(res, 200, {
-      reply: 'Thanks for your message! Our team will get back to you shortly. For anything urgent, email hello@luxedge.us and we will reply within 24 hours.',
+      reply: 'Thanks for your message! Our team will get back to you shortly. For instant help, message us on WhatsApp (+1 440-941-8002) or email sales@luxedge.us.',
       provider: 'canned',
       leadStored: false,
     });
@@ -121,7 +121,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     // (the client treats it as a broken response). Fall back to canned.
     if (!reply) {
       sendJson(res, 200, {
-        reply: 'I hit a small snag on my side. Please try again in a moment — or email us at hello@luxedge.us.',
+        reply: 'I hit a small snag on my side. Please try again in a moment — or reach us instantly on WhatsApp (+1 440-941-8002) / sales@luxedge.us.',
         provider: 'canned',
         leadStored: true,
       });
@@ -130,7 +130,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, { reply, provider: result.provider, model: result.model });
   } catch {
     sendJson(res, 200, {
-      reply: 'I hit a small snag on my side. Please try again in a moment — or email us at hello@luxedge.us.',
+      reply: 'I hit a small snag on my side. Please try again in a moment — or reach us instantly on WhatsApp (+1 440-941-8002) / sales@luxedge.us.',
       provider: 'canned',
       leadStored: true,
     });

@@ -97,10 +97,9 @@ export const HOME_SECTIONS: SiteSection[] = [
     links: [{ label: 'Returns & Refunds', href: '/returns' }],
   },
   {
-    heading: 'Support, by email',
+    heading: 'Support, by email or phone',
     paragraphs: [
-      'Support runs on email: hello@luxedge.us, Monday to Friday, 9AM\u20136PM CT, with replies within 24 hours. Include your order number if you have one, the product name, what went wrong, and photos if anything arrived damaged — that is usually everything needed to act on the first reply.',
-      'Customers who have placed an order also get a phone line for that order inside their account once they sign in. It is not published on the site, so it never reaches anyone who is not a customer.',
+      'Support runs on email and phone: hello@luxedge.us or (440) 941-8002, Monday to Friday, 9AM\u20136PM CT, with email replies within 24 hours. Include your order number if you have one, the product name, what went wrong, and photos if anything arrived damaged — that is usually everything needed to act on the first reply.',
     ],
     links: [
       { label: 'Contact us', href: '/contact' },
@@ -122,9 +121,9 @@ export const HOME_SECTIONS: SiteSection[] = [
 
 export const CONTACT_SECTIONS: SiteSection[] = [
   {
-    heading: 'Email is the fastest way to reach us',
+    heading: 'Email or phone — both reach us',
     paragraphs: [
-      'Send support requests to hello@luxedge.us. We monitor the inbox Monday to Friday, 9AM\u20136PM CT, and reply within 24 hours. The form on this page reaches the same inbox, so either route works — use whichever is easier.',
+      'Send support requests to hello@luxedge.us or call (440) 941-8002. We monitor both Monday to Friday, 9AM\u20136PM CT, and reply to email within 24 hours. The form on this page reaches the same inbox, so either route works — use whichever is easier.',
       'If your message is about an order, sign in before you write. It lets us see the order next to your message, which usually removes a round trip.',
     ],
     links: [
@@ -157,7 +156,7 @@ export const CONTACT_SECTIONS: SiteSection[] = [
   {
     heading: 'Business details',
     paragraphs: [
-      'Luxedge is operated by Embani LLC, Denver, CO 80203, United States. Our policies explain how we handle orders, returns, privacy and site content, and they are written to match how we actually operate.',
+      'Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States. Our policies explain how we handle orders, returns, privacy and site content, and they are written to match how we actually operate.',
     ],
     links: [
       { label: 'FAQ', href: '/faq' },

@@ -74,7 +74,6 @@ import { maybeInjectSeo } from './seo-meta';
 import { buildSitemap } from './sitemap';
 import blogAutomationHandler from '../api/blog-automation/index';
 import adsenseHandler, { setAdSenseRuntimeBindings } from '../api/adsense/index';
-import supportContactHandler from '../api/support/contact';
 
 type NodeHandler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
@@ -113,9 +112,6 @@ const ROUTES: Route[] = [
   { path: '/api/email/status', handler: emailStatusHandler },
   { path: '/api/email/routes', handler: emailRoutesHandler },
   { path: '/api/email/contact', handler: emailContactHandler },
-  // Customer-only support phone. Kept server-side so the number never reaches
-  // the browser bundle (see api/support/contact.ts).
-  { path: '/api/support/contact', handler: supportContactHandler },
   { path: '/api/media/generate', handler: mediaGenerateHandler },
   { path: '/api/media/sync', handler: mediaSyncHandler },
   { path: '/api/media/status', handler: mediaStatusHandler },
@@ -278,13 +274,6 @@ export interface Env {
   };
   /** Alert recipient for the nightly sitemap health check (defaults to hello@luxedge.us). */
   SITEMAP_ALERT_EMAIL?: string;
-  /**
-   * Customer-only support phone (server-only). Returned by
-   * GET /api/support/contact to a signed-in user with an order — never rendered
-   * on a public page and never bundled into the client. Optional: the endpoint
-   * has a built-in server-side default.
-   */
-  SUPPORT_PHONE?: string;
 }
 
 /**

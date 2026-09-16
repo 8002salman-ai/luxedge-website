@@ -165,8 +165,9 @@ describe('homepage / contact copy — honesty', () => {
 
   it('publishes only numbers the policy pages already publish', () => {
     // 30-day return window, 2-hour cancellation window, 24-hour reply time,
-    // 9AM-6PM CT support hours, and the published business postal code.
-    const allowed = new Set(['30', '2', '24', '9', '6', '80203']);
+    // 9AM-6PM CT support hours, the published business postal code, and the
+    // restored public support phone number.
+    const allowed = new Set(['30', '2', '24', '9', '6', '80203', '1500', '440', '941', '8002']);
     for (const [page, parts] of [['home', HOME_PARTS], ['contact', CONTACT_PARTS]] as const) {
       for (const part of parts) {
         for (const m of part.matchAll(/\b\d+\b/g)) {

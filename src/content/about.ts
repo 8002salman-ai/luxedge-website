@@ -50,7 +50,7 @@ export const ABOUT_SECTIONS: AboutSection[] = [
     body:
       'Our team is available Monday to Friday, 9AM\u20136PM CT. Order processing takes about 1\u20133 business days, and ' +
       'eligible products ship across the United States where the destination is supported. We offer 30-day return ' +
-      'and replacement support for damaged, defective, or incorrect items. Questions? Email hello@luxedge.us and ' +
-      'we will reply within 24 hours.',
+      'and replacement support for damaged, defective, or incorrect items. Questions? Contact hello@luxedge.us ' +
+      'or call (440) 941-8002.',
   },
 ];

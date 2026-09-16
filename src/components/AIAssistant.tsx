@@ -51,10 +51,10 @@ export default function AIAssistant() {
       // alarming broken-widget message.
       const reply = j && typeof j.reply === 'string' && j.reply.trim()
         ? j.reply
-        : 'Sorry, I could not respond right now. Please try again, or email us at hello@luxedge.us.';
+        : 'Sorry, I could not respond right now. Please try again or message us on WhatsApp (+1 440-941-8002).';
       setMsgs((m) => [...m, { role: 'assistant', content: reply }]);
     } catch {
-      setMsgs((m) => [...m, { role: 'assistant', content: 'Connection issue on my side. Please try again — or email us at hello@luxedge.us.' }]);
+      setMsgs((m) => [...m, { role: 'assistant', content: 'Connection issue on my side. Please try again — or reach us on WhatsApp (+1 440-941-8002).' }]);
     } finally {
       setBusy(false);
     }

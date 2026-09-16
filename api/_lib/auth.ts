@@ -112,32 +112,6 @@ export async function adminAuth(req: IncomingMessage): Promise<AuthDecision> {
   return remoteVerifyAdmin(token);
 }
 
-/**
- * Verify that the request carries ANY valid signed-in session (customer or
- * admin) and return the verified identity.
- *
- * Same two verification strategies as adminAuth(), minus the admin role
- * requirement. The identity comes from the verified token (or from Supabase's
- * own /auth/v1/user response), never from a browser-supplied field — callers
- * that read a customer's email MUST use the returned payload, not a query
- * parameter, or anyone could claim someone else's order history.
- */
-export async function userAuth(req: IncomingMessage): Promise<AuthDecision> {
-  const token = getBearerToken(req);
-  if (!token) {
-    return { ok: false, status: 401, error: 'Unauthorized — sign in to continue.' };
-  }
-  const secret = (process.env.SUPABASE_JWT_SECRET || '').trim();
-  if (secret) {
-    try {
-      return { ok: true, payload: verifyJwtHs256(token, secret) };
-    } catch (e) {
-      return { ok: false, status: 401, error: `Unauthorized — ${(e as Error).message}.` };
-    }
-  }
-  return remoteVerifyAdmin(token, false);
-}
-
 /** Convenience: enforce admin auth and send the failure response if denied. */
 export async function requireAdmin(req: IncomingMessage, res: ServerResponse): Promise<VerifiedJwt | null> {
   const decision = await adminAuth(req);
