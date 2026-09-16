@@ -783,7 +783,6 @@ function Header() {
     { l: 'Horse', to: '/category/horse' },
     { l: 'Livestock', to: '/category/cattle' },
     { l: 'Accessories', to: '/category/pet-accessories' },
-    { l: 'Guides', to: '/blog' },
     { l: 'Blog', to: '/blog' },
     { l: 'About', to: '/about' },
   ];
@@ -1089,9 +1088,6 @@ function Footer() {
           <div className="lg:col-span-2 space-y-1">
             <ColTitle>Learn</ColTitle>
             <Link to="/blog" className={FL}>Blog &amp; Guides</Link>
-            <Link to="/blog" className={FL}>Care Guides</Link>
-            <Link to="/category/horse" className={FL}>Equine Minerals</Link>
-            <Link to="/category/cattle" className={FL}>Pasture Health</Link>
           </div>
 
           {/* Col 3: Help */}
