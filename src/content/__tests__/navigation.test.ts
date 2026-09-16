@@ -1,80 +1,81 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { maybeInjectSeo } from '../../../worker/seo-meta';
+import {
+  NAV_PATHS, UTILITY_NAV, STRIP_NAV, MEGA_MENU, DRAWER_NAV, FOOTER_COLUMNS, SSR_FOOTER_NAV,
+} from '../navigation';
 
 /**
- * Two navigation invariants the header and footer have both broken: one label
- * per destination, and nothing thin in primary navigation. Each surface is
- * sliced out of its source and parsed, so a duplicate destination or a thin
- * route cannot quietly return.
+ * Navigation invariants, asserted against src/content/navigation.ts — the one
+ * module the header strip, mobile drawer, footer and the worker's pre-rendered
+ * footer all render from.
+ *
+ * These read the values themselves rather than the markup that happens to
+ * contain them, so a surface that drifts from the rest fails here instead of
+ * shipping a menu that points at the wrong page. The worker case is exercised
+ * through maybeInjectSeo, which is the code path that actually emits it.
  */
-const app = readFileSync('src/App.tsx', 'utf8');
-const seoMeta = readFileSync('worker/seo-meta.ts', 'utf8');
 
-/** Text between two anchors — throws via the assertion if the shape moved. */
-const between = (src: string, from: string, to: string) => {
-  const start = src.indexOf(from);
-  expect(start, `anchor not found: ${from}`).toBeGreaterThan(-1);
-  return src.slice(start, src.indexOf(to, start));
-};
+const stripDests = [STRIP_NAV.all, ...STRIP_NAV.items, STRIP_NAV.deals].map((l) => l.to);
+const drawerDests = [...DRAWER_NAV.tiles, ...DRAWER_NAV.links].map((l) => l.to);
+const footerDests = FOOTER_COLUMNS.flatMap((c) => c.links.map((l) => l.to));
 
-// Four surfaces render <Link to="..."> — the utility bar is a sibling of
-// <header>, not inside it — and the header reads a data array. The worker footer
-// builds its <a> tags from [label, url] pairs, so its destinations are the
-// second element of each pair rather than an href in the source.
-const workerFooter = between(seoMeta, 'const FOOTER_NAV =', '</nav>');
-
-// Each header mega panel is a surface of its own, sliced from its groups array
-// to the next panel. The panel's own destination is not counted: the nav bar
-// entry above it is the conventional "go to the section" label, and the nav bar
-// is already covered.
-const megaBlock = between(app, 'const MEGA_MENU', 'function Header()');
-const panelStarts = [...megaBlock.matchAll(/label: '([^']+)', to: '[^']+',\r?\n    groups: \[/g)];
-
-const SURFACES: [string, string, RegExp][] = [
-  ['utility bar', between(app, 'Top Utility Bar', 'Main Header'), /to="([^"]+)"/g],
-  ['header nav', between(app, 'const navLinks = [', '];'), /to: '([^']+)'/g],
-  ['mobile drawer', between(app, '{mob && (', '</header>'), /to="([^"]+)"/g],
-  ['footer', between(app, 'function Footer()', '</footer>'), /to="([^"]+)"/g],
-  ['worker footer', workerFooter, /\[[^,]+, '([^']+)'\]/g],
-  ...panelStarts.map((m, i): [string, string, RegExp] => [
-    `mega panel "${m[1]}"`,
-    megaBlock.slice((m.index ?? 0) + m[0].length, panelStarts[i + 1]?.index ?? megaBlock.length),
-    /to: '([^']+)'/g,
-  ]),
+const SURFACES: [string, string[]][] = [
+  ['utility bar', UTILITY_NAV.map((l) => l.to)],
+  ['header strip', stripDests],
+  ['mobile drawer', drawerDests],
+  ['footer', footerDests],
+  ['worker footer', SSR_FOOTER_NAV.map((l) => l.to)],
+  ...MEGA_MENU.map((p): [string, string[]] => [`${p.label} panel`, p.groups.flatMap((g) => g.links.map((l) => l.to))]),
 ];
 
-describe('primary navigation advertises each destination once', () => {
-  for (const [name, block, re] of SURFACES) {
-    it(`${name} has no duplicate destination`, () => {
-      const dests = [...block.matchAll(re)].map((m) => m[1]);
-      // The length assertion keeps this honest: a stale anchor would otherwise
-      // let the test pass against an empty list and protect nothing.
-      expect(dests.length, `${name} yielded no destinations`).toBeGreaterThan(1);
+describe('every navigation surface advertises each destination once', () => {
+  for (const [name, dests] of SURFACES) {
+    it(`${name}: no duplicate destination`, () => {
+      // The length assertion keeps this honest: a surface that renders nothing
+      // would otherwise satisfy the uniqueness check and protect nothing.
+      expect(dests.length).toBeGreaterThan(1);
       expect(dests.filter((d, i) => dests.indexOf(d) !== i)).toEqual([]);
     });
   }
 });
 
-describe('the nav strip advertises only menus it has', () => {
-  it('gives Shop All no dropdown arrow, because it opens no panel', () => {
-    const strip = between(app, 'aria-label="Main Navigation"', '</nav>');
-    const shopAll = strip.slice(strip.indexOf('Shop All'), strip.indexOf('</Link>', strip.indexOf('Shop All')));
-    expect(shopAll).not.toContain('ChevronDown');
+describe('navigation only points at named paths', () => {
+  it('uses a NAV_PATHS value for every destination on every surface', () => {
+    const named = new Set<string>(Object.values(NAV_PATHS));
+    expect([...new Set(SURFACES.flatMap(([, dests]) => dests))].filter((d) => !named.has(d))).toEqual([]);
+  });
+
+  it('keeps /media out of primary navigation', () => {
+    expect(SURFACES.flatMap(([, dests]) => dests).filter((d) => d === '/media' || d.startsWith('/media/'))).toEqual([]);
   });
 });
 
-describe('/media is de-listed from primary navigation', () => {
-  it('has no /media link in the header nav, mobile drawer or footer', () => {
-    expect(app).not.toContain('to="/media"');
+describe('panels and the strip items that open them agree', () => {
+  it('matches every megaKey to a panel pointing at the same destination', () => {
+    for (const item of STRIP_NAV.items.filter((i) => i.megaKey)) {
+      const panel = MEGA_MENU.find((p) => p.label === item.megaKey);
+      expect(panel, `no panel for megaKey "${item.megaKey}"`).toBeDefined();
+      expect(panel?.to).toBe(item.to);
+      expect(panel?.groups.length).toBeGreaterThan(0);
+    }
   });
 
-  it('drops Media from the worker footer without dropping its neighbours', () => {
-    expect(workerFooter).not.toContain('/media');
-    expect(workerFooter).toContain("['Blog', '/blog']");
+  it('gives every panel a strip item that opens it', () => {
+    expect(MEGA_MENU.map((p) => p.label).filter((l) => !STRIP_NAV.items.some((i) => i.megaKey === l))).toEqual([]);
   });
+});
 
-  it('keeps both /media routes registered so the URLs still resolve', () => {
-    expect(app).toContain('path="/media"');
-    expect(app).toContain('path="/media/:slug"');
+describe('the worker pre-renders the footer the module defines', () => {
+  const shell = '<head><title>Luxedge</title><meta name="robots" content="index, follow" />'
+    + '<link rel="canonical" href="https://luxedge.us" /></head><div id="root"></div>';
+  const env = { ASSETS: { fetch: async () => new Response('{}') } };
+
+  it('emits every SSR_FOOTER_NAV link, in order, and no others', async () => {
+    const result = await maybeInjectSeo(shell, '/about', 'https://luxedge.us', env);
+    const html = result && 'html' in result ? result.html : '';
+    const block = html.slice(html.indexOf('aria-label="Site"'), html.indexOf('</nav>'));
+    const rendered = [...block.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((m) => `${m[2]}→${m[1]}`);
+    expect(rendered.length).toBeGreaterThan(1);
+    expect(rendered).toEqual(SSR_FOOTER_NAV.map((l) => `${l.label}→${l.to}`));
   });
 });

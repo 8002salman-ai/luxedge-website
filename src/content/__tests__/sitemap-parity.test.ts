@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { STATIC_ROUTES, buildSitemap, buildSitemapGroups, renderHtmlSitemapBody } from '../../../worker/sitemap';
+import { NAV_PATHS, FOOTER_COLUMNS, SSR_FOOTER_NAV } from '../navigation';
 
 /**
  * The footer's "Sitemap" link used to point straight at /sitemap.xml, so
@@ -145,9 +146,9 @@ describe('sitemap — the static URL set cannot drift', () => {
 });
 
 describe('sitemap — the footer link opens a page, not raw XML', () => {
-  it('links /sitemap from the hydrated footer', () => {
-    expect(app).toContain('to="/sitemap"');
-    expect(app).not.toContain('<a href="/sitemap.xml" className={FL}>');
+  it('links the /sitemap page from the hydrated footer, never the raw XML', () => {
+    expect(FOOTER_COLUMNS.flatMap((c) => c.links.map((l) => l.to))).toContain('/sitemap');
+    expect(Object.values(NAV_PATHS)).not.toContain('/sitemap.xml');
   });
 
   it('renders the page from live data so the crawl body and the React page agree', () => {
@@ -169,6 +170,6 @@ describe('sitemap — the footer link opens a page, not raw XML', () => {
   it('is a known, indexable static page in the worker', () => {
     expect(seoMeta).toMatch(/['"]\/sitemap['"]:\s*\{/);
     expect(seoMeta).toContain('Sitemap — Every Page on Luxedge');
-    expect(seoMeta).toContain("['Sitemap', '/sitemap']");
+    expect(SSR_FOOTER_NAV.some((l) => l.to === '/sitemap')).toBe(true);
   });
 });

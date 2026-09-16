@@ -13,6 +13,7 @@ import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
+import { UTILITY_NAV, STRIP_NAV, MEGA_MENU, DRAWER_NAV, FOOTER_COLUMNS } from './content/navigation';
 import { productContentFor } from './content/productContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
@@ -717,28 +718,6 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
 // HEADER + FOOTER (STORE)
 // ============================================================================
 // ── Header mega menu data (maps to real category routes) ──
-const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { label: string; to: string }[] }[] }[] = [
-  {
-    label: 'Dog', to: '/category/dog-supplies',
-    groups: [
-      { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
-      { title: 'Comfort', links: [{ label: 'Beds, Blankets & Mats', to: '/category/pet-beds' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls, Feeders & Water Bottles', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes & Grooming Tools', to: '/category/grooming' }] },
-      { title: 'Play', links: [{ label: 'Chew, Rope & Tug Toys', to: '/category/pet-toys' }] },
-    ],
-  },
-  {
-    label: 'Cat', to: '/category/cat-supplies',
-    groups: [
-      { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }] },
-      { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches, Towers & Scratching', to: '/category/cat-supplies' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls, Fountains & Feeders', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes & Nail Care', to: '/category/grooming' }] },
-    ],
-  },
-];
-
 function Header() {
   const [mob, setMob] = useState(false);
   const [um, setUm] = useState(false);
@@ -769,18 +748,6 @@ function Header() {
 
   useEffect(() => { setMob(false); setUm(false); setMega(null); }, [loc.pathname]);
 
-  const navLinks = [
-    { l: 'Dog', to: '/category/dog-supplies', megaKey: 'Dog' },
-    { l: 'Cat', to: '/category/cat-supplies', megaKey: 'Cat' },
-    // Bird has a single category, so a panel would only repeat it.
-    { l: 'Bird', to: '/category/bird-supplies' },
-    { l: 'Horse', to: '/category/horse' },
-    { l: 'Livestock', to: '/category/cattle' },
-    { l: 'Accessories', to: '/category/pet-accessories' },
-    { l: 'Blog', to: '/blog' },
-    { l: 'About', to: '/about' },
-  ];
-
   return (
     <>
       {/* ── Top Utility Bar ── */}
@@ -803,11 +770,12 @@ function Header() {
             </span>
           </div>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0 text-white/80">
-            <Link to="/orders" className="hover:text-white transition-colors">Track Order</Link>
-            <span className="text-white/25">|</span>
-            <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
-            <span className="text-white/25">|</span>
-            <Link to="/faq" className="hover:text-white transition-colors">FAQ</Link>
+            {UTILITY_NAV.map((l, i) => (
+              <Fragment key={l.to}>
+                {i > 0 && <span className="text-white/25">|</span>}
+                <Link to={l.to} className="hover:text-white transition-colors">{l.label}</Link>
+              </Fragment>
+            ))}
           </div>
         </div>
       </div>
@@ -932,14 +900,14 @@ function Header() {
         <nav className="hidden lg:block border-t border-gray-100 bg-white" aria-label="Main Navigation">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-11 text-[13.5px] font-semibold text-gray-700">
             <div className="flex items-center gap-1">
-              <Link to="/shop" className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors">
-                Shop All
+              <Link to={STRIP_NAV.all.to} className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors">
+                {STRIP_NAV.all.label}
               </Link>
-              {navLinks.map((item) => {
+              {STRIP_NAV.items.map((item) => {
                 const megaItem = item.megaKey ? MEGA_MENU.find(m => m.label === item.megaKey) : null;
                 return (
                   <div
-                    key={item.l}
+                    key={item.to}
                     className="relative"
                     onMouseEnter={() => item.megaKey && setMega(item.megaKey)}
                     onMouseLeave={() => setMega(null)}
@@ -948,7 +916,7 @@ function Header() {
                       to={item.to}
                       className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors flex items-center gap-1"
                     >
-                      {item.l}
+                      {item.label}
                       {megaItem && <ChevronDown strokeWidth={1.5} size={12} className={`text-gray-400 transition-transform ${mega === item.megaKey ? 'rotate-180' : ''}`} />}
                     </Link>
 
@@ -981,8 +949,8 @@ function Header() {
                 );
               })}
             </div>
-            <Link to="/shop?q=deal" className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[13px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-full transition-colors">
-              <Zap strokeWidth={1.5} size={13} className="text-amber-600" /> Deals
+            <Link to={STRIP_NAV.deals.to} className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[13px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-full transition-colors">
+              <Zap strokeWidth={1.5} size={13} className="text-amber-600" /> {STRIP_NAV.deals.label}
             </Link>
           </div>
         </nav>
@@ -996,19 +964,21 @@ function Header() {
               <button type="submit" className="px-3 py-1 bg-[#1E4636] text-white rounded-full text-xs font-semibold">Search</button>
             </form>
             <div className="grid grid-cols-2 gap-2 text-sm font-medium">
-              <Link to="/category/dog-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐶 Dog Supplies</Link>
-              <Link to="/category/cat-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐱 Cat Supplies</Link>
-              <Link to="/category/bird-supplies" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🦜 Bird Supplies</Link>
-              <Link to="/category/horse" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐴 Horse Supplies</Link>
-              <Link to="/category/cattle" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">🐄 Livestock</Link>
-              <Link to="/category/pet-accessories" onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">✨ Accessories</Link>
+              {DRAWER_NAV.tiles.map((t) => (
+                <Link key={t.to} to={t.to} onClick={() => setMob(false)} className="p-2.5 bg-gray-50 rounded-xl hover:bg-gray-100">{t.label}</Link>
+              ))}
             </div>
             <div className="border-t border-gray-100 pt-3 space-y-1 text-sm font-medium text-gray-700">
-              <Link to="/shop" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Shop All Products</Link>
-              <Link to="/blog" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Care Guides &amp; Blog</Link>
-              <Link to="/about" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">About Us</Link>
-              <Link to="/contact" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Contact &amp; Help</Link>
-              <Link to="/shop?q=deal" onClick={() => setMob(false)} className="block py-1.5 px-2 text-amber-700 font-bold hover:bg-amber-50 rounded-lg">🔥 Special Deals</Link>
+              {DRAWER_NAV.links.map((l) => (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  onClick={() => setMob(false)}
+                  className={`block py-1.5 px-2 rounded-lg ${l.highlight ? 'text-amber-700 font-bold hover:bg-amber-50' : 'hover:bg-gray-50'}`}
+                >
+                  {l.label}
+                </Link>
+              ))}
             </div>
           </div>
         )}
@@ -1064,51 +1034,22 @@ function Footer() {
             )}
           </div>
 
-          {/* Col 1: Shop */}
-          <div className="lg:col-span-2 space-y-1">
-            <ColTitle>Shop</ColTitle>
-            <Link to="/shop" className={FL}>All Products</Link>
-            <Link to="/category/dog-supplies" className={FL}>Dog Supplies</Link>
-            <Link to="/category/cat-supplies" className={FL}>Cat Supplies</Link>
-            <Link to="/category/bird-supplies" className={FL}>Bird Supplies</Link>
-            <Link to="/category/horse" className={FL}>Horse Supplies</Link>
-            <Link to="/category/cattle" className={FL}>Livestock Supplies</Link>
-            <Link to="/category/pet-accessories" className={FL}>Accessories</Link>
-          </div>
-
-          {/* Col 2: Learn */}
-          <div className="lg:col-span-2 space-y-1">
-            <ColTitle>Learn</ColTitle>
-            <Link to="/blog" className={FL}>Blog &amp; Guides</Link>
-          </div>
-
-          {/* Col 3: Help */}
-          <div className="lg:col-span-2 space-y-1">
-            <ColTitle>Help</ColTitle>
-            <Link to="/orders" className={FL}>Track Order</Link>
-            <Link to="/shipping-policy" className={FL}>Shipping Policy</Link>
-            <Link to="/returns" className={FL}>Returns &amp; Refunds</Link>
-            <Link to="/faq" className={FL}>FAQs</Link>
-            <Link to="/contact" className={FL}>Contact Us</Link>
-          </div>
-
-          {/* Col 4: Company */}
-          <div className="lg:col-span-2 space-y-1">
-            <ColTitle>Company</ColTitle>
-            <Link to="/about" className={FL}>About Luxedge</Link>
-            <Link to="/copyright" className={FL}>Copyright &amp; DMCA</Link>
-            <Link to="/editorial-policy" className={FL}>Editorial Policy</Link>
-            <Link to="/disclaimer" className={FL}>Disclaimer</Link>
-            <Link to="/privacy" className={FL}>Privacy Policy</Link>
-            <Link to="/terms" className={FL}>Terms of Service</Link>
-            <Link to="/sitemap" className={FL}>Sitemap</Link>
-            <div className="pt-4 border-t border-white/10 mt-4">
-              <div className="flex items-center gap-2 text-xs text-[#C5A880]">
-                <ShieldTick strokeWidth={1.5} size={15} />
-                <SecurePaymentsNote />
-              </div>
+          {FOOTER_COLUMNS.map((col) => (
+            <div key={col.title} className="lg:col-span-2 space-y-1">
+              <ColTitle>{col.title}</ColTitle>
+              {col.links.map((l) => (
+                <Link key={l.to} to={l.to} className={FL}>{l.label}</Link>
+              ))}
+              {col.paymentsNote && (
+                <div className="pt-4 border-t border-white/10 mt-4">
+                  <div className="flex items-center gap-2 text-xs text-[#C5A880]">
+                    <ShieldTick strokeWidth={1.5} size={15} />
+                    <SecurePaymentsNote />
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          ))}
         </div>
       </div>
 

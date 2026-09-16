@@ -44,6 +44,7 @@ import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_
 import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
+import { SSR_FOOTER_NAV } from '../src/content/navigation';
 import { productContentFor } from '../src/content/productContent';
 import { productFacts, FREE_SHIPPING_CLAIM } from '../src/content/productFacts';
 import {
@@ -773,18 +774,13 @@ async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
  * pages — /blog, /media, /about, /contact, legal — have zero SSR inbound
  * links and are reachable only via the sitemap). Lives INSIDE #root so React
  * replaces it with the real footer on hydration: no duplication, no hidden
- * text. Plain inline styling — Tailwind does not scan this file.
+ * text. The links come from src/content/navigation.ts, the same module the
+ * React header, drawer and footer read. Plain inline styling — Tailwind does
+ * not scan this file.
  */
 const FOOTER_NAV =
   '<nav aria-label="Site" style="margin-top:2rem;padding:1rem 0;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.8">' +
-  [
-    ['Shop All', '/shop'], ['Blog', '/blog'],
-    ['About', '/about'], ['Contact', '/contact'], ['FAQ', '/faq'],
-    ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
-    ['Copyright & DMCA', '/copyright'], ['Editorial Policy', '/editorial-policy'], ['Disclaimer', '/disclaimer'],
-    ['Privacy Policy', '/privacy'], ['Terms of Service', '/terms'],
-    ['Sitemap', '/sitemap'],
-  ].map(([label, to]) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
+  SSR_FOOTER_NAV.map(({ label, to }) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
   '</nav>';
 
 function inject(html: string, meta: RouteMeta): string {

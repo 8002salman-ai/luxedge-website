@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { SHIPPING_SECTIONS, POLICY_LAST_UPDATED } from '../policies';
+import { SSR_FOOTER_NAV } from '../navigation';
 
 /**
  * The shipping policy regressed in three ways at once, which is why it is
@@ -136,6 +137,6 @@ describe('shipping policy — indexing hygiene', () => {
   });
 
   it('is reachable from the pre-rendered crawl footer', () => {
-    expect(seoMeta).toContain("['Shipping Policy', '/shipping-policy']");
+    expect(SSR_FOOTER_NAV.some((l) => l.to === '/shipping-policy')).toBe(true);
   });
 });
