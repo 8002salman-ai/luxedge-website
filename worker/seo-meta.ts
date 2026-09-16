@@ -43,7 +43,7 @@ import {
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
 import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
-import { CATEGORY_CONTENT } from '../src/content/categoryContent';
+import { categoryContentFor } from '../src/content/categoryContent';
 import { authorFor } from '../src/content/authors';
 import { SSR_FOOTER_NAV } from '../src/content/navigation';
 import { productContentFor } from '../src/content/productContent';
@@ -1020,7 +1020,9 @@ export function injectCategoryBody(html: string, cat: CategoryRow, products: Pro
   // the crawl HTML carries the same intro, considerations and guide links the
   // hydrated page shows. CATEGORY_DESC stays as the fallback for a slug that has
   // no shared entry yet.
-  const content = CATEGORY_CONTENT[cat.slug];
+  // Through the shared lookup, never the raw map: that lookup drops guide links
+  // whose URL is retired, and the crawl HTML has to match the hydrated page.
+  const content = categoryContentFor(cat.slug);
   const desc = content?.desc || CATEGORY_DESC[cat.slug] || `Browse our ${cat.name} collection`;
   const hero = CAT_HERO_IMAGES[cat.name] || '';
   const parts: string[] = [];

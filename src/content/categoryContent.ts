@@ -1,3 +1,5 @@
+import { isLinkablePublicPath } from './reviewHolds';
+
 // Shared category content — ONE source for the category intro, the selection
 // considerations and the related guides.
 //
@@ -161,5 +163,10 @@ export const CATEGORY_CONTENT: Record<string, CategoryContent> = {
 /** Lookup by slug, tolerant of a display name ("Dog Supplies"). */
 export function categoryContentFor(slugOrName: string): CategoryContent | null {
   const slug = String(slugOrName || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  return CATEGORY_CONTENT[slug] || null;
+  const entry = CATEGORY_CONTENT[slug];
+  if (!entry) return null;
+  // Guide links are filtered here, at the one lookup both render paths and the
+  // category hero already share, so a category page can never advertise a guide
+  // whose URL is retired (or held). Nothing else needs to know the rule.
+  return { ...entry, guides: entry.guides.filter((g) => isLinkablePublicPath(g.href)) };
 }

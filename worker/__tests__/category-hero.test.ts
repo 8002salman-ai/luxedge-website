@@ -67,4 +67,15 @@ describe('injectCategoryBody — category pet hero image', () => {
     // Breadcrumb sits before the h1.
     expect(html.indexOf('Breadcrumb')).toBeLessThan(html.indexOf('<h1>'));
   });
+
+  it('never pre-renders a link to a withdrawn guide', () => {
+    // The production crawl audit found eight category/product pages still
+    // emitting /blog/... guide links while those articles are retired and their
+    // URLs only redirect. The crawl body must carry no such link, for every
+    // category — the guide list is filtered at the shared lookup.
+    for (const slug of ['dog-supplies', 'cat-supplies', 'horse', 'bird-supplies', 'cattle', 'pet-beds']) {
+      const html = wrap(cat(slug.replace(/-/g, ' '), slug));
+      expect(html, `${slug} still links a guide`).not.toContain('href="/blog/');
+    }
+  });
 });

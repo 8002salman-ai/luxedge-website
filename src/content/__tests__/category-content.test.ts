@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { CATEGORY_CONTENT, categoryContentFor } from '../categoryContent';
+import { isLinkablePublicPath } from '../reviewHolds';
 
 /** The ten live, indexable categories (worker/sitemap.ts source of truth). */
 const CATEGORY_SLUGS = [
@@ -27,18 +28,34 @@ describe('category content', () => {
     }
   });
 
-  it('links only to guides that are actually published', () => {
-    for (const [slug, c] of Object.entries(CATEGORY_CONTENT)) {
-      for (const g of c.guides) {
+  it('advertises only guide links a reader can actually open', () => {
+    // The raw data still names the guides, but the lookup is the gate: a
+    // category page must never render a link to a retired or held URL, which is
+    // what the reader would otherwise click into a redirect.
+    for (const slug of Object.keys(CATEGORY_CONTENT)) {
+      const resolved = categoryContentFor(slug)!;
+      for (const g of resolved.guides) {
         expect(g.href.startsWith('/blog/'), `${slug} -> ${g.href}`).toBe(true);
         expect(publishedBlogSlugs, `${slug} -> ${g.href}`).toContain(g.href.replace('/blog/', ''));
+        // And whatever survives the filter must satisfy the same rule the
+        // markdown linker uses.
+        expect(isLinkablePublicPath(g.href), `${slug} -> ${g.href}`).toBe(true);
       }
+      expect(resolved.considerations).toEqual(CATEGORY_CONTENT[slug].considerations);
+    }
+  });
+
+  it('drops the guide list entirely while the guides are withdrawn', () => {
+    // The live CMS holds no published posts, so every guide href in these
+    // modules is retired and the lookup must return none of them.
+    for (const slug of Object.keys(CATEGORY_CONTENT)) {
+      expect(categoryContentFor(slug)!.guides, slug).toEqual([]);
     }
   });
 
   it('resolves by display name as well as by slug (the client passes a name)', () => {
     expect(categoryContentFor('Dog Supplies')?.desc).toBe(CATEGORY_CONTENT['dog-supplies'].desc);
-    expect(categoryContentFor('Horse')?.guides.length).toBeGreaterThan(0);
+    expect(categoryContentFor('Horse')?.desc).toBe(CATEGORY_CONTENT['horse'].desc);
     expect(categoryContentFor('All')).toBeNull();
   });
 

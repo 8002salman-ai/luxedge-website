@@ -57,22 +57,23 @@ export function isHeldProduct(slug?: string | null): boolean {
 
 /** Public routes that were permanently deleted or withdrawn from the catalog.
  * EDITORIAL COPY MUST NEVER LINK TO THESE AGAIN: a crawler following a link
- * from an indexable article to a 404 is a real quality defect (and the
+ * from an indexable page to a dead link is a real quality defect (and the
  * September 2026 audit found exactly that — a live guide still linked a
  * deleted article and a delisted product). Both renderers (the client
  * markdown renderer and the worker's article pre-render) degrade a markdown
- * link whose destination is in this set to plain text, so a stale CMS body
- * can never emit a dead link. Add a path here when content is deleted; the
- * anchor text stays readable, only the <a> disappears. */
-const retiredPublicPaths = new Set([
-  '/blog/dog-car-safety-seat-belt-guide',
+ * link whose destination is retired to plain text, so a stale CMS body can
+ * never emit a dead link, and isLinkablePublicPath() is what the content
+ * modules filter their own guide links through. The anchor text stays
+ * readable; only the <a> disappears. */
+const retiredProductPaths = [
   '/product/2m-pet-dog-leash-with-soft-padded-handle-highly-reflective-dog-rope-for-night-walking-suitable-for-small-medium-and-large-dogs',
-]);
+];
 
 /**
  * Article URLs that were published, submitted in the sitemap and then removed
  * from the CMS — the live `blog_posts` table now holds no rows at all. Google
- * has these in its index, so they 301 to /blog instead of answering 404.
+ * has these in its index, so they 301 to /blog instead of answering 404, and
+ * the same set keeps category and product pages from advertising them.
  *
  * The redirect is decided AFTER the CMS lookup, so a restored article with any
  * of these slugs wins: the worker finds the post and serves it. Nothing here
@@ -92,10 +93,14 @@ const retiredBlogSlugs = new Set([
 export function isRetiredBlogSlug(slug?: string | null): boolean {
   return !!slug && retiredBlogSlugs.has(slug);
 }
+/** Every retired article URL, so the two rules below cannot disagree: the
+ * worker 301s these, and no editorial link may point at them while their page
+ * is a redirect. */
+const retiredBlogPaths = new Set([...retiredBlogSlugs].map((s) => `/blog/${s}`));
 export function isRetiredPublicPath(path?: string | null): boolean {
   if (!path) return false;
   const clean = path.split(/[?#]/)[0].replace(/\/+$/, '');
-  return !!clean && retiredPublicPaths.has(clean);
+  return !!clean && (retiredBlogPaths.has(clean) || retiredProductPaths.includes(clean));
 }
 
 /** Every destination a markdown link in public editorial content may point to

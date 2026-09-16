@@ -35,6 +35,8 @@
 //   - src/App.tsx         → the product detail page (after hydration)
 // ============================================================================
 
+import { isLinkablePublicPath } from './reviewHolds';
+
 export interface ProductContent {
   /** What the listing is, and which animal or use it suits. */
   summary: string;
@@ -557,5 +559,10 @@ export function productContentFor(slug: string | null | undefined): ProductConte
   if (!slug) return undefined;
   if (!Object.prototype.hasOwnProperty.call(PRODUCT_CONTENT, slug)) return undefined;
   const entry = PRODUCT_CONTENT[slug];
-  return entry && entry.summary ? entry : undefined;
+  if (!entry || !entry.summary) return undefined;
+  // Same rule as the category lookup: a guide link whose URL is retired (or
+  // held) is dropped at the shared lookup rather than advertised and clicked
+  // into a dead end. Dropping it here covers both render paths at once.
+  if (entry.guide && !isLinkablePublicPath(entry.guide.href)) return { ...entry, guide: undefined };
+  return entry;
 }

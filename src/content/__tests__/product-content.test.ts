@@ -15,6 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PRODUCT_CONTENT, NEEDS_OWNER_EVIDENCE, productContentFor } from '../productContent';
+import { isLinkablePublicPath } from '../reviewHolds';
 
 /** The eight guides live in the CMS as of this change. */
 const LIVE_BLOG_SLUGS = new Set([
@@ -115,12 +116,24 @@ describe('productContent entries', () => {
     expect(() => assertNoAssertedClaims('t', 'It measures 60 cm across.')).toThrow();
   });
 
-  it('guide links point at live guides only', () => {
+  it('guide links always point at a guide that resolves', () => {
+    // Whatever the lookup returns must be openable, and while the CMS holds no
+    // published posts it must return no guide at all — a product page must not
+    // advertise a guide URL that only redirects.
+    for (const [slug] of entries) {
+      const resolved = productContentFor(slug)?.guide;
+      if (!resolved) continue;
+      expect(resolved.href, `${slug} href`).toMatch(/^\/blog\/[a-z0-9-]+$/);
+      expect(LIVE_BLOG_SLUGS.has(resolved.href.replace('/blog/', '')), `${slug} → ${resolved.href}`).toBe(true);
+      expect(isLinkablePublicPath(resolved.href), `${slug} → ${resolved.href}`).toBe(true);
+      expect(resolved.label.length).toBeGreaterThan(5);
+    }
+  });
+
+  it('drops the guide while the guides are withdrawn from the index', () => {
     for (const [slug, c] of entries) {
       if (!c.guide) continue;
-      expect(c.guide.href, `${slug} href`).toMatch(/^\/blog\/[a-z0-9-]+$/);
-      expect(LIVE_BLOG_SLUGS.has(c.guide.href.replace('/blog/', '')), `${slug} → ${c.guide.href}`).toBe(true);
-      expect(c.guide.label.length).toBeGreaterThan(5);
+      expect(productContentFor(slug)?.guide, slug).toBeUndefined();
     }
   });
 
