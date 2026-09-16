@@ -44,7 +44,7 @@ export const TERMS_SECTIONS: PolicySection[] = [
   { title: 'Returns, Replacements, and Refunds', body: 'Returns and replacements are governed by our Return & Replacement Policy. Luxedge does not offer change-of-mind refunds as a standard remedy.' },
   { title: 'Product Information', body: 'Product information is for general shopping purposes. Follow product labels, instructions, intended species, and warnings. Animal food and feed: check the label, ingredients, intended species, and warnings before use.' },
   { title: 'Disclaimers and Liability', body: 'The website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses except where liability cannot be limited.' },
-  { title: 'Changes and Contact', body: 'We may update these Terms by posting a revised version. Questions: email hello@luxedge.us.' },
+  { title: 'Changes and Contact', body: 'We may update these Terms by posting a revised version. Questions: hello@luxedge.us or (440) 941-8002.' },
 ];
 
 export const RETURNS_SECTIONS: PolicySection[] = [
