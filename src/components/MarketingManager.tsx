@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getConsent } from '../lib/consent';
+import { getConsent, syncConsentMode } from '../lib/consent';
 import {
   captureUtm,
   getEffectiveConfig,
@@ -34,10 +34,15 @@ export default function MarketingManager() {
       getEffectiveConfig().then((c: MarketingConfig) => {
         if (!alive) return;
         const okToLoad = getConsent() === 'accepted';
+        // Keep Google Consent Mode v2 signals in sync with the stored decision
+        // (no-op for gtag.js itself, which loads separately below).
+        syncConsentMode(getConsent());
         const pageIsNoindex = document.querySelector('meta[name="robots"]')?.getAttribute('content')?.includes('noindex');
         if (okToLoad && !pageIsNoindex && !isExcludedPath(loc.pathname, c) && c.adsenseEnabled && (c.autoAdsEnabled || c.manualAdsEnabled)) {
           loadAdSenseScript(c.adsenseClientId);
         } else {
+          // Removes BOTH the client-created tag and the shell <head> tag, so
+          // a visitor who never consented stops loading the publisher script.
           removeAdSenseScript();
         }
         if (okToLoad && c.gaEnabled && c.ga4Id.trim()) {

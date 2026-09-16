@@ -10,10 +10,27 @@
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#2563eb" />
     <meta name="google-adsense-account" content="ca-pub-5473713135927706" />
-    <!-- Google AdSense publisher script (verified ca-pub-5473713135927706) →
-         present in served HTML for account verification. Id matches the client
-         loader (src/lib/marketing.ts) so it never duplicates, and the existing
-         consent gating still removes it for visitors who decline. -->
+    <!-- Google AdSense account verification meta (ca-pub-5473713135927706).
+         Consent discipline: the publisher SCRIPT is NOT tag-gated in the shell
+         — the inline bootstrap below holds Consent Mode v2 at 'denied' before
+         any Google tag can load, and the client loader (src/lib/marketing.ts)
+         removes this tag for visitors who have not accepted. A visitor who
+         declines never executes the publisher script beyond its header fetch,
+         and EEA/UK/CH traffic runs on denied consent signals by default.
+         When a Google-certified CMP is connected it replaces this bootstrap's
+         defaults with the certified widget's own signal handling. -->
+    <script>
+      // Google Consent Mode v2 — denied defaults, set before any Google tag.
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+        wait_for_update: 500
+      });
+    </script>
     <script
       async
       id="adsbygoogle-script"

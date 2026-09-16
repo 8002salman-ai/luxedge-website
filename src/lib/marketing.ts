@@ -1,5 +1,6 @@
 import { recordSiteEvent } from '../services/siteEvents';
 import { isHeldProduct } from '../content/reviewHolds';
+import { getConsent } from './consent';
 
 // ============================================================================
 // MARKETING & TRAFFIC — shared config, script loading, GA4 events
@@ -237,6 +238,14 @@ export function validateConfig(c: MarketingConfig): Record<string, string> {
 
 export function loadAdSenseScript(clientId: string): void {
   if (!clientId || typeof document === 'undefined') return;
+  // Consent gate: without an 'accepted' decision (or inside the EEA where a
+  // certified CMP may later own the signal) the AdSense library never loads.
+  // Remove the shell <head> tag too, so an unconsented visitor neither loads
+  // nor keeps the publisher script.
+  if (getConsent() !== 'accepted') {
+    removeAdSenseScript();
+    return;
+  }
   if (document.getElementById(SCRIPT_ID)) return;
   const s = document.createElement('script');
   s.id = SCRIPT_ID;

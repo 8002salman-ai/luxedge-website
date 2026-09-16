@@ -2,6 +2,17 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getConsent, setConsent } from '../lib/consent';
 
+/**
+ * The site's single consent surface.
+ *
+ * Architecture note (CMP): Google requires EEA/UK/Switzerland traffic to run
+ * under a Google-certified Consent Management Platform once ads are served
+ * there. This banner is the site's own first-party consent UI and sets Google
+ * Consent Mode v2 signals (ad_storage, ad_user_data, ad_personalization,
+ * analytics_storage) through src/lib/consent.ts — one source of truth, no
+ * second conflicting consent system. When the owner connects a certified CMP,
+ * it should drive THESE same signals and this banner stays for everyone else.
+ */
 export default function CookieConsent() {
   const [choice, setChoice] = useState<null | 'accepted' | 'declined'>(() => getConsent() || (typeof window !== 'undefined' && window.location.search.includes('headless=true') ? 'accepted' : null));
   if (choice !== null) return null;
@@ -16,12 +27,14 @@ export default function CookieConsent() {
     <div role="region" aria-label="Cookie consent" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 sm:max-w-md z-[130]">
       <div className="bg-luxe-black/95 backdrop-blur border border-luxe-white/10 rounded-2xl shadow-2xl p-5 text-luxe-white">
         <p className="text-sm leading-relaxed text-luxe-white/85">
-          We use optional cookies for analytics and personalized advertising only after you accept.
-          See our{' '}
-          <Link to="/privacy" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Privacy Policy</Link>.
-          {' '}Learn how{' '}
-          <a href="https://business.safety.google/privacy/" target="_blank" rel="noopener noreferrer" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Google uses data</a>{' '}
-          when you use its partner sites.
+          We use essential cookies to run the store. With your consent, Google
+          services measure traffic (analytics) and show ads, and Google and its
+          partners may use cookies or device identifiers to personalize ads and
+          measure their performance. See our{' '}
+          <Link to="/privacy" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Privacy Policy</Link>
+          {' '}and how{' '}
+          <a href="https://business.safety.google/privacy/" target="_blank" rel="noopener noreferrer" className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200">Google uses data</a>
+          {' '}when you use its partner sites.
         </p>
         <div className="mt-4 flex items-center gap-2.5">
           <button onClick={() => decide('accepted')}
