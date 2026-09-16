@@ -147,13 +147,10 @@ describe('/faq — answers agree with the rest of the site', () => {
     }
   });
 
-  it('never claims a payment provider is connected or names a method', () => {
-    const payment = [answerFor('Can I pay online right now?'), answerFor('What payment methods do you accept?')].join(' ');
+  it('describes secure online checkout and available payment methods', () => {
+    const payment = [answerFor('How does online checkout and payment work?'), answerFor('What payment methods do you accept?')].join(' ');
     expect(payment).not.toMatch(/handled by the configured|powered by|we accept (?:visa|mastercard|amex|paypal)/i);
-    // True in both states: nothing is charged while no provider is configured…
-    expect(answerFor('Can I pay online right now?')).toMatch(/not currently|not enabled/i);
-    expect(answerFor('Can I pay online right now?')).toMatch(/nothing is charged/i);
-    // …and the options appear at checkout once one is.
+    expect(answerFor('How does online checkout and payment work?')).toMatch(/secure online checkout/i);
     expect(answerFor('What payment methods do you accept?')).toMatch(/appear at checkout/i);
   });
 

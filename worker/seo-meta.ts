@@ -1009,9 +1009,19 @@ const CAT_HERO_IMAGES: Record<string, string> = {
 };
 
 export function injectCategoryBody(html: string, cat: CategoryRow, products: ProductRow[]): string {
-  const inCategory = products.filter(
-    (p) => p.slug && isPubliclyListableProduct(p) && p.categories && p.categories.name && p.categories.name.toLowerCase() === cat.name.toLowerCase(),
-  );
+  const inCategory = products.filter((p) => {
+    if (!p.slug || !isPubliclyListableProduct(p)) return false;
+    const catName = p.categories?.name?.toLowerCase();
+    if (catName === cat.name.toLowerCase()) return true;
+    if (cat.slug === 'cat-supplies' || cat.name.toLowerCase() === 'cat supplies') {
+      const slug = p.slug.toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const tags = typeof p.tags === 'string' ? p.tags.toLowerCase() : Array.isArray(p.tags) ? p.tags.join(' ').toLowerCase() : '';
+      if (tags.includes('cat')) return true;
+      if (slug.includes('cat-') || slug.includes('-cat') || /\bcat\b|\bcats\b/i.test(name)) return true;
+    }
+    return false;
+  });
   // Mirror the client category header exactly (CAT_META in src/App.tsx or the
   // client's `Browse our {category} collection` fallback) so the pre-render and
   // the hydrated page show the same line. The DB description column is ignored

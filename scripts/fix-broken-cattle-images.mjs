@@ -21,7 +21,7 @@ const updates = [
   },
   {
     slug: 'portable-livestock-water-trough-30-gallon',
-    image_url: 'https://upload.wikimedia.org/wikipedia/commons/b/b8/Cattle_water_trough_-_geograph.org.uk_-_747178.jpg',
+    image_url: 'https://luxedge.us/images/products/portable-livestock-water-trough-30-gallon.jpg',
   },
 ];
 

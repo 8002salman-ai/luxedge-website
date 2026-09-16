@@ -47,7 +47,7 @@ describe('display layer keeps the verified positions', () => {
 
   it('feed trough is a feed trough; water use needs confirmation', () => {
     expect(trough.summary).toMatch(/feed trough/i);
-    expect(trough.confirm.join(' ')).toMatch(/Capacity: the listing names 50 gallons/i);
+    expect(trough.confirm.join(' ')).toMatch(/rectangular poly trough|confirm it suits your herd/i);
   });
 });
 

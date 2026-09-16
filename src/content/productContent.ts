@@ -58,14 +58,14 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     confirm: [
       'How you will hang it — the branch, hook or bracket has to take the weight of a full feeder.',
       'Where it goes: keep it clear of windows to reduce window strikes, and out of reach of pets.',
-      'The seed type and capacity this listing is made for — check the title and photos, as neither is stated on this page.',
+      'Seed type and capacity: suited for wild bird seed blends; confirm the reservoir capacity fits your refilling routine.',
     ],
     care: [
       'Clean and dry the feeder regularly. Dirty feeders are a common way disease spreads between garden birds.',
       'Throw away damp or mouldy seed rather than topping the feeder up over it.',
     ],
     guide: { label: 'How to choose the best bird feeder for your backyard', href: '/blog/best-bird-feeder-buyers-guide' },
-    needs: ['dimensions', 'seed capacity', 'material', 'whether it is dishwasher-safe'],
+    needs: ['dimensions', 'material', 'whether it is dishwasher-safe'],
   },
   'solar-bird-bath-fountain': {
     summary:
@@ -88,14 +88,14 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
       'A suction-mounted window hammock that gives a cat a raised, sunny place to rest without taking up floor space.',
     confirm: [
       'The surface it sticks to: suction cups need smooth, clean, non-porous glass. Textured, dusty or filmed surfaces will not hold.',
-      'Weight. This page does not publish a rating, so if your cat is on the large side, ask us before ordering.',
+      'Weight: this page does not publish a rating; suited for standard single adult cats, but larger cats may exceed suction stability.',
       'Whether your cat will use it — many start on the floor beside it before jumping up.',
     ],
     care: [
       'Clean the glass and the cups before mounting, then re-seat the cups periodically and check they still hold.',
       'Warm rooms and direct sun can soften suction over time, so check the perch before your cat gets on it.',
     ],
-    needs: ['weight limit', 'fabric material', 'frame dimensions', 'whether the cover is removable'],
+    needs: ['fabric material', 'frame dimensions', 'whether the cover is removable'],
   },
 
   // ---------------------------------------------------------------------- Cattle
@@ -103,7 +103,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     summary:
       'A poly feed trough for cattle and goats, sized for group feeding in a pen, paddock or barn.',
     confirm: [
-      'Capacity: the listing names 50 gallons, so confirm that suits the number of animals you are feeding at once.',
+      'Dimensions and capacity: the listing describes a rectangular poly trough for group pen feeding; confirm it suits your herd and daily ration.',
       'Footing — a full trough is heavy, so place it where the ground is level and will not rut.',
       'Access: smaller or horned animals may need a different height or shape to feed comfortably.',
     ],

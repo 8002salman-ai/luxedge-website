@@ -39,7 +39,7 @@ async function verifyLive() {
   const cattleRes = await fetch('https://luxedge.us/product/portable-livestock-water-trough-30-gallon');
   console.log('\n5. Cattle Trough Image Check:');
   console.log('   - Page Status:', cattleRes.status);
-  const imgCheck = await fetch('https://upload.wikimedia.org/wikipedia/commons/b/b8/Cattle_water_trough_-_geograph.org.uk_-_747178.jpg', { method: 'HEAD' });
+  const imgCheck = await fetch('https://luxedge.us/images/products/portable-livestock-water-trough-30-gallon.jpg', { method: 'HEAD' });
   console.log('   - Image HTTP Status:', imgCheck.status);
 
   // 6. Blog Sample
