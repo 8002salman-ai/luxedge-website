@@ -136,7 +136,7 @@ describe('/faq — answers agree with the rest of the site', () => {
   it('shipping and returns answers repeat the policy wording they come from', () => {
     const pins: Array<[string, string]> = [
       ['shipping destination', 'International shipping is not currently offered.'],
-      ['return shipping cost', 'Customers are responsible for return shipping label, packaging, and all return shipping costs'],
+      ['return shipping cost', 'Customers are responsible for purchasing their own return shipping label'],
       ['replacement route', 'handled by replacement'],
       ['card data', 'Luxedge does not store complete card numbers'],
     ];

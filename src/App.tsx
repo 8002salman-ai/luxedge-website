@@ -12,7 +12,7 @@ import { productFacts, FREE_SHIPPING_CLAIM } from './content/productFacts';
 import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
 import { authorFor } from './content/authors';
-import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
+import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, PRIVACY_SECTIONS, RETURNS_SECTIONS, SHIPPING_SECTIONS, TERMS_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
 import { NAV_PATHS, UTILITY_NAV, STRIP_NAV, MEGA_MENU, DRAWER_NAV, FOOTER_COLUMNS } from './content/navigation';
 import { productContentFor } from './content/productContent';
@@ -3739,58 +3739,41 @@ function AboutPage() {
 function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" updated={POLICY_LAST_UPDATED['/privacy']}>
-      <LS t="Introduction"><p>At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
-      <LS t="Information We Collect"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Name</li><li>Billing and shipping address</li><li>Email address</li><li>Phone number</li><li>Payment and transaction information when a payment provider is enabled (Luxedge does not store complete card numbers)</li><li>Order history</li><li>Messages and contact details you provide through the contact form or the Luxie AI assistant</li><li>IP address, browser type, and device information</li><li>Website usage information through cookies and analytics</li></ul></LS>
-      <LS t="Checkout Options"><p><strong>Guest Checkout:</strong> You do not need to create an account to make a purchase. Customers may complete their orders using Guest Checkout. We collect only the information necessary to process, ship, and support the order.</p><p className="mt-2"><strong>Create an Account:</strong></p><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers who prefer to create an account may register during checkout.</li><li>View order history.</li><li>Manage your profile and order information.</li><li>Track current and past orders.</li><li>Manage account information.</li></ul><p className="mt-2">Whether you choose Guest Checkout or create an account, your personal information is collected, stored, and protected in accordance with this Privacy Policy.</p></LS>
-      <LS t="How We Use Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Process and fulfill your orders.</li><li>Communicate regarding your order or customer service requests.</li><li>Respond to inquiries and operate support tools, including the Luxie AI assistant.</li><li>Improve our website and customer experience.</li><li>Prevent fraud and unauthorized transactions.</li><li>Comply with legal obligations.</li><li>Send promotional emails if you have opted in (you may unsubscribe at any time).</li></ul></LS>
-      <LS t="Payments"><p>Online payment processing is provided by a third-party payment processor when checkout is enabled. Luxedge does not store complete credit or debit card numbers on its servers. If payment is not enabled, checkout does not create a paid order and no payment is taken.</p></LS>
-      <LS t="Cookies and Analytics"><p>Our website uses essential browser storage and similar technologies to keep the cart, maintain an account session, and remember preferences. With your consent, we may load Google Analytics and Google advertising technologies, including AdSense, to measure traffic and show relevant ads. Google and its partners may use cookies or similar technologies and may use information such as device, browser, and interaction data as described in Google's own policies. Our site sends Google consent signals (Consent Mode) covering advertising storage, advertising personalization, advertising measurement, and analytics storage; they remain denied until you accept, and Google is instructed not to read or write advertising cookies while they are denied. You can decline optional analytics and advertising through the consent prompt, change your decision by clearing this site's storage in your browser, or use Google's advertising settings to control the ads Google shows you. Where required by law, including in the European Economic Area, the United Kingdom, and Switzerland, we use a consent solution compatible with Google's certification requirements for advertising partners before personalized advertising runs.</p></LS>
-      <LS t="Advertising & Google AdSense"><p>We display advertising on our website through <strong>Google AdSense</strong>, a service provided by Google LLC ("Google"). Google and its advertising partners may use cookies — such as the DoubleClick cookie — to serve and personalize ads based on your visits to this site and other websites across the Internet.</p><p className="mt-2">You can learn more about how Google uses data when you visit sites that partner with it by reading Google's page on <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" className="text-[#1E4636] underline hover:text-[#143023]">how Google uses data when you use our partners' sites or apps</a>.</p><p className="mt-2">You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" className="text-[#1E4636] underline hover:text-[#143023]">Google Ads Settings</a>. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to this website.</p></LS>
-      <LS t="Sharing Your Information"><ul className="list-disc pl-5 mt-2 space-y-1"><li>We do not sell or rent your personal information.</li><li>We may share your information only with trusted service providers, including payment processors, shipping carriers, website hosting providers, analytics services, and AI service providers that help operate the Luxie assistant.</li><li>AI assistant messages may be sent to the configured AI provider and may be stored in our CRM for support and quality purposes. Please do not include passwords, payment details, health records, or other sensitive information in chat messages.</li><li>These providers receive only the information necessary to perform their services and may process it under their own privacy policies.</li></ul></LS>
-      <LS t="Data Security"><p>We use reasonable administrative, technical, and physical safeguards to protect your personal information. While no method of transmission over the Internet is completely secure, we strive to protect your information using industry-standard security practices.</p></LS>
-      <LS t="Your Privacy Choices"><p>Depending on your location, you may request access to, correction of, or deletion of personal information, ask us to correct inaccurate information, or opt out of promotional communications. We do not sell personal information. To make a privacy request, email hello@luxedge.us with enough information for us to verify and respond to your request.</p><p className="mt-2">Where required by applicable law, you may also have rights to opt out of targeted advertising or certain sharing of information. We will not discriminate against you for exercising rights provided by law.</p></LS>
-      <LS t="Data Retention"><p>We retain information only for as long as reasonably necessary for the purposes described here, including order support, accounting, fraud prevention, dispute resolution, and legal compliance. Retention periods vary by the type of information and applicable requirements.</p></LS>
-      <LS t="Children's Privacy"><p>Luxedge is not directed to children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has provided information to us, contact hello@luxedge.us so we can review and delete it where appropriate.</p></LS>
-      <LS t="Email Marketing"><p>If you opt in to newsletters or promotional messages, you can unsubscribe using the link in the message or by contacting us. Transactional messages about an order or support request may still be sent when necessary.</p></LS>
-      <LS t="Third-Party Links"><p>Our website may contain links to third-party websites. We are not responsible for the privacy practices or content of those websites.</p></LS>
-      <LS t="Changes to This Privacy Policy"><p>We may update this Privacy Policy from time to time. Any changes will be posted on this page with an updated effective date.</p></LS>
-      <LS t="Contact Us"><p>If you have any questions about this Privacy Policy or how we handle your information, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002</p></LS>
+      {/* Same PRIVACY_SECTIONS the worker pre-renders (src/content/policies.ts),
+          so the crawl HTML and the hydrated page cannot publish different terms.
+          policy-source.test.ts pins the parity. */}
+      {PRIVACY_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
     </LegalPage>
   );
 }
-
 function TermsPage() {
   return (
     <LegalPage title="Terms of Service" updated={POLICY_LAST_UPDATED['/terms']}>
-      <LS t="Using Luxedge"><p>By using this website, you agree to these Terms of Service and our Privacy Policy. If you do not agree, please do not use the website. Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
-      <LS t="Products, Pricing, and Availability"><p>Product availability, pricing, images, specifications, and descriptions may change as inventory and supplier information are updated. We work to keep details accurate, but occasional errors may occur. We may correct an error or cancel an affected order before shipment, and will notify you if that happens.</p></LS>
-      <LS t="Orders and Payment"><p>Submitting checkout information is not acceptance of an order. An order is accepted only after the payment provider confirms a successful transaction and Luxedge sends an order confirmation. If payment is unavailable, the checkout action remains disabled and no paid order is created.</p></LS>
-      <LS t="Customer Responsibilities"><p>Customers are responsible for providing accurate contact, shipping, and payment details and for using products according to manufacturer instructions, labels, warnings, and applicable law.</p></LS>
-      <LS t="Shipping and Delivery"><p>Shipping availability, cost, and estimated delivery windows are shown at checkout or on the relevant product page. Estimates are not guarantees and may change because of supplier processing, carrier delays, weather, or events outside our control. Please review our Shipping Policy.</p></LS>
-      <LS t="Returns, Replacements, and Refunds"><p>Returns and replacements are governed by our Return &amp; Replacement Policy. Unless applicable law requires otherwise, Luxedge does not offer change-of-mind refunds as a standard remedy. Nothing in these Terms limits a consumer right that cannot legally be waived.</p></LS>
-      <LS t="Product Information"><p>Product information is provided for general shopping purposes. Follow the product label, instructions, warnings, and applicable requirements. Stop using a product if it appears unsafe or causes harm, and contact an appropriate qualified professional when needed.</p><p className="mt-2"><strong>Animal food and feed:</strong> Luxedge does not manufacture or independently certify animal food, feed, treats, supplements, or salt/mineral products. Check the label, ingredients, intended species, warnings, lot/expiry information, supplier reference, and destination support before use. Do not use animal products as human food. Listings may be removed or paused where this information cannot be verified.</p></LS>
-      <LS t="Third-Party Services and Links"><p>Our website may use third-party services for hosting, analytics, advertising, payment processing, fulfillment, and shipping. Third-party services and linked websites have their own terms and privacy policies. We are not responsible for content or services controlled by third parties.</p></LS>
-      <LS t="Intellectual Property"><p>Luxedge and its content, branding, text, graphics, and software are protected by applicable intellectual-property laws. You may use the site for personal, lawful shopping purposes only and may not copy, modify, or commercially exploit its content without permission.</p></LS>
-      <LS t="Disclaimers and Liability"><p>To the maximum extent permitted by law, the website and its content are provided without warranties beyond those that cannot legally be excluded. Luxedge is not liable for indirect, incidental, or consequential losses arising from use of the website or a product, except where liability cannot legally be limited.</p></LS>
-      <LS t="Changes and Contact"><p>We may update these Terms from time to time by posting a revised version with a new effective date. Questions may be sent to hello@luxedge.us or (440) 941-8002.</p></LS>
+      {/* Same TERMS_SECTIONS the worker pre-renders (src/content/policies.ts). */}
+      {TERMS_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
     </LegalPage>
   );
 }
-
 function ReturnsPage() {
   return (
     <LegalPage title="Returns & Replacement Policy" updated={POLICY_LAST_UPDATED['/returns']}>
-      <LS t="Our Promise"><p>At Luxedge, we take pride in the quality of our pet essentials. If you receive a product that is damaged, defective, or incorrect, please contact us within 30 days of your order date. We will work with you to resolve the issue as quickly as possible.</p></LS>
-      <LS t="Return Eligibility"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Return requests must be made within 30 days of the original order date.</li><li>Products must be unused, unopened, and returned in their original packaging.</li><li>Returns require prior approval from Luxedge before being shipped.</li></ul></LS>
-      <LS t="Replacement Policy"><p>Once we receive and inspect your returned product, we will process a replacement if the return meets our policy requirements.</p><p className="mt-2">Replacement items will be shipped after the returned product has been received and approved.</p></LS>
-      <LS t="Refunds and Legal Rights"><p>Luxedge does not offer change-of-mind refunds, exchanges for different products, or store credit as a standard policy. Eligible damaged, defective, or incorrect products are normally handled by replacement. Where applicable law or a payment-provider rule requires a refund or another remedy, that right is not limited by this policy.</p></LS>
-      <LS t="Return Shipping"><ul className="list-disc pl-5 mt-2 space-y-1"><li>Customers are responsible for purchasing their own return shipping label.</li><li>Customers are responsible for properly packaging the product to prevent damage during transit.</li><li>Customers are responsible for all return shipping costs.</li><li>We recommend using a trackable shipping service, as Luxedge is not responsible for returns that are lost or damaged during shipping.</li></ul></LS>
-      <LS t="Damaged or Incorrect Orders"><p>If your order arrives damaged or you received the wrong product, please contact us within 30 days of delivery. Include your order number and photos of the product and packaging so we can review your request promptly.</p></LS>
-      <LS t="Contact Us"><p>If you have any questions regarding returns or replacements, please contact us:<br />Email: hello@luxedge.us<br />Phone: (440) 941-8002<br />Luxedge is operated by Embani LLC, 1500 N Grant St, Denver, CO 80203, United States.</p></LS>
+      {/* Same RETURNS_SECTIONS the worker pre-renders (src/content/policies.ts). */}
+      {RETURNS_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
     </LegalPage>
   );
 }
-
 function ShippingPolicyPage() {
   return (
     <LegalPage title="Shipping Policy" updated={POLICY_LAST_UPDATED['/shipping-policy']}>

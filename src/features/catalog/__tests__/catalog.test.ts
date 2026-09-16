@@ -377,7 +377,7 @@ describe('seo + feed', () => {
     // said the customer pays return shipping — a visible-vs-structured-data
     // contradiction that GSC merchant listings flag.
     const policyText = RETURNS_SECTIONS.map((s) => `${s.title} ${s.body}`).join(' ');
-    const customerPays = /customers? (are|is) responsible for return shipping/i.test(policyText);
+    const customerPays = /customers? (are|is) responsible for[^.]*return shipping costs/i.test(policyText);
     const ld = buildProductJsonLd(p);
     const offer = (ld.find((x) => x['@type'] === 'Product') as Record<string, unknown>)['offers'] as Record<string, unknown>;
     const schemaFees = (offer.hasMerchantReturnPolicy as Record<string, unknown>).returnFees;
