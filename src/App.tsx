@@ -932,8 +932,8 @@ function Header() {
         <nav className="hidden lg:block border-t border-gray-100 bg-white" aria-label="Main Navigation">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-11 text-[13.5px] font-semibold text-gray-700">
             <div className="flex items-center gap-1">
-              <Link to="/shop" className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors flex items-center gap-1">
-                Shop All <ChevronDown strokeWidth={1.5} size={13} className="text-gray-400" />
+              <Link to="/shop" className="px-3 py-1.5 rounded-lg hover:text-[#1E4636] hover:bg-[#F6F8F5] transition-colors">
+                Shop All
               </Link>
               {navLinks.map((item) => {
                 const megaItem = item.megaKey ? MEGA_MENU.find(m => m.label === item.megaKey) : null;

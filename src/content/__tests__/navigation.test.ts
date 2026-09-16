@@ -55,6 +55,14 @@ describe('primary navigation advertises each destination once', () => {
   }
 });
 
+describe('the nav strip advertises only menus it has', () => {
+  it('gives Shop All no dropdown arrow, because it opens no panel', () => {
+    const strip = between(app, 'aria-label="Main Navigation"', '</nav>');
+    const shopAll = strip.slice(strip.indexOf('Shop All'), strip.indexOf('</Link>', strip.indexOf('Shop All')));
+    expect(shopAll).not.toContain('ChevronDown');
+  });
+});
+
 describe('/media is de-listed from primary navigation', () => {
   it('has no /media link in the header nav, mobile drawer or footer', () => {
     expect(app).not.toContain('to="/media"');
