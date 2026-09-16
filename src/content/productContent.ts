@@ -325,29 +325,29 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
   // ------------------------------------------------------------ Pet Accessories
   'adjustable-pet-car-seatbelt-tether-2-pack': {
     summary:
-      'A two-pack of adjustable tethers that clip a pet\'s harness to a car seatbelt, so your pet stays in the seat area while you drive.',
+      'A two-pack of adjustable vehicle tethers that clip a pet’s body harness to a vehicle seatbelt receptacle, helping keep pets in their seat and reducing driver distraction.',
     confirm: [
-      'That it attaches to a harness, not a collar. A tether on a collar is the wrong place to restrain a pet in a car.',
-      'The buckle your car uses — seatbelt fittings vary, so check the listing photos against your vehicle.',
-      'What it is: a restraint that keeps a pet in the seat area during a journey. It is not a protective device, so treat it as a way to stop your pet climbing through, not as protection in a collision.',
+      'Attach exclusively to a chest harness, never to a neck collar. A tether on a collar creates severe risk during sudden braking.',
+      'Check your vehicle’s seatbelt buckle fitting — seatbelt receptacle shapes vary, so inspect the listing photos against your vehicle.',
+      'Understand device limits: this is a travel restraint to reduce driver distraction and prevent pets from roaming the cabin; it is not a crash-tested safety device.',
     ],
     care: [
-      'Check the clip and stitching before each trip.',
+      'Inspect the clip, buckle tab, and webbing stitching before each trip.',
       'Never leave a pet unattended in a parked car, even tethered.',
     ],
     needs: ['length and adjustment range', 'webbing material', 'clip type and load rating evidence'],
   },
   'bungee-pet-car-seatbelt-leash': {
     summary:
-      'A single elastic bungee tether that clips to a harness and a seatbelt point, with some give as your pet moves.',
+      'An elastic bungee travel tether that clips to a chest harness and a car seatbelt buckle, with shock-absorbing give to reduce driver distraction.',
     confirm: [
-      'Harness attachment rather than collar, for the same reason as any car restraint.',
-      'Length: an elastic tether still has to be short enough to keep your pet off the front seats and away from the pedals.',
-      'That it is a restraint for journeys rather than a protective device, and that its job is to keep your pet in place.',
+      'Harness attachment only: never clip a vehicle restraint to a neck collar.',
+      'Tether length: adjust so your pet can comfortably sit or lie down, but cannot reach the driver console or front footwells.',
+      'Understand device limits: this is a travel restraint for journeys rather than a crash-tested protective device.',
     ],
     care: [
-      'Inspect the elastic and the clips for wear, since stretched elastic is the part that fails.',
-      'Unclip it when the car is parked so a pet cannot get tangled.',
+      'Inspect the elastic buffer and the clips for wear; replace if elasticity degrades or webbing frays.',
+      'Unclip the tether when the car is parked so your pet cannot get tangled.',
     ],
     needs: ['unloaded and loaded length', 'elastic material', 'clip type and load rating evidence'],
   },
