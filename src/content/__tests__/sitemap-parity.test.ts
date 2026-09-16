@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { STATIC_ROUTES, buildSitemap, buildSitemapGroups, renderHtmlSitemapBody } from '../../../worker/sitemap';
+import { STATIC_ROUTES, buildSitemap, buildSitemapGroups, renderHtmlSitemapBody, sitemapLinks } from '../../../worker/sitemap';
 import { NAV_PATHS, FOOTER_COLUMNS, SSR_FOOTER_NAV } from '../navigation';
 
 /**
@@ -96,8 +96,10 @@ describe('sitemap — XML and the visitor-facing page share one source', () => {
   });
 
   it('escapes section headings exactly once', async () => {
-    const groups = await buildSitemapGroups();
-    const html = renderHtmlSitemapBody(groups!);
+    // A guide is supplied explicitly: the section still has to render and
+    // escape correctly whenever the blog is public again.
+    const groups = { ...(await buildSitemapGroups())!, guides: [{ href: '/blog/a-guide', label: 'A guide' }] };
+    const html = renderHtmlSitemapBody(groups);
     // "Guides &amp;amp; articles" rendered into the crawl HTML as a literal
     // "&amp;amp;" for every visitor and crawler until this was pinned.
     expect(html).toContain('Guides &amp; articles');
@@ -108,8 +110,14 @@ describe('sitemap — XML and the visitor-facing page share one source', () => {
     const groups = await buildSitemapGroups();
     const html = renderHtmlSitemapBody(groups!);
     expect(html).toContain('>Dog Supplies<');
-    expect(html).toContain('>How to Fit a No-Pull Dog Harness<');
     expect(html).toContain('>Orthopedic Dog Bed<');
+  });
+
+  it('drops the blog from every sitemap surface while it is withdrawn from the index', async () => {
+    const groups = (await buildSitemapGroups())!;
+    expect(groups.guides).toEqual([]);
+    expect(sitemapLinks(groups).some((l) => l.href === '/blog' || l.href.startsWith('/blog/'))).toBe(false);
+    expect(await buildSitemap()).not.toContain('/blog');
   });
 
   it('returns null on a database outage so the caller can 503 instead of publishing stale URLs', async () => {

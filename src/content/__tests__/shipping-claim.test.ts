@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FREE_SHIPPING_CLAIM } from '../productFacts';
+import { SHIPPING_SECTIONS } from '../policies';
 import { quoteShipping } from '../../features/catalog/repository';
+import { DEFAULT_STORE_SETTINGS } from '../../features/catalog/types';
 
 /**
  * The product page used to print a flat "Free shipping" whenever the catalog
@@ -54,5 +56,18 @@ describe('free-shipping claim', () => {
     // survives only as the shop filter chip's label in src/App.tsx.)
     expect(worker).not.toContain("facts.push('Free shipping')");
     expect(react).not.toMatch(/>\s*Free shipping\s*</);
+  });
+
+  it('publishes the same numbers the store is configured with', () => {
+    const policy = SHIPPING_SECTIONS.map((s) => s.body).join(' ');
+    expect(policy).toContain(`$${DEFAULT_STORE_SETTINGS.freeShippingThreshold} or more`);
+    expect(policy).toContain(`${DEFAULT_STORE_SETTINGS.defaultDeliveryMinDays} to ${DEFAULT_STORE_SETTINGS.defaultDeliveryMaxDays} business days`);
+  });
+
+  it('advertises the promotion from the setting, not a hardcoded number', () => {
+    const react = file('src/App.tsx');
+    // The announcement bar must follow the same value the checkout quotes.
+    expect(react).toContain('Free Shipping on Orders ${freeShippingThreshold}+');
+    expect(react).not.toMatch(/Free Shipping on Orders \$\d/);
   });
 });

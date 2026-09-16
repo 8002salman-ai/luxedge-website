@@ -1,5 +1,5 @@
 import { SITEMAP_PRODUCTS_SELECT, SITEMAP_CATEGORIES_SELECT, SITEMAP_BLOG_POSTS_SELECT } from './selects';
-import { isHeldBlog, isHeldProduct } from '../src/content/reviewHolds';
+import { isHeldBlog, isHeldProduct, isBlogPublic } from '../src/content/reviewHolds';
 import { isPubliclyListableProduct } from '../src/content/productEligibility';
 
 // Dynamic sitemap source. Media routes are noindexed and deliberately excluded.
@@ -7,6 +7,9 @@ const root = 'https://luxedge.us';
 
 /**
  * Static, always-indexable pages, in the order the HTML sitemap presents them.
+ *
+ * /blog is listed here for the same reason as the rest, and buildSitemapGroups
+ * drops it (and every article) while the blog is withdrawn from the index.
  *
  * /sitemap is listed here because the HTML sitemap is a real visitor-facing
  * page, not a crawler-only artefact: it is in the XML feed like any other page
@@ -88,13 +91,16 @@ export async function buildSitemapGroups(): Promise<SitemapGroups | null> {
     fetchRows<BlogRow[]>(`blog_posts?select=${SITEMAP_BLOG_POSTS_SELECT}&status=eq.published&order=slug.asc&limit=500`),
   ]);
   if (!prods || !cats || !blogs) return null;
-  return {
-    pages: STATIC_ROUTES.map((r) => ({ ...r })),
-    categories: cats.map((c) => ({ href: `/category/${c.slug}`, label: c.name?.trim() || fromSlug(c.slug) })),
+  const guides = isBlogPublic()
     // Held posts keep returning 404, so they must never be advertised here.
-    guides: blogs
-      .filter((b) => !isHeldBlog(b.slug))
-      .map((b) => ({ href: `/blog/${b.slug}`, label: b.title?.trim() || fromSlug(b.slug) })),
+    ? blogs.filter((b) => !isHeldBlog(b.slug))
+    : [];
+  return {
+    // The blog is noindexed while isBlogPublic() is false, so its index page is
+    // not published URL inventory either.
+    pages: STATIC_ROUTES.filter((r) => isBlogPublic() || r.href !== '/blog').map((r) => ({ ...r })),
+    categories: cats.map((c) => ({ href: `/category/${c.slug}`, label: c.name?.trim() || fromSlug(c.slug) })),
+    guides: guides.map((b) => ({ href: `/blog/${b.slug}`, label: b.title?.trim() || fromSlug(b.slug) })),
     // Mirrors the storefront visibility gate: held + not-publicly-listable
     // products are excluded exactly as they are from the XML feed.
     products: prods
@@ -137,11 +143,13 @@ export function renderHtmlSitemapBody(groups: SitemapGroups): string {
   return [
     '<article>',
     '<h1>Sitemap</h1>',
-    `<p>Every page we currently publish, in one place — ${total} URLs across the storefront, our ${groups.guides.length} care guides, ${groups.categories.length} categories and ${groups.products.length} products. This is the same list our XML sitemap at <a href="/sitemap.xml">/sitemap.xml</a> gives search engines.</p>`,
+    `<p>Every page we currently publish, in one place — ${total} URLs across the storefront, ${groups.categories.length} categories and ${groups.products.length} products. This is the same list our XML sitemap at <a href="/sitemap.xml">/sitemap.xml</a> gives search engines.</p>`,
     section('Main pages', groups.pages),
     section('Shop by category', groups.categories),
     // Plain text: htmlEscape() handles the ampersand. Passing a pre-escaped
     // entity here double-escaped it into "Guides &amp;amp; articles".
+    // Empty while the blog is withdrawn from the index — section() then emits
+    // nothing at all rather than an empty heading.
     section('Guides & articles', groups.guides),
     section('Products', groups.products),
     '<p>Looking for something specific? Try <a href="/shop">searching the shop</a> or <a href="/contact">contacting us</a>.</p>',

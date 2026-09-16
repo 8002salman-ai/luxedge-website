@@ -18,7 +18,7 @@
 // Requires VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env.
 // Usage: node scripts/regenerate-sitemap.mjs
 import fs from 'fs';
-import { isHeldBlog, isHeldProduct } from '../src/content/reviewHolds.ts';
+import { isHeldBlog, isHeldProduct, isBlogPublic } from '../src/content/reviewHolds.ts';
 import { isPubliclyListableProduct } from '../src/content/productEligibility.ts';
 
 const env = {};
@@ -59,9 +59,13 @@ const listable = prods.filter((p) => !isHeldProduct(p.slug) && isPubliclyListabl
 // the live /sitemap.xml is served by the worker while this file ships in the
 // build output, and the two are expected to diff to zero.
 // src/content/__tests__/sitemap-parity.test.ts enforces that.
-const urls = ['/', '/shop', '/blog', '/about', '/contact', '/faq', '/shipping-policy', '/returns', '/copyright', '/editorial-policy', '/disclaimer', '/privacy', '/terms', '/sitemap'];
+const urls = ['/', '/shop', '/blog', '/about', '/contact', '/faq', '/shipping-policy', '/returns', '/copyright', '/editorial-policy', '/disclaimer', '/privacy', '/terms', '/sitemap']
+  // While the blog is withdrawn from the index it is not published URL
+  // inventory, so the static file drops it exactly as buildSitemapGroups does.
+  // The literal above keeps /blog so this list stays comparable to STATIC_ROUTES.
+  .filter((u) => isBlogPublic() || u !== '/blog');
 for (const c of cats) urls.push(`/category/${c.slug}`);
-for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${b.slug}`);
+if (isBlogPublic()) for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${b.slug}`);
 for (const p of listable) urls.push(`/product/${p.slug || p.id}`);
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -70,4 +74,5 @@ ${urls.map((u) => `  <url><loc>https://luxedge.us${u}</loc></url>`).join('\n')}
 </urlset>
 `;
 fs.writeFileSync('public/sitemap.xml', xml);
-console.log(`sitemap: ${urls.length} URLs (${blogs.filter((b) => !isHeldBlog(b.slug)).length} published blogs, ${cats.length} categories, ${listable.length} publicly listable products)`);
+const publishedGuides = isBlogPublic() ? blogs.filter((b) => !isHeldBlog(b.slug)).length : 0;
+console.log(`sitemap: ${urls.length} URLs (${publishedGuides} published blogs, ${cats.length} categories, ${listable.length} publicly listable products)`);

@@ -14,9 +14,17 @@ const heldMedia = new Set([
 // Legacy article withheld after the production content audit: it is too thin
 // and makes unsupported care claims. The CMS row remains available to admins.
 const heldBlog = new Set(['grooming-routine-long-haired-pets']);
-export function isHeldMedia(slug: string): boolean { return heldMedia.has(slug); }
-export function isHeldBlog(slug: string): boolean { return heldBlog.has(slug); }
-const heldProduct = new Set([
+/**
+ * The manual per-product index control.
+ *
+ * Add a slug here and that product stops being public inventory: the worker
+ * pre-render answers 404 with noindex, the sitemap feed drops it, and the store
+ * grid finds no row — while the CMS record itself is untouched and can be
+ * restored by deleting one line. That is deliberate: nothing auto-generates a
+ * product description, so a listing whose facts are not written up yet can be
+ * taken out of the index by hand instead of being padded to look substantial.
+ */
+const heldProduct = new Set<string>([
   'promo-probe-1788640230930',
   // Withheld until independently verified product facts replace thin or
   // contradictory supplier-derived copy. CMS/admin records stay intact.
@@ -24,6 +32,25 @@ const heldProduct = new Set([
   'adjustable-nylon-horse-halter-lead-rope',
   'horse-grooming-kit-12-piece',
 ]);
+
+/**
+ * SEPTEMBER 2026 — the public blog is withdrawn from Google's index.
+ *
+ * Owner decision after the AdSense review: the guides are honestly written and
+ * human-edited, but the blog is the surface that keeps drawing a "low value
+ * content" finding, so it stops being indexable inventory while the storefront
+ * and the trust pages carry the review on their own.
+ *
+ * Nothing is deleted. Every CMS row stays published and editable, /blog and
+ * /blog/<slug> still answer 200 for visitors, and flipping this to true brings
+ * back indexation, the sitemap entries and the admin generation tools in one
+ * edit — that is the whole point of putting it here instead of deleting rows.
+ */
+export const BLOG_PUBLIC = false;
+export function isBlogPublic(): boolean { return BLOG_PUBLIC; }
+
+export function isHeldMedia(slug: string): boolean { return heldMedia.has(slug); }
+export function isHeldBlog(slug: string): boolean { return heldBlog.has(slug); }
 export function isHeldProduct(slug?: string | null): boolean {
   return !!slug && heldProduct.has(slug);
 }

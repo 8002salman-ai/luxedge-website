@@ -20,6 +20,7 @@ import {
 import { useApp } from '../App';
 import { getFreshAccessToken } from '../services/supabase';
 import { generateSeoJson } from '../features/ai/seo';
+import { isBlogPublic } from '../content/reviewHolds';
 import {
   adminListAll, adminCreate, adminUpdate, adminSetLifecycle, adminDelete,
   adminListRevisions, adminRestoreRevision,
@@ -555,12 +556,16 @@ export default function BlogManager() {
                 <p className="text-xs font-semibold text-indigo-800 flex items-center gap-1.5"><Sparkle size={14} />Auto SEO</p>
                 <button
                   onClick={generateBlogSeo}
-                  disabled={seoBusy || !form.title.trim() || !form.content?.trim()}
+                  disabled={!isBlogPublic() || seoBusy || !form.title.trim() || !form.content?.trim()}
+                  title={isBlogPublic() ? undefined : 'The blog is withdrawn from the index, so AI generation is off.'}
                   className="px-3 py-1.5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5"
                 >
                   <Sparkle size={13} />{seoBusy ? 'Generating…' : 'Generate & Save'}
                 </button>
                 <p className="w-full text-[10px] text-indigo-600">Writes the SEO title, meta description, keywords and intent from the article — saved instantly for existing posts.</p>
+                {!isBlogPublic() && (
+                  <p className="w-full text-[10px] font-semibold text-rose-600">The blog is withdrawn from the index, so AI generation is disabled. Re-enable it in src/content/reviewHolds.ts.</p>
+                )}
               </div>
               <div>
                 <label className={label}>SEO title (max 60)</label>
@@ -654,7 +659,7 @@ export default function BlogManager() {
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={automationOnly} onChange={(e) => setAutomationOnly(e.target.checked)} /> Automation only ({counts.automation})
             </label>
-            <button onClick={autoSeoBlogs} disabled={seo.running || !rows} title="Auto-generate + save SEO for every post missing or incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages." className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg">
+            <button onClick={autoSeoBlogs} disabled={!isBlogPublic() || seo.running || !rows} title={isBlogPublic() ? 'Auto-generate + save SEO for every post missing or incomplete SEO — complete SEO is never overwritten. Keeps running while you work on other pages.' : 'The blog is withdrawn from the index (reviewHolds.ts), so AI generation is off.'} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg">
               <Sparkle size={15} />{seo.running ? `Auto SEO… ${seo.done}/${seo.total}` : 'Auto SEO All'}
             </button>
           </div>

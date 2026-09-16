@@ -195,11 +195,18 @@ export interface StoreSettings {
   defaultDeliveryMaxDays: number | null;
 }
 
+/**
+ * The store-wide fallback, mirroring the live `store_settings` row so the
+ * published policy and the code agree: free shipping is on at a $50 subtotal
+ * and the standard delivery estimate is 7-14 business days where a listing
+ * carries no window of its own. Admin can overwrite any of these at runtime
+ * (CatalogAdmin), and the header reads the live value rather than a literal.
+ */
 export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   freeShippingEnabled: true,
   freeShippingThreshold: 50,
-  defaultDeliveryMinDays: null,
-  defaultDeliveryMaxDays: null,
+  defaultDeliveryMinDays: 7,
+  defaultDeliveryMaxDays: 14,
 };
 
 /** Effective storefront price after any store-approved sale/discount. */

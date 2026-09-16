@@ -233,11 +233,12 @@ describe('mediaJsonLd (Media Hub VideoObject)', () => {
     expect(blocks.find((b) => b['@type'] === 'VideoObject')).toBeUndefined();
   });
 
-  it('adds FAQPage only when the video really has FAQ', () => {
+  // Media pages are noindexed, so FAQ markup there is schema for a page we do
+  // not ask Google to index. The visible FAQ stays; only the markup went away.
+  it('never emits FAQPage, even when the video really has FAQ', () => {
     const withFaq = mediaJsonLd(v({ faq: [{ q: 'Is it safe?', a: 'Yes.' }] }), 'https://luxedge.us/media/x');
-    expect(withFaq.find((b) => b['@type'] === 'FAQPage')).toBeDefined();
-    const without = mediaJsonLd(v(), 'https://luxedge.us/media/x');
-    expect(without.find((b) => b['@type'] === 'FAQPage')).toBeUndefined();
+    expect(withFaq.find((b) => b['@type'] === 'FAQPage')).toBeUndefined();
+    expect(mediaJsonLd(v(), 'https://luxedge.us/media/x').find((b) => b['@type'] === 'FAQPage')).toBeUndefined();
   });
 
   it('always includes the BreadcrumbList with Home → Media → video', () => {

@@ -11,9 +11,10 @@ import { ProductFactSections, ProductSpecRows } from './components/ProductFacts'
 import { productFacts, FREE_SHIPPING_CLAIM } from './content/productFacts';
 import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
+import { authorFor } from './content/authors';
 import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
-import { UTILITY_NAV, STRIP_NAV, MEGA_MENU, DRAWER_NAV, FOOTER_COLUMNS } from './content/navigation';
+import { NAV_PATHS, UTILITY_NAV, STRIP_NAV, MEGA_MENU, DRAWER_NAV, FOOTER_COLUMNS } from './content/navigation';
 import { productContentFor } from './content/productContent';
 import ProductGallery from './components/ProductGallery';
 import CookieConsent from './components/CookieConsent';
@@ -726,7 +727,7 @@ function Header() {
   const [scrolled, setScrolled] = useState(false);
   const loc = useLocation();
   const goTo = useNavigate();
-  const { user, cart, logout, openCart } = useApp();
+  const { user, cart, logout, openCart, freeShippingEnabled, freeShippingThreshold } = useApp();
   const { ids: wishIds } = useWishlist();
   const cc = cart.reduce((s, i) => s + i.quantity, 0);
 
@@ -754,11 +755,19 @@ function Header() {
       <div className="bg-[#143023] text-[#E0ECE4] text-[11px] sm:text-xs py-2 px-4 border-b border-[#1E4636]/40 select-none">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
-            <span className="inline-flex items-center gap-1.5 font-medium text-white/95">
-              <Truck01 strokeWidth={1.5} size={13} className="text-[#C5A880]" />
-              Free Shipping on Orders $50+
-            </span>
-            <span className="hidden md:inline text-white/30">•</span>
+            {/* The threshold is read from the same store settings the checkout
+                quotes (`quoteShipping`), so admin can change the promotion
+                without the header going on advertising the old number — and
+                with free shipping switched off, the claim disappears. */}
+            {freeShippingEnabled && (
+              <>
+                <span className="inline-flex items-center gap-1.5 font-medium text-white/95">
+                  <Truck01 strokeWidth={1.5} size={13} className="text-[#C5A880]" />
+                  Free Shipping on Orders ${freeShippingThreshold}+
+                </span>
+                <span className="hidden md:inline text-white/30">•</span>
+              </>
+            )}
             <span className="hidden md:inline-flex items-center gap-1.5 text-white/85">
               <ShieldTick strokeWidth={1.5} size={13} className="text-[#C5A880]" />
               Trusted by Pet &amp; Livestock Owners
@@ -1017,6 +1026,11 @@ function Footer() {
             <p className="text-sm leading-relaxed text-white/75 max-w-sm">
               Quality products, expert guidance, and a community for everyone who cares for animals.
             </p>
+            {/* Operating-entity disclosure: the visitor and an ad reviewer should
+                both be able to see who runs this store without opening a policy.
+                City/state come from the owner-supplied business address in
+                policies.ts; no address is invented here. */}
+            <p className="text-xs text-white/60">Luxedge is operated by Embani LLC · Denver, CO.</p>
             {/* Social Icons — rendered from SOCIAL_PROFILES, which is empty until
                 real Luxedge accounts exist. The previous hardcoded buttons opened
                 bare platform homepages, so they advertised accounts we do not
@@ -2068,16 +2082,11 @@ function HomePage() {
   const [nlDone, setNlDone] = useState(false);
   const [nlSaved, setNlSaved] = useState(false);
 
-  // SEO & Document setup
-  useEffect(() => {
-    document.title = 'Luxedge | Premium Pet Supplies, Livestock Solutions & Animal Care';
-    const setMeta = (name: string, content: string) => {
-      let el = document.head.querySelector(`meta[name="${name}"]`);
-      if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); }
-      el.setAttribute('content', content);
-    };
-    setMeta('description', 'Discover premium pet supplies, livestock nutrition, Himalayan salt licks, and expert animal care guides. Thoughtfully curated for dogs, cats, birds, horses, and cattle.');
-  }, []);
+  // No head writes here: the route head owner (AppRoutes) sets the homepage
+  // title and meta description, and its strings are byte-identical to the ones
+  // the worker pre-renders. This component used to overwrite both on mount with
+  // different copy, so after hydration the title and description a visitor (and
+  // a JS-rendering crawler) saw were no longer the ones served in the HTML.
 
   // GA4: fire view_item_list for homepage
   useEffect(() => {
@@ -3192,7 +3201,7 @@ function CartPage() {
             {/* Delivery reassurance — concise, honest (rates shown at checkout). */}
             <div className="mt-4 pt-4 border-t border-luxe-silver/60 text-[11px] text-luxe-gray space-y-1.5">
               <p className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> Delivery options and live rates shown at checkout</p>
-              <p className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> 30-day return requests</p>
+              <Link to={NAV_PATHS.returns} className="flex items-center gap-1.5 hover:text-luxe-gold transition-colors"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> Easy returns — see our return policy</Link>
               <p className="flex items-center gap-1.5"><Lock01 strokeWidth={1.5} size={13} className="text-luxe-gold shrink-0" /> Secure checkout — card details never stored</p>
             </div>
           </div>
@@ -3500,7 +3509,7 @@ function LoginPage() {
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
           <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Clear checkout terms</span>
           <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Shipping shown at checkout</span>
-          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day return requests</span>
+          <Link to={NAV_PATHS.returns} className="flex items-center gap-1.5 hover:text-luxe-gold transition-colors"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Easy returns — see our return policy</Link>
         </div>
 
         {/* Admin link */}
@@ -3605,7 +3614,7 @@ function SignupPage() {
         <div className="mt-8 flex items-center justify-center gap-6 text-[11px] text-gray-500">
           <span className="flex items-center gap-1.5"><ShieldTick strokeWidth={1.5} size={13} className="text-luxe-gold" /> Clear checkout terms</span>
           <span className="flex items-center gap-1.5"><Truck01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Shipping shown at checkout</span>
-          <span className="flex items-center gap-1.5"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> 30-day return requests</span>
+          <Link to={NAV_PATHS.returns} className="flex items-center gap-1.5 hover:text-luxe-gold transition-colors"><RefreshCcw01 strokeWidth={1.5} size={13} className="text-luxe-gold" /> Easy returns — see our return policy</Link>
         </div>
       </div>
     </div>
@@ -4190,6 +4199,53 @@ function NotFoundPage() {
   );
 }
 
+/**
+ * /author/<slug> — editorial attribution, rendered from the same registry the
+ * worker pre-renders (src/content/authors.ts). The registry is empty until a
+ * real author is supplied, so today this is the not-found state; publishing an
+ * author turns it into a profile without touching this component.
+ */
+function AuthorPage() {
+  const { slug = '' } = useParams();
+  const author = authorFor(slug);
+
+  useEffect(() => {
+    const name = author ? `${author.name} — author | Luxedge` : 'Author Not Found | Luxedge';
+    document.title = name;
+    const setMeta = (attr: 'name' | 'property', key: string, content: string) => {
+      let el = document.head.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) { el = document.createElement('meta'); el.setAttribute(attr, key); document.head.appendChild(el); }
+      el.setAttribute('content', content);
+    };
+    setMeta('name', 'description', author ? author.bio : 'This author page does not exist.');
+    setMeta('name', 'robots', author ? 'index, follow' : 'noindex, nofollow');
+    document.head.querySelector('link[rel="canonical"]')?.setAttribute('href', `https://luxedge.us/author/${slug}`);
+  }, [author, slug]);
+
+  if (!author) return <NotFoundPage />;
+
+  return (
+    <main className="mx-auto max-w-3xl px-4 py-14">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-luxe-gold-dark">Author</p>
+      <h1 className="mt-3 font-serif text-3xl font-bold text-luxe-black">{author.name}</h1>
+      {author.photo && (
+        <img src={author.photo} alt={author.name} width={160} height={160} className="mt-5 rounded-xl object-cover" />
+      )}
+      <p className="mt-5 text-sm leading-relaxed text-luxe-black/70">{author.bio}</p>
+      {author.links && author.links.length > 0 && (
+        <p className="mt-4 flex gap-3 text-sm">
+          {author.links.map((l) => (
+            <a key={l.href} href={l.href} rel="noopener" className="text-luxe-gold-dark hover:underline">{l.label}</a>
+          ))}
+        </p>
+      )}
+      <Link to="/blog" className="mt-8 inline-flex rounded-full bg-luxe-black px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-luxe-gold-dark">
+        Read the guides
+      </Link>
+    </main>
+  );
+}
+
 // APP WITH ROUTES
 // ============================================================================
 export default function App() {
@@ -4245,6 +4301,7 @@ export default function App() {
           <Route path="/blog" element={<SLayout><Suspense fallback={<PageFallback />}><BlogListPage /></Suspense></SLayout>} />
           <Route path="/blog/write" element={<SLayout><Suspense fallback={<PageFallback />}><BlogWritePage /></Suspense></SLayout>} />
           <Route path="/blog/:slug" element={<SLayout><Suspense fallback={<PageFallback />}><BlogDetailPage /></Suspense></SLayout>} />
+          <Route path="/author/:slug" element={<SLayout><AuthorPage /></SLayout>} />
           {/* Auth */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />

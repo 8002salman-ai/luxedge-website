@@ -44,6 +44,8 @@ import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import { withSecurityHeaders } from './seo-meta';
 import { productSlugRedirects } from '../src/content/productSlugHistory';
+import { isBlogPublic } from '../src/content/reviewHolds';
+import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
@@ -289,6 +291,11 @@ export interface Env {
  */
 const LEGACY_PATH_REDIRECTS: Record<string, string> = {
   '/shipping': '/shipping-policy',
+  // The owner-facing "shipping & returns" URL people type and link to. The
+  // store publishes /shipping-policy and /returns as separate substantial
+  // pages, so this is an alias into the returns policy rather than a third,
+  // overlapping policy page.
+  '/shipping-returns': '/returns',
   // Supplier-feed product slugs → the clean Luxedge slug that replaced them
   // (src/content/productSlugHistory.ts). These URLs were indexed and are in
   // bookmarks, so they must merge rather than 404 — and an internal link that
@@ -296,6 +303,33 @@ const LEGACY_PATH_REDIRECTS: Record<string, string> = {
   // audit as a redirected link.
   ...productSlugRedirects(),
 };
+
+/**
+ * WordPress-era URL shapes this domain still gets crawled for. All of them 301
+ * to the homepage: every target was retired with the old site, and answering
+ * them with a 404 leaves them in the index as soft errors.
+ *
+ * /category is the one shape that needs care — the storefront publishes its
+ * real categories under the same prefix, so ONLY a slug we do not publish is
+ * treated as legacy. The live list comes from the category content module,
+ * which is the same set the storefront and the sitemap render from.
+ */
+const LEGACY_WP_PREFIXES = ['/wp-content', '/wp-includes', '/wp-admin', '/tag', '/trendings'];
+const LIVE_CATEGORY_SLUGS = new Set(Object.keys(CATEGORY_CONTENT));
+
+function legacyWordPressRedirect(pathname: string, search: string): string | null {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  if (LEGACY_WP_PREFIXES.some((p) => clean === p || clean.startsWith(`${p}/`))) return '/';
+  if (clean === '/category') return '/';
+  if (clean.startsWith('/category/')) {
+    const slug = clean.slice('/category/'.length);
+    if (slug && !LIVE_CATEGORY_SLUGS.has(slug)) return '/';
+  }
+  // WordPress post/attachment permalinks: /?p=123, /index.php?page_id=9, /feed.
+  if ((clean === '/' || clean === '/index.php') && /[?&](p|page_id|attachment_id)=\d+/.test(search)) return '/';
+  if (clean === '/index.php' || clean === '/feed') return '/';
+  return null;
+}
 
 /**
  * The API modules were originally written for a Node/Vercel runtime and read
@@ -350,6 +384,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     if (legacyTarget) {
       return Response.redirect(new URL(legacyTarget + url.search, url.origin).toString(), 301);
     }
+    // Legacy WordPress shapes (see legacyWordPressRedirect). The query string is
+    // dropped deliberately: /?p=123 must land on / WITHOUT ?p=123, or the
+    // redirect would match itself forever.
+    const wpTarget = legacyWordPressRedirect(url.pathname, url.search);
+    if (wpTarget) return Response.redirect(new URL(wpTarget, url.origin).toString(), 301);
     // Dynamic sitemap from the LIVE database (CMS blogs + products + categories)
     // so publishing updates sitemap.xml without a redeploy. Media is noindexed
     // and deliberately absent from all sitemap feeds.
@@ -554,13 +593,22 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
     const res = await handleRequest(request, env);
     // Single security-header owner: every response this Worker returns —
     // HTML shell, JSON APIs, sitemaps, redirects — gets the same header set
     // exactly once. Response.redirect objects are immutable, so wrap in a
     // try/catch: header-added redirects would throw; pass them through.
     try {
-      return withSecurityHeaders(res);
+      const out = withSecurityHeaders(res);
+      // The public blog is withdrawn from the index (src/content/reviewHolds.ts).
+      // The meta tag covers the HTML we pre-render; this header is what a
+      // crawler acts on for every response on these paths, including the 503
+      // outage pages and anything the SPA shell itself answers.
+      if (!isBlogPublic() && (pathname === '/blog' || pathname.startsWith('/blog/'))) {
+        out.headers.set('x-robots-tag', 'noindex, nofollow');
+      }
+      return out;
     } catch {
       return res;
     }

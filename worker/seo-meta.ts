@@ -25,7 +25,7 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
-import { isHeldProduct, isHeldMedia, isHeldBlog, isRetiredPublicPath } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia, isHeldBlog, isRetiredPublicPath, isBlogPublic } from '../src/content/reviewHolds';
 import { isPubliclyListableProduct } from '../src/content/productEligibility';
 import {
   CONTACT_INFO,
@@ -44,6 +44,7 @@ import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_
 import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
+import { authorFor } from '../src/content/authors';
 import { SSR_FOOTER_NAV } from '../src/content/navigation';
 import { productContentFor } from '../src/content/productContent';
 import { productFacts, FREE_SHIPPING_CLAIM } from '../src/content/productFacts';
@@ -664,8 +665,12 @@ function blogJsonLd(b: BlogEntry, canonical: string): Record<string, unknown>[] 
 // Media JSON-LD + body pre-render
 // ---------------------------------------------------------------------------
 
-/** VideoObject (real data only) + BreadcrumbList + optional FAQPage. Fields
- * with no real value are omitted entirely — nothing is ever fabricated. */
+/** VideoObject (real data only) + BreadcrumbList. Fields with no real value
+ * are omitted entirely — nothing is ever fabricated.
+ *
+ * No FAQPage here, by owner decision: media pages are noindexed, so FAQ markup
+ * is schema for a page we do not ask Google to index. Any FAQ the page shows
+ * stays visible and unmarked. */
 export function mediaJsonLd(v: MediaEntry, canonical: string): Record<string, unknown>[] {
   // Home → Media → video — matches the breadcrumb the client actually renders.
   const blocks: Record<string, unknown>[] = [
@@ -692,17 +697,6 @@ export function mediaJsonLd(v: MediaEntry, canonical: string): Record<string, un
     };
     if (v.duration) video.duration = v.duration;
     blocks.push(video);
-  }
-  if (v.faq && v.faq.length) {
-    blocks.push({
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: v.faq.map((f) => ({
-        '@type': 'Question',
-        name: f.q,
-        acceptedAnswer: { '@type': 'Answer', text: f.a },
-      })),
-    });
   }
   return blocks;
 }
@@ -781,6 +775,9 @@ async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
 const FOOTER_NAV =
   '<nav aria-label="Site" style="margin-top:2rem;padding:1rem 0;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.8">' +
   SSR_FOOTER_NAV.map(({ label, to }) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
+  // Business identity in the crawlable footer too: a reviewer reading the
+  // server response (no JS) should still learn who operates the store.
+  '<p style="margin:.75rem 0 0;font-size:12px;color:#6b7280">Luxedge is operated by Embani LLC \u00b7 Denver, CO.</p>' +
   '</nav>';
 
 function inject(html: string, meta: RouteMeta): string {
@@ -1397,6 +1394,13 @@ export async function maybeInjectSeo(
           '@type': 'Organization',
           name: 'Embani LLC',
           legalName: 'Embani LLC',
+          // The storefront brand the customer buys under, and the mark the
+          // store actually ships (public/luxedge-mark.png). No `sameAs`: the
+          // social profiles are empty on purpose until a real account exists
+          // (src/content/socialProfiles.ts), and naming a profile that does
+          // not exist would be a false claim about the business.
+          brand: { '@type': 'Brand', name: 'Luxedge' },
+          logo: `${root}/luxedge-mark.png`,
           url: root,
           address: {
             '@type': 'PostalAddress',
@@ -1498,6 +1502,8 @@ export async function maybeInjectSeo(
       description:
         'Practical buying guides and care tips for dogs, cats, birds, horses, and cattle — sizing, placement, grooming, and product picks from the Luxedge editorial team.',
       canonical: `${root}/blog`,
+      // Withdrawn from the index while the blog is not public (reviewHolds.ts).
+      noindex: !isBlogPublic(),
     });
     const posts = await getBlogRegistry(origin, env);
     if (posts === null) return { html: inject(out, { title: 'Blog temporarily unavailable | Luxedge', description: 'The blog is temporarily unavailable. Please retry.', canonical: `${root}/blog`, noindex: true }), status: 503 };
@@ -1613,9 +1619,52 @@ export async function maybeInjectSeo(
       canonical,
       ogImage: post.image || null,
       jsonLd: blogJsonLd(post, canonical),
+      // Withdrawn from the index while the blog is not public (reviewHolds.ts).
+      noindex: !isBlogPublic(),
     });
     out = injectArticleBody(out, post);
     return { html: out, status: 200 };
+  }
+
+  // /author/:slug — editorial attribution. The registry is deliberately empty
+  // until a real author is supplied (src/content/authors.ts), so today every
+  // slug falls through to the noindex 404 below rather than publishing an
+  // invented person. The branch is here so that adding an author is a data edit,
+  // not a rendering change: the name, photo, bio and their pre-rendered article
+  // list all come from that one entry.
+  if (segs.length === 2 && segs[0] === 'author') {
+    const slug = decodeURIComponent(segs[1]);
+    const author = authorFor(slug);
+    if (author) {
+      const canonical = `${root}/author/${author.slug}`;
+      const posts = await getBlogRegistry(origin, env);
+      const mine = (posts || []).filter((p) => p.authorName === author.name);
+      const photo = author.photo
+        ? `<p><img src="${esc(author.photo)}" alt="${esc(author.name)}" width="160" height="160" /></p>`
+        : '';
+      const articles = mine.length
+        ? `<h2>Articles by ${esc(author.name)}</h2><ul>${mine
+            .map((p) => `<li><a href="/blog/${esc(p.slug)}">${esc(p.title)}</a></li>`)
+            .join('')}</ul>`
+        : '';
+      const external = (author.links || [])
+        .map((l) => `<a href="${esc(l.href)}" rel="noopener">${esc(l.label)}</a>`)
+        .join(' \u00b7 ');
+      const out = inject(html, {
+        title: `${author.name} \u2014 author | Luxedge`,
+        description: cleanText(author.bio, 200),
+        canonical,
+        ogImage: author.photo || null,
+      });
+      return {
+        html: out.replace(
+          '<div id="ssr-body"></div>',
+          `<article><h1>${esc(author.name)}</h1>${photo}<p>${esc(author.bio)}</p>${articles}`
+            + `${external ? `<p>${external}</p>` : ''}</article>`,
+        ),
+        status: 200,
+      };
+    }
   }
 
   // /category/:slug

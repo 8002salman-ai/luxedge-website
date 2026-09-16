@@ -46,6 +46,35 @@ export const ABOUT_SECTIONS: AboutSection[] = [
       'email hello@luxedge.us with the page URL and the passage concerned.',
   },
   {
+    title: 'Who we are',
+    body:
+      'Luxedge.us is an independent US online store operated by Embani LLC. We are a retailer, not a ' +
+      'manufacturer, a veterinary practice, or a marketplace: we choose the items we list, write the ' +
+      'descriptions and guides that accompany them, and answer the messages that come back. Luxedge is ' +
+      'not affiliated with LuxEdge Furniture Co. (Canada) or LuxEdge Property (UK); those are unrelated ' +
+      'businesses with similar names.',
+  },
+  {
+    title: 'How our products reach you',
+    body:
+      'Luxedge holds no warehouse of its own. Orders are fulfilled through third-party suppliers and ' +
+      'fulfilment partners, and some items ship from outside the United States. That model is why the ' +
+      'catalogue can stay broad and why delivery estimates vary by product: the delivery window shown on ' +
+      'a product page reflects how that item is stocked and shipped, and the shipping policy explains how ' +
+      'tracking and delays are handled. We would rather state that plainly than imply a domestic warehouse ' +
+      'we do not have.',
+  },
+  {
+    title: 'What you can expect from us',
+    body:
+      'Listings state what we can verify — size, material, quantity, and intended species — and omit ' +
+      'specifications we cannot confirm rather than guessing at them. Where a product has a limitation that ' +
+      'matters before you buy, the page says so. Prices and availability are shown at checkout, delivery ' +
+      'estimates are described as estimates, and returns follow the published returns policy. If something ' +
+      'arrives damaged, defective, or different from its listing, email hello@luxedge.us and we will work ' +
+      'through it with you.',
+  },
+  {
     title: 'Customer support',
     body:
       'Our team is available Monday to Friday, 9AM\u20136PM CT. Order processing takes about 1\u20133 business days, and ' +
