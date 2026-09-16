@@ -10,6 +10,12 @@ const heldMedia = new Set([
   '02-02-rainbow-crystal-jelly', '01-01-crystal-block-clean-cut',
   'how-pomegranate-juice-is-made-in-a-1-million-bottle-factory',
   'reality-peel-apartment-to-desert-oasis',
+  'himalayan-koh-himalayan-salt-block-premium-ranch-cgi-commercial',
+  'how-livestock-salt-lick-blocks-are-pressed-shorts',
+  'white-salt-vs-trace-mineral-blocks-what-is-the-difference-shorts',
+  '4-types-of-livestock-salt-licks-explained-shorts',
+  'how-livestock-salt-licks-are-made-and-used-worldwide-factory-to-farm',
+  'how-pakistan-s-himalayan-pink-salt-products-are-made-mine-to-factory',
 ]);
 // Legacy article withheld after the production content audit: it is too thin
 // and makes unsupported care claims. The CMS row remains available to admins.
