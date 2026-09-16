@@ -28,6 +28,20 @@
  *    derived number is ever shown that the stored value does not state.
  */
 
+/**
+ * The storefront's free-shipping claim, worded once for both render paths.
+ *
+ * The checkout grants free shipping only when EVERY line in the cart carries
+ * the flag (`quoteShipping` → `cart.every(…)`), and /shipping-policy states
+ * that cost and eligibility are confirmed in the cart and again at checkout.
+ * A flat "Free shipping" on the product page therefore promised more than the
+ * store delivers — and on supplier-imported rows, where `shipping_cost` is 0
+ * and `free_shipping` defaults to true, it was a feed artifact rather than a
+ * decision anyone made. This wording is true of the flag itself and consistent
+ * with the published policy.
+ */
+export const FREE_SHIPPING_CLAIM = 'Qualifies for free shipping';
+
 export interface ProductFactRow {
   label: string;
   value: string;

@@ -86,7 +86,7 @@ const FIXES = {
       ['Soft fleece padding at pressure points prevents rubbing.', 'Soft fleece padding at pressure points reduces rubbing.'],
     ],
   },
-  'orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs': {
+  'orthopedic-memory-foam-dog-bed': {
     name: [
       ['Orthopedic Memory Foam Dog Bed — Joint Support for Senior & Large Dogs', 'Orthopedic Memory Foam Dog Bed for Senior & Large Dogs'],
     ],
@@ -101,7 +101,7 @@ const FIXES = {
       ['Available in M, L, XL, and XXL for dogs up to 120 lbs.', 'Available in M, L, XL, and XXL.'],
     ],
   },
-  'foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs': {
+  'foldable-pet-travel-carrier-backpack': {
     name: [
       ['Airline-Approved Breathable Foldable Pet Travel Carrier Backpack', 'Breathable Foldable Pet Travel Carrier Backpack'],
     ],

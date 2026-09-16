@@ -43,6 +43,7 @@ import mediaStatusHandler from '../api/media/status';
 import crmWelcomeHandler from '../api/crm/welcome';
 import crmSubscribeHandler from '../api/crm/subscribe';
 import { withSecurityHeaders } from './seo-meta';
+import { productSlugRedirects } from '../src/content/productSlugHistory';
 import crmLeadHandler from '../api/crm/lead';
 import crmListHandler from '../api/crm/list';
 import crmAssistantHandler from '../api/crm/assistant';
@@ -288,6 +289,12 @@ export interface Env {
  */
 const LEGACY_PATH_REDIRECTS: Record<string, string> = {
   '/shipping': '/shipping-policy',
+  // Supplier-feed product slugs → the clean Luxedge slug that replaced them
+  // (src/content/productSlugHistory.ts). These URLs were indexed and are in
+  // bookmarks, so they must merge rather than 404 — and an internal link that
+  // still points at one must resolve in a single hop, not show up in the crawl
+  // audit as a redirected link.
+  ...productSlugRedirects(),
 };
 
 /**

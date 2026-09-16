@@ -143,7 +143,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['size chart with measurements', 'exact fabric composition', 'care label instructions'],
   },
-  'dot-turtleneck-dog-bottoming-shirt': {
+  'polka-dot-turtleneck-dog-sweater': {
     summary:
       'A ribbed polka-dot turtleneck top for small dogs — a light layer for cool rooms or short trips outdoors.',
     confirm: [
@@ -172,7 +172,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     guide: { label: 'How to fit a no-pull dog harness', href: '/blog/how-to-fit-no-pull-dog-harness' },
     needs: ['size chart with chest girth ranges', 'webbing material', 'hardware material and load rating evidence'],
   },
-  'pet-dog-collars-pet-training-dog-training-equipment': {
+  'nylon-training-collar-quick-release': {
     summary:
       'A plain nylon training collar with a quick-release buckle — the everyday walking and identification collar.',
     confirm: [
@@ -230,7 +230,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['capacity in ml/oz', 'dishwasher and microwave suitability', 'base diameter and weight'],
   },
-  'spot-pet-mat-waterproof-and-easy-to-clean-silicone-dog-mat-cat-mat-square-pet-placemat-pet-supplies-3': {
+  'silicone-feeding-placemat-dogs-cats': {
     summary:
       'A square silicone placemat to sit under bowls, so spilled water and food stay off the floor.',
     confirm: [
@@ -321,7 +321,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
   },
 
   // ------------------------------------------------------------ Pet Accessories
-  '2pcs-pet-dog-seat-belt-leash-adjustable-pet-dog-cat-safety-leads-harness-car-vehicle-nylon-fabric-seatbelt-strap': {
+  'adjustable-pet-car-seatbelt-tether-2-pack': {
     summary:
       'A two-pack of adjustable tethers that clip a pet\'s harness to a car seatbelt, so your pet stays in the seat area while you drive.',
     confirm: [
@@ -335,7 +335,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['length and adjustment range', 'webbing material', 'clip type and load rating evidence'],
   },
-  'durable-pet-cat-dog-vehicle-leash-nylon-adjustable-car-seat-dog-safety-belt-pet-leashes': {
+  'bungee-pet-car-seatbelt-leash': {
     summary:
       'A single elastic bungee tether that clips to a harness and a seatbelt point, with some give as your pet moves.',
     confirm: [
@@ -349,7 +349,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['unloaded and loaded length', 'elastic material', 'clip type and load rating evidence'],
   },
-  'foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs': {
+  'foldable-pet-travel-carrier-backpack': {
     summary:
       'A foldable carrier backpack for cats and small dogs, for vet visits and travel where a pet needs to be carried hands-free.',
     confirm: [
@@ -363,7 +363,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['internal dimensions', 'weight limit with evidence', 'airline compatibility documentation', 'fabric and frame material'],
   },
-  'love-my-owneri-love-my-dog-pet-dog-bone-necklace': {
+  'bone-charm-pendant-necklace': {
     summary:
       'A pendant necklace with an engraved bone charm. This is jewellery for the dog owner to wear — it is not a collar or an accessory to fit on a dog.',
     confirm: [
@@ -405,7 +405,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['material and certification evidence for any biodegradability claim', 'bag dimensions', 'roll count and thickness'],
   },
-  'pet-dog-carrier-bag-carrier-for-dogs-backpack-out-double-shoulder-portable-travel-backpack-outdoor-dog-carrier-bag-travel': {
+  'dual-shoulder-pet-carrier-backpack': {
     summary:
       'A dual-shoulder carrier backpack for carrying a small dog on foot, designed to sit on your back with your pet supported in front of you.',
     confirm: [
@@ -477,7 +477,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['size chart with dimensions', 'cover and filling materials', 'removable/washable cover (yes/no)', 'whether the base is non-slip'],
   },
-  'orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs': {
+  'orthopedic-memory-foam-dog-bed': {
     summary:
       'A memory-foam bed sized for larger and older dogs, with a firmer base meant to be easier to get up from than a loose-stuffed bed. It is a comfort bed, not a treatment for joint disease.',
     confirm: [
@@ -508,7 +508,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     guide: { label: 'How to choose a cat tunnel', href: '/blog/how-to-choose-a-cat-tunnel' },
     needs: ['dimensions when open and folded', 'fabric and frame materials', 'whether the frame is wire or sprung steel'],
   },
-  'silicone-flying-saucer-funny-pets-dog-cat-toy-dog-game-flying-discs-resistant-chew-puppy-training-interactive-pet-supplies': {
+  'silicone-flying-disc-dog-toy': {
     summary:
       'A flexible silicone flying disc for fetch, soft enough to catch and throw indoors or out.',
     confirm: [

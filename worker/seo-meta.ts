@@ -45,7 +45,7 @@ import { buildSitemapGroups, renderHtmlSitemapBody } from './sitemap';
 import { merchantOfferExtras } from '../src/features/catalog/seo';
 import { CATEGORY_CONTENT } from '../src/content/categoryContent';
 import { productContentFor } from '../src/content/productContent';
-import { productFacts } from '../src/content/productFacts';
+import { productFacts, FREE_SHIPPING_CLAIM } from '../src/content/productFacts';
 import {
   HOME_SECTIONS,
   HOME_FAQ,
@@ -931,7 +931,7 @@ export function injectProductBody(html: string, p: ProductRow): string {
   const facts: string[] = [];
   if (p.stock_status === 'in_stock' || p.us_inventory === true) facts.push('In stock');
   else if (p.stock_status && p.stock_status !== 'in_stock') facts.push('Availability confirmed at checkout');
-  if (p.free_shipping === true) facts.push('Free shipping');
+  if (p.free_shipping === true) facts.push(FREE_SHIPPING_CLAIM);
   else if (p.shipping_cost && Number(p.shipping_cost) > 0) facts.push(`Shipping ${money(p.shipping_cost)}`);
   facts.push('Delivery timing confirmed during order processing');
   if (facts.length) parts.push(`<p>${esc(facts.join(' · '))}</p>`);

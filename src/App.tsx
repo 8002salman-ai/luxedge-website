@@ -8,7 +8,7 @@ import { BuyerGuidance } from './components/BuyerGuidance';
 import { SiteSections, SiteFaq } from './components/SiteContent';
 import { FaqContent } from './components/FaqContent';
 import { ProductFactSections, ProductSpecRows } from './components/ProductFacts';
-import { productFacts } from './content/productFacts';
+import { productFacts, FREE_SHIPPING_CLAIM } from './content/productFacts';
 import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
 import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
@@ -1768,7 +1768,7 @@ function ProductDetailPage() {
               </span>
             )}
             {product.freeShipping
-              ? <span className="text-green-700 font-medium"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Free shipping</span>
+              ? <span className="text-green-700 font-medium"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />{FREE_SHIPPING_CLAIM}</span>
               : product.shippingCost && parseFloat(product.shippingCost) > 0
                 ? <span className="text-gray-500"><Truck01 strokeWidth={1.5} size={13} className="inline mr-1" />Shipping ${parseFloat(product.shippingCost).toFixed(2)}</span>
                 : null}

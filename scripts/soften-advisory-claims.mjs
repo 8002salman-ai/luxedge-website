@@ -7,10 +7,10 @@ const base = env.VITE_SUPABASE_URL.replace(/\/$/, '');
 const key = env.SUPABASE_SERVICE_ROLE_KEY;
 const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 const changes = {
-  'orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs': {
+  'orthopedic-memory-foam-dog-bed': {
     short_description: 'Orthopedic dog bed with memory foam base, inner lining and removable washable cover. Designed for senior and large dogs.',
   },
-  'spot-pet-mat-waterproof-and-easy-to-clean-silicone-dog-mat-cat-mat-square-pet-placemat-pet-supplies-3': {
+  'silicone-feeding-placemat-dogs-cats': {
     name: 'Easy-Clean Non-Slip Silicone Feeding Placemat for Dogs & Cats',
     short_description: 'Easy-to-clean silicone placemat for food and water bowls.',
     description: 'A silicone placemat that helps contain spills around food and water bowls. Check the stated size and care instructions before ordering.',

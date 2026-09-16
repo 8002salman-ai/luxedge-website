@@ -28,7 +28,7 @@ import { PRODUCT_CONTENT } from '../productContent';
 
 const per = PRODUCT_CONTENT['cat-window-perch-suction-cup-hammock-seat-for-sunbathing'];
 const bags = PRODUCT_CONTENT['dog-poop-bags-biodegradable-waste-bag-rolls'];
-const neck = PRODUCT_CONTENT['love-my-owneri-love-my-dog-pet-dog-bone-necklace'];
+const neck = PRODUCT_CONTENT['bone-charm-pendant-necklace'];
 const trough = PRODUCT_CONTENT['heavy-duty-cattle-feed-trough-50-gallon'];
 
 describe('display layer keeps the verified positions', () => {

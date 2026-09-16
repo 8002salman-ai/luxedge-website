@@ -127,8 +127,8 @@ describe('productContent entries', () => {
   it('says plainly when a fact is missing instead of implying one exists', () => {
     // Products whose known gaps are material must tell the buyer so.
     expect(PRODUCT_CONTENT['dog-bed'].confirm.join(' ')).toMatch(/not published on this page|not stated/i);
-    expect(PRODUCT_CONTENT['orthopedic-memory-foam-dog-bed-joint-support-for-senior-large-dogs'].confirm.join(' ')).toMatch(/not state/i);
-    expect(PRODUCT_CONTENT['foldable-pet-carrier-backpack-airline-approved-travel-bag-for-cats-small-dogs'].confirm.join(' ')).toMatch(/no approval claim/i);
+    expect(PRODUCT_CONTENT['orthopedic-memory-foam-dog-bed'].confirm.join(' ')).toMatch(/not state/i);
+    expect(PRODUCT_CONTENT['foldable-pet-travel-carrier-backpack'].confirm.join(' ')).toMatch(/no approval claim/i);
     expect(PRODUCT_CONTENT['dog-poop-bags-biodegradable-waste-bag-rolls'].confirm.join(' ')).toMatch(/does not state a degradation timeframe/i);
   });
 

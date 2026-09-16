@@ -39,7 +39,7 @@ const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!BASE || !KEY) { console.error('env missing VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY'); process.exit(1); }
 const HEAD = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'content-type': 'application/json' };
 
-const CAR_TETHER = '/product/2pcs-pet-dog-seat-belt-leash-adjustable-pet-dog-cat-safety-leads-harness-car-vehicle-nylon-fabric-seatbelt-strap';
+const CAR_TETHER = '/product/adjustable-pet-car-seatbelt-tether-2-pack';
 const LEASH_SET = '/product/nylon-anti-grind-dog-leash-collar';
 const HARNESS = '/product/no-pull-dog-harness-with-reflective-strips-front-back-clip';
 

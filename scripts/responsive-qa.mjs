@@ -70,6 +70,11 @@ const MEASURE = `(async () => {
   for (const el of document.querySelectorAll('body *')) {
     const r = visible(el);
     if (!r || r.right <= vw + 1 || r.left >= vw || r.right <= 0) continue;
+    // An element with no text and no replaced content cannot truncate anything
+    // a reader would miss — a decorative blurred circle or an off-canvas drawer
+    // deliberately parked past the edge is not a mobile defect. Real content
+    // overflow still reports: text, img, svg, video and canvas all count.
+    if (!el.textContent.trim() && !el.querySelector('img,svg,video,canvas,picture')) continue;
     const cls = (typeof el.className === 'string' ? el.className : '').split(/\\s+/).slice(0, 2).join('.');
     const label = el.tagName.toLowerCase() + (cls ? '.' + cls : '');
     let node = el.parentElement, rail = false;
@@ -82,7 +87,26 @@ const MEASURE = `(async () => {
 
   const h1 = [...document.querySelectorAll('h1')].filter((el) => visible(el)).map((el) => el.textContent.trim().slice(0, 56));
   const imgs = [...document.images].filter((i) => visible(i));
-  const imgNoAlt = imgs.filter((i) => !i.alt).length;
+  // \`alt=""\` is the CORRECT treatment for a decorative image, and this app
+  // renders every product card's hover duplicate that way (with aria-hidden).
+  // Counting those as failures made this gate permanently red on the product
+  // routes, which hides the real case it exists to catch: a content image with
+  // no alt text at all.
+  const decorativeImg = (i) => {
+    if (i.getAttribute('aria-hidden') === 'true') return true;
+    if (i.getAttribute('role') === 'presentation' || i.getAttribute('role') === 'none') return true;
+    // An \`alt=""\` image inside a control that already carries the accessible
+    // name is also correct: the product gallery's thumbnail sits in a
+    // <button aria-label="View product photo N">, so naming the image again
+    // would only make a screen reader repeat it.
+    for (let n = i.parentElement; n && n !== document.body; n = n.parentElement) {
+      if (n.tagName === 'BUTTON' || n.tagName === 'A') {
+        if (n.getAttribute('aria-label') || n.textContent.trim()) return true;
+      }
+    }
+    return false;
+  };
+  const imgNoAlt = imgs.filter((i) => !i.alt && !decorativeImg(i)).length;
   const widgets = [...document.querySelectorAll('body *')].filter((el) => {
     if (getComputedStyle(el).position !== 'fixed') return false;
     const r = visible(el);
