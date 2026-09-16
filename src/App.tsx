@@ -11,7 +11,7 @@ import { ProductFactSections, ProductSpecRows } from './components/ProductFacts'
 import { productFacts } from './content/productFacts';
 import { HOME_SECTIONS, HOME_FAQ, CONTACT_SECTIONS } from './content/sitePages';
 import { isHeldBlog } from './content/reviewHolds';
-import { COPYRIGHT_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
+import { COPYRIGHT_SECTIONS, DISCLAIMER_SECTIONS, EDITORIAL_SECTIONS, SHIPPING_SECTIONS, POLICY_LAST_UPDATED, FAQ_DATA } from './content/policies';
 import { categoryContentFor } from './content/categoryContent';
 import { productContentFor } from './content/productContent';
 import ProductGallery from './components/ProductGallery';
@@ -1114,6 +1114,8 @@ function Footer() {
             <ColTitle>Company</ColTitle>
             <Link to="/about" className={FL}>About Luxedge</Link>
             <Link to="/copyright" className={FL}>Copyright &amp; DMCA</Link>
+            <Link to="/editorial-policy" className={FL}>Editorial Policy</Link>
+            <Link to="/disclaimer" className={FL}>Disclaimer</Link>
             <Link to="/privacy" className={FL}>Privacy Policy</Link>
             <Link to="/terms" className={FL}>Terms of Service</Link>
             <Link to="/sitemap" className={FL}>Sitemap</Link>
@@ -1320,7 +1322,7 @@ function RouteTitle() {
     else if (segs[0] === "orders") { set("My Orders"); desc("Track your Luxedge orders."); }
     else if (segs[0] === "about") { set("About Us"); desc("Luxedge curates premium, honest pet essentials for dogs and cats — quality you can trust."); }
     else if (segs[0] === "contact") { set("Contact Us"); desc("Reach the Luxedge customer support team — Mon–Fri, 9AM–6PM CT."); }
-    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }      else if (segs[0] === "terms") { set("Terms of Service"); desc("The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language."); }      else if (segs[0] === "returns") { set("Returns & Replacement Policy"); desc("How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it."); }
+    else if (segs[0] === "privacy") { set("Privacy Policy"); desc("Luxedge privacy policy — how we handle your data, cookies and advertising."); }      else if (segs[0] === "terms") { set("Terms of Service"); desc("The rules for using Luxedge: orders and payment, shipping estimates, product information, returns, and liability, written in plain language."); }      else if (segs[0] === "returns") { set("Returns & Replacement Policy"); desc("How Luxedge returns work: request within 30 days for damaged, defective, or incorrect items, with replacement or refund where the law requires it."); }      else if (segs[0] === "editorial-policy") { set("Editorial Policy"); desc("How Luxedge prepares, checks, updates, sources, and corrects its animal-care buying guides and editorial content."); }      else if (segs[0] === "disclaimer") { set("Disclaimer"); desc("Important limits on Luxedge product information and general animal-care content."); }
     else if (segs[0] === "shipping-policy" || segs[0] === "shipping") { set("Shipping Policy"); desc("How Luxedge ships orders: where we deliver, how shipping is priced, what affects your delivery estimate, delays, and lost-package help."); }
     else if (segs[0] === "copyright") { full("Copyright & DMCA — Reporting Infringement | Luxedge"); desc("How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice."); }
     else if (segs[0] === "faq") { set("Frequently Asked Questions"); desc("Answers to common questions about shopping at Luxedge."); }
@@ -3911,6 +3913,8 @@ function SitemapPage() {
     { to: '/shipping-policy', label: 'Shipping policy' },
     { to: '/returns', label: 'Returns & refunds' },
     { to: '/copyright', label: 'Copyright & DMCA' },
+    { to: '/editorial-policy', label: 'Editorial policy' },
+    { to: '/disclaimer', label: 'Disclaimer' },
     { to: '/privacy', label: 'Privacy policy' },
     { to: '/terms', label: 'Terms of service' },
     // Kept in step with STATIC_ROUTES in worker/sitemap.ts (which also drives
@@ -3978,6 +3982,32 @@ function CopyrightPage() {
       {COPYRIGHT_SECTIONS.map((s) => (
         <LS key={s.title} t={s.title}>
           {s.body.split('\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
+    </LegalPage>
+  );
+}
+
+/** Rendered from the same EDITORIAL_SECTIONS the worker pre-renders. */
+function EditorialPolicyPage() {
+  return (
+    <LegalPage title="Editorial Policy" updated={POLICY_LAST_UPDATED['/editorial-policy']}>
+      {EDITORIAL_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
+        </LS>
+      ))}
+    </LegalPage>
+  );
+}
+
+/** Rendered from the same DISCLAIMER_SECTIONS the worker pre-renders. */
+function DisclaimerPage() {
+  return (
+    <LegalPage title="Disclaimer" updated={POLICY_LAST_UPDATED['/disclaimer']}>
+      {DISCLAIMER_SECTIONS.map((s) => (
+        <LS key={s.title} t={s.title}>
+          {s.body.split('\\n').map((line, i) => (<p key={i} className={i ? 'mt-2' : undefined}>{line}</p>))}
         </LS>
       ))}
     </LegalPage>
@@ -4295,6 +4325,8 @@ export default function App() {
               worker issues a 301 for crawlers; this covers client-side nav. */}
           <Route path="/shipping" element={<Navigate to="/shipping-policy" replace />} />
           <Route path="/copyright" element={<SLayout><CopyrightPage /></SLayout>} />
+          <Route path="/editorial-policy" element={<SLayout><EditorialPolicyPage /></SLayout>} />
+          <Route path="/disclaimer" element={<SLayout><DisclaimerPage /></SLayout>} />
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
           <Route path="/sitemap" element={<SLayout><SitemapPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />

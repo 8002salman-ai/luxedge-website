@@ -36,6 +36,8 @@ import {
   SHIPPING_SECTIONS,
   FAQ_DATA,
   COPYRIGHT_SECTIONS,
+  DISCLAIMER_SECTIONS,
+  EDITORIAL_SECTIONS,
   POLICY_LAST_UPDATED,
 } from '../src/content/policies';
 import { SEO_PRODUCTS_SELECT, SEO_CATEGORIES_SELECT, SEO_BLOG_POSTS_SELECT, SEO_MEDIA_SELECT } from './selects';
@@ -473,6 +475,16 @@ const STATIC_PAGES: Record<string, { title: string; description: string }> = {
     description:
       'How Luxedge handles copyright: what we own, how to reuse our content, and how a rights holder can report allegedly infringing material with a DMCA-style notice.',
   },
+  '/editorial-policy': {
+    title: 'Editorial Policy — How Luxedge Guides Are Prepared',
+    description:
+      'How Luxedge prepares, checks, updates, sources, and corrects its animal-care buying guides and editorial content.',
+  },
+  '/disclaimer': {
+    title: 'Disclaimer — Luxedge Product and Animal-Care Information',
+    description:
+      'Important limits on Luxedge product information and general animal-care content, including health, safety, and professional-care boundaries.',
+  },
   '/privacy': {
     title: 'Privacy Policy | Luxedge',
     description:
@@ -748,7 +760,7 @@ const FOOTER_NAV =
     ['Shop All', '/shop'], ['Blog', '/blog'], ['Media', '/media'],
     ['About', '/about'], ['Contact', '/contact'], ['FAQ', '/faq'],
     ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
-    ['Copyright & DMCA', '/copyright'],
+    ['Copyright & DMCA', '/copyright'], ['Editorial Policy', '/editorial-policy'], ['Disclaimer', '/disclaimer'],
     ['Privacy Policy', '/privacy'], ['Terms of Service', '/terms'],
     ['Sitemap', '/sitemap'],
   ].map(([label, to]) => `<a href="${to}">${label}</a>`).join(' \u00b7 ') +
@@ -1472,6 +1484,8 @@ export async function maybeInjectSeo(
     else if (staticKey === '/returns') out = injectLegalBody(out, 'Returns & Replacement Policy', RETURNS_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/shipping-policy') out = injectLegalBody(out, 'Shipping Policy', SHIPPING_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/copyright') out = injectLegalBody(out, 'Copyright & DMCA', COPYRIGHT_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/editorial-policy') out = injectLegalBody(out, 'Editorial Policy', EDITORIAL_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
+    else if (staticKey === '/disclaimer') out = injectLegalBody(out, 'Disclaimer', DISCLAIMER_SECTIONS, POLICY_LAST_UPDATED[staticKey]);
     else if (staticKey === '/faq') out = injectFaqBody(out);
     else if (staticKey === '/sitemap') out = await injectSitemapBody(out);
     else if (staticKey === '/careers') out = injectCareersBody(out);

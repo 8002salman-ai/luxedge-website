@@ -23,6 +23,8 @@ export const STATIC_ROUTES: SitemapLink[] = [
   { href: '/shipping-policy', label: 'Shipping policy' },
   { href: '/returns', label: 'Returns & refunds' },
   { href: '/copyright', label: 'Copyright & DMCA' },
+  { href: '/editorial-policy', label: 'Editorial policy' },
+  { href: '/disclaimer', label: 'Disclaimer' },
   { href: '/privacy', label: 'Privacy policy' },
   { href: '/terms', label: 'Terms of service' },
   { href: '/sitemap', label: 'Sitemap' },

@@ -30,7 +30,7 @@ export const PRIVACY_SECTIONS: PolicySection[] = [
   { title: 'Introduction', body: 'At Luxedge, we value your privacy and are committed to protecting your personal information. This Privacy Policy explains what information we collect, how we use it, and the choices you have when using our website. Luxedge is operated by Embani LLC, Denver, CO 80203, United States.' },
   { title: 'Information We Collect', body: 'Name, billing and shipping address, email address, phone number, payment and transaction information (Luxedge does not store complete card numbers), order history, messages and support details, IP address, browser type, device information, and website usage through cookies and analytics.' },
   { title: 'How We Use Your Information', body: 'To process and fulfill orders, communicate regarding orders and customer service, respond to inquiries, improve our website, prevent fraud, comply with legal obligations, and send promotional emails if you have opted in.' },
-  { title: 'Cookies and Analytics', body: 'Our website uses essential browser storage for the cart, account sessions, and preferences. With your consent, we load analytics and advertising technologies to understand traffic and show relevant ads.' },
+  { title: 'Cookies and Analytics', body: 'Our website uses essential browser storage for the cart, account sessions, and preferences. With your consent, we may load Google Analytics and Google advertising technologies, including AdSense, to measure traffic and show relevant ads. Google and its partners may use cookies or similar technologies and may use information such as device, browser, and interaction data as described in Google\'s own policies. You can decline optional analytics and advertising through the consent prompt; see Google\'s advertising settings and our choices section for more information.' },
   { title: 'Sharing Your Information', body: 'We do not sell or rent your personal information. We share only with trusted service providers including payment processors, shipping carriers, website hosting, analytics, and AI service providers that help operate support tools.' },
   { title: 'Data Security', body: 'We use reasonable administrative, technical, and physical safeguards. While no method of transmission is completely secure, we strive to use industry-standard practices.' },
   { title: 'Your Privacy Choices', body: 'You may request access to, correction of, or deletion of personal information. We do not sell personal information. To make a privacy request, email hello@luxedge.us.' },
@@ -97,6 +97,29 @@ export const COPYRIGHT_SECTIONS: PolicySection[] = [
   { title: 'Contact', body: 'Copyright questions and notices: email hello@luxedge.us. We monitor this inbox Monday to Friday, 9AM\u20136PM CT. Luxedge is operated by Embani LLC, Denver, CO 80203, United States.' },
 ];
 
+/** Editorial Policy — explains who prepares the guides and how factual claims,
+ * product links, updates, and corrections are handled. It makes no claim of
+ * veterinary review or first-hand testing that the site cannot substantiate. */
+/** Product and animal-care disclaimer. This is informational, not a medical or
+ * veterinary promise, and uses only the limitations already reflected in the
+ * site's terms and editorial process. */
+export const DISCLAIMER_SECTIONS: PolicySection[] = [
+  { title: 'General information', body: 'Luxedge product pages, buying guides, and care articles provide general shopping and animal-care information. They are not veterinary, medical, nutrition, emergency, legal, or professional advice.' },
+  { title: 'Animal health and safety', body: 'Do not use a Luxedge article or product description to diagnose, treat, or prevent an illness or injury. For pain, toxicity, breathing problems, bleeding, lameness, sudden behaviour changes, nutrition concerns, or any urgent animal problem, contact an appropriately qualified veterinarian or animal-care professional.' },
+  { title: 'Product facts', body: 'We publish the product information we can verify. Size, material, capacity, compatibility, care instructions, and performance can vary by product or variant. Read the exact listing and product label before ordering or use, and do not rely on an image or a general guide as proof of a specification.' },
+  { title: 'Use and supervision', body: 'Choose equipment for the animal, handler, environment, and task. Inspect products before use, follow the label or maker instructions, and supervise animals when a product could be chewed, caught, swallowed, or damaged. Stop using equipment that rubs, breaks, or no longer fits.' },
+  { title: 'Questions and corrections', body: 'If a page contains an error, a broken link, or a product detail you need clarified, email hello@luxedge.us. Luxedge is operated by Embani LLC, Denver, CO 80203, United States.' },
+];
+
+export const EDITORIAL_SECTIONS: PolicySection[] = [
+  { title: 'Who prepares our guides', body: 'Luxedge buying guides and care articles are prepared by the Luxedge Editorial Team. The team writes from the product information available to Luxedge, the individual product listing, and reputable published animal-care guidance where a source is relevant. We do not present the team as veterinarians, trainers, farmers, manufacturers, or product testers.' },
+  { title: 'What our articles are for', body: 'Our guides help readers compare ordinary animal-care products, plan a setup, and check fit, cleaning, placement, or maintenance. They are general information for shopping and everyday care. They are not veterinary, medical, legal, or emergency advice. For illness, injury, pain, toxicity, nutrition concerns, or an urgent animal problem, contact an appropriately qualified professional.' },
+  { title: 'Product facts and links', body: 'Product links are included only when they are relevant to the topic and the product is publicly listed. We do not invent dimensions, materials, capacities, certifications, ratings, reviews, safety tests, or performance results. When a fact is not confirmed, the article tells the reader to check the product listing, label, or supplier evidence before ordering.' },
+  { title: 'Updates and corrections', body: 'We update an article when a product, policy, link, or factual explanation materially changes. We preserve the article URL when it remains useful. If an article cannot be kept accurate or relevant, we may remove it or hold it from public indexing. Readers can report a factual error or a broken link by emailing hello@luxedge.us.' },
+  { title: 'Images and attribution', body: 'Images are used when they help explain the subject or identify a product. We use images supplied for the store or images from sources whose stated terms permit the intended use, and we keep descriptive alternative text where an image is part of an article. An image is not evidence of a product specification or performance claim.' },
+  { title: 'Last reviewed', body: 'This policy describes the editorial process used for Luxedge guides. It does not mean every article has been independently reviewed by a veterinarian or other professional.' },
+];
+
 /**
  * Last-updated label per policy route. ONE source, read by both the worker's
  * pre-rendered HTML and the React page, so the crawl copy and the hydrated copy
@@ -109,6 +132,8 @@ export const POLICY_LAST_UPDATED: Record<string, string> = {
   '/returns': 'August 26, 2026',
   '/shipping-policy': 'September 15, 2026',
   '/copyright': 'September 14, 2026',
+  '/editorial-policy': 'September 15, 2026',
+  '/disclaimer': 'September 15, 2026',
 };
 
 export interface FaqItem {

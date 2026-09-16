@@ -59,7 +59,7 @@ const listable = prods.filter((p) => !isHeldProduct(p.slug) && isPubliclyListabl
 // the live /sitemap.xml is served by the worker while this file ships in the
 // build output, and the two are expected to diff to zero.
 // src/content/__tests__/sitemap-parity.test.ts enforces that.
-const urls = ['/', '/shop', '/blog', '/about', '/contact', '/faq', '/shipping-policy', '/returns', '/copyright', '/privacy', '/terms', '/sitemap'];
+const urls = ['/', '/shop', '/blog', '/about', '/contact', '/faq', '/shipping-policy', '/returns', '/copyright', '/editorial-policy', '/disclaimer', '/privacy', '/terms', '/sitemap'];
 for (const c of cats) urls.push(`/category/${c.slug}`);
 for (const b of blogs) if (!isHeldBlog(b.slug)) urls.push(`/blog/${b.slug}`);
 for (const p of listable) urls.push(`/product/${p.slug || p.id}`);

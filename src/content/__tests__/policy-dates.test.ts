@@ -16,7 +16,7 @@ import { POLICY_LAST_UPDATED } from '../policies';
  */
 const worker = readFileSync('worker/seo-meta.ts', 'utf8');
 
-const LEGAL_ROUTES = ['/privacy', '/terms', '/returns', '/shipping-policy', '/copyright'];
+const LEGAL_ROUTES = ['/privacy', '/terms', '/returns', '/shipping-policy', '/copyright', '/editorial-policy', '/disclaimer'];
 
 function legalRouteLines(): string[] {
   return worker
