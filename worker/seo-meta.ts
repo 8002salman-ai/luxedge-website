@@ -778,7 +778,7 @@ async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
 const FOOTER_NAV =
   '<nav aria-label="Site" style="margin-top:2rem;padding:1rem 0;border-top:1px solid #e5e7eb;font-size:13px;line-height:1.8">' +
   [
-    ['Shop All', '/shop'], ['Blog', '/blog'], ['Media', '/media'],
+    ['Shop All', '/shop'], ['Blog', '/blog'],
     ['About', '/about'], ['Contact', '/contact'], ['FAQ', '/faq'],
     ['Shipping Policy', '/shipping-policy'], ['Returns', '/returns'],
     ['Copyright & DMCA', '/copyright'], ['Editorial Policy', '/editorial-policy'], ['Disclaimer', '/disclaimer'],

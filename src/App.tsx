@@ -785,7 +785,6 @@ function Header() {
     { l: 'Accessories', to: '/category/pet-accessories' },
     { l: 'Guides', to: '/blog' },
     { l: 'Blog', to: '/blog' },
-    { l: 'Media', to: '/media' },
     { l: 'About', to: '/about' },
   ];
 
@@ -1016,7 +1015,6 @@ function Header() {
             <div className="border-t border-gray-100 pt-3 space-y-1 text-sm font-medium text-gray-700">
               <Link to="/shop" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Shop All Products</Link>
               <Link to="/blog" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Care Guides &amp; Blog</Link>
-              <Link to="/media" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Media Hub</Link>
               <Link to="/about" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">About Us</Link>
               <Link to="/contact" onClick={() => setMob(false)} className="block py-1.5 px-2 hover:bg-gray-50 rounded-lg">Contact &amp; Help</Link>
               <Link to="/shop?q=deal" onClick={() => setMob(false)} className="block py-1.5 px-2 text-amber-700 font-bold hover:bg-amber-50 rounded-lg">🔥 Special Deals</Link>
@@ -1091,7 +1089,6 @@ function Footer() {
           <div className="lg:col-span-2 space-y-1">
             <ColTitle>Learn</ColTitle>
             <Link to="/blog" className={FL}>Blog &amp; Guides</Link>
-            <Link to="/media" className={FL}>Media Hub</Link>
             <Link to="/blog" className={FL}>Care Guides</Link>
             <Link to="/category/horse" className={FL}>Equine Minerals</Link>
             <Link to="/category/cattle" className={FL}>Pasture Health</Link>
