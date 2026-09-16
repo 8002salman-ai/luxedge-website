@@ -722,26 +722,19 @@ const MEGA_MENU: { label: string; to: string; groups: { title: string; links: { 
     label: 'Dog', to: '/category/dog-supplies',
     groups: [
       { title: 'Walking & Gear', links: [{ label: 'Harnesses & Collars', to: '/category/dog-supplies' }, { label: 'Travel Accessories', to: '/category/pet-accessories' }] },
-      { title: 'Comfort', links: [{ label: 'Beds', to: '/category/pet-beds' }, { label: 'Blankets & Mats', to: '/category/pet-beds' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls & Feeders', to: '/category/feeding-water' }, { label: 'Water Bottles', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Grooming Tools', to: '/category/grooming' }] },
-      { title: 'Play', links: [{ label: 'Chew Toys', to: '/category/pet-toys' }, { label: 'Rope & Tug Toys', to: '/category/pet-toys' }] },
+      { title: 'Comfort', links: [{ label: 'Beds, Blankets & Mats', to: '/category/pet-beds' }] },
+      { title: 'Feeding', links: [{ label: 'Bowls, Feeders & Water Bottles', to: '/category/feeding-water' }] },
+      { title: 'Grooming', links: [{ label: 'Brushes & Grooming Tools', to: '/category/grooming' }] },
+      { title: 'Play', links: [{ label: 'Chew, Rope & Tug Toys', to: '/category/pet-toys' }] },
     ],
   },
   {
     label: 'Cat', to: '/category/cat-supplies',
     groups: [
-      { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }, { label: 'Scratching', to: '/category/cat-supplies' }] },
-      { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches & Towers', to: '/category/cat-supplies' }] },
-      { title: 'Feeding', links: [{ label: 'Bowls & Fountains', to: '/category/feeding-water' }, { label: 'Feeders', to: '/category/feeding-water' }] },
-      { title: 'Grooming', links: [{ label: 'Brushes', to: '/category/grooming' }, { label: 'Nail Care', to: '/category/grooming' }] },
-    ],
-  },
-  {
-    label: 'Birds', to: '/category/bird-supplies',
-    groups: [
-      { title: 'Feeding', links: [{ label: 'Bird Feed', to: '/category/bird-supplies' }, { label: 'Seed & Treats', to: '/category/bird-supplies' }] },
-      { title: 'Care', links: [{ label: 'Cages & Accessories', to: '/category/bird-supplies' }, { label: 'Perches & Swings', to: '/category/bird-supplies' }] },
+      { title: 'Play', links: [{ label: 'Toys & Wands', to: '/category/pet-toys' }] },
+      { title: 'Comfort', links: [{ label: 'Beds & Caves', to: '/category/pet-beds' }, { label: 'Perches, Towers & Scratching', to: '/category/cat-supplies' }] },
+      { title: 'Feeding', links: [{ label: 'Bowls, Fountains & Feeders', to: '/category/feeding-water' }] },
+      { title: 'Grooming', links: [{ label: 'Brushes & Nail Care', to: '/category/grooming' }] },
     ],
   },
 ];
@@ -779,7 +772,8 @@ function Header() {
   const navLinks = [
     { l: 'Dog', to: '/category/dog-supplies', megaKey: 'Dog' },
     { l: 'Cat', to: '/category/cat-supplies', megaKey: 'Cat' },
-    { l: 'Bird', to: '/category/bird-supplies', megaKey: 'Birds' },
+    // Bird has a single category, so a panel would only repeat it.
+    { l: 'Bird', to: '/category/bird-supplies' },
     { l: 'Horse', to: '/category/horse' },
     { l: 'Livestock', to: '/category/cattle' },
     { l: 'Accessories', to: '/category/pet-accessories' },

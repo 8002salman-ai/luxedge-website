@@ -22,13 +22,26 @@ const between = (src: string, from: string, to: string) => {
 // builds its <a> tags from [label, url] pairs, so its destinations are the
 // second element of each pair rather than an href in the source.
 const workerFooter = between(seoMeta, 'const FOOTER_NAV =', '</nav>');
-const SURFACES = [
+
+// Each header mega panel is a surface of its own, sliced from its groups array
+// to the next panel. The panel's own destination is not counted: the nav bar
+// entry above it is the conventional "go to the section" label, and the nav bar
+// is already covered.
+const megaBlock = between(app, 'const MEGA_MENU', 'function Header()');
+const panelStarts = [...megaBlock.matchAll(/label: '([^']+)', to: '[^']+',\r?\n    groups: \[/g)];
+
+const SURFACES: [string, string, RegExp][] = [
   ['utility bar', between(app, 'Top Utility Bar', 'Main Header'), /to="([^"]+)"/g],
   ['header nav', between(app, 'const navLinks = [', '];'), /to: '([^']+)'/g],
   ['mobile drawer', between(app, '{mob && (', '</header>'), /to="([^"]+)"/g],
   ['footer', between(app, 'function Footer()', '</footer>'), /to="([^"]+)"/g],
   ['worker footer', workerFooter, /\[[^,]+, '([^']+)'\]/g],
-] as const;
+  ...panelStarts.map((m, i): [string, string, RegExp] => [
+    `mega panel "${m[1]}"`,
+    megaBlock.slice((m.index ?? 0) + m[0].length, panelStarts[i + 1]?.index ?? megaBlock.length),
+    /to: '([^']+)'/g,
+  ]),
+];
 
 describe('primary navigation advertises each destination once', () => {
   for (const [name, block, re] of SURFACES) {
