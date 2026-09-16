@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
+import { configDefaults } from "vitest/config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,6 +63,13 @@ export default defineConfig(({ mode }) => {
     server: {
       allowedHosts: ['.monkeycode-ai.live'],
       ...(proxy ? { proxy } : {}),
+    },
+    test: {
+      // .claude/worktrees is a registered git worktree: a second checkout of
+      // this repository whose tests the default include pattern also collected,
+      // so every reported count described two trees. Spread the defaults (they
+      // exclude node_modules and dist) rather than replacing them.
+      exclude: [...configDefaults.exclude, '**/.claude/**'],
     },
   build: {
     // Split vendor libraries into separately cached chunks so app updates
