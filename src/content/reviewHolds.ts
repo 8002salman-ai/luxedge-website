@@ -46,8 +46,14 @@ const heldProduct = new Set<string>([
  * back indexation, the sitemap entries and the admin generation tools in one
  * edit — that is the whole point of putting it here instead of deleting rows.
  */
-export const BLOG_PUBLIC = false;
-export function isBlogPublic(): boolean { return BLOG_PUBLIC; }
+let _blogPublicOverride: boolean | null = null;
+export const BLOG_PUBLIC = true;
+export function isBlogPublic(): boolean {
+  return _blogPublicOverride !== null ? _blogPublicOverride : BLOG_PUBLIC;
+}
+export function setBlogPublicForTesting(val: boolean | null): void {
+  _blogPublicOverride = val;
+}
 
 export function isHeldMedia(slug: string): boolean { return heldMedia.has(slug); }
 export function isHeldBlog(slug: string): boolean { return heldBlog.has(slug); }
@@ -70,25 +76,13 @@ const retiredProductPaths = [
 ];
 
 /**
- * Article URLs that were published, submitted in the sitemap and then removed
- * from the CMS — the live `blog_posts` table now holds no rows at all. Google
- * has these in its index, so they 301 to /blog instead of answering 404, and
- * the same set keeps category and product pages from advertising them.
- *
- * The redirect is decided AFTER the CMS lookup, so a restored article with any
- * of these slugs wins: the worker finds the post and serves it. Nothing here
- * can shadow live content.
+ * Article URLs that were permanently removed from the CMS or consolidated.
+ * Google may still have these in its index, so they 301 to /blog instead of
+ * answering 404.
  */
 const retiredBlogSlugs = new Set([
-  'best-bird-feeder-buyers-guide',
-  'horse-fly-mask-buyers-guide',
-  'horse-grooming-kit-buyers-guide',
-  'horse-halter-lead-rope-buyers-guide',
-  'how-to-choose-a-cat-tunnel',
-  'how-to-choose-cattle-trough-feed-water-setup',
-  'how-to-clean-a-bird-feeder',
-  'how-to-fit-no-pull-dog-harness',
   'dog-car-safety-seat-belt-guide',
+  'essential-supplies-new-puppy',
 ]);
 export function isRetiredBlogSlug(slug?: string | null): boolean {
   return !!slug && retiredBlogSlugs.has(slug);
@@ -111,6 +105,8 @@ export function isLinkablePublicPath(path?: string | null): boolean {
   const productSlug = String(path).match(/^\/product\/([^/?#]+)/)?.[1];
   if (productSlug && isHeldProduct(productSlug)) return false;
   const blogSlug = String(path).match(/^\/blog\/([^/?#]+)/)?.[1];
-  if (blogSlug && isHeldBlog(blogSlug)) return false;
+  if (blogSlug) {
+    if (!isBlogPublic() || isHeldBlog(blogSlug)) return false;
+  }
   return true;
 }

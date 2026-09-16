@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { injectCategoryBody, type CategoryRow, type ProductRow } from '../seo-meta';
+import { setBlogPublicForTesting } from '../../src/content/reviewHolds';
 
 const cat = (name: string, slug: string): CategoryRow => ({ name, slug });
 
@@ -73,9 +74,14 @@ describe('injectCategoryBody — category pet hero image', () => {
     // emitting /blog/... guide links while those articles are retired and their
     // URLs only redirect. The crawl body must carry no such link, for every
     // category — the guide list is filtered at the shared lookup.
-    for (const slug of ['dog-supplies', 'cat-supplies', 'horse', 'bird-supplies', 'cattle', 'pet-beds']) {
-      const html = wrap(cat(slug.replace(/-/g, ' '), slug));
-      expect(html, `${slug} still links a guide`).not.toContain('href="/blog/');
+    setBlogPublicForTesting(false);
+    try {
+      for (const slug of ['dog-supplies', 'cat-supplies', 'horse', 'bird-supplies', 'cattle', 'pet-beds']) {
+        const html = wrap(cat(slug.replace(/-/g, ' '), slug));
+        expect(html, `${slug} still links a guide`).not.toContain('href="/blog/');
+      }
+    } finally {
+      setBlogPublicForTesting(null);
     }
   });
 });

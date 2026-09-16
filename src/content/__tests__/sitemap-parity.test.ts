@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { STATIC_ROUTES, buildSitemap, buildSitemapGroups, renderHtmlSitemapBody, sitemapLinks } from '../../../worker/sitemap';
 import { NAV_PATHS, FOOTER_COLUMNS, SSR_FOOTER_NAV } from '../navigation';
-import { isBlogPublic } from '../reviewHolds';
+import { isBlogPublic, setBlogPublicForTesting } from '../reviewHolds';
 
 /**
  * The footer's "Sitemap" link used to point straight at /sitemap.xml, so
@@ -115,10 +115,15 @@ describe('sitemap — XML and the visitor-facing page share one source', () => {
   });
 
   it('drops the blog from every sitemap surface while it is withdrawn from the index', async () => {
-    const groups = (await buildSitemapGroups())!;
-    expect(groups.guides).toEqual([]);
-    expect(sitemapLinks(groups).some((l) => l.href === '/blog' || l.href.startsWith('/blog/'))).toBe(false);
-    expect(await buildSitemap()).not.toContain('/blog');
+    setBlogPublicForTesting(false);
+    try {
+      const groups = (await buildSitemapGroups())!;
+      expect(groups.guides).toEqual([]);
+      expect(sitemapLinks(groups).some((l) => l.href === '/blog' || l.href.startsWith('/blog/'))).toBe(false);
+      expect(await buildSitemap()).not.toContain('/blog');
+    } finally {
+      setBlogPublicForTesting(null);
+    }
   });
 
   it('returns null on a database outage so the caller can 503 instead of publishing stale URLs', async () => {

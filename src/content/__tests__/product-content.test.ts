@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PRODUCT_CONTENT, NEEDS_OWNER_EVIDENCE, productContentFor } from '../productContent';
-import { isLinkablePublicPath } from '../reviewHolds';
+import { isLinkablePublicPath, setBlogPublicForTesting } from '../reviewHolds';
 
 /** The eight guides live in the CMS as of this change. */
 const LIVE_BLOG_SLUGS = new Set([
@@ -131,9 +131,14 @@ describe('productContent entries', () => {
   });
 
   it('drops the guide while the guides are withdrawn from the index', () => {
-    for (const [slug, c] of entries) {
-      if (!c.guide) continue;
-      expect(productContentFor(slug)?.guide, slug).toBeUndefined();
+    setBlogPublicForTesting(false);
+    try {
+      for (const [slug, c] of entries) {
+        if (!c.guide) continue;
+        expect(productContentFor(slug)?.guide, slug).toBeUndefined();
+      }
+    } finally {
+      setBlogPublicForTesting(null);
     }
   });
 

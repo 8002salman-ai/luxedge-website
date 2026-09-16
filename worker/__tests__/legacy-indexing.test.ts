@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import worker from '../index';
 import { CATEGORY_CONTENT } from '../../src/content/categoryContent';
+import { setBlogPublicForTesting } from '../../src/content/reviewHolds';
 
 /**
  * Two indexation-hygiene contracts the AdSense review turned up:
@@ -16,7 +17,11 @@ const ORIGIN = 'https://luxedge-production.8002salman.workers.dev';
 const SHELL = '<!doctype html><head><title>Luxedge</title>'
   + '<meta name="robots" content="index, follow" /></head><div id="root"></div>';
 
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => {
+  setBlogPublicForTesting(null);
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 async function call(path: string) {
   const env = {
@@ -71,7 +76,8 @@ describe('legacy WordPress URLs', () => {
 });
 
 describe('the blog is withdrawn from the index', () => {
-  it('answers /blog with 200 and both noindex signals', async () => {
+  it('answers /blog with 200 and both noindex signals when withdrawn', async () => {
+    setBlogPublicForTesting(false);
     stubBlog();
     const res = await call('/blog');
     expect(res.status).toBe(200);
@@ -84,7 +90,8 @@ describe('the blog is withdrawn from the index', () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
   });
 
-  it('answers /blog/<slug> with 200 and both noindex signals', async () => {
+  it('answers /blog/<slug> with 200 and both noindex signals when withdrawn', async () => {
+    setBlogPublicForTesting(false);
     stubBlog();
     const res = await call('/blog/a-guide');
     expect(res.status).toBe(200);
@@ -95,9 +102,19 @@ describe('the blog is withdrawn from the index', () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
   });
 
+  it('answers /blog with 200 and index signals when public', async () => {
+    stubBlog();
+    const res = await call('/blog');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-robots-tag')).toBeNull();
+    const html = await res.text();
+    expect(html).toContain('Pet Care Blog');
+    expect(html).not.toContain('noindex');
+  });
+
   it('301s an article URL that was published and then removed', async () => {
     stubBlog();
-    const res = await call('/blog/how-to-fit-no-pull-dog-harness');
+    const res = await call('/blog/essential-supplies-new-puppy');
     expect(res.status).toBe(301);
     expect(res.headers.get('location')).toBe(`${ORIGIN}/blog`);
   });

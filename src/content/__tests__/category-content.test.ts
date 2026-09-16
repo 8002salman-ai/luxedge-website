@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { CATEGORY_CONTENT, categoryContentFor } from '../categoryContent';
-import { isLinkablePublicPath } from '../reviewHolds';
+import { isLinkablePublicPath, setBlogPublicForTesting } from '../reviewHolds';
 
 /** The ten live, indexable categories (worker/sitemap.ts source of truth). */
 const CATEGORY_SLUGS = [
@@ -48,8 +48,13 @@ describe('category content', () => {
   it('drops the guide list entirely while the guides are withdrawn', () => {
     // The live CMS holds no published posts, so every guide href in these
     // modules is retired and the lookup must return none of them.
-    for (const slug of Object.keys(CATEGORY_CONTENT)) {
-      expect(categoryContentFor(slug)!.guides, slug).toEqual([]);
+    setBlogPublicForTesting(false);
+    try {
+      for (const slug of Object.keys(CATEGORY_CONTENT)) {
+        expect(categoryContentFor(slug)!.guides, slug).toEqual([]);
+      }
+    } finally {
+      setBlogPublicForTesting(null);
     }
   });
 
