@@ -2,19 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
 /**
- * Two navigation invariants this header and footer have both broken:
- *
- *  1. ONE LABEL PER DESTINATION. The header carried "Guides" and "Blog" for
- *     /blog, and the footer's Learn column carried /blog twice plus copies of
- *     the Shop column's /category/horse and /category/cattle — advertising more
- *     destinations than the site has.
- *  2. NOTHING THIN IN PRIMARY NAVIGATION. /media is four 57-65 word companion
- *     pages and a 136-word hub, all noindexed, so it was de-listed from the
- *     header, drawer and footer. Every /media URL still resolves 200 + noindex,
- *     and the homepage still links the videos as content.
- *
- * Each surface is sliced out of its source and parsed, so a duplicate cannot
- * quietly return to any of them.
+ * Two navigation invariants the header and footer have both broken: one label
+ * per destination, and nothing thin in primary navigation. Each surface is
+ * sliced out of its source and parsed, so a duplicate destination or a thin
+ * route cannot quietly return.
  */
 const app = readFileSync('src/App.tsx', 'utf8');
 const seoMeta = readFileSync('worker/seo-meta.ts', 'utf8');
@@ -26,14 +17,17 @@ const between = (src: string, from: string, to: string) => {
   return src.slice(start, src.indexOf(to, start));
 };
 
-// Three surfaces render <Link to="…"> and the header reads a data array. The
-// worker footer builds its <a> tags from [label, url] pairs, so its destinations
-// are the second element of each pair rather than an href in the source.
+// Four surfaces render <Link to="..."> — the utility bar is a sibling of
+// <header>, not inside it — and the header reads a data array. The worker footer
+// builds its <a> tags from [label, url] pairs, so its destinations are the
+// second element of each pair rather than an href in the source.
+const workerFooter = between(seoMeta, 'const FOOTER_NAV =', '</nav>');
 const SURFACES = [
+  ['utility bar', between(app, 'Top Utility Bar', 'Main Header'), /to="([^"]+)"/g],
   ['header nav', between(app, 'const navLinks = [', '];'), /to: '([^']+)'/g],
   ['mobile drawer', between(app, '{mob && (', '</header>'), /to="([^"]+)"/g],
   ['footer', between(app, 'function Footer()', '</footer>'), /to="([^"]+)"/g],
-  ['worker footer', between(seoMeta, 'const FOOTER_NAV =', '</nav>'), /\[[^,]+, '([^']+)'\]/g],
+  ['worker footer', workerFooter, /\[[^,]+, '([^']+)'\]/g],
 ] as const;
 
 describe('primary navigation advertises each destination once', () => {
@@ -54,9 +48,8 @@ describe('/media is de-listed from primary navigation', () => {
   });
 
   it('drops Media from the worker footer without dropping its neighbours', () => {
-    const nav = between(seoMeta, 'const FOOTER_NAV =', '</nav>');
-    expect(nav).not.toContain('/media');
-    expect(nav).toContain("['Blog', '/blog']");
+    expect(workerFooter).not.toContain('/media');
+    expect(workerFooter).toContain("['Blog', '/blog']");
   });
 
   it('keeps both /media routes registered so the URLs still resolve', () => {

@@ -809,8 +809,6 @@ function Header() {
             </span>
           </div>
           <div className="flex items-center gap-3 sm:gap-4 shrink-0 text-white/80">
-            <Link to="/contact" className="hover:text-white transition-colors">Help</Link>
-            <span className="text-white/25">|</span>
             <Link to="/orders" className="hover:text-white transition-colors">Track Order</Link>
             <span className="text-white/25">|</span>
             <Link to="/contact" className="hover:text-white transition-colors">Contact</Link>
