@@ -34,9 +34,16 @@ const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 function listable(p) {
   if (!/^(active|published)$/.test(txt(p.status).toLowerCase())) return false;
   if (num(p.price) <= 0) return false;
-  if (!/^https?:\/\//i.test(txt(p.image_url))) return false;
+  const hasImage = /^https?:\/\//i.test(txt(p.image_url)) || (p.product_images || []).some((i) => /^https?:\/\//i.test(txt(i?.url || i?.public_url)));
+  if (!hasImage) return false;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(txt(p.slug))) return false;
+  if (txt(p.name).length < 3 || /^(product|item|test)(\s|$)/i.test(txt(p.name))) return false;
   if (txt(p.description).length + txt(p.short_description).length < 100) return false;
   if (/\bkong\b|official|manufacturer/i.test(txt(p.supplier_source))) return false;
+  const facts = txt([p.slug, p.name, p.description, p.short_description].join(' ')).toLowerCase();
+  if ((/(horse.*halter|halter.*horse)/.test(facts) && /nylon/.test(facts) && /cowhide/.test(facts)) ||
+      (/(grooming.*kit|kit.*grooming)/.test(facts) && /\b12[- ]?piece\b/.test(facts) && /\b10[- ]?piece\b/.test(facts)) ||
+      (/(trough|water bladder)/.test(facts) && /\b30[- ]?gallon\b/.test(facts) && /water bladder/.test(facts))) return false;
   const declared = txt(p.commerce_readiness);
   if (declared) return declared === 'COMMERCE_READY';
   const src = txt(p.supplier_source).toLowerCase();
@@ -117,12 +124,19 @@ const scanSlug = (slug, copy, owner) => SLUG_TOKENS
   }));
 
 const [rawProducts, rawPosts, rawCats] = await Promise.all([
-  get('products?select=slug,name,status,price,image_url,short_description,description,seo_title,seo_description,supplier_source,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness&limit=500'),
+  get('products?select=slug,name,status,price,image_url,short_description,description,seo_title,seo_description,supplier_source,cost_price,us_inventory,stock_status,inventory_qty,commerce_readiness,product_images(url,public_url)&limit=500'),
   get('blog_posts?select=slug,title,excerpt,content,seo_title,meta_description,author_name,date_label&status=eq.published&order=slug.asc&limit=500'),
   get('categories?select=slug,name,description&is_active=eq.true&order=slug.asc&limit=200'),
 ]);
 
-const products = rawProducts.filter(listable);
+// Match the public sitemap/storefront contract: editorially held records stay
+// out of the public claim scan even when their admin data is otherwise complete.
+const HELD_PRODUCT_SLUGS = new Set([
+  'kong-classic-durable-natural-rubber-dog-toy',
+  'adjustable-nylon-horse-halter-lead-rope',
+  'horse-grooming-kit-12-piece',
+]);
+const products = rawProducts.filter((p) => !HELD_PRODUCT_SLUGS.has(txt(p.slug)) && listable(p));
 const findings = [];
 
 for (const p of products) {
