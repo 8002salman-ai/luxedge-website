@@ -68,7 +68,7 @@ const FIXES = {
       ['Safety guard prevents over-grinding.', 'Safety guard for controlled grinding.'],
     ],
   },
-  'horse-fly-mask-with-ears-uv-protection': {
+  'horse-fly-mask-with-ears': {
     name: [
       ['Breathable Mesh Horse Fly Mask with Ear Protection & UV Shield', 'Breathable Mesh Horse Fly Mask with Ear Covers'],
     ],

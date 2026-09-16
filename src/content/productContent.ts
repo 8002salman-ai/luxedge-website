@@ -97,7 +97,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
   },
 
   // ---------------------------------------------------------------------- Cattle
-  'heavy-duty-cattle-feed-trough-50-gallon': {
+  'heavy-duty-cattle-feed-trough': {
     summary:
       'A poly feed trough for cattle and goats, sized for group feeding in a pen, paddock or barn.',
     confirm: [
@@ -304,7 +304,7 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
     ],
     needs: ['mineral analysis document', 'rope material and length', 'exact per-lick weight verification'],
   },
-  'horse-fly-mask-with-ears-uv-protection': {
+  'horse-fly-mask-with-ears': {
     summary:
       'A breathable mesh fly mask with ear covers, for turnout and ridden work in fly season. It is a physical barrier against flies and sunlight.',
     confirm: [

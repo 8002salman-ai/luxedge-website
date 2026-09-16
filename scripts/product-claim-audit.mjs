@@ -88,7 +88,7 @@ const SLUG_TOKENS = [
 ];
 
 /** Markdown link targets are URLs, not reading copy. Strip them before scanning
- * a body so `/product/horse-fly-mask-with-ears-uv-protection` cannot be reported
+ * a body so `/product/horse-fly-mask-with-ears` cannot be reported
  * as the guide making a UV claim. */
 const stripLinkTargets = (text) => String(text || '').replace(/\]\([^)]*\)/g, ']');
 

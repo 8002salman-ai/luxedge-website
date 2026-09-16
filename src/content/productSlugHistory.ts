@@ -46,6 +46,13 @@ export const PRODUCT_SLUG_RENAMES: Record<string, string> = {
     'orthopedic-memory-foam-dog-bed',
   'love-my-owneri-love-my-dog-pet-dog-bone-necklace': 'bone-charm-pendant-necklace',
   'dot-turtleneck-dog-bottoming-shirt': 'polka-dot-turtleneck-dog-sweater',
+  // The last two slugs that still named a claim the published copy deliberately
+  // does not make. scripts/product-claim-audit.mjs tracks both token classes and
+  // reports them: "public URL still names a claim the visible copy no longer
+  // makes". Its own note says a rename needs a 301 and is an owner decision —
+  // the redirect layer above makes that the same one-line change.
+  'horse-fly-mask-with-ears-uv-protection': 'horse-fly-mask-with-ears',
+  'heavy-duty-cattle-feed-trough-50-gallon': 'heavy-duty-cattle-feed-trough',
 };
 
 /** Slugs that must never appear in a public product URL again. A product slug

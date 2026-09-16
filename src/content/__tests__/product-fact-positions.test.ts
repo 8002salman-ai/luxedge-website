@@ -29,7 +29,7 @@ import { PRODUCT_CONTENT } from '../productContent';
 const per = PRODUCT_CONTENT['cat-window-perch-suction-cup-hammock-seat-for-sunbathing'];
 const bags = PRODUCT_CONTENT['dog-poop-bags-biodegradable-waste-bag-rolls'];
 const neck = PRODUCT_CONTENT['bone-charm-pendant-necklace'];
-const trough = PRODUCT_CONTENT['heavy-duty-cattle-feed-trough-50-gallon'];
+const trough = PRODUCT_CONTENT['heavy-duty-cattle-feed-trough'];
 
 describe('display layer keeps the verified positions', () => {
   it('perch states that no weight rating is published', () => {

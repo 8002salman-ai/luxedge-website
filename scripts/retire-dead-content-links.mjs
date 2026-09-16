@@ -236,7 +236,7 @@ const TROUGH = {
   short_description: 'Heavy-duty rectangular livestock feeding trough for cattle, sheep, goats, pigs and poultry. Easy-to-clean design with reinforced edges.',
   description: 'Built for livestock use, this heavy-duty poly trough works as both a feed trough and a water basin. The smooth interior is easy to clean, which suits daily feeding and watering, and it is made to be used outdoors on the farm. Suitable for cattle, horses, goats, and other large livestock.\n\nExact dimensions and capacity are not stated on this listing \u2014 contact us before ordering if you need a specific size.',
 };
-const [trough] = await api('products?select=slug,name,seo_title,seo_description,short_description,description&slug=eq.heavy-duty-cattle-feed-trough-50-gallon');
+const [trough] = await api('products?select=slug,name,seo_title,seo_description,short_description,description&slug=eq.heavy-duty-cattle-feed-trough');
 if (!trough) { console.error('trough product not found'); process.exit(1); }
 // Only the COPY fields are checked — the slug legitimately keeps "50-gallon"
 // (it is the indexed URL), so including it would rewrite the same copy on every
@@ -244,10 +244,10 @@ if (!trough) { console.error('trough product not found'); process.exit(1); }
 const troughCopy = [trough.name, trough.seo_title, trough.seo_description, trough.short_description, trough.description].join(' ');
 const conflicts = troughCopy.match(/50-gallon|50 gallon|60 ?cm/gi) || [];
 if (conflicts.length) {
-  await api('products?slug=eq.heavy-duty-cattle-feed-trough-50-gallon', {
+  await api('products?slug=eq.heavy-duty-cattle-feed-trough', {
     method: 'PATCH', body: JSON.stringify(TROUGH),
   });
-  console.log(`heavy-duty-cattle-feed-trough-50-gallon: copy replaced (found ${conflicts.length} conflicting capacity mention(s))`);
+  console.log(`heavy-duty-cattle-feed-trough: copy replaced (found ${conflicts.length} conflicting capacity mention(s))`);
 } else {
-  console.log('heavy-duty-cattle-feed-trough-50-gallon: no conflicting capacity claim left, unchanged');
+  console.log('heavy-duty-cattle-feed-trough: no conflicting capacity claim left, unchanged');
 }

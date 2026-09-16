@@ -87,7 +87,7 @@ Browse [Bird Supplies](/category/bird-supplies) to compare the current feeder an
 
 A standard mask covers the eye area and part of the face. A style with ear covers adds fabric around the ears, which may suit a horse bothered by flies there. More coverage is not automatically better: consider heat, rubbing, the horse’s tolerance, and how often you can check the mask.
 
-The current [Horse Fly Mask with Ears](/product/horse-fly-mask-with-ears-uv-protection) listing should be read for its own stated material and fit details. Do not assume that a product title proves a performance rating; confirm any specification you need before ordering.
+The current [Horse Fly Mask with Ears](/product/horse-fly-mask-with-ears) listing should be read for its own stated material and fit details. Do not assume that a product title proves a performance rating; confirm any specification you need before ordering.
 
 ## Measure and check the fit
 
@@ -159,7 +159,7 @@ Skip tools that duplicate a job you already do well, products with claims you ca
 
 Shake out hair and dirt after use. Wash brushes according to their material, rinse away soap, and let them dry fully before storing them. Keep the hoof pick and other hard tools clean, and replace items with cracks, rough edges, or damaged handles.
 
-A [horse fly mask](/product/horse-fly-mask-with-ears-uv-protection) and a correctly fitted [nylon halter and lead rope](/product/adjustable-nylon-horse-halter-lead-rope) may be useful parts of a wider routine, but they are separate from the grooming kit itself.
+A [horse fly mask](/product/horse-fly-mask-with-ears) and a correctly fitted [nylon halter and lead rope](/product/adjustable-nylon-horse-halter-lead-rope) may be useful parts of a wider routine, but they are separate from the grooming kit itself.
 
 ## Frequently Asked Questions
 
