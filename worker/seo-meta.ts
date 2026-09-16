@@ -25,7 +25,7 @@
 // ============================================================================
 
 import { ABOUT_QUOTE, ABOUT_LEAD, ABOUT_SECTIONS } from '../src/content/about';
-import { isHeldProduct, isHeldMedia, isHeldBlog, isRetiredPublicPath, isBlogPublic } from '../src/content/reviewHolds';
+import { isHeldProduct, isHeldMedia, isHeldBlog, isRetiredPublicPath, isRetiredBlogSlug, isBlogPublic } from '../src/content/reviewHolds';
 import { isPubliclyListableProduct } from '../src/content/productEligibility';
 import {
   CONTACT_INFO,
@@ -1599,6 +1599,10 @@ export async function maybeInjectSeo(
     }
     const post = posts.find((x) => x.slug === slug);
     if (!post) {
+      // An article that was published, submitted in the sitemap and later
+      // removed: 301 to the blog index rather than leaving a 404 in the index.
+      // Checked only after the CMS lookup, so a restored article wins.
+      if (isRetiredBlogSlug(slug)) return { redirect: '/blog' };
       return {
         html: inject(html, {
           title: 'Post Not Found | Luxedge',

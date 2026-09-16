@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { STATIC_ROUTES, buildSitemap, buildSitemapGroups, renderHtmlSitemapBody, sitemapLinks } from '../../../worker/sitemap';
 import { NAV_PATHS, FOOTER_COLUMNS, SSR_FOOTER_NAV } from '../navigation';
+import { isBlogPublic } from '../reviewHolds';
 
 /**
  * The footer's "Sitemap" link used to point straight at /sitemap.xml, so
@@ -145,9 +146,14 @@ describe('sitemap — the static URL set cannot drift', () => {
   });
 
   it('ships the same static set in the built sitemap.xml', () => {
-    for (const href of STATIC_ROUTES.map((r) => r.href)) {
+    // Same rule as the worker's own feed: /blog is excluded only while the blog
+    // is withdrawn from the index, and present again the moment it is public.
+    for (const href of STATIC_ROUTES.map((r) => r.href).filter((h) => isBlogPublic() || h !== '/blog')) {
       const expected = href === '/' ? '<loc>https://luxedge.us/</loc>' : `<loc>https://luxedge.us${href}</loc>`;
       expect(staticSitemapXml, `${href} missing from public/sitemap.xml`).toContain(expected);
+    }
+    if (!isBlogPublic()) {
+      expect(staticSitemapXml, 'the withdrawn blog is still advertised').not.toContain('<loc>https://luxedge.us/blog</loc>');
     }
     expect(staticSitemapXml).not.toContain('/shipping<');
   });

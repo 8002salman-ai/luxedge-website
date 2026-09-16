@@ -68,6 +68,30 @@ const retiredPublicPaths = new Set([
   '/blog/dog-car-safety-seat-belt-guide',
   '/product/2m-pet-dog-leash-with-soft-padded-handle-highly-reflective-dog-rope-for-night-walking-suitable-for-small-medium-and-large-dogs',
 ]);
+
+/**
+ * Article URLs that were published, submitted in the sitemap and then removed
+ * from the CMS — the live `blog_posts` table now holds no rows at all. Google
+ * has these in its index, so they 301 to /blog instead of answering 404.
+ *
+ * The redirect is decided AFTER the CMS lookup, so a restored article with any
+ * of these slugs wins: the worker finds the post and serves it. Nothing here
+ * can shadow live content.
+ */
+const retiredBlogSlugs = new Set([
+  'best-bird-feeder-buyers-guide',
+  'horse-fly-mask-buyers-guide',
+  'horse-grooming-kit-buyers-guide',
+  'horse-halter-lead-rope-buyers-guide',
+  'how-to-choose-a-cat-tunnel',
+  'how-to-choose-cattle-trough-feed-water-setup',
+  'how-to-clean-a-bird-feeder',
+  'how-to-fit-no-pull-dog-harness',
+  'dog-car-safety-seat-belt-guide',
+]);
+export function isRetiredBlogSlug(slug?: string | null): boolean {
+  return !!slug && retiredBlogSlugs.has(slug);
+}
 export function isRetiredPublicPath(path?: string | null): boolean {
   if (!path) return false;
   const clean = path.split(/[?#]/)[0].replace(/\/+$/, '');

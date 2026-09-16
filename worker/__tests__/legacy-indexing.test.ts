@@ -95,6 +95,20 @@ describe('the blog is withdrawn from the index', () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
   });
 
+  it('301s an article URL that was published and then removed', async () => {
+    stubBlog();
+    const res = await call('/blog/how-to-fit-no-pull-dog-harness');
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/blog`);
+  });
+
+  it('still 404s an article slug that was never published', async () => {
+    stubBlog();
+    const res = await call('/blog/never-existed');
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain('noindex');
+  });
+
   it('leaves the rest of the store indexable', async () => {
     for (const path of ['/about', '/contact', '/returns']) {
       const res = await call(path);
