@@ -65,6 +65,9 @@ interface RouteMeta {
   description: string;
   canonical: string;
   noindex?: boolean;
+  /** Per-page social/preview image (absolute URL). Falls back to the shell's
+   * static og:image (luxedge-mark.png) when absent. */
+  ogImage?: string | null;
   jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
 
@@ -703,11 +706,20 @@ export function mediaJsonLd(v: MediaEntry, canonical: string): Record<string, un
   return blocks;
 }
 
-/** Pre-renders the /media hub index with real video links from the CMS. */
+/** Pre-renders the /media hub index with real video links + thumbnails from
+ * the CMS, so the initial HTML shows the actual video cards. */
 async function injectMediaIndexBody(html: string): Promise<string> {
   const media = await getMediaRegistry();
   const items = media && media.length
-    ? media.slice(0, 15).map((v) => `<li><a href="/media/${esc(v.slug)}">${esc(v.title)}</a></li>`).join('')
+    ? media
+        .slice(0, 15)
+        .map((v) => {
+          const thumb = v.thumbnail
+            ? `<br /><img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" loading="lazy" width="480" height="270" />`
+            : '';
+          return `<li><a href="/media/${esc(v.slug)}">${esc(v.title)}</a>${thumb}</li>`;
+        })
+        .join('')
     : '<li>Videos from the official Luxedge YouTube channel are added here as they are published.</li>';
   const parts: string[] = [
     `<h1>Luxedge Media</h1>`,
@@ -725,7 +737,16 @@ async function injectMediaBody(html: string, v: MediaEntry): Promise<string> {
   ];
   if (v.publishedAt) parts.push(`<p><time datetime="${esc(v.publishedAt)}">${esc(v.publishedAt.slice(0, 10))}</time></p>`);
   if (v.youtubeVideoId) {
-    parts.push(`<p><a href="https://www.youtube.com/watch?v=${esc(v.youtubeVideoId)}">Watch on YouTube</a>${v.thumbnail ? ` — <img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" />` : ''}</p>`);
+    // Server-rendered iframe: the video embed is real markup in the initial
+    // HTML, so the crawler can verify the video a VideoObject points at
+    // (frame-src already allows youtube.com). The watch link stays for any
+    // client that blocks frames.
+    parts.push(
+      `<iframe src="https://www.youtube.com/embed/${esc(v.youtubeVideoId)}" title="${esc(v.title)}" loading="lazy" allowfullscreen></iframe>`,
+    );
+    parts.push(`<p><a href="https://www.youtube.com/watch?v=${esc(v.youtubeVideoId)}">Watch on YouTube</a></p>`);
+  } else if (v.thumbnail) {
+    parts.push(`<p><img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" loading="lazy" /></p>`);
   }
   if (v.summary) parts.push(`<p>${esc(v.summary)}</p>`);
   if (v.description) parts.push(`<p>${esc(v.description).replace(/\n+/g, '</p><p>')}</p>`);
@@ -790,6 +811,11 @@ function inject(html: string, meta: RouteMeta): string {
   out = out.replace(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(meta.title)}" />`);
   out = out.replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(meta.description)}" />`);
   out = out.replace(/<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${esc(meta.canonical)}" />`);
+  if (meta.ogImage) {
+    // Per-page image: replace the shell default on both card protocols.
+    out = out.replace(/<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${esc(meta.ogImage)}" />`);
+    out = out.replace(/<meta name="twitter:image" content="[^"]*" \/>/, `<meta name="twitter:image" content="${esc(meta.ogImage)}" />`);
+  }
   out = out.replace(/<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(meta.title)}" />`);
   out = out.replace(/<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(meta.description)}" />`);
   if (meta.jsonLd) {
@@ -1068,7 +1094,7 @@ function renderSiteFaq(items: SiteFaqItem[], title = 'Common questions'): string
   return parts;
 }
 
-export function injectHomeBody(html: string): string {
+export function injectHomeBody(html: string, products?: ProductRow[] | null): string {
   const parts: string[] = [
     `<h1>The Best Finds for Every Pet, Thoughtfully Curated.</h1>`,
     `<p>Sourced worldwide. Chosen with care.</p>`,
@@ -1100,6 +1126,28 @@ export function injectHomeBody(html: string): string {
     ...renderSiteSections(HOME_SECTIONS),
     ...renderSiteFaq(HOME_FAQ),
   ];
+  // A real product grid: what the store actually sells, with images and
+  // prices, in the crawler's initial HTML. The hydrated homepage renders its
+  // own curated React sections on top; this block gives the crawl the same
+  // commercial substance the visitor sees. Same public filter as /shop and the
+  // sitemap; name + price + one real image only — nothing invented.
+  const publicProducts = (products || []).filter(
+    (p) => p.slug && !isHeldProduct(p.slug) && isPubliclyListableProduct(p),
+  );
+  if (publicProducts.length) {
+    const cards = publicProducts.slice(0, 12).map((p) => {
+      const img = productImageUrls(p)[0];
+      const price = money(p.price);
+      return (
+        `<li>` +
+        `<a href="/product/${esc(p.slug!)}">${esc(p.name)}</a>` +
+        (price ? ` — ${esc(price)}` : '') +
+        (img ? `<br /><img src="${esc(img)}" alt="${esc(p.name)}" loading="lazy" width="400" height="400" />` : '') +
+        `</li>`
+      );
+    });
+    parts.push(`<h2>Featured products</h2>`, `<ul>${cards.join('')}</ul>`);
+  }
   return html.replace('<div id="ssr-body"></div>', `<article>${parts.join('\n')}</article>`);
 }
 
@@ -1329,11 +1377,21 @@ export async function maybeInjectSeo(
 
   // Homepage (and the /home alias the app also serves) — canonical always to /.
   if (segs.length === 0 || (segs.length === 1 && segs[0] === 'home')) {
+    // og:image: the homepage pre-renders a real product grid below the fold,
+    // so the social/preview card leads with a real product image too. With no
+    // catalog (DB down) the shell's brand PNG stays.
+    const homeProducts = await getProducts();
+    const homeOgImage = homeProducts
+      ? homeProducts
+          .filter((p) => p.slug && !isHeldProduct(p.slug) && isPubliclyListableProduct(p) && productImageUrls(p).length)
+          .map((p) => productImageUrls(p)[0])[0] || null
+      : null;
     let out = inject(html, {
       title: 'Luxedge — Premium Pet & Animal Essentials',
       description:
         'Shop practical pet and horse essentials, read buying guides, and find clear shipping and return information at Luxedge.',
       canonical: root,
+      ogImage: homeOgImage,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'WebSite',
@@ -1362,9 +1420,10 @@ export async function maybeInjectSeo(
         },
       },
     });
-    // Pre-render the hero + category navigation so the initial HTML (and any
-    // non-JS crawler) sees real substantive content, not an empty shell.
-    out = injectHomeBody(out);
+    // Pre-render the hero + category navigation + a real product grid so the
+    // initial HTML (and any non-JS crawler) sees substantive, product-led
+    // content, not an empty shell.
+    out = injectHomeBody(out, homeProducts);
     return { html: out, status: 200 };
   }
 
@@ -1415,6 +1474,7 @@ export async function maybeInjectSeo(
       description: cleanText(v.metaDescription || v.summary || v.description || '', 200),
       canonical,
       noindex: true,
+      ogImage: v.thumbnail || null,
       jsonLd: mediaJsonLd(v, canonical),
     });
     out = await injectMediaBody(out, v);
@@ -1512,10 +1572,14 @@ export async function maybeInjectSeo(
     }
     const canonical = `${root}/product/${slug}`;
     const title = (p.seo_title || `${p.name} | Luxedge`).replace(/\s*\|\s*Luxedge\s*$/, '') + ' | Luxedge';
+    // og:image: the product's first real catalog image — crawlers and social
+    // cards get the actual item, not the brand mark.
+    const ogImage = productImageUrls(p)[0] || null;
     let out = inject(html, {
       title,
       description: cleanText(p.seo_description || p.short_description || p.description || '', 200),
       canonical,
+      ogImage,
       jsonLd: [productJsonLd(p, canonical), breadcrumbJsonLd(p.name, canonical)],
     });
     // Pre-render the real product facts into #root (same content the client
@@ -1551,6 +1615,7 @@ export async function maybeInjectSeo(
       title: `${post.title} | Luxedge`,
       description: cleanText(post.excerpt, 200),
       canonical,
+      ogImage: post.image || null,
       jsonLd: blogJsonLd(post, canonical),
     });
     out = injectArticleBody(out, post);
