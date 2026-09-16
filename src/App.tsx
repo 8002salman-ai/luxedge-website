@@ -4278,9 +4278,9 @@ export default function App() {
           <Route path="/faq" element={<SLayout><FAQPage /></SLayout>} />
           <Route path="/sitemap" element={<SLayout><SitemapPage /></SLayout>} />
           <Route path="/careers" element={<SLayout><CareersPage /></SLayout>} />
-          {/* Blog */}
-          <Route path="/media" element={<SLayout><Suspense fallback={<PageFallback />}><MediaHubPage /></Suspense></SLayout>} />
-          <Route path="/media/:slug" element={<SLayout><Suspense fallback={<PageFallback />}><MediaVideoPage /></Suspense></SLayout>} />
+          {/* Media — withheld from public display for AdSense review */}
+          <Route path="/media" element={<Navigate to="/" replace />} />
+          <Route path="/media/:slug" element={<Navigate to="/" replace />} />
           <Route path="/blog" element={<SLayout><Suspense fallback={<PageFallback />}><BlogListPage /></Suspense></SLayout>} />
           <Route path="/blog/write" element={<SLayout><Suspense fallback={<PageFallback />}><BlogWritePage /></Suspense></SLayout>} />
           <Route path="/blog/:slug" element={<SLayout><Suspense fallback={<PageFallback />}><BlogDetailPage /></Suspense></SLayout>} />
