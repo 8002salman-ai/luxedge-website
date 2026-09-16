@@ -243,10 +243,15 @@ export function BlogDetailPage() {
             {renderContent(post.content)}
           </article>
 
-          {/* Inline images */}
+          {/* Inline images — these are article content, not decoration, so an
+              empty alt would hide them from a screen reader and leave the post
+              with no image description at all. Same wording pattern as
+              altTextFor() in features/catalog/seo.ts. */}
           {post.images.length > 0 && (
             <div className="grid grid-cols-2 gap-4 mt-8">
-              {post.images.map((img, i) => <img key={i} src={img} alt="" className="rounded-xl w-full object-cover" />)}
+              {post.images.map((img, i) => (
+                <img key={i} src={img} alt={`${post.title} — image ${i + 1}`} loading="lazy" decoding="async" className="rounded-xl w-full object-cover" />
+              ))}
             </div>
           )}
 
